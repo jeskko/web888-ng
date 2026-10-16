@@ -1,14 +1,25 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! web888d (M0): only the simulator pipeline exists so far.
+//! web888d (M1).
+//!
+//! `serve`: run the radio (simulated, or the stock driver on a unit) and
+//! offer its channels over HPSDR Protocol 1 (UDP 1024):
+//!
+//!   web888d serve --backend zynqsdr          # on the unit, stock server stopped
+//!   web888d serve --backend sim --tone 7.0755e6:-40 --noise
+//!
+//! `sim`: one demodulated channel to stdout (raw f32 LE), for listening:
 //!
 //!   web888d sim --tone 7.0755e6:-40 --noise --tune 7.074e6 --mode usb \
 //!     | aplay -t raw -f FLOAT_LE -r 24000 -c 1
-//!
-//! Output is raw little-endian f32 (mono audio, or interleaved I/Q for
-//! `--mode iq`) at the hardware rate; a level line goes to stderr each second.
+
+mod hw;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::io::Write;
+use std::net::UdpSocket;
+use std::sync::Arc;
+use std::sync::atomic::AtomicBool;
+use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use web888_dsp::chan::{ChannelSpec, Droop, design};
 use web888_dsp::demod::{Am, ssb};
@@ -28,6 +39,42 @@ struct Cli {
 enum Cmd {
     /// Run one receiver channel on the simulated radio.
     Sim(SimArgs),
+    /// Run the radio and serve its channels (HPSDR Protocol 1).
+    Serve(ServeArgs),
+}
+
+#[derive(Clone, Copy, ValueEnum)]
+enum Backend {
+    /// Simulated radio (real-time).
+    Sim,
+    /// Stock kernel driver /dev/zynqsdr (on the unit; stop the stock server first).
+    Zynqsdr,
+}
+
+#[derive(clap::Args)]
+struct ServeArgs {
+    #[arg(long, value_enum, default_value = "zynqsdr")]
+    backend: Backend,
+    /// Bitstream to load first (zynqsdr backend): a path, `auto` for the
+    /// stock file on the SD card, or `none` if it's already loaded.
+    #[arg(long, default_value = "auto")]
+    bitstream: String,
+    /// HPSDR Protocol 1 listen address.
+    #[arg(long, default_value = "0.0.0.0:1024")]
+    hpsdr: String,
+    /// Board id reported to HPSDR clients (1 = Hermes, 5 = Orion, 6 = Hermes-Lite).
+    #[arg(long, default_value_t = 1)]
+    hpsdr_board: u8,
+    /// Receivers offered to HPSDR clients (max 7).
+    #[arg(long, default_value_t = 7)]
+    hpsdr_rx: usize,
+    /// Simulated scene (sim backend): tones FREQ_HZ:DBFS.
+    #[arg(long = "tone", value_parser = parse_tone)]
+    tones: Vec<(f64, f64)>,
+    #[arg(long)]
+    noise: bool,
+    #[arg(short, long)]
+    verbose: bool,
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -82,7 +129,109 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Cmd::Serve(a) => {
+            if let Err(e) = run_serve(a) {
+                eprintln!("web888d: {e}");
+                std::process::exit(1);
+            }
+        }
     }
+}
+
+type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+
+fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
+    match a.backend {
+        Backend::Sim => {
+            let mut scene = Scene::new();
+            for &(f, l) in &a.tones {
+                scene = scene.tone(f, l);
+            }
+            if a.noise {
+                scene = scene.adc_noise();
+            }
+            Ok(Box::new(SimRadio::new(SimConfig::hf(
+                scene,
+                Pacing::RealTime,
+            ))))
+        }
+        Backend::Zynqsdr => {
+            use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev};
+            let cfg = ZynqConfig::default();
+            let bit = match a.bitstream.as_str() {
+                "none" => None,
+                "auto" => Some(bitstream::default_path(cfg.variant)),
+                p => Some(std::path::PathBuf::from(p)),
+            };
+            if let Some(bit) = bit {
+                let n = bitstream::load(&bit, std::path::Path::new(bitstream::XDEVCFG))
+                    .map_err(|e| format!("loading {}: {e}", bit.display()))?;
+                eprintln!("bitstream: {} ({n} bytes)", bit.display());
+            }
+            let dev = ZynqsdrDev::open(ZynqsdrDev::PATH)
+                .map_err(|e| format!("{}: {e} (is the stock server running?)", ZynqsdrDev::PATH))?;
+            Ok(Box::new(ZynqsdrRadio::new(dev, cfg)?))
+        }
+    }
+}
+
+fn eth0_mac() -> [u8; 6] {
+    let mut mac = [0x02, 0, 0, 0x88, 0x88, 0x01];
+    if let Ok(s) = std::fs::read_to_string("/sys/class/net/eth0/address") {
+        for (k, b) in s.trim().split(':').take(6).enumerate() {
+            mac[k] = u8::from_str_radix(b, 16).unwrap_or(0);
+        }
+    }
+    mac
+}
+
+fn run_serve(a: ServeArgs) -> AnyResult<()> {
+    use web888_hpsdr::{proto::Board, server};
+    let mut radio = open_radio(&a)?;
+    let caps = radio.caps();
+    let id = radio.identity();
+    eprintln!(
+        "radio: {} signature {:#010x}, {} RX / {} WF channels, ADC {:.0} Hz",
+        id.backend, id.signature, caps.rx_channels, caps.wf_channels, caps.adc_hz
+    );
+    // HPSDR P1 is served at 48 kS/s
+    radio.set_rx_rate(r2_for_rate(caps.adc_hz, 48_000.0))?;
+
+    let stop = Arc::new(AtomicBool::new(false));
+    let (blk_tx, blk_rx) = mpsc::sync_channel(64);
+    let (ctl_tx, ctl_rx) = mpsc::channel();
+
+    let sock = UdpSocket::bind(&a.hpsdr).map_err(|e| format!("bind {}: {e}", a.hpsdr))?;
+    let cfg = server::Config {
+        board: Board {
+            mac: eth0_mac(),
+            code_version: 1,
+            board_id: a.hpsdr_board,
+        },
+        max_rx: a.hpsdr_rx.min(caps.rx_channels).min(7),
+    };
+    let mut srv = server::Server::new(sock, cfg)?;
+    eprintln!(
+        "hpsdr: listening on {} ({} receivers)",
+        srv.local_addr()?,
+        cfg.max_rx
+    );
+    let srv_stop = stop.clone();
+    let srv_thread = std::thread::Builder::new()
+        .name("hpsdr".into())
+        .spawn(move || srv.run(blk_rx, ctl_tx, srv_stop))?;
+
+    let hw = hw::HwLoop {
+        radio,
+        ctl: ctl_rx,
+        out: blk_tx,
+        stop: stop.clone(),
+        verbose: a.verbose,
+    };
+    let res = hw.run();
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    srv_thread.join().ok();
+    res.map_err(|e| e.into())
 }
 
 fn run_sim(a: SimArgs) -> std::result::Result<(), Box<dyn std::error::Error>> {

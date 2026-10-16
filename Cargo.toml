@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/radio", "crates/sim", "crates/dsp", "crates/web888d"]
+members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/web888d"]
 
 [workspace.package]
 version = "0.0.1"
@@ -12,6 +12,9 @@ repository = "https://github.com/jeskko/web888-ng"
 web888-radio = { path = "crates/radio" }
 web888-sim = { path = "crates/sim" }
 web888-dsp = { path = "crates/dsp" }
+web888-zynqsdr = { path = "crates/zynqsdr" }
+web888-hpsdr = { path = "crates/hpsdr" }
+libc = "0.2.190"
 num-complex = "0.4.6"
 rustfft = "6.4.1"
 clap = { version = "4.6.7", features = ["derive"] }

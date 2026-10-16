@@ -117,6 +117,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "a6cb138bb79a146c1bd460005623e142ef0181e3d0219cb493e02f7d08a35695"
 
 [[package]]
+name = "libc"
+version = "0.2.190"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "ce5d3ddc6d3fa000eb1536d85e147bfe31aacaba692ed6a876f95cb7c855be78"
+
+[[package]]
 name = "num-complex"
 version = "0.4.6"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -246,6 +252,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-hpsdr"
+version = "0.0.1"
+dependencies = [
+ "web888-radio",
+ "web888-sim",
+]
+
+[[package]]
 name = "web888-radio"
 version = "0.0.1"
 
@@ -258,14 +272,25 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-zynqsdr"
+version = "0.0.1"
+dependencies = [
+ "libc",
+ "web888-radio",
+ "web888-sim",
+]
+
+[[package]]
 name = "web888d"
 version = "0.0.1"
 dependencies = [
  "clap",
  "num-complex",
  "web888-dsp",
+ "web888-hpsdr",
  "web888-radio",
  "web888-sim",
+ "web888-zynqsdr",
 ]
 
 [[package]]

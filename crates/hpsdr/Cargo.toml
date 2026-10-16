@@ -1,0 +1,13 @@
+[package]
+name = "web888-hpsdr"
+description = "OpenHPSDR Protocol 1 (Metis/Hermes) receive-only server for web888d"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+
+[dev-dependencies]
+web888-radio.workspace = true
+web888-sim.workspace = true

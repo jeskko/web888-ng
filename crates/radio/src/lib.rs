@@ -10,6 +10,7 @@
 use std::fmt;
 
 pub mod chan;
+pub mod clock;
 
 pub use chan::*;
 
