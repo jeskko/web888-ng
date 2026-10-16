@@ -16,6 +16,7 @@
 pub mod abi;
 pub mod bitstream;
 pub mod dev;
+pub mod si5351;
 
 use abi::*;
 use dev::Device;

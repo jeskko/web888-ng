@@ -59,6 +59,10 @@ struct ServeArgs {
     /// stock file on the SD card, or `none` if it's already loaded.
     #[arg(long, default_value = "auto")]
     bitstream: String,
+    /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock to this
+    /// frequency before loading the bitstream. Default: keep the FSBL setting.
+    #[arg(long)]
+    si5351_adc: Option<f64>,
     /// HPSDR Protocol 1 listen address.
     #[arg(long, default_value = "0.0.0.0:1024")]
     hpsdr: String,
@@ -156,8 +160,21 @@ fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
             ))))
         }
         Backend::Zynqsdr => {
-            use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev};
-            let cfg = ZynqConfig::default();
+            use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev, si5351};
+            let mut cfg = ZynqConfig::default();
+            if let Some(f) = a.si5351_adc {
+                let p =
+                    si5351::plan(f, si5351::REF_HZ).ok_or("no Si5351 plan for that frequency")?;
+                si5351::program("/dev/i2c-0", &p).map_err(|e| format!("si5351: {e}"))?;
+                eprintln!(
+                    "si5351: CLK0 {:.3} Hz (PLLA {}+{}/{}, MS0 {})",
+                    p.out_hz, p.pll.a, p.pll.b, p.pll.c, p.ms.a
+                );
+                cfg.adc_hz = p.out_hz;
+                if p.out_hz < 100e6 {
+                    cfg.variant = Variant::Vhf; // stock rule: ADC < 100 MHz uses the VHF bitstream
+                }
+            }
             let bit = match a.bitstream.as_str() {
                 "none" => None,
                 "auto" => Some(bitstream::default_path(cfg.variant)),

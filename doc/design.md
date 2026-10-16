@@ -238,7 +238,7 @@ Results go to a common spot bus (UI, PSKReporter, WSPRnet, local log).
 | M | content | done when |
 |---|---|---|
 | M0 ✅ | workspace, `Radio` trait, `Sim` backend, DSP crate with tests, CI (x86 + armv7 cross build) | IQ from Sim through channel filter verified in tests (`crates/dsp/tests/dsp.rs`) |
-| M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested), PPS loop ✅, HPSDR P1 ✅ (loopback tested); open: Si5351 init (relies on the FSBL-programmed 122.88 MHz for now), IQ stream, test on a unit | SDR++/SparkSDR receive 7 channels from a real unit |
+| M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested), PPS loop ✅, HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programming opt-in `--si5351-adc`, test unit only); open: test on a unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
 | M2 | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio | usable in a browser |
 | M3 | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth | 13 users + time-shared waterfalls |
 | M4 | decoder supervisor, FT8/WSPR skimmers, spot reporting | spots uploaded |
