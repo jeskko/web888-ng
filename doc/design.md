@@ -89,20 +89,28 @@ Constraints that shape the design:
 
 ## 4. Hardware abstraction
 
+The trait as implemented (`crates/radio`):
+
 ```rust
 pub trait Radio: Send {
-    fn caps(&self) -> Caps;                       // channel counts, rates, ADC fs
+    fn caps(&self) -> Caps;                        // channel counts, rates, ADC fs
+    fn adc_hz(&self) -> f64;                       // rate used for NCO words
+    fn set_adc_hz(&mut self, hz: f64);             // PPS-corrected estimate
     fn set_rx_rate(&mut self, r2: u16) -> Result<()>;
-    fn tune_rx(&mut self, ch: usize, f_hz: f64) -> Result<()>;   // uses corrected fs
-    fn read_rx(&mut self, buf: &mut [IqFrame]) -> Result<usize>; // all channels per frame
+    fn rx_r2(&self) -> u16;
+    fn tune_rx(&mut self, ch: usize, f_hz: f64) -> Result<()>;
+    fn read_rx(&mut self, buf: &mut [Iq32]) -> Result<usize>; // whole frames, flat
     fn start_wf(&mut self, slot: usize, f_hz: f64, decim: u16, mode: WfMode) -> Result<()>;
     fn read_wf(&mut self, slot: usize, buf: &mut [Iq16]) -> Result<usize>;
-    fn front_end(&mut self, fe: FrontEnd) -> Result<()>;  // att, pga, dither, antenna, hf/vhf, ref
+    fn front_end(&mut self, fe: FrontEnd) -> Result<()>; // att, pga, dither, antenna, hf/vhf, ref
     fn pps(&mut self) -> Result<Option<u32>>;
-    fn sample_counter(&mut self) -> Option<u64>;          // open FPGA only
-    fn identity(&self) -> Identity;                       // DNA, signature, build id
+    fn sample_counter(&mut self) -> Option<u64>;   // open FPGA only
+    fn identity(&self) -> Identity;                // signature, DNA, build id
 }
 ```
+
+`read_rx` fills a flat buffer of `rx_channels`-sample frames (the ring
+layout), because the channel count (12/13) is only known at run time.
 
 Backends:
 
@@ -229,7 +237,7 @@ Results go to a common spot bus (UI, PSKReporter, WSPRnet, local log).
 
 | M | content | done when |
 |---|---|---|
-| M0 | workspace, `Radio` trait, `Sim` backend, DSP crate with tests, CI (x86 + armv7 cross build) | IQ from Sim through channel filter verified in tests |
+| M0 ✅ | workspace, `Radio` trait, `Sim` backend, DSP crate with tests, CI (x86 + armv7 cross build) | IQ from Sim through channel filter verified in tests (`crates/dsp/tests/dsp.rs`) |
 | M1 | `ZynqsdrIoctl` backend, clock init, PPS loop, IQ stream + HPSDR P1 | SDR++/SparkSDR receive 7 channels from a real unit |
 | M2 | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio | usable in a browser |
 | M3 | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth | 13 users + time-shared waterfalls |

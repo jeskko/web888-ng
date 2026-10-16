@@ -1,0 +1,12 @@
+[package]
+name = "web888-sim"
+description = "Simulated Web-888 radio backend with the real channel model"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+web888-radio.workspace = true
+num-complex.workspace = true
+

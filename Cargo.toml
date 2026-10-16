@@ -1,0 +1,25 @@
+[workspace]
+resolver = "3"
+members = ["crates/radio", "crates/sim", "crates/dsp", "crates/web888d"]
+
+[workspace.package]
+version = "0.0.1"
+edition = "2024"
+license = "GPL-3.0-or-later"
+repository = "https://github.com/jeskko/web888-ng"
+
+[workspace.dependencies]
+web888-radio = { path = "crates/radio" }
+web888-sim = { path = "crates/sim" }
+web888-dsp = { path = "crates/dsp" }
+num-complex = "0.4.6"
+rustfft = "6.4.1"
+clap = { version = "4.6.7", features = ["derive"] }
+
+[profile.release]
+lto = "thin"
+codegen-units = 1
+
+# DSP tests are slow unoptimised
+[profile.test]
+opt-level = 2

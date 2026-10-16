@@ -1,0 +1,14 @@
+[package]
+name = "web888d"
+description = "web888-ng server for the Web-888 SDR"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+web888-radio.workspace = true
+web888-sim.workspace = true
+web888-dsp.workspace = true
+clap.workspace = true
+num-complex.workspace = true

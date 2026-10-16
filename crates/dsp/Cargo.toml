@@ -1,0 +1,15 @@
+[package]
+name = "web888-dsp"
+description = "DSP building blocks for web888d: filters, NCO, CIC compensation, demodulators"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+web888-radio.workspace = true
+num-complex.workspace = true
+rustfft.workspace = true
+
+[dev-dependencies]
+web888-sim.workspace = true

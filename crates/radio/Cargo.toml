@@ -1,0 +1,9 @@
+[package]
+name = "web888-radio"
+description = "Hardware abstraction for the Web-888 SDR: Radio trait, sample types, channel math"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
