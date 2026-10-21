@@ -255,6 +255,8 @@ dependencies = [
 name = "web888-hpsdr"
 version = "0.0.1"
 dependencies = [
+ "num-complex",
+ "rustfft",
  "web888-radio",
  "web888-sim",
 ]
