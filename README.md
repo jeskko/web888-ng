@@ -44,8 +44,8 @@ The same works against the QEMU virtual Web-888 in web888-ng-hw
 (`emu/`, stock firmware against an FPGA model): boot it, fetch the
 binary in the guest with `wget http://10.0.2.2:PORT/web888d` from a host
 HTTP server, run `web888d serve`, then probe `127.0.0.1:1024` (UDP
-forwarded). The emulated CPU can't keep up with 12 channels at 48 kS/s,
-so expect `rx: ... frames lost` warnings there. They are not a bug.
+forwarded). Tones arrive at the model's levels and web888d reads the
+full 48 kS/s.
 
 CI builds a static `armv7-unknown-linux-musleabihf` binary for the device.
 
