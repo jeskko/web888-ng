@@ -19,10 +19,9 @@ pub const WF_READ: u32 = 0xC00E_5A0C; // WfRead
 pub const PPS_START: u32 = 0x4004_5A14; // 1 = enable
 pub const PPS_READ: u32 = 0x8004_5A15; // -> u32, EBUSY if none new
 
-/// `WF_START` flag. The driver clears the WF mode bit when it is set and
-/// sets it otherwise. Which mode bit value the stock bitstream treats as
-/// continuous is not confirmed (the open bitstream streams continuously
-/// with the bit set), so web888d never passes this flag (see `ZynqsdrRadio`).
+/// `WF_START` flag: continuous waterfall. The driver clears the WF mode bit
+/// (CFG 0x9E) when it is set and sets it otherwise; mode bit 1 = one-shot
+/// (open bitstream; stock by the flag's name, unconfirmed on hardware).
 pub const WF_READ_CONTINUES: u32 = 1 << 16;
 
 /// GPIO word bits (`SET/GET_GPIO_MASK`).

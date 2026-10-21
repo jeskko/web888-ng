@@ -7,11 +7,11 @@
 //! Notes:
 //! * The driver allows one opener: the stock server must not be running.
 //! * RX_READ/WF_READ may return partial frames; whole frames are assembled here.
-//! * Waterfall: `WF_START` is always issued without `WF_READ_CONTINUES`
-//!   (like the stock server), because the mode-bit polarity of the stock
-//!   bitstream is unconfirmed. One-shot reads stop after one block. In
-//!   continuous mode, a stream that stalls (as a one-shot capture would) is
-//!   restarted.
+//! * Waterfall: one-shot is a plain `WF_START` (like the stock server);
+//!   continuous adds `WF_READ_CONTINUES`. One-shot reads stop after one
+//!   block. The flag's effect on the stock bitstream is not yet confirmed
+//!   on hardware, so a continuous stream that stalls (as a one-shot capture
+//!   would) is still restarted.
 
 pub mod abi;
 pub mod bitstream;
@@ -120,7 +120,11 @@ impl<D: Device> ZynqsdrRadio<D> {
         self.dev
             .wf_param(slot as u16, s.decim, s.word)
             .map_err(io)?;
-        self.dev.set(WF_START, slot as u32).map_err(io)?;
+        let flag = match s.mode {
+            WfMode::Continuous => WF_READ_CONTINUES,
+            WfMode::OneShot => 0,
+        };
+        self.dev.set(WF_START, slot as u32 | flag).map_err(io)?;
         s.produced = 0;
         s.stage.clear();
         s.last_data = Instant::now();

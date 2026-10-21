@@ -21,7 +21,8 @@ struct FakeDriver {
     chunk: usize,
     rx_q: Vec<u8>,
     wf_param: [(u16, u64); 2],
-    /// Emulate a bitstream whose WF stops after one block (one-shot).
+    /// Emulate a bitstream whose WF always stops after one block, whatever
+    /// the mode bit (in case the stock bitstream ignores it).
     wf_oneshot_hw: bool,
 }
 
@@ -52,10 +53,11 @@ impl Device for FakeDriver {
                 let slot = (arg & 0xff) as usize;
                 let (decim, word) = self.wf_param[slot];
                 let f = nco_freq(word, self.sim.adc_hz());
-                let mode = if self.wf_oneshot_hw || arg & WF_READ_CONTINUES != 0 {
+                // the flag clears the mode bit: clear = continuous
+                let mode = if self.wf_oneshot_hw || arg & WF_READ_CONTINUES == 0 {
                     WfMode::OneShot
                 } else {
-                    WfMode::Continuous // open bitstream: mode bit set = continuous
+                    WfMode::Continuous
                 };
                 self.sim
                     .start_wf(slot, f, decim, mode)
@@ -262,4 +264,16 @@ fn wf_continuous_restarts_on_one_shot_hardware() {
         .filter(|&&(c, _)| c == WF_START)
         .count();
     assert!(starts >= 3, "restarted {starts} times");
+}
+
+#[test]
+fn wf_continuous_sets_continue_flag() {
+    let mut r = radio(Scene::new().tone(F0 + 250_000.0, -6.0));
+    r.start_wf(0, F0, 16, WfMode::Continuous).unwrap();
+    let mut buf = vec![Iq16::default(); 4096];
+    let mut total = 0;
+    while total < 3 * WF_BLOCK {
+        total += r.read_wf(0, &mut buf).unwrap();
+    }
+    assert!(r.device().log.contains(&(WF_START, WF_READ_CONTINUES)));
 }
