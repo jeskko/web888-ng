@@ -156,6 +156,31 @@ IQ @ Fs_hw (12..48 k) → CIC droop EQ + channel FIR (overlap-save FFT, per mode
     channel's IQ (software FFT) without a hardware slot.
 * Processing: window → 8192-pt FFT → |X|² → average (frame rate) → log →
   resample to client width (1024–4096 bins, max-hold per bin) → u8 dB.
+* **Full-interval averaging (goal, improves on stock).** Each line should
+  average the power of all samples in its frame interval (Welch: 50 %
+  overlapping windowed FFTs, mean of |X|² before the log), not one
+  snapshot. The stock server shows one short one-shot block per line
+  (about 70 µs at zoom 0, a few ms zoomed). Impulsive noise, such as switch-mode
+  supplies pulsing at 100 Hz, is then in some lines and not others. On a real
+  unit (2026-10-21) that gave line-to-line steps of 0.9 dB at 3.5 MHz,
+  1.8 dB at 29 MHz and 2.5 dB at 50 MHz, against 0.2 dB with the antenna
+  disconnected. That is the horizontal streaking above about 24 MHz,
+  where impulsive noise dominates the quieter bands, and the waterfall then
+  disagrees with the audio, which integrates. With averaging, impulsive noise shows as
+  a steady, raised floor, as it sounds.
+  * Exclusive mode streams continuously (CFG 0x9E bit clear via
+    `WF_READ_CONTINUES`), so the interval is fully covered up to the
+    capture rate the HP port and CPU allow. At wide spans
+    (decimation 1–4) take as many blocks as the budget allows, spread
+    evenly over the interval rather than back to back.
+  * Time-shared mode: spread several one-shot blocks over the interval
+    when the scheduler has slack, rather than one block per line.
+  * When resampling to the client width, average the power of the bins merged
+    into one pixel (max-hold only as an optional "peak" view), or the
+    noise floor gets speckled and biased upward.
+  * Test: a `web888-pl` scene option for 100 Hz-gated impulsive noise; the
+    per-line level spread (whole-line component) must stay
+    within 0.3 dB of a stationary-noise run.
 * Cost: an 8192-pt complex FFT is ≈ 1 ms on an A9 (NEON); 30 fps × 13
   users ≈ 40 % of one core — so frame rate is adaptive under load.
 
