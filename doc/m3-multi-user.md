@@ -147,12 +147,24 @@ uses a pool of `N = cores` workers (2 on the Zynq), each pinned:
   audio is never dropped deliberately (design.md §5.2, "frame rate is
   adaptive under load")
 
-Budget on the A9 is an estimate until the test unit arrives: the audio
-chain is about 2 M multiply-adds/s per user at 48 kS/s → 12 kS/s (160-tap
-decimator + ~300-tap filter at 12 k via overlap-save). 12 users ≈ 25 M/s,
-well inside two A9 cores; the WF FFTs dominate and are what the budget and
-shared views control. Benchmarks (`cargo bench`-style examples) for the
-chain and the engine get armv7 builds so they run on the board day one.
+Budget on the A9, measured with `crates/dsp/examples/bench.rs` (armv7
+musl build, one A9 core at nice 19 next to the stock server, 2026-10-22):
+
+| | A9 | x86-64 workstation |
+|---|---|---|
+| audio chain, USB / AM, per session | 3.5 % of a core | 0.2 % |
+| with NB + NR + squelch | 6 % | 0.3 % |
+| WF view 1024 bins, 25 fps, 30 FFTs/line | 55 % | 0.5 % |
+| WF view 1024 bins, 25 fps, 8 FFTs/line | 21 % | 0.25 % |
+| complex FFT 2048 (rustfft) | 410 µs | 3.5 µs |
+| f32 FIR | 106 M MAC/s | 1290 M MAC/s |
+
+12 audio sessions fit in under one A9 core. The waterfall doesn't at the
+workstation default: rustfft has no NEON code on armv7 (and LLVM doesn't
+vectorize f32 for NEON, so `-C target-cpu=cortex-a9` changes nothing,
+measured), and every FFT costs ~0.6 ms with its window and accumulation.
+On the A9 the WF budget (FFTs per line) has to start low, and the FFT is
+the kernel worth a NEON implementation.
 
 ## 5. DSP additions
 
