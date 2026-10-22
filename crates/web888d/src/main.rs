@@ -608,6 +608,11 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 wf_decim_max: caps.wf_decim_max,
             },
             channels: channels.clone(),
+            pool: {
+                let p = web888_core::pool::DspPool::per_cpu(&ctl_tx)?;
+                eprintln!("dsp: {} pool workers", p.workers());
+                p
+            },
             rx_r2: r2,
             live: live_rx,
             busy: Default::default(),

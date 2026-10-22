@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! A session's DSP threads: audio (one RX channel to PCM frames) and
-//! waterfall (WF slot samples to lines). They take blocks from the hw
-//! fan-out and hand encoded frames to the session's WebSocket task; a full
-//! queue drops the frame (counted), it never blocks.
+//! A session's DSP: audio (one RX channel to PCM frames, a job on the DSP
+//! pool) and waterfall (WF slot samples to lines, its own thread until the
+//! WF scheduler). They hand encoded frames to the session's WebSocket
+//! task; a full queue drops the frame (counted), it never blocks.
 
 use crate::proto::{self, FLAG_GAP, FLAG_NEW_GEN, FLAG_OVERLOAD};
 use crossbeam_channel::{Receiver as CbReceiver, TryRecvError};
@@ -12,6 +12,7 @@ use std::sync::mpsc::{Receiver, RecvTimeoutError};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
 use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::TrySendError;
+use web888_core::pool::RxJob;
 use web888_dsp::audio::{AUDIO_RATE, AudioChain, AudioSpec};
 use web888_dsp::chan::Droop;
 use web888_dsp::wf::{WF_DB_STEP, WF_DB0, WfEngine, WfSpec, quantize};
@@ -41,7 +42,7 @@ impl Out {
     }
 }
 
-/// Changes for the audio thread.
+/// Changes for a session's audio job.
 #[derive(Clone, Copy, Debug)]
 pub enum AudioCmd {
     Spec(AudioSpec),
@@ -49,78 +50,107 @@ pub enum AudioCmd {
     Channel(Option<usize>),
 }
 
-pub struct AudioWorker {
-    pub ch: Option<usize>,
-    pub rx_rate: f64,
-    pub droop: Droop,
-    pub spec: AudioSpec,
-    pub blocks: Receiver<Arc<RxBlock>>,
-    pub cmd: CbReceiver<AudioCmd>,
-    pub out: Out,
+/// A session's audio on the DSP pool: its RX channel to PCM frames. Ends
+/// when the session drops its command sender or its frame queue.
+pub struct AudioJob {
+    ch: Option<usize>,
+    rx_rate: f64,
+    droop: Droop,
+    cmd: CbReceiver<AudioCmd>,
+    out: Out,
+    chain: AudioChain,
+    pcm: Vec<f32>,
+    next_frame: Option<u64>,
+    flags: u8,
+    seq: u32,
+    rssi: f32,
 }
 
-impl AudioWorker {
-    pub fn run(self) {
-        let mut chain = AudioChain::new(self.spec, self.rx_rate, self.droop);
-        let mut pcm: Vec<f32> = Vec::new();
-        let mut next_frame = None;
-        let mut flags = 0u8;
-        let mut seq = 0u32;
-        let mut rssi = -200.0;
-        let mut ch = self.ch;
-        loop {
-            loop {
-                match self.cmd.try_recv() {
-                    Ok(AudioCmd::Spec(s)) => chain.set_spec(s),
-                    Ok(AudioCmd::Channel(c)) if c != ch => {
-                        // another channel's history: start over
-                        ch = c;
-                        chain = AudioChain::new(*chain.spec(), self.rx_rate, self.droop);
-                        pcm.clear();
-                        flags |= FLAG_GAP;
-                    }
-                    Ok(AudioCmd::Channel(_)) => {}
-                    Err(TryRecvError::Empty) => break,
-                    Err(TryRecvError::Disconnected) => return,
-                }
-            }
-            let b = match self.blocks.recv_timeout(Duration::from_millis(100)) {
-                Ok(b) => b,
-                Err(RecvTimeoutError::Timeout) => continue,
-                Err(RecvTimeoutError::Disconnected) => return,
-            };
-            let Some(ch) = ch else {
-                next_frame = None;
-                continue;
-            };
-            if next_frame.is_some_and(|n| n != b.first_frame) {
-                flags |= FLAG_GAP;
-            }
-            next_frame = Some(b.end_frame());
-            if b.overload {
-                flags |= FLAG_OVERLOAD;
-            }
-            chain.process(b.channel(ch), &mut pcm);
-            let mut used = 0;
-            while pcm.len() - used >= AUDIO_FRAME {
-                // a block may finish several frames: they share its reading
-                rssi = chain.take_power_db().unwrap_or(rssi);
-                let f = proto::audio_frame(
-                    flags,
-                    seq,
-                    AUDIO_RATE as u32,
-                    rssi,
-                    &pcm[used..used + AUDIO_FRAME],
-                );
-                if !self.out.send(f) {
-                    return;
-                }
-                flags = 0;
-                seq = seq.wrapping_add(1);
-                used += AUDIO_FRAME;
-            }
-            pcm.drain(..used);
+impl AudioJob {
+    pub fn new(
+        ch: Option<usize>,
+        rx_rate: f64,
+        droop: Droop,
+        spec: AudioSpec,
+        cmd: CbReceiver<AudioCmd>,
+        out: Out,
+    ) -> Self {
+        AudioJob {
+            ch,
+            rx_rate,
+            droop,
+            cmd,
+            out,
+            chain: AudioChain::new(spec, rx_rate, droop),
+            pcm: Vec::new(),
+            next_frame: None,
+            flags: 0,
+            seq: 0,
+            rssi: -200.0,
         }
+    }
+
+    /// Apply the session's changes; false when the session is gone.
+    fn commands(&mut self) -> bool {
+        loop {
+            match self.cmd.try_recv() {
+                Ok(AudioCmd::Spec(s)) => self.chain.set_spec(s),
+                Ok(AudioCmd::Channel(c)) if c != self.ch => {
+                    // another channel's history: start over
+                    self.ch = c;
+                    self.chain = AudioChain::new(*self.chain.spec(), self.rx_rate, self.droop);
+                    self.pcm.clear();
+                    self.next_frame = None;
+                    self.flags |= FLAG_GAP;
+                }
+                Ok(AudioCmd::Channel(_)) => {}
+                Err(TryRecvError::Empty) => return true,
+                Err(TryRecvError::Disconnected) => return false,
+            }
+        }
+    }
+}
+
+impl RxJob for AudioJob {
+    fn process(&mut self, b: &RxBlock) -> bool {
+        if !self.commands() {
+            return false;
+        }
+        let Some(ch) = self.ch else {
+            return true;
+        };
+        if self.next_frame.is_some_and(|n| n != b.first_frame) {
+            self.flags |= FLAG_GAP;
+        }
+        self.next_frame = Some(b.end_frame());
+        if b.overload {
+            self.flags |= FLAG_OVERLOAD;
+        }
+        self.chain.process(b.channel(ch), &mut self.pcm);
+        let mut used = 0;
+        while self.pcm.len() - used >= AUDIO_FRAME {
+            // a block may finish several frames: they share its reading
+            self.rssi = self.chain.take_power_db().unwrap_or(self.rssi);
+            let f = proto::audio_frame(
+                self.flags,
+                self.seq,
+                AUDIO_RATE as u32,
+                self.rssi,
+                &self.pcm[used..used + AUDIO_FRAME],
+            );
+            if !self.out.send(f) {
+                return false;
+            }
+            self.flags = 0;
+            self.seq = self.seq.wrapping_add(1);
+            used += AUDIO_FRAME;
+        }
+        self.pcm.drain(..used);
+        true
+    }
+
+    fn idle(&mut self) -> bool {
+        self.commands() && !self.out.tx.is_closed()
     }
 }
 

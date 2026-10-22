@@ -122,9 +122,12 @@ uses a pool of `N = cores` workers (2 on the Zynq), each pinned:
 
 * jobs: "process this RxBlock for these audio sessions" (split across
   workers by session), and "push this WfBlock into this view's engine"
-* per-session state (`AudioChain`) is owned by one worker at a time
-  (sessions are assigned round-robin; rebalanced on join/leave)
-* the hw thread keeps one fan-out to the pool, not one per session
+* per-session state (`AudioChain`) is owned by one worker at a time: a
+  new session goes to the worker with the fewest jobs; jobs aren't
+  migrated when others leave (the next ones fill the lighter worker)
+* the hw thread feeds one RX subscription per worker, not one per session
+  (`web888_core::pool`; a job is an `RxJob`, the session's audio is
+  `AudioJob`)
 * load shedding when behind: WF budget per view drops first, then fps;
   audio is never dropped deliberately (design.md §5.2, "frame rate is
   adaptive under load")

@@ -1,14 +1,16 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! One web user (M2: one at a time): a WebSocket connection, an RX
-//! channel lease and WF slot 0, and its two DSP threads.
+//! channel lease and WF slot 0, its audio job on the DSP pool and its
+//! waterfall thread.
 
 use crate::proto::{self, ClientMsg, Limits, Mode, RadioInfo, ServerMsg, State, WfReq};
-use crate::workers::{AudioCmd, AudioWorker, Out, WfConfig, WfWorker};
+use crate::workers::{AudioCmd, AudioJob, Out, WfConfig, WfWorker};
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
 use web888_core::leases::{Channels, Class};
+use web888_core::pool::DspPool;
 use web888_dsp::agc::AgcSpec;
 use web888_dsp::audio::{AUDIO_RATE, AudioSpec};
 use web888_dsp::chan::Droop;
@@ -27,6 +29,7 @@ pub struct Shared {
     pub status: Arc<HwStatus>,
     pub radio: RadioInfo,
     pub channels: Arc<Channels>,
+    pub pool: DspPool,
     /// Stage-2 RX decimation the hardware runs at (droop compensation).
     pub rx_r2: u16,
     /// The configuration's live settings (reloaded without a restart).
@@ -204,52 +207,46 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
         .channels
         .acquire(Class::Web, &format!("web {}", peer.ip()), st.hz);
 
-    // DSP threads
+    // DSP: audio on the pool, waterfall on its own thread
     let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel(32);
     let (wf_tx, mut wf_rx) = tokio::sync::mpsc::channel(16);
     let audio_drops = Arc::new(AtomicU64::new(0));
     let wf_drops = Arc::new(AtomicU64::new(0));
-    let (rx_sub, rx_blocks, rx_lost) = Subscriber::new(64);
     let (wf_sub, wf_blocks, wf_lost) = Subscriber::new(256);
     let (audio_cmd, audio_cmd_rx) = crossbeam_channel::unbounded();
     let (wf_cmd, wf_cmd_rx) = crossbeam_channel::unbounded();
-    let rx_rate = sh.radio.rx_rate;
-    let worker = AudioWorker {
-        ch: lease.channel(),
-        rx_rate,
-        droop: Droop::Rx {
-            adc_hz: sh.radio.adc_hz,
-            r2: sh.rx_r2,
-        },
-        spec,
-        blocks: rx_blocks,
-        cmd: audio_cmd_rx,
+    let w = WfWorker {
+        blocks: wf_blocks,
+        cmd: wf_cmd_rx,
         out: Out {
-            tx: audio_tx,
-            drops: audio_drops.clone(),
+            tx: wf_tx,
+            drops: wf_drops.clone(),
         },
     };
     let spawned = std::thread::Builder::new()
-        .name("web-audio".into())
-        .spawn(move || worker.run())
-        .and_then(|_| {
-            let w = WfWorker {
-                blocks: wf_blocks,
-                cmd: wf_cmd_rx,
-                out: Out {
-                    tx: wf_tx,
-                    drops: wf_drops.clone(),
-                },
-            };
-            std::thread::Builder::new()
-                .name("web-wf".into())
-                .spawn(move || w.run())
-        });
+        .name("web-wf".into())
+        .spawn(move || w.run());
     if let Err(e) = spawned {
         let _ = send_json(&mut ws, &ServerMsg::Error { msg: e.to_string() }).await;
         return;
     }
-    sh.hw(HwCmd::SubscribeRx(rx_sub));
+    let job = AudioJob::new(
+        lease.channel(),
+        sh.radio.rx_rate,
+        Droop::Rx {
+            adc_hz: sh.radio.adc_hz,
+            r2: sh.rx_r2,
+        },
+        spec,
+        audio_cmd_rx,
+        Out {
+            tx: audio_tx,
+            drops: audio_drops.clone(),
+        },
+    );
+    let placed = sh.pool.add(Box::new(job));
+    // the worker's losses count from here
+    let rx_lost0 = placed.rx_dropped.load(Ordering::Relaxed);
     sh.hw(HwCmd::SubscribeWf(wf_sub));
     let start_wf = |w: &WfReq| {
         let generation = sh.generation.fetch_add(1, Ordering::Relaxed) + 1;
@@ -358,7 +355,8 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
                 let m = ServerMsg::Status {
                     adc_overloads: s.overload_blocks.load(Ordering::Relaxed),
                     clock_ppm: s.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
-                    audio_drops: audio_drops.load(Ordering::Relaxed) + rx_lost.load(Ordering::Relaxed),
+                    audio_drops: audio_drops.load(Ordering::Relaxed)
+                        + placed.rx_dropped.load(Ordering::Relaxed).saturating_sub(rx_lost0),
                     wf_drops: wf_drops.load(Ordering::Relaxed) + wf_lost.load(Ordering::Relaxed),
                     hw_rate_ok: s.rx_rate_ok.load(Ordering::Relaxed),
                 };
@@ -368,5 +366,5 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
             }
         }
     }
-    // dropping the command senders stops the DSP threads
+    // dropping the command senders ends the audio job and the WF thread
 }

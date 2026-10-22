@@ -46,6 +46,7 @@ async fn start_with_channels() -> (
         web888_core::leases::Policy::default(),
         tx.clone(),
     );
+    let pool = web888_core::pool::DspPool::new(2, &tx, false).unwrap();
     let shared = Arc::new(Shared {
         hw: std::sync::Mutex::new(tx),
         status,
@@ -60,6 +61,7 @@ async fn start_with_channels() -> (
             wf_decim_max: caps.wf_decim_max,
         },
         channels: channels.clone(),
+        pool,
         rx_r2: r2,
         live: tokio::sync::watch::channel(Arc::new(web888_config::Config::default())).1,
         busy: Default::default(),
