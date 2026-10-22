@@ -265,11 +265,14 @@ Results go to a common spot bus (UI, PSKReporter, WSPRnet, local log).
 |---|---|---|
 | M0 ✅ | workspace, `Radio` trait, `Sim` backend, DSP crate with tests, CI (x86 + armv7 cross build) | IQ from Sim through channel filter verified in tests (`crates/dsp/tests/dsp.rs`) |
 | M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested), PPS loop ✅, HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programming opt-in `--si5351-adc`, test unit only); open: test on a unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
-| M2 | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio | usable in a browser |
-| M3 | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth | 13 users + time-shared waterfalls |
+| M2 ✅ | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio (`doc/m2-web-ui.md`, v0.1.0) | usable in a browser |
+| M3 ✅ | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth (`doc/m3-multi-user.md`, v0.2.0/v0.2.1); board benches wait for the test unit | 13 users + time-shared waterfalls |
 | M4 | decoder supervisor, FT8/WSPR skimmers, spot reporting | spots uploaded |
 | M5 | Kiwi protocol (feature `kiwi`) ported from upstream | kiwirecorder/SuperSDR work |
-| M6 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver) | GPS-timestamped IQ |
+| M6 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver); proposed core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`) | GPS-timestamped IQ |
+
+The order after M3 is being revisited against the stock firmware,
+KiwiSDR and OpenWebRX+: `doc/feature-gap.md` (proposal).
 
 ## 12. Licensing and provenance
 
