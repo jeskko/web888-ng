@@ -175,8 +175,18 @@ Each step is a milestone like M3 (plan, steps, tests).
 6. **B — interactive decoders in the browser (M7)**: CW, FSK/RTTY,
    NAVTEX/DSC, FAX, SSTV, time codes, as WASM/JS fed from the audio the
    page already gets.
-   * The stock server runs these on the A9 per user. Our bench (m3 §4)
-     says the A9 has little to spare, while a browser has plenty.
+   * The stock server runs these on the A9, one per listener who opens
+     one, so their cost grows with the audience; skimmers are a fixed
+     cost. Done in the browser they cost the unit nothing.
+   * This is about scaling, not a scarce A9. KiwiSDR serves 4-8 users
+     with decoders on one Cortex-A8 core, and the stock server runs 10
+     FT8 decoders. Our bench (m3 §4) shows where *our* code is expensive:
+     * 30 averaged FFTs per waterfall line against Kiwi's ~1
+     * filtering at 48 kS/s on the CPU where Kiwi's FPGA delivers 12 kS/s
+     * a scalar FFT, since rustfft has no NEON on armv7
+
+     Profiling on the test unit decides the optimisations: NEON FFT or
+     FFTW, 12 kS/s channels from the open bitstream, cheaper decimators.
    * Only autoruns (S) and things needing more than the audio (D) run on
      the unit.
 7. **O — operations (with the os repo, can run alongside)**:
