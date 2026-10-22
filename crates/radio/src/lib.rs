@@ -93,6 +93,19 @@ pub struct Identity {
     pub build_id: Option<u32>,
 }
 
+/// Health counters of the open driver (and, with the open bitstream, the
+/// FPGA). Running totals: compare successive values.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct HwStats {
+    /// Open bitstream: ADC clocks with the overflow pin high (wraps).
+    pub adc_overflows: u32,
+    /// Open bitstream: RX frames lost in the FPGA FIFO since RX start.
+    pub rx_frames_dropped: u32,
+    /// Driver: times the reader was lapped and the driver skipped ahead.
+    pub rx_overruns: u32,
+    pub rx_overrun_bytes: u64,
+}
+
 #[derive(Debug)]
 pub enum Error {
     InvalidChannel(usize),
@@ -159,6 +172,10 @@ pub trait Radio: Send {
 
     /// Next PPS period in ADC clocks, if a new one arrived.
     fn pps(&mut self) -> Result<Option<u32>>;
+    /// Health counters, if the backend has them (open driver).
+    fn hw_stats(&mut self) -> Result<Option<HwStats>> {
+        Ok(None)
+    }
     /// Open FPGA only: ADC samples since reset.
     fn sample_counter(&mut self) -> Option<u64>;
 

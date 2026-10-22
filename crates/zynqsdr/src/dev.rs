@@ -18,6 +18,10 @@ pub trait Device: Send {
     fn wf_read(&mut self, ch: u16, dst: &mut [u8]) -> io::Result<usize>;
     /// Next PPS period, `None` if there's none new.
     fn pps_read(&mut self) -> io::Result<Option<u32>>;
+    /// Open driver's counters; `None` with the stock driver.
+    fn stats(&mut self) -> io::Result<Option<Stats>> {
+        Ok(None)
+    }
 }
 
 /// The real `/dev/zynqsdr`. Only works on 32-bit ARM: the driver takes user
@@ -131,6 +135,16 @@ impl Device for ZynqsdrDev {
         match self.get_u32(PPS_READ) {
             Ok(v) => Ok(Some(v)),
             Err(e) if e.raw_os_error() == Some(libc::EBUSY) => Ok(None),
+            Err(e) => Err(e),
+        }
+    }
+
+    fn stats(&mut self) -> io::Result<Option<Stats>> {
+        let mut s = Stats::default();
+        match self.ioctl_ptr(GET_STATS, &mut s) {
+            Ok(()) => Ok(Some(s)),
+            // stock driver: unknown ioctl
+            Err(e) if matches!(e.raw_os_error(), Some(libc::ENOTTY | libc::EINVAL)) => Ok(None),
             Err(e) => Err(e),
         }
     }

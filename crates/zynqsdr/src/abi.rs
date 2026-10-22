@@ -19,6 +19,9 @@ pub const WF_READ: u32 = 0xC00E_5A0C; // WfRead
 pub const PPS_START: u32 = 0x4004_5A14; // 1 = enable
 pub const PPS_READ: u32 = 0x8004_5A15; // -> u32, EBUSY if none new
 
+/// Open driver (web888-ng-hw `driver/web888_sdr.h`) only; ENOTTY on stock.
+pub const GET_STATS: u32 = 0x8040_5A20; // -> Stats
+
 /// `WF_START` flag: continuous waterfall. The driver clears the WF mode bit
 /// (CFG 0x9E) when it is set and sets it otherwise; mode bit 1 = one-shot
 /// (open bitstream; stock by the flag's name, unconfirmed on hardware).
@@ -65,6 +68,27 @@ pub struct WfRead {
     pub readed: u32,
 }
 
+/// `GET_STATS` result (natural alignment, 64 bytes).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct Stats {
+    pub size: u32,
+    pub signature: u32,
+    /// 1 if the FPGA fields are valid (open bitstream).
+    pub ext: u32,
+    pub build_id: u32,
+    pub flags: u32,
+    pub adc_overflows: u32,
+    pub adc_peak: u32,
+    pub rx_frames: u32,
+    pub adc_samples: u64,
+    pub rx_frames_dropped: u32,
+    pub rx_bursts: u32,
+    pub wf_bursts: u32,
+    pub rx_overruns: u32,
+    pub rx_overrun_bytes: u64,
+}
+
 /// The size field of an ioctl number (bits 29:16).
 pub const fn ioc_size(cmd: u32) -> usize {
     ((cmd >> 16) & 0x3fff) as usize
@@ -92,6 +116,10 @@ mod tests {
         assert_eq!(ioc_size(WF_READ), 14);
         assert_eq!(ioc_size(GET_DNA), 8);
         assert_eq!(ioc_size(GET_SIGNATURE), 4);
+        assert_eq!(size_of::<Stats>(), 64);
+        assert_eq!(ioc_size(GET_STATS), 64);
+        assert_eq!(std::mem::offset_of!(Stats, adc_samples), 32);
+        assert_eq!(std::mem::offset_of!(Stats, rx_overrun_bytes), 56);
     }
 
     #[test]

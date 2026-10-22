@@ -63,6 +63,9 @@ pub struct ZynqsdrRadio<D: Device> {
     rx_stage: Vec<u8>,
     wf: Vec<WfState>,
     gpio: u32,
+    /// From GET_STATS at open (open driver + open bitstream).
+    build_id: Option<u32>,
+    has_stats: bool,
 }
 
 fn io(e: std::io::Error) -> Error {
@@ -81,6 +84,7 @@ impl<D: Device> ZynqsdrRadio<D> {
         }
         let dna = dev.get_dna().map_err(io)?;
         let gpio = dev.get_u32(GET_GPIO_MASK).map_err(io)?;
+        let stats = dev.stats().map_err(io)?;
         dev.set(PPS_START, 1).map_err(io)?;
         let adc = cfg.adc_hz;
         let mut r = ZynqsdrRadio {
@@ -106,6 +110,8 @@ impl<D: Device> ZynqsdrRadio<D> {
                 })
                 .collect(),
             gpio,
+            build_id: stats.filter(|s| s.ext != 0).map(|s| s.build_id),
+            has_stats: stats.is_some(),
         };
         r.set_rx_rate(20)?;
         Ok(r)
@@ -305,6 +311,18 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         self.dev.pps_read().map_err(io)
     }
 
+    fn hw_stats(&mut self) -> Result<Option<HwStats>> {
+        if !self.has_stats {
+            return Ok(None);
+        }
+        Ok(self.dev.stats().map_err(io)?.map(|s| HwStats {
+            adc_overflows: s.adc_overflows,
+            rx_frames_dropped: s.rx_frames_dropped,
+            rx_overruns: s.rx_overruns,
+            rx_overrun_bytes: s.rx_overrun_bytes,
+        }))
+    }
+
     fn sample_counter(&mut self) -> Option<u64> {
         None
     }
@@ -314,7 +332,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             backend: "zynqsdr",
             signature: self.signature,
             dna: Some(self.dna),
-            build_id: None,
+            build_id: self.build_id,
         }
     }
 }

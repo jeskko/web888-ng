@@ -24,6 +24,8 @@ struct FakeDriver {
     /// Emulate a bitstream whose WF always stops after one block, whatever
     /// the mode bit (in case the stock bitstream ignores it).
     wf_oneshot_hw: bool,
+    /// GET_STATS answer: `None` = stock driver (no such ioctl).
+    stats: Option<Stats>,
 }
 
 impl FakeDriver {
@@ -36,6 +38,7 @@ impl FakeDriver {
             rx_q: Vec::new(),
             wf_param: [(1, 0); 2],
             wf_oneshot_hw: false,
+            stats: None,
         }
     }
 }
@@ -122,6 +125,10 @@ impl Device for FakeDriver {
     fn pps_read(&mut self) -> io::Result<Option<u32>> {
         self.sim.pps().map_err(io::Error::other)
     }
+
+    fn stats(&mut self) -> io::Result<Option<Stats>> {
+        Ok(self.stats)
+    }
 }
 
 fn libc_einval() -> i32 {
@@ -153,6 +160,36 @@ fn init_sequence_and_identity() {
     let log = &r.device().log;
     assert_eq!(log[0], (PPS_START, 1));
     assert_eq!(log[1], (RX_START, 20));
+}
+
+#[test]
+fn stats_only_with_the_open_driver() {
+    let mut r = radio(Scene::new());
+    assert_eq!(r.hw_stats().unwrap(), None);
+    assert_eq!(r.identity().build_id, None);
+
+    let mut d = FakeDriver::new(Scene::new());
+    d.stats = Some(Stats {
+        size: 64,
+        ext: 1,
+        build_id: 0x2026_1022,
+        adc_overflows: 5,
+        rx_frames_dropped: 2,
+        rx_overruns: 1,
+        rx_overrun_bytes: 4800,
+        ..Default::default()
+    });
+    let mut r = ZynqsdrRadio::new(d, ZynqConfig::default()).unwrap();
+    assert_eq!(r.identity().build_id, Some(0x2026_1022));
+    assert_eq!(
+        r.hw_stats().unwrap(),
+        Some(HwStats {
+            adc_overflows: 5,
+            rx_frames_dropped: 2,
+            rx_overruns: 1,
+            rx_overrun_bytes: 4800,
+        })
+    );
 }
 
 #[test]

@@ -11,8 +11,9 @@ use web888_radio::clock::AdcClock;
 use web888_radio::*;
 
 /// Detects lost RX frames by comparing what arrived with the configured
-/// rate over a window. The stock driver reports no ring overruns, so a
-/// reader that falls behind (slow CPU, a stalled thread) only shows up here.
+/// rate over a window. The stock driver reports no ring overruns, so with
+/// it a reader that falls behind (slow CPU, a stalled thread) only shows
+/// up here; the open driver also counts them (`Radio::hw_stats`).
 pub struct RateMonitor {
     window: Duration,
     start: Option<Instant>,
@@ -73,6 +74,19 @@ impl RateMonitor {
     }
 }
 
+/// RX data is read in batches of about this much signal time. The PL
+/// delivers 128-byte bursts, so reading whatever is there makes thousands
+/// of tiny reads per second.
+const RX_BATCH: Duration = Duration::from_millis(5);
+
+/// Pause after a read of `got` frames: the time the rest of a batch takes
+/// to arrive at `frames_per_s` (none when the reader is behind).
+pub fn read_pause(got: usize, frames_per_s: f64) -> Duration {
+    let batch = RX_BATCH.as_secs_f64();
+    let missing = batch - got as f64 / frames_per_s;
+    Duration::from_secs_f64(missing.clamp(0.0, batch))
+}
+
 pub struct HwLoop {
     pub radio: Box<dyn Radio>,
     pub ctl: Receiver<Control>,
@@ -93,6 +107,7 @@ impl HwLoop {
         let mut last_report = Instant::now();
         let mut fe = FrontEnd::default();
         let mut rate = RateMonitor::new(Duration::from_secs(10));
+        let mut last_stats = self.radio.hw_stats()?;
 
         while !self.stop.load(Ordering::Relaxed) {
             while let Ok(c) = self.ctl.try_recv() {
@@ -129,20 +144,45 @@ impl HwLoop {
                     }
                 );
             }
+            let mut overload = false;
+            if got > 0
+                && let Some(s) = self.radio.hw_stats()?
+            {
+                if let Some(l) = last_stats {
+                    overload = s.adc_overflows != l.adc_overflows;
+                    if s.rx_overruns != l.rx_overruns {
+                        eprintln!(
+                            "rx: ring overrun, {} bytes skipped: the reader fell behind",
+                            s.rx_overrun_bytes.wrapping_sub(l.rx_overrun_bytes)
+                        );
+                    }
+                    // reset at each RX start
+                    if s.rx_frames_dropped > l.rx_frames_dropped {
+                        eprintln!(
+                            "rx: {} frames dropped in the FPGA FIFO",
+                            s.rx_frames_dropped - l.rx_frames_dropped
+                        );
+                    }
+                }
+                last_stats = Some(s);
+            }
             if got > 0 {
                 frames += got as u64;
                 let iq = buf[..got * n].iter().map(|s| (s.i, s.q)).collect();
                 match self.out.try_send(Block {
                     nch: n,
                     iq,
-                    overload: false,
+                    overload,
                 }) {
                     Ok(()) => {}
                     Err(TrySendError::Full(_)) => dropped += 1,
                     Err(TrySendError::Disconnected(_)) => return Ok(()),
                 }
-            } else {
-                std::thread::sleep(Duration::from_millis(5));
+            }
+            let fps = self.radio.adc_hz() / (256.0 * self.radio.rx_r2() as f64);
+            let pause = read_pause(got, fps);
+            if !pause.is_zero() {
+                std::thread::sleep(pause);
             }
 
             if let Some(p) = self.radio.pps()?
@@ -173,6 +213,16 @@ impl HwLoop {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn read_pause_waits_for_the_rest_of_a_batch() {
+        let fps = 48_000.0; // 240 frames per 5 ms batch
+        assert_eq!(read_pause(0, fps), RX_BATCH);
+        let p = read_pause(60, fps).as_secs_f64();
+        assert!((p - 0.00375).abs() < 1e-9, "{p}");
+        assert_eq!(read_pause(240, fps), Duration::ZERO);
+        assert_eq!(read_pause(2000, fps), Duration::ZERO);
+    }
 
     #[test]
     fn rate_monitor_reports_deficit_and_restarts_on_rate_change() {
