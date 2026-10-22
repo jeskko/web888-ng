@@ -200,6 +200,10 @@ async fn status_and_missing_ui() {
         s.read_to_string(&mut r).await.unwrap();
         assert!(r.starts_with("HTTP/1.1 200"), "{r}");
         assert!(r.contains(want), "{path}: {r}");
+        assert!(
+            r.to_lowercase().contains("cache-control: no-cache"),
+            "{path}: {r}"
+        );
     }
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }

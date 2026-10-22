@@ -12,7 +12,7 @@ web888-dsp.workspace = true
 web888-hw.workspace = true
 axum = { version = "0.8.9", features = ["ws"] }
 tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
-tower-http = { version = "0.7.1", features = ["fs", "compression-gzip"] }
+tower-http = { version = "0.7.1", features = ["fs", "compression-gzip", "set-header"] }
 serde = { version = "1.0.229", features = ["derive"] }
 serde_json = "1.0.154"
 crossbeam-channel = "0.5.17"

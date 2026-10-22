@@ -23,6 +23,7 @@ use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
+use tower_http::set_header::SetResponseHeaderLayer;
 
 pub use tls::Tls;
 
@@ -36,6 +37,12 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .route("/ws", get(ws))
         .route("/api/status", get(status))
         .fallback_service(ui)
+        // revalidate every load (cheap with ETags): a new UI build is
+        // picked up at once, never mixed with cached old files
+        .layer(SetResponseHeaderLayer::if_not_present(
+            axum::http::header::CACHE_CONTROL,
+            axum::http::HeaderValue::from_static("no-cache"),
+        ))
         .layer(CompressionLayer::new())
         .with_state(shared)
 }
