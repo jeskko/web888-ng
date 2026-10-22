@@ -6,6 +6,7 @@
 pub mod proto;
 pub mod session;
 pub mod tls;
+pub mod wfsvc;
 pub mod workers;
 
 use axum::Router;
@@ -61,7 +62,7 @@ async fn status(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
     let s = &sh.status;
     Json(serde_json::json!({
         "radio": sh.radio,
-        "busy": sh.busy.load(Ordering::Relaxed),
+        "sessions": sh.sessions.load(Ordering::Relaxed),
         "adc_overloads": s.overload_blocks.load(Ordering::Relaxed),
         "clock_ppm": s.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
         "hw_rate_ok": s.rx_rate_ok.load(Ordering::Relaxed),

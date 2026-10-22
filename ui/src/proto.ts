@@ -81,6 +81,8 @@ export const FLAG_OVERLOAD = 1;
 export const FLAG_GAP = 2;
 /** Waterfall: first line of a new tuning/zoom. */
 export const FLAG_NEW_GEN = 2;
+/** Waterfall: no new samples since the previous line (a repeat). */
+export const FLAG_STALE = 4;
 export const AUDIO_HEADER = 16;
 export const WF_HEADER = 40;
 

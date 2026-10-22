@@ -11,13 +11,16 @@
 //! (narrow spans: fewer than N new samples) reuses the newest N samples.
 //!
 //! Levels are dBFS: a full-scale complex tone reads 0 dB in its bin, with
-//! the WF CIC droop corrected per bin. Merging FFT bins into display bins
-//! averages power.
+//! the chain's CIC droop corrected per bin. Merging FFT bins into display
+//! bins averages power. Input is a WF slot's samples, or an RX channel's
+//! (narrow views of the channel a user listens to, `doc/m3-multi-user.md`
+//! §3).
 
-use crate::C32;
+use crate::chan::Droop;
+use crate::{C32, rx_to_c32};
 use rustfft::{Fft, FftPlanner};
 use std::sync::Arc;
-use web888_radio::{Iq16, WF_SINE_FULL_SCALE, wf_chain_mag};
+use web888_radio::{Iq16, Iq32, WF_SINE_FULL_SCALE};
 
 /// Level of quantised value 0 and the step per value (`quantize`).
 pub const WF_DB0: f32 = -160.0;
@@ -27,7 +30,7 @@ const MAX_CORRECTION_DB: f64 = 20.0;
 
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct WfSpec {
-    /// WF sample rate (= span).
+    /// Sample rate (= span).
     pub fs: f64,
     /// Display bins per line (power of two, <= 4096).
     pub bins: usize,
@@ -35,8 +38,8 @@ pub struct WfSpec {
     pub budget: usize,
     /// Line rate, for the stride before the first line is measured.
     pub fps: f64,
-    /// WF CIC to correct: ADC rate and decimation.
-    pub droop: Option<(f64, u16)>,
+    /// The chain's CIC response to correct.
+    pub droop: Droop,
 }
 
 /// FFT size for `bins` display bins: at least two FFT bins per display bin.
@@ -53,6 +56,9 @@ pub struct WfLine {
     pub bin_hz: f64,
     /// FFTs averaged into this line.
     pub ffts: usize,
+    /// Samples arrived since the previous line (else it repeats the
+    /// newest ones).
+    pub fresh: bool,
 }
 
 /// Quantise levels for the wire: `WF_DB0 + v * WF_DB_STEP`.
@@ -104,13 +110,8 @@ impl WfEngine {
                 } else {
                     k as f64 - n as f64
                 };
-                let corr = match spec.droop {
-                    Some((adc, decim)) => {
-                        let m = wf_chain_mag(kk * spec.fs / n as f64, adc, decim);
-                        (1.0 / (m * m)).min(10f64.powf(MAX_CORRECTION_DB / 10.0))
-                    }
-                    None => 1.0,
-                };
+                let m = spec.droop.mag(kk * spec.fs / n as f64);
+                let corr = (1.0 / (m * m)).min(10f64.powf(MAX_CORRECTION_DB / 10.0));
                 (corr / (sum_w * sum_w)) as f32
             })
             .collect();
@@ -143,21 +144,39 @@ impl WfEngine {
         self.n
     }
 
+    /// Most FFTs per line from the next line on (load shedding).
+    pub fn set_budget(&mut self, budget: usize) {
+        self.spec.budget = budget.max(1);
+    }
+
     fn set_stride(&mut self, samples_per_line: usize) {
         self.stride = (samples_per_line / self.spec.budget).max(self.hop);
     }
 
-    /// Add samples; `contiguous = false` if there was a gap before them
-    /// (no FFT spans a gap).
+    /// Add WF slot samples; `contiguous = false` if there was a gap
+    /// before them (no FFT spans a gap).
     pub fn push(&mut self, iq: &[Iq16], contiguous: bool) {
+        let k = (1.0 / WF_SINE_FULL_SCALE) as f32;
+        self.push_c32(
+            iq.iter().map(|s| C32::new(s.i as f32 * k, s.q as f32 * k)),
+            contiguous,
+        );
+    }
+
+    /// Add RX channel samples (as `push`).
+    pub fn push_rx(&mut self, iq: impl Iterator<Item = Iq32>, contiguous: bool) {
+        self.push_c32(iq.map(rx_to_c32), contiguous);
+    }
+
+    /// Add samples scaled so that a full-scale ADC sine has |z| = 1.
+    pub fn push_c32(&mut self, iq: impl Iterator<Item = C32>, contiguous: bool) {
         if !contiguous {
             self.buf.clear();
             self.next = 0;
         }
-        let k = (1.0 / WF_SINE_FULL_SCALE) as f32;
-        self.buf
-            .extend(iq.iter().map(|s| C32::new(s.i as f32 * k, s.q as f32 * k)));
-        self.fresh += iq.len();
+        let before = self.buf.len();
+        self.buf.extend(iq);
+        self.fresh += self.buf.len() - before;
         while self.next + self.n <= self.buf.len() {
             if self.nacc < self.spec.budget {
                 self.fft_at(self.next);
@@ -189,6 +208,7 @@ impl WfEngine {
 
     /// Finish the current line. `None` until the first N samples arrived.
     pub fn line(&mut self) -> Option<WfLine> {
+        let fresh = self.fresh > 0;
         if self.nacc == 0 {
             if self.buf.len() < self.n {
                 return None;
@@ -216,6 +236,7 @@ impl WfEngine {
             first_offset_hz: (-(n as f64) / 2.0 + (g as f64 - 1.0) / 2.0) * fft_bin,
             bin_hz: fft_bin * g as f64,
             ffts: self.nacc,
+            fresh,
         };
         self.acc.fill(0.0);
         self.nacc = 0;
@@ -256,8 +277,36 @@ mod tests {
             bins: 1024,
             budget,
             fps: 20.0,
-            droop: None,
+            droop: Droop::None,
         }
+    }
+
+    #[test]
+    fn rx_channel_input_and_fresh_lines() {
+        // a 48 kS/s RX channel: -20 dBFS tone at -5 kHz
+        let fs = 48_000.0;
+        let mut e = WfEngine::new(spec(fs, 30));
+        let a = web888_radio::RX_SINE_FULL_SCALE * 0.1;
+        let w = 2.0 * std::f64::consts::PI * -5e3 / fs;
+        let x: Vec<Iq32> = (0..4800)
+            .map(|k| Iq32 {
+                i: (a * (w * k as f64).cos()) as i32,
+                q: (a * (w * k as f64).sin()) as i32,
+            })
+            .collect();
+        e.push_rx(x.iter().copied(), true);
+        let l = e.line().unwrap();
+        assert!(l.fresh);
+        let (k, peak) =
+            l.db.iter()
+                .enumerate()
+                .fold((0, f32::MIN), |m, (k, &d)| if d > m.1 { (k, d) } else { m });
+        let f = l.first_offset_hz + k as f64 * l.bin_hz;
+        assert!((f + 5e3).abs() <= l.bin_hz, "{f}");
+        assert!((-23.0..=-19.9).contains(&peak), "{peak}");
+        // nothing new: the next line repeats the newest samples
+        let l = e.line().unwrap();
+        assert!(!l.fresh && l.ffts == 1);
     }
 
     #[test]
@@ -386,7 +435,10 @@ mod tests {
         let fs = 1_920_000.0;
         let decim = 64;
         let mut s = spec(fs, 1000);
-        s.droop = Some((web888_radio::ADC_HZ_HF, decim));
+        s.droop = Droop::Wf {
+            adc_hz: web888_radio::ADC_HZ_HF,
+            decim,
+        };
         let e = WfEngine::new(s);
         let n = e.fft_n();
         for k in [n / 8, n / 4, n / 2, n - n / 4] {
@@ -396,7 +448,7 @@ mod tests {
                 k as f64 - n as f64
             } * fs
                 / n as f64;
-            let m = wf_chain_mag(f, web888_radio::ADC_HZ_HF, decim);
+            let m = web888_radio::wf_chain_mag(f, web888_radio::ADC_HZ_HF, decim);
             let want = (1.0 / (m * m)).min(100.0);
             let got = (e.scale[k] / e.scale[0]) as f64;
             assert!((got / want - 1.0).abs() < 1e-3, "bin {k}: {got} vs {want}");

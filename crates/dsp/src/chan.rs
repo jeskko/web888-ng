@@ -31,6 +31,11 @@ pub enum Droop {
         adc_hz: f64,
         r2: u16,
     },
+    /// Web-888 WF chain (CIC decimating by `decim`) at ADC rate `adc_hz`.
+    Wf {
+        adc_hz: f64,
+        decim: u16,
+    },
 }
 
 impl Droop {
@@ -38,6 +43,7 @@ impl Droop {
         match *self {
             Droop::None => 1.0,
             Droop::Rx { adc_hz, r2 } => web888_radio::rx_chain_mag(f, adc_hz, r2),
+            Droop::Wf { adc_hz, decim } => web888_radio::wf_chain_mag(f, adc_hz, decim),
         }
     }
 }

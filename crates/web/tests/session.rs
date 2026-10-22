@@ -16,11 +16,21 @@ use web888_web::session::Shared;
 const TONE: f64 = 7_075_500.0;
 
 async fn start() -> (std::net::SocketAddr, Arc<AtomicBool>) {
-    let (addr, stop, _) = start_with_channels().await;
+    let (addr, stop, _) = start_with(web888_config::Config::default()).await;
     (addr, stop)
 }
 
 async fn start_with_channels() -> (
+    std::net::SocketAddr,
+    Arc<AtomicBool>,
+    Arc<web888_core::leases::Channels>,
+) {
+    start_with(web888_config::Config::default()).await
+}
+
+async fn start_with(
+    config: web888_config::Config,
+) -> (
     std::net::SocketAddr,
     Arc<AtomicBool>,
     Arc<web888_core::leases::Channels>,
@@ -46,9 +56,15 @@ async fn start_with_channels() -> (
         web888_core::leases::Policy::default(),
         tx.clone(),
     );
-    let pool = web888_core::pool::DspPool::new(2, &tx, false).unwrap();
+    let pool = Arc::new(web888_core::pool::DspPool::new(2, &tx, false).unwrap());
     let shared = Arc::new(Shared {
-        hw: std::sync::Mutex::new(tx),
+        waterfalls: web888_web::wfsvc::Waterfalls::new(
+            caps.wf_channels,
+            caps.adc_hz,
+            caps.wf_block,
+            tx.clone(),
+            pool.clone(),
+        ),
         status,
         radio: RadioInfo {
             backend: "sim".into(),
@@ -63,9 +79,10 @@ async fn start_with_channels() -> (
         channels: channels.clone(),
         pool,
         rx_r2: r2,
-        live: tokio::sync::watch::channel(Arc::new(web888_config::Config::default())).1,
-        busy: Default::default(),
-        generation: Default::default(),
+        live: tokio::sync::watch::channel(Arc::new(config)).1,
+        ips: Default::default(),
+        sessions: Default::default(),
+        next_session: Default::default(),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -126,12 +143,12 @@ async fn session_streams_audio_and_waterfall() {
     assert_eq!(st.hz, 7_074_000.0);
     assert_eq!(st.wf.decim, 2, "full view of 0..61.44 MHz");
 
-    // a second user is turned away
+    // a second user gets in too
     let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
         .await
         .unwrap();
     let m = json(&ws2.next().await.unwrap().unwrap()).unwrap();
-    assert!(matches!(m, ServerMsg::Busy { .. }), "{m:?}");
+    assert!(matches!(m, ServerMsg::Hello { .. }), "{m:?}");
 
     // zoom: 480 kHz around 7.1 MHz
     let req = r#"{"type":"wf","center_hz":7100000,"decim":256,"bins":1024,"fps":20}"#;
@@ -185,14 +202,32 @@ async fn session_streams_audio_and_waterfall() {
     let p = rssi[rssi.len() - 5];
     assert!((p + 40.0).abs() < 1.0, "rssi {p}");
 
-    // the user leaves: the next one gets in
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn sessions_per_address_are_limited() {
+    let mut config = web888_config::Config::default();
+    config.limits.per_ip = 2;
+    let (addr, stop, _) = start_with(config).await;
+    let url = format!("ws://{addr}/ws");
+    let mut first = Vec::new();
+    for _ in 0..2 {
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        let m = json(&ws.next().await.unwrap().unwrap()).unwrap();
+        assert!(matches!(m, ServerMsg::Hello { .. }), "{m:?}");
+        first.push(ws);
+    }
+    let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    let m = json(&ws.next().await.unwrap().unwrap()).unwrap();
+    assert!(matches!(m, ServerMsg::Busy { .. }), "{m:?}");
+    // one leaves: the next one gets in
+    let mut ws = first.pop().unwrap();
     ws.close(None).await.unwrap();
     drop(ws);
     tokio::time::sleep(Duration::from_millis(200)).await;
-    let (mut ws3, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
-        .await
-        .unwrap();
-    let m = json(&ws3.next().await.unwrap().unwrap()).unwrap();
+    let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    let m = json(&ws.next().await.unwrap().unwrap()).unwrap();
     assert!(matches!(m, ServerMsg::Hello { .. }), "{m:?}");
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
@@ -269,5 +304,48 @@ async fn session_waits_for_a_channel() {
     let web = channels.leases();
     assert_eq!(web.len(), 1);
     assert_eq!(web[0].state, LeaseState::Granted { ch: 0 });
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn narrow_view_comes_from_the_channel() {
+    let (addr, stop) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    // 30 kHz around the dial (7.074 MHz): inside the RX channel
+    let req = r#"{"type":"wf","center_hz":7074000,"decim":4096,"bins":1024,"fps":20}"#;
+    ws.send(Message::Text(req.into())).await.unwrap();
+    let mut lines = 0;
+    let mut new_gen = false;
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while lines < 5 && tokio::time::Instant::now() < deadline {
+        let m = ws.next().await.unwrap().unwrap();
+        let Message::Binary(b) = m else { continue };
+        if b[0] != proto::KIND_WF {
+            continue;
+        }
+        new_gen |= b[1] & proto::FLAG_NEW_GEN != 0;
+        let bins = u16::from_le_bytes([b[2], b[3]]) as usize;
+        let f0 = f64::from_le_bytes(b[8..16].try_into().unwrap());
+        let df = f64::from_le_bytes(b[16..24].try_into().unwrap());
+        if !new_gen || df > 1000.0 {
+            continue; // still the full view
+        }
+        // the channel's grid: 48 kHz / 2048 bins, cropped to the 30 kHz
+        assert!((df - 48_000.0 / 2048.0).abs() < 1e-6, "df {df}");
+        let span = bins as f64 * df;
+        assert!((span - 30_000.0).abs() <= 2.0 * df, "span {span}");
+        assert!((f0 - (7_074_000.0 - 15_000.0)).abs() <= df, "f0 {f0}");
+        let lv = &b[proto::WF_HEADER..];
+        let k = (0..bins).max_by_key(|&k| lv[k]).unwrap();
+        let f = f0 + k as f64 * df;
+        assert!((f - TONE).abs() <= df, "peak at {f}");
+        // -40 dBFS tone: about 100 above the floor of the u8 scale
+        let level = -160.0 + lv[k] as f64 * 160.0 / 255.0;
+        assert!((level + 40.0).abs() < 3.0, "tone at {level} dBFS");
+        lines += 1;
+    }
+    assert!(lines >= 5, "{lines} lines");
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }

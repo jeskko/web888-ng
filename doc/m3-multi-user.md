@@ -115,6 +115,21 @@ Fairness metric per view: achieved fps vs requested, shown in the admin
 page. Unit tests run the scheduler against a fake clock and a fake radio
 (block arrival times by span).
 
+As built (step 4): `web888_core::wf::WfScheduler` groups the sessions'
+hardware views and spreads them over the slots (greedy by load = fps x
+block time); it hands the hw thread a plan per slot (`HwCmd::WfPlan`).
+The hw thread streams a slot with one view continuously, or rotates its
+views as one-shot blocks (`web888_hw::wf::Rotation`: each view due once
+per line period, most overdue first, idle when none is due; lag bounded
+to 1 s, shifting all views together so shares stay fair). Each hardware
+view is a `ViewJob` on the DSP pool (one engine at its sessions' finest
+bins and fastest rate; lines re-binned per session); a narrow view
+(<= 40 kHz, within +-20 kHz of the dial) is drawn by the session's own
+`AudioJob` from its channel. Waterfall frames carry a `stale` flag for
+lines with no new samples; the load tool counts fresh lines as the
+achieved rate. Under load a pool worker halves its waterfalls' FFT
+budget per shedding level, then their rate.
+
 ## 4. DSP pool
 
 Two threads per session (M2) is 26 threads for 13 users on 2 cores. M3

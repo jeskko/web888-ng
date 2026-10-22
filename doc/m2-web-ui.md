@@ -175,7 +175,7 @@ Waterfall (`kind = 2`), one line:
 | off | type | field |
 |---|---|---|
 | 0 | u8 | kind = 2 |
-| 1 | u8 | flags: bit0 ADC overload, bit1 new `gen` (retune/zoom) |
+| 1 | u8 | flags: bit0 ADC overload, bit1 new `gen` (retune/zoom), bit2 stale (no new samples since the previous line; M3) |
 | 2 | u16 | bins |
 | 4 | u32 | seq |
 | 8 | f64 | frequency of the first bin's centre (Hz) |

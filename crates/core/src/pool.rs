@@ -3,45 +3,74 @@
 //! core, pinned) run every session's per-block DSP, instead of a thread
 //! per session.
 //!
-//! Each worker subscribes once to the hw thread's RX blocks and runs the
-//! [`RxJob`]s placed on it, block by block, in its own thread, so a job's
-//! state never moves between threads while it runs. A new job goes to the
-//! worker with the fewest jobs. A job ends when it says so (its session is
-//! gone); jobs aren't migrated when others leave, so new ones fill the
-//! lighter worker first.
+//! Each worker subscribes once to the hw thread's RX and WF blocks and
+//! runs the [`Job`]s placed on it in its own thread, so a job's state
+//! never moves between threads while it runs: every RX block and WF block
+//! goes to every job, and after each round (an RX block, ~5 ms, or
+//! [`TICK`] without one) every job gets a tick for timed output. A new
+//! job goes to the worker with the fewest jobs. A job ends when it says so
+//! (its session is gone); jobs aren't migrated when others leave, so new
+//! ones fill the lighter worker first.
+//!
+//! Load shedding: a worker busy more than [`SHED_ABOVE`] of a second
+//! raises its shed level (jobs see it in [`Ctx`]; waterfalls halve their
+//! FFT budget per level, then their rate), and lowers it again below
+//! [`SHED_BELOW`]. Audio is never shed.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::mpsc::{Receiver, RecvTimeoutError, Sender, TryRecvError, channel};
 use std::time::{Duration, Instant};
 use web888_hw::{HwCmd, Subscriber};
-use web888_radio::RxBlock;
+use web888_radio::{RxBlock, WfBlock};
 
-/// Per-block work for one client (e.g. a session's audio chain).
-pub trait RxJob: Send + 'static {
-    /// Process one RX block; false when the job is finished.
-    fn process(&mut self, b: &RxBlock) -> bool;
-    /// No block for a while (radio stopped); false when finished.
-    fn idle(&mut self) -> bool {
+/// What a worker tells its jobs each tick.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub struct Ctx {
+    /// Load shedding level: 0 = none.
+    pub shed: u32,
+}
+
+/// Work for one client (a session's audio chain, a waterfall view). Each
+/// method returns false when the job is finished.
+pub trait Job: Send + 'static {
+    fn rx(&mut self, _b: &RxBlock) -> bool {
+        true
+    }
+    fn wf(&mut self, _b: &Arc<WfBlock>) -> bool {
+        true
+    }
+    /// After each round: timed output, checking the client is still there.
+    fn tick(&mut self, _now: Instant, _ctx: Ctx) -> bool {
         true
     }
 }
 
 /// RX blocks queued per worker: 64 blocks of ~5 ms.
 const DEPTH: usize = 64;
-const IDLE: Duration = Duration::from_millis(100);
+/// WF blocks queued per worker.
+const WF_DEPTH: usize = 256;
+/// Longest time between ticks.
+pub const TICK: Duration = Duration::from_millis(10);
+/// Busy share of a second above which a worker sheds load, and below
+/// which it stops.
+pub const SHED_ABOVE: f64 = 0.7;
+pub const SHED_BELOW: f64 = 0.4;
+const MAX_SHED: u32 = 8;
 
 #[derive(Default)]
 struct Load {
     jobs: AtomicUsize,
     /// Time spent in jobs, ns.
     busy_ns: AtomicU64,
+    shed: std::sync::atomic::AtomicU32,
 }
 
 struct Worker {
-    jobs: Sender<Box<dyn RxJob>>,
+    jobs: Sender<Box<dyn Job>>,
     load: Arc<Load>,
     rx_dropped: Arc<AtomicU64>,
+    wf_dropped: Arc<AtomicU64>,
 }
 
 /// Where a job runs.
@@ -49,6 +78,8 @@ pub struct Placement {
     pub worker: usize,
     /// RX blocks the worker lost (its queue was full); shared by its jobs.
     pub rx_dropped: Arc<AtomicU64>,
+    /// WF blocks the worker lost.
+    pub wf_dropped: Arc<AtomicU64>,
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -56,6 +87,8 @@ pub struct WorkerStats {
     pub jobs: usize,
     pub busy: Duration,
     pub rx_dropped: u64,
+    pub wf_dropped: u64,
+    pub shed: u32,
 }
 
 pub struct DspPool {
@@ -63,12 +96,13 @@ pub struct DspPool {
 }
 
 impl DspPool {
-    /// `n` workers (at least one), subscribed to the hw thread's RX
-    /// blocks; worker k pinned to CPU k if `pin`.
+    /// `n` workers (at least one), subscribed to the hw thread's RX and
+    /// WF blocks; worker k pinned to CPU k if `pin`.
     pub fn new(n: usize, hw: &Sender<HwCmd>, pin: bool) -> std::io::Result<Self> {
         let mut workers = Vec::new();
         for k in 0..n.max(1) {
             let (sub, blocks, rx_dropped) = Subscriber::new(DEPTH);
+            let (wf_sub, wf_blocks, wf_dropped) = Subscriber::new(WF_DEPTH);
             let (jobs, jobs_rx) = channel();
             let load = Arc::new(Load::default());
             let l = load.clone();
@@ -78,13 +112,15 @@ impl DspPool {
                     if pin {
                         pin_to_cpu(k);
                     }
-                    run(blocks, jobs_rx, l)
+                    run(blocks, wf_blocks, jobs_rx, l)
                 })?;
             let _ = hw.send(HwCmd::SubscribeRx(sub));
+            let _ = hw.send(HwCmd::SubscribeWf(wf_sub));
             workers.push(Worker {
                 jobs,
                 load,
                 rx_dropped,
+                wf_dropped,
             });
         }
         Ok(DspPool { workers })
@@ -101,7 +137,7 @@ impl DspPool {
     }
 
     /// Run `job` on the least loaded worker.
-    pub fn add(&self, job: Box<dyn RxJob>) -> Placement {
+    pub fn add(&self, job: Box<dyn Job>) -> Placement {
         let (k, w) = self
             .workers
             .iter()
@@ -115,6 +151,7 @@ impl DspPool {
         Placement {
             worker: k,
             rx_dropped: w.rx_dropped.clone(),
+            wf_dropped: w.wf_dropped.clone(),
         }
     }
 
@@ -125,13 +162,23 @@ impl DspPool {
                 jobs: w.load.jobs.load(Ordering::Relaxed),
                 busy: Duration::from_nanos(w.load.busy_ns.load(Ordering::Relaxed)),
                 rx_dropped: w.rx_dropped.load(Ordering::Relaxed),
+                wf_dropped: w.wf_dropped.load(Ordering::Relaxed),
+                shed: w.load.shed.load(Ordering::Relaxed),
             })
             .collect()
     }
 }
 
-fn run(blocks: Receiver<Arc<RxBlock>>, new: Receiver<Box<dyn RxJob>>, load: Arc<Load>) {
-    let mut jobs: Vec<Box<dyn RxJob>> = Vec::new();
+fn run(
+    blocks: Receiver<Arc<RxBlock>>,
+    wf_blocks: Receiver<Arc<WfBlock>>,
+    new: Receiver<Box<dyn Job>>,
+    load: Arc<Load>,
+) {
+    let mut jobs: Vec<Box<dyn Job>> = Vec::new();
+    let mut ctx = Ctx::default();
+    let mut window = Instant::now();
+    let mut busy = Duration::ZERO;
     loop {
         loop {
             match new.try_recv() {
@@ -142,18 +189,37 @@ fn run(blocks: Receiver<Arc<RxBlock>>, new: Receiver<Box<dyn RxJob>>, load: Arc<
             }
         }
         let before = jobs.len();
-        match blocks.recv_timeout(IDLE) {
-            Ok(b) => {
-                let t = Instant::now();
-                jobs.retain_mut(|j| j.process(&b));
-                load.busy_ns
-                    .fetch_add(t.elapsed().as_nanos() as u64, Ordering::Relaxed);
-            }
-            Err(RecvTimeoutError::Timeout) => jobs.retain_mut(|j| j.idle()),
+        let rx = blocks.recv_timeout(TICK);
+        let t = Instant::now();
+        match rx {
+            Ok(b) => jobs.retain_mut(|j| j.rx(&b)),
+            Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
+        while let Ok(b) = wf_blocks.try_recv() {
+            jobs.retain_mut(|j| j.wf(&b));
+        }
+        let now = Instant::now();
+        jobs.retain_mut(|j| j.tick(now, ctx));
+        let spent = t.elapsed();
+        busy += spent;
+        load.busy_ns
+            .fetch_add(spent.as_nanos() as u64, Ordering::Relaxed);
         if jobs.len() != before {
             load.jobs.fetch_sub(before - jobs.len(), Ordering::Relaxed);
+        }
+        // shedding, judged once a second
+        let span = now.duration_since(window);
+        if span >= Duration::from_secs(1) {
+            let f = busy.as_secs_f64() / span.as_secs_f64();
+            if f > SHED_ABOVE && ctx.shed < MAX_SHED {
+                ctx.shed += 1;
+            } else if f < SHED_BELOW && ctx.shed > 0 {
+                ctx.shed -= 1;
+            }
+            load.shed.store(ctx.shed, Ordering::Relaxed);
+            window = now;
+            busy = Duration::ZERO;
         }
     }
 }
@@ -185,8 +251,8 @@ mod tests {
         limit: usize,
     }
 
-    impl RxJob for Count {
-        fn process(&mut self, b: &RxBlock) -> bool {
+    impl Job for Count {
+        fn rx(&mut self, b: &RxBlock) -> bool {
             let mut s = self.seen.lock().unwrap();
             s.push(b.first_frame);
             s.len() < self.limit
@@ -210,10 +276,13 @@ mod tests {
         let mut subs = 0;
         for c in rx.try_iter() {
             match c {
-                HwCmd::SubscribeRx(s) => f.add(s),
+                HwCmd::SubscribeRx(s) => {
+                    f.add(s);
+                    subs += 1;
+                }
+                HwCmd::SubscribeWf(_) => {}
                 _ => panic!("subscription expected"),
             }
-            subs += 1;
         }
         (p, f, subs)
     }
@@ -255,5 +324,29 @@ mod tests {
         // the next job goes to a now empty worker
         let s = Arc::new(Mutex::new(Vec::new()));
         assert_eq!(p.add(Box::new(Count { seen: s, limit: 1 })).worker, 0);
+    }
+
+    /// Keeps its worker ~90 % busy; records the shed level it's told.
+    struct Hog(Arc<std::sync::atomic::AtomicU32>);
+
+    impl Job for Hog {
+        fn tick(&mut self, _: Instant, ctx: Ctx) -> bool {
+            self.0.store(ctx.shed, Ordering::Relaxed);
+            std::thread::sleep(TICK * 9);
+            true
+        }
+    }
+
+    #[test]
+    fn a_busy_worker_sheds_load() {
+        let (p, _hw, _) = pool(1);
+        let level = Arc::new(std::sync::atomic::AtomicU32::new(0));
+        p.add(Box::new(Hog(level.clone())));
+        let t = Instant::now();
+        while level.load(Ordering::Relaxed) == 0 {
+            assert!(t.elapsed() < Duration::from_secs(4), "no shedding");
+            std::thread::sleep(Duration::from_millis(50));
+        }
+        assert!(p.stats()[0].shed >= 1);
     }
 }

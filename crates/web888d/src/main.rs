@@ -594,8 +594,9 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     if cfg.web.enabled {
         let w = &cfg.web;
         let rf = caps.rf_range.clone();
+        let pool = Arc::new(web888_core::pool::DspPool::per_cpu(&ctl_tx)?);
+        eprintln!("dsp: {} pool workers", pool.workers());
         let shared = Arc::new(web888_web::session::Shared {
-            hw: std::sync::Mutex::new(ctl_tx.clone()),
             status: status.clone(),
             radio: web888_web::proto::RadioInfo {
                 backend: id.backend.into(),
@@ -608,15 +609,19 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 wf_decim_max: caps.wf_decim_max,
             },
             channels: channels.clone(),
-            pool: {
-                let p = web888_core::pool::DspPool::per_cpu(&ctl_tx)?;
-                eprintln!("dsp: {} pool workers", p.workers());
-                p
-            },
+            waterfalls: web888_web::wfsvc::Waterfalls::new(
+                caps.wf_channels,
+                caps.adc_hz,
+                caps.wf_block,
+                ctl_tx.clone(),
+                pool.clone(),
+            ),
+            pool,
             rx_r2: r2,
             live: live_rx,
-            busy: Default::default(),
-            generation: Default::default(),
+            ips: Default::default(),
+            sessions: Default::default(),
+            next_session: Default::default(),
         });
         let tls = match w.tls {
             TlsMode::Off => web888_web::Tls::Off,

@@ -16,7 +16,7 @@ use web888_hw::{HwLoop, HwStatus};
 use web888_radio::*;
 use web888_sim::*;
 use web888_web::proto::{AUDIO_HEADER, FLAG_GAP};
-use web888_web::workers::{AudioCmd, AudioJob, Out};
+use web888_web::workers::{AudioCmd, AudioJob, Out, WfSink};
 
 const SESSIONS: usize = 13;
 
@@ -123,6 +123,10 @@ async fn thirteen_sessions_on_the_pool() {
                     tx: out,
                     drops: drops.clone(),
                 },
+                WfSink::new(Out {
+                    tx: mpsc::channel(1).0,
+                    drops: Arc::default(),
+                }),
             );
             pool.add(Box::new(job));
             Session {

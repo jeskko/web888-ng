@@ -10,6 +10,9 @@ use std::time::{Duration, Instant};
 use web888_radio::clock::AdcClock;
 use web888_radio::*;
 
+pub mod wf;
+pub use wf::{Rotation, WfView};
+
 /// Commands for the hw thread, from any consumer (HPSDR, web sessions).
 pub enum HwCmd {
     Tune {
@@ -19,15 +22,12 @@ pub enum HwCmd {
     Atten {
         db: f32,
     },
-    /// Stream WF slot `slot` continuously; its blocks carry `generation`.
-    WfStart {
+    /// What WF slot `slot` captures: nothing, one view continuously, or
+    /// several in turn as one-shot blocks (`wf::Rotation`). A view kept
+    /// from the previous plan of a continuous slot isn't restarted.
+    WfPlan {
         slot: usize,
-        hz: f64,
-        decim: u16,
-        generation: u64,
-    },
-    WfStop {
-        slot: usize,
+        views: Vec<WfView>,
     },
     SubscribeRx(Subscriber<RxBlock>),
     SubscribeWf(Subscriber<WfBlock>),
@@ -187,16 +187,40 @@ pub struct HwLoop {
     pub verbose: bool,
 }
 
-/// A WF slot being streamed.
-struct WfRun {
-    hz: f64,
-    decim: u16,
-    generation: u64,
-    seq: u64,
+/// A WF slot's capture.
+#[derive(Default)]
+struct Slot {
+    /// One view, streamed continuously.
+    cont: Option<WfView>,
+    /// Several views, one-shot blocks in turn.
+    rot: Rotation,
+    /// The block being captured.
+    shot: Option<Shot>,
+    /// Blocks per view (by generation) so far.
+    seq: std::collections::HashMap<u64, u64>,
     /// `Radio::wf_gaps` already accounted for.
     gaps_seen: u64,
     /// Mark the next block as following a gap (restart after a retune).
     force_gap: bool,
+}
+
+struct Shot {
+    view: WfView,
+    got: usize,
+    /// Give up on a block that doesn't complete by then.
+    deadline: Instant,
+}
+
+impl Slot {
+    fn is_idle(&self) -> bool {
+        self.cont.is_none() && self.rot.views().next().is_none()
+    }
+
+    fn next_seq(&mut self, generation: u64) -> u64 {
+        let s = self.seq.entry(generation).or_insert(0);
+        *s += 1;
+        *s - 1
+    }
 }
 
 /// WF samples per read; a few reads per loop pass at most, so a fast
@@ -205,11 +229,127 @@ const WF_READ: usize = 16384;
 const WF_READS_PER_PASS: usize = 8;
 
 impl HwLoop {
+    fn plan_wf(&mut self, slot: usize, w: &mut Slot, views: Vec<WfView>) -> Result<()> {
+        let now = Instant::now();
+        w.seq
+            .retain(|g, _| views.iter().any(|v| v.generation == *g));
+        match views.as_slice() {
+            [] => {
+                if let Some(v) = w.cont.take() {
+                    // a one-shot block ends the stream on every backend
+                    self.radio.start_wf(slot, v.hz, v.decim, WfMode::OneShot)?;
+                }
+                w.rot.set(&[], now);
+                w.shot = None;
+            }
+            [v] => {
+                w.rot.set(&[], now);
+                w.shot = None;
+                let same = w.cont.is_some_and(|c| {
+                    (c.generation, c.hz, c.decim) == (v.generation, v.hz, v.decim)
+                });
+                if !same {
+                    self.radio
+                        .start_wf(slot, v.hz, v.decim, WfMode::Continuous)?;
+                    w.gaps_seen = 0;
+                    w.force_gap = true;
+                }
+                w.cont = Some(*v);
+            }
+            _ => {
+                if let Some(v) = w.cont.take() {
+                    self.radio.start_wf(slot, v.hz, v.decim, WfMode::OneShot)?;
+                }
+                w.rot.set(&views, now);
+                // a block of a view that's gone is abandoned
+                if w.shot
+                    .as_ref()
+                    .is_some_and(|s| !views.iter().any(|v| v.generation == s.view.generation))
+                {
+                    w.shot = None;
+                }
+            }
+        }
+        Ok(())
+    }
+
+    /// Read what a WF slot has and fan it out; start the next one-shot
+    /// block of a time-shared slot.
+    fn read_wf_slot(
+        &mut self,
+        slot: usize,
+        w: &mut Slot,
+        block: usize,
+        buf: &mut [Iq16],
+        out: &mut Fanout<WfBlock>,
+    ) -> Result<()> {
+        if w.is_idle() {
+            return Ok(());
+        }
+        if let Some(v) = w.cont {
+            for _ in 0..WF_READS_PER_PASS {
+                // gaps counted by now lie before this read's samples
+                let gaps = self.radio.wf_gaps(slot);
+                let got = self.radio.read_wf(slot, buf)?;
+                if got == 0 {
+                    break;
+                }
+                let gap_before = std::mem::take(&mut w.force_gap) || gaps != w.gaps_seen;
+                w.gaps_seen = gaps;
+                out.send(WfBlock {
+                    slot,
+                    generation: v.generation,
+                    seq: w.next_seq(v.generation),
+                    gap_before,
+                    iq: buf[..got].to_vec(),
+                });
+                if got < buf.len() {
+                    break;
+                }
+            }
+            return Ok(());
+        }
+        let now = Instant::now();
+        if let Some(s) = &mut w.shot {
+            let got = self.radio.read_wf(slot, buf)?;
+            if got > 0 {
+                let first = s.got == 0;
+                s.got += got;
+                let g = s.view.generation;
+                let seq = w.next_seq(g);
+                out.send(WfBlock {
+                    slot,
+                    generation: g,
+                    seq,
+                    // every block is a fresh capture
+                    gap_before: first,
+                    iq: buf[..got].to_vec(),
+                });
+            }
+            let s = w.shot.as_ref().expect("shot");
+            if s.got >= block || now > s.deadline {
+                w.shot = None;
+            } else {
+                return Ok(());
+            }
+        }
+        if let Ok(v) = w.rot.next(now) {
+            self.radio.start_wf(slot, v.hz, v.decim, WfMode::OneShot)?;
+            let t = block as f64 * v.decim as f64 / self.radio.adc_hz();
+            w.shot = Some(Shot {
+                view: v,
+                got: 0,
+                deadline: now + Duration::from_secs_f64(2.0 * t + 0.2),
+            });
+        }
+        Ok(())
+    }
+
     pub fn run(mut self) -> Result<()> {
         let caps = self.radio.caps();
         let n = caps.rx_channels;
         let mut tuned: Vec<Option<f64>> = vec![None; n];
-        let mut wf: Vec<Option<WfRun>> = (0..caps.wf_channels).map(|_| None).collect();
+        let mut wf: Vec<Slot> = (0..caps.wf_channels).map(|_| Slot::default()).collect();
         let mut rx_out = Fanout::<RxBlock>::default();
         let mut wf_out = Fanout::<WfBlock>::default();
         let mut clock = AdcClock::new(caps.adc_hz);
@@ -232,34 +372,10 @@ impl HwLoop {
                         fe.atten_db = db.clamp(0.0, 31.5);
                         self.radio.front_end(fe)
                     }
-                    HwCmd::WfStart {
-                        slot,
-                        hz,
-                        decim,
-                        generation,
-                    } => self
-                        .radio
-                        .start_wf(slot, hz, decim, WfMode::Continuous)
-                        .map(|()| {
-                            wf[slot] = Some(WfRun {
-                                hz,
-                                decim,
-                                generation,
-                                seq: 0,
-                                gaps_seen: 0,
-                                force_gap: false,
-                            });
-                        }),
-                    HwCmd::WfStop { slot } if slot < wf.len() => {
-                        // a one-shot block ends the stream on every backend
-                        let r = match &wf[slot] {
-                            Some(w) => self.radio.start_wf(slot, w.hz, w.decim, WfMode::OneShot),
-                            None => Ok(()),
-                        };
-                        wf[slot] = None;
-                        r
+                    HwCmd::WfPlan { slot, views } if slot < wf.len() => {
+                        self.plan_wf(slot, &mut wf[slot], views)
                     }
-                    HwCmd::WfStop { .. } => Err(Error::InvalidChannel(usize::MAX)),
+                    HwCmd::WfPlan { slot, .. } => Err(Error::InvalidChannel(slot)),
                     HwCmd::SubscribeRx(s) => {
                         rx_out.add(s);
                         Ok(())
@@ -336,29 +452,8 @@ impl HwLoop {
                 frames += got as u64;
             }
 
-            for (slot, run) in wf.iter_mut().enumerate() {
-                let Some(w) = run else { continue };
-                for _ in 0..WF_READS_PER_PASS {
-                    // gaps counted by now lie before this read's samples
-                    let gaps = self.radio.wf_gaps(slot);
-                    let got = self.radio.read_wf(slot, &mut wf_buf)?;
-                    if got == 0 {
-                        break;
-                    }
-                    let gap_before = std::mem::take(&mut w.force_gap) || gaps != w.gaps_seen;
-                    w.gaps_seen = gaps;
-                    wf_out.send(WfBlock {
-                        slot,
-                        generation: w.generation,
-                        seq: w.seq,
-                        gap_before,
-                        iq: wf_buf[..got].to_vec(),
-                    });
-                    w.seq += 1;
-                    if got < wf_buf.len() {
-                        break;
-                    }
-                }
+            for (slot, w) in wf.iter_mut().enumerate() {
+                self.read_wf_slot(slot, w, caps.wf_block, &mut wf_buf, &mut wf_out)?;
             }
 
             let fps = self.radio.adc_hz() / (256.0 * self.radio.rx_r2() as f64);
@@ -380,13 +475,14 @@ impl HwLoop {
                         self.radio.tune_rx(ch, *f)?;
                     }
                 }
-                for (slot, run) in wf.iter_mut().enumerate() {
-                    if let Some(w) = run {
+                for (slot, w) in wf.iter_mut().enumerate() {
+                    if let Some(v) = w.cont {
                         self.radio
-                            .start_wf(slot, w.hz, w.decim, WfMode::Continuous)?;
+                            .start_wf(slot, v.hz, v.decim, WfMode::Continuous)?;
                         w.gaps_seen = 0;
                         w.force_gap = true;
                     }
+                    // a block being captured finishes at the old tuning
                 }
                 eprintln!(
                     "clock: ADC {:.3} Hz ({:+.3} ppm), channels retuned",
@@ -475,11 +571,14 @@ mod tests {
         let (tx, stop, t) = start(Scene::new().tone(F0 + fs / 8.0, -10.0));
         let (s, rx, _) = Subscriber::new(256);
         tx.send(HwCmd::SubscribeWf(s)).unwrap();
-        let wf_start = |generation| HwCmd::WfStart {
+        let wf_start = |generation| HwCmd::WfPlan {
             slot: 0,
-            hz: F0,
-            decim: 64,
-            generation,
+            views: vec![WfView {
+                hz: F0,
+                decim: 64,
+                generation,
+                fps: 20.0,
+            }],
         };
         tx.send(wf_start(7)).unwrap();
         let mut prev: Option<Arc<WfBlock>> = None;
@@ -499,7 +598,11 @@ mod tests {
             prev = Some(b);
         }
 
-        tx.send(HwCmd::WfStop { slot: 0 }).unwrap();
+        tx.send(HwCmd::WfPlan {
+            slot: 0,
+            views: vec![],
+        })
+        .unwrap();
         std::thread::sleep(Duration::from_millis(100));
         while rx.try_recv().is_ok() {}
         assert!(
@@ -512,6 +615,58 @@ mod tests {
         assert_eq!((b.generation, b.seq), (8, 0));
         stop.store(true, Ordering::Relaxed);
         t.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn wf_time_shares_a_slot_between_views() {
+        // two views of the same tone: 1.92 MHz span centred on F0 (tone at
+        // +fs/8) and 480 kHz centred 60 kHz below the tone (+fs/8 again)
+        let fs1 = ADC_HZ_HF / 64.0;
+        let fs2 = ADC_HZ_HF / 256.0;
+        let tone = F0 + fs1 / 8.0;
+        let (tx, stop, t) = start(Scene::new().tone(tone, -10.0));
+        let (s, rx, _) = Subscriber::new(256);
+        tx.send(HwCmd::SubscribeWf(s)).unwrap();
+        let v = |generation, hz, decim| WfView {
+            hz,
+            decim,
+            generation,
+            fps: 10.0,
+        };
+        tx.send(HwCmd::WfPlan {
+            slot: 1,
+            views: vec![v(1, F0, 64), v(2, tone - fs2 / 8.0, 256)],
+        })
+        .unwrap();
+        // per view: samples per capture, captures
+        let mut shot = [0usize; 3];
+        let mut shots = [0usize; 3];
+        let t0 = Instant::now();
+        while t0.elapsed() < Duration::from_millis(1050) {
+            let Ok(b) = rx.recv_timeout(Duration::from_millis(100)) else {
+                continue;
+            };
+            assert_eq!(b.slot, 1);
+            let g = b.generation as usize;
+            if b.gap_before {
+                if shots[g] > 0 {
+                    assert_eq!(shot[g], WF_BLOCK, "a whole block per capture");
+                }
+                shots[g] += 1;
+                shot[g] = 0;
+            }
+            shot[g] += b.iq.len();
+            if b.iq.len() > 100 {
+                let c = cycles_per_sample(&b.iq);
+                assert!((c - 0.125).abs() < 2e-3, "view {g}: {c}");
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        t.join().unwrap().unwrap();
+        // 10 captures a second each (both spans fill a block in < 20 ms)
+        for g in [1, 2] {
+            assert!((10..=12).contains(&shots[g]), "{shots:?}");
+        }
     }
 
     #[test]

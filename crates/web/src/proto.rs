@@ -138,6 +138,9 @@ pub const FLAG_OVERLOAD: u8 = 1;
 pub const FLAG_GAP: u8 = 2;
 /// Waterfall: first line of a new tuning/zoom.
 pub const FLAG_NEW_GEN: u8 = 2;
+/// Waterfall: no new samples since the previous line (it repeats the
+/// newest ones: a time-shared view, or a narrow span).
+pub const FLAG_STALE: u8 = 4;
 
 pub const AUDIO_HEADER: usize = 16;
 pub const WF_HEADER: usize = 40;

@@ -14,7 +14,8 @@ Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR Protoco
 | `crates/dsp` | Kaiser FIR, droop-compensated channel design, overlap-save filter, shifter, SSB/AM demod |
 | `crates/zynqsdr` | backend for the stock kernel driver (`/dev/zynqsdr` ioctls), bitstream loading |
 | `crates/hpsdr` | OpenHPSDR Protocol 1 receive server (discovery, up to 7 receivers, 48 kS/s) |
-| `crates/hw` | the hardware thread: owns the radio, fans RX/WF blocks out to HPSDR and web sessions |
+| `crates/hw` | the hardware thread: owns the radio, fans RX/WF blocks out to HPSDR and web sessions, time-shares WF slots |
+| `crates/core` | what clients share: RX channel leases, the DSP pool, the waterfall scheduler |
 | `crates/web` | web UI server: HTTPS/HTTP on one port, WebSocket sessions (audio + waterfall) |
 | `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet) |
 | `crates/iq` | backend fed by real signals: wideband IQ from an SDR (SoapySDR, e.g. HackRF) or a recording, channelized like the FPGA |
@@ -64,8 +65,13 @@ as needing a restart. A file that doesn't parse is reported and ignored.
 self-signed certificate (generated on first start into `--state-dir`,
 default `/var/lib/web888d`; or `--tls-cert`/`--tls-key`), and plain HTTP on
 the same port for a TLS-terminating proxy (`--no-tls` for plain only).
-Browsers only play audio over HTTPS or from `localhost`. One web user at
-a time (M2); it gets the last RX channel, which HPSDR then doesn't offer.
+Browsers only play audio over HTTPS or from `localhost`. Web users and
+HPSDR receivers share the RX channels through leases (`[limits]`:
+`per_ip` sessions per address, default 4; `hpsdr_channels`); a web user
+who finds them all taken gets the waterfall only, until one frees. Users
+with the same waterfall view share one capture; more distinct views than
+the two WF slots are time-shared (`doc/m3-multi-user.md`). Load test:
+`cargo run --release -p web888-web --example webload -- ws://HOST:8073/ws`.
 
 The UI lives in `ui/` (TypeScript + Preact, built with esbuild; needs
 Node 24 and pnpm):
