@@ -91,6 +91,10 @@ cargo run --release -p web888d -- serve --backend iq --iq file:hf.cs8 --iq-freq 
 # then https://localhost:8073 (or http://localhost:8073)
 ```
 
+UI checks in headless Chromium (muted): `ui/tools/cdp/` (receiver,
+login, admin pages, idle limit, layout). armv7 builds of benches and
+tools without a local toolchain: `scripts/cross-armv7.sh`.
+
 Waterfall: wheel zooms around the cursor, drag pans, click tunes,
 shift+wheel steps the dial; arrows step, `u`/`l`/`c`/`a` pick the mode.
 The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`).

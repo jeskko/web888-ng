@@ -148,7 +148,8 @@ uses a pool of `N = cores` workers (2 on the Zynq), each pinned:
   adaptive under load")
 
 Budget on the A9, measured with `crates/dsp/examples/bench.rs` (armv7
-musl build, one A9 core at nice 19 next to the stock server, 2026-10-22):
+musl build with `scripts/cross-armv7.sh OUT -p web888-dsp --example
+bench`, one A9 core at nice 19 next to the stock server, 2026-10-22):
 
 | | A9 | x86-64 workstation |
 |---|---|---|
