@@ -242,6 +242,19 @@ pub struct Auth {
     pub listener_hash: Option<String>,
 }
 
+/// Where `path` leads through symlinks (itself if it isn't one).
+fn link_target(path: &Path) -> PathBuf {
+    let mut p = path.to_path_buf();
+    for _ in 0..16 {
+        let Ok(t) = std::fs::read_link(&p) else { break };
+        p = match p.parent() {
+            Some(d) if t.is_relative() => d.join(t),
+            _ => t,
+        };
+    }
+    p
+}
+
 /// What a config change means for a running server.
 #[derive(Debug, Default, PartialEq, Eq)]
 pub struct Changes {
@@ -292,9 +305,11 @@ impl Config {
     }
 
     /// Write atomically: a temp file next to `path`, fsync, rename, fsync
-    /// the directory.
+    /// the directory. A symlink is followed and its target replaced (the
+    /// image links /etc/web888d/web888d.toml to the config partition).
     pub fn save(&self, path: &Path) -> Result<(), Error> {
         let io = |e| Error::Io(path.into(), e);
+        let path = &link_target(path);
         let dir = path
             .parent()
             .filter(|d| !d.as_os_str().is_empty())
@@ -412,6 +427,23 @@ mod tests {
         assert_eq!(names, ["web888d.toml"], "no temp file left");
         std::fs::write(&p, "[[[").unwrap();
         assert!(matches!(Config::load(&p), Err(Error::Parse(..))));
+        std::fs::remove_dir_all(&dir).unwrap();
+    }
+
+    #[test]
+    fn save_through_a_symlink_replaces_its_target() {
+        let dir = std::env::temp_dir().join(format!("web888-config-link-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        std::fs::create_dir_all(dir.join("etc")).unwrap();
+        std::fs::create_dir_all(dir.join("config")).unwrap();
+        let link = dir.join("etc/web888d.toml");
+        std::os::unix::fs::symlink("../config/web888d.toml", &link).unwrap();
+        let mut c = Config::default();
+        c.limits.per_ip = 3;
+        c.save(&link).unwrap();
+        assert!(std::fs::symlink_metadata(&link).unwrap().is_symlink());
+        assert_eq!(Config::load(&dir.join("config/web888d.toml")).unwrap(), c);
+        assert_eq!(Config::load(&link).unwrap(), c);
         std::fs::remove_dir_all(&dir).unwrap();
     }
 

@@ -67,6 +67,10 @@ jobs:
     permissions:
       contents: write
     steps:
+      - uses: actions/checkout@v4
+        with:
+          path: src
+          sparse-checkout: doc/release-notes
       - uses: actions/download-artifact@v4
         with:
           name: web888d-ui
@@ -83,7 +87,7 @@ jobs:
           tar -C ui-dist --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
             -czf "out/web888d-ui-$v.tar.gz" .
           install -m 0755 bin/web888d "out/web888d-$v-armv7-musl"
-          (cd out && sha256sum * > SHA256SUMS)
+          (cd out && sha256sum -- * > SHA256SUMS)
           pre=
           case "$v" in v0.*) pre=--prerelease ;; esac
           {
@@ -92,6 +96,11 @@ jobs:
             echo "* \`web888d-ui-$v.tar.gz\`: the web UI (unpack into \`--ui-dir\`, default \`/usr/share/web888d/ui\`)"
             echo "* \`web888d-$v-armv7-musl\`: static binary for the Web-888"
             echo "* \`SHA256SUMS\`"
+            # what's new, if written down for this version
+            if [ -f "src/doc/release-notes/$v.md" ]; then
+              echo
+              cat "src/doc/release-notes/$v.md"
+            fi
             if [ -n "$pre" ]; then
               echo
               echo "**Pre-release: not yet tested on a Web-888.**"

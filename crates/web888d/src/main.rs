@@ -425,28 +425,45 @@ fn run_passwd(a: PasswdArgs) -> AnyResult<()> {
 }
 
 /// A first admin password put on the SD card: applied at start, then the
-/// file is deleted (also a way back in after a forgotten password).
+/// file is deleted (also a way back in after a forgotten password). Where
+/// it can't be deleted (the image mounts /boot read-only), a fingerprint
+/// in the state directory remembers it was applied, so it isn't applied
+/// again over a password changed since; a file with new content is.
 const FIRST_PASSWORD: &str = "/boot/web888d-admin";
+const FIRST_PASSWORD_SEEN: &str = "boot-admin-applied";
 
-fn first_password(config: &std::path::Path) -> AnyResult<()> {
-    let p = std::path::Path::new(FIRST_PASSWORD);
+fn first_password(
+    p: &std::path::Path,
+    config: &std::path::Path,
+    state_dir: &std::path::Path,
+) -> AnyResult<()> {
     let Ok(s) = std::fs::read_to_string(p) else {
         return Ok(());
     };
+    let seen = state_dir.join(FIRST_PASSWORD_SEEN);
+    if std::fs::read_to_string(&seen).is_ok_and(|h| web888_web::auth::verify(h.trim(), &s)) {
+        return Ok(());
+    }
     let pw = s.lines().next().unwrap_or("").trim_end_matches('\r');
     if pw.chars().count() < web888_web::auth::ADMIN_MIN_LEN {
         eprintln!(
-            "auth: {FIRST_PASSWORD}: too short (at least {} characters), ignored",
+            "auth: {}: too short (at least {} characters), ignored",
+            p.display(),
             web888_web::auth::ADMIN_MIN_LEN
         );
     } else {
         let mut c = Config::load(config)?;
         c.auth.admin_hash = Some(web888_web::auth::hash(pw));
         c.save(config)?;
-        eprintln!("auth: admin password set from {FIRST_PASSWORD}");
+        eprintln!("auth: admin password set from {}", p.display());
     }
     if let Err(e) = std::fs::remove_file(p) {
-        eprintln!("auth: can't delete {FIRST_PASSWORD}: {e}");
+        std::fs::create_dir_all(state_dir)?;
+        std::fs::write(&seen, web888_web::auth::hash(&s))?;
+        eprintln!(
+            "auth: can't delete {} ({e}); it won't be applied again unless it changes",
+            p.display()
+        );
     }
     Ok(())
 }
@@ -638,7 +655,11 @@ impl web888_hpsdr::server::Host for HpsdrHost {
 fn run_serve(a: ServeArgs) -> AnyResult<()> {
     use web888_hpsdr::{proto::Board, server};
     if !a.print_config {
-        first_password(&a.config)?;
+        first_password(
+            std::path::Path::new(FIRST_PASSWORD),
+            &a.config,
+            &a.effective()?.web.state_dir,
+        )?;
     }
     let cfg = a.effective()?;
     if a.print_config {
@@ -914,5 +935,57 @@ fn run_sim(a: SimArgs) -> std::result::Result<(), Box<dyn std::error::Error>> {
         if a.seconds > 0.0 && t0.elapsed().as_secs_f64() >= a.seconds {
             return Ok(());
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::os::unix::fs::PermissionsExt;
+    use web888_web::auth::verify;
+
+    #[test]
+    fn a_boot_password_that_cant_be_deleted_applies_once_per_content() {
+        let dir = std::env::temp_dir().join(format!("web888d-bootpw-{}", std::process::id()));
+        let _ = std::fs::remove_dir_all(&dir);
+        let boot = dir.join("boot");
+        std::fs::create_dir_all(&boot).unwrap();
+        let file = boot.join("web888d-admin");
+        let (config, state) = (dir.join("c.toml"), dir.join("state"));
+        let admin = || Config::load(&config).unwrap().auth.admin_hash.unwrap();
+        let ro = |on: bool| {
+            let mode = if on { 0o555 } else { 0o755 };
+            std::fs::set_permissions(&boot, std::fs::Permissions::from_mode(mode)).unwrap();
+        };
+
+        std::fs::write(&file, "first-password\n").unwrap();
+        ro(true); // as the image's read-only /boot
+        first_password(&file, &config, &state).unwrap();
+        assert!(verify(&admin(), "first-password"));
+        assert!(file.exists());
+
+        // changed since (e.g. in the admin page): the old file doesn't undo it
+        let mut c = Config::load(&config).unwrap();
+        c.auth.admin_hash = Some(web888_web::auth::hash("changed-later"));
+        c.save(&config).unwrap();
+        first_password(&file, &config, &state).unwrap();
+        assert!(verify(&admin(), "changed-later"));
+
+        // a new file is a reset
+        ro(false);
+        std::fs::write(&file, "reset-password\n").unwrap();
+        ro(true);
+        first_password(&file, &config, &state).unwrap();
+        assert!(verify(&admin(), "reset-password"));
+
+        // where it can be deleted, it is
+        ro(false);
+        first_password(&file, &config, &state).unwrap();
+        assert!(verify(&admin(), "reset-password"));
+        std::fs::write(&file, "deleted-password\n").unwrap();
+        first_password(&file, &config, &state).unwrap();
+        assert!(!file.exists());
+        assert!(verify(&admin(), "deleted-password"));
+        std::fs::remove_dir_all(&dir).unwrap();
     }
 }
