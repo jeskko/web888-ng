@@ -68,7 +68,9 @@ fn waterfall(bins: usize, fps: f64, budget: usize, fs: f64, secs: f64) {
     });
     let mut n = Noise(2);
     let per_line = (fs / fps) as usize;
-    let input: Vec<C32> = (0..per_line).map(|_| C32::new(n.next(), n.next())).collect();
+    let input: Vec<C32> = (0..per_line)
+        .map(|_| C32::new(n.next(), n.next()))
+        .collect();
     let lines = (secs * fps) as usize;
     let t = Instant::now();
     for _ in 0..lines {
