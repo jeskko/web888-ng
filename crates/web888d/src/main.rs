@@ -181,9 +181,23 @@ fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
                 p => Some(std::path::PathBuf::from(p)),
             };
             if let Some(bit) = bit {
-                let n = bitstream::load(&bit, std::path::Path::new(bitstream::XDEVCFG))
-                    .map_err(|e| format!("loading {}: {e}", bit.display()))?;
-                eprintln!("bitstream: {} ({n} bytes)", bit.display());
+                use std::path::Path;
+                let (n, via) = if Path::new(bitstream::XDEVCFG).exists() {
+                    (
+                        bitstream::load(&bit, Path::new(bitstream::XDEVCFG)),
+                        "devcfg",
+                    )
+                } else {
+                    let n = bitstream::load_fpga_mgr(
+                        &bit,
+                        Path::new(bitstream::FPGA_MGR),
+                        Path::new(bitstream::FW_DIR),
+                        bitstream::FW_NAME,
+                    );
+                    (n, "fpga_manager")
+                };
+                let n = n.map_err(|e| format!("loading {} ({via}): {e}", bit.display()))?;
+                eprintln!("bitstream: {} ({n} bytes, {via})", bit.display());
             }
             let dev = ZynqsdrDev::open(ZynqsdrDev::PATH)
                 .map_err(|e| format!("{}: {e} (is the stock server running?)", ZynqsdrDev::PATH))?;
