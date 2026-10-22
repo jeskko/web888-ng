@@ -57,3 +57,45 @@ jobs:
         with:
           name: web888d-armv7-musl
           path: target/armv7-unknown-linux-musleabihf/release/web888d
+
+  # Tags: publish the UI tarball and the device binary (web888-ng-os
+  # fetches the UI from here by checksum).
+  release:
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs: [test, ui, armv7]
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          name: web888d-ui
+          path: ui-dist
+      - uses: actions/download-artifact@v4
+        with:
+          name: web888d-armv7-musl
+          path: bin
+      - env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v="$GITHUB_REF_NAME"
+          mkdir out
+          tar -C ui-dist --sort=name --owner=0 --group=0 --numeric-owner --mtime=@0 \
+            -czf "out/web888d-ui-$v.tar.gz" .
+          install -m 0755 bin/web888d "out/web888d-$v-armv7-musl"
+          (cd out && sha256sum * > SHA256SUMS)
+          pre=
+          case "$v" in v0.*) pre=--prerelease ;; esac
+          {
+            echo "web888d $v, built by CI from this tag."
+            echo
+            echo "* \`web888d-ui-$v.tar.gz\`: the web UI (unpack into \`--ui-dir\`, default \`/usr/share/web888d/ui\`)"
+            echo "* \`web888d-$v-armv7-musl\`: static binary for the Web-888"
+            echo "* \`SHA256SUMS\`"
+            if [ -n "$pre" ]; then
+              echo
+              echo "**Pre-release: not yet tested on a Web-888.**"
+            fi
+          } > notes.md
+          gh release create "$v" --repo "$GITHUB_REPOSITORY" \
+            --title "$v" --notes-file notes.md $pre out/*

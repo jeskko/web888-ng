@@ -9,7 +9,7 @@
     {"type": "ping", "t": 1234.5}
   ],
   "server": [
-    {"type": "hello", "proto": 1, "server": "web888d 0.0.1", "codec": "pcm16", "audio_rate": 12000,
+    {"type": "hello", "proto": 1, "server": "web888d 0.1.0", "codec": "pcm16", "audio_rate": 12000,
      "radio": {"backend": "sim", "variant": "hf", "adc_hz": 122880000, "rx_rate": 48000,
                "rf_lo": 0, "rf_hi": 61440000, "wf_decim_min": 1, "wf_decim_max": 8192},
      "limits": {"bins_max": 4096, "fps_max": 30}},

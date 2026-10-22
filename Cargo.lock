@@ -1585,7 +1585,7 @@ dependencies = [
 
 [[package]]
 name = "web888-dsp"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1595,7 +1595,7 @@ dependencies = [
 
 [[package]]
 name = "web888-hpsdr"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1605,7 +1605,7 @@ dependencies = [
 
 [[package]]
 name = "web888-hw"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "num-complex",
  "web888-radio",
@@ -1614,7 +1614,7 @@ dependencies = [
 
 [[package]]
 name = "web888-iq"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "num-complex",
  "soapysdr",
@@ -1623,11 +1623,11 @@ dependencies = [
 
 [[package]]
 name = "web888-radio"
-version = "0.0.1"
+version = "0.1.0"
 
 [[package]]
 name = "web888-sim"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "num-complex",
  "web888-radio",
@@ -1635,7 +1635,7 @@ dependencies = [
 
 [[package]]
 name = "web888-web"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "axum",
  "crossbeam-channel",
@@ -1658,7 +1658,7 @@ dependencies = [
 
 [[package]]
 name = "web888-zynqsdr"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "libc",
  "web888-radio",
@@ -1667,7 +1667,7 @@ dependencies = [
 
 [[package]]
 name = "web888d"
-version = "0.0.1"
+version = "0.1.0"
 dependencies = [
  "clap",
  "num-complex",
