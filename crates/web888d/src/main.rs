@@ -182,7 +182,7 @@ fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
             };
             if let Some(bit) = bit {
                 use std::path::Path;
-                let (n, via) = if Path::new(bitstream::XDEVCFG).exists() {
+                let (n, via) = if bitstream::has_devcfg() {
                     (
                         bitstream::load(&bit, Path::new(bitstream::XDEVCFG)),
                         "devcfg",

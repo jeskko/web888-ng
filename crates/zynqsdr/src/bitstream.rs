@@ -32,6 +32,14 @@ pub fn default_path(variant: Variant) -> PathBuf {
     Path::new(SD_DIR).join(name)
 }
 
+/// The vendor kernel's devcfg driver is there. Checks for a character
+/// device: without the driver, a stock userspace that writes its bitstream
+/// to the path leaves a plain file behind.
+pub fn has_devcfg() -> bool {
+    use std::os::unix::fs::FileTypeExt;
+    std::fs::metadata(XDEVCFG).is_ok_and(|m| m.file_type().is_char_device())
+}
+
 /// Copy `bit` into the devcfg device (`dev`, normally [`XDEVCFG`]).
 pub fn load(bit: &Path, dev: &Path) -> io::Result<u64> {
     let mut src = std::fs::File::open(bit)?;
