@@ -12,6 +12,7 @@ pub mod nb;
 pub mod nco;
 pub mod nr;
 pub mod ols;
+pub mod pfb;
 pub mod squelch;
 pub mod wf;
 

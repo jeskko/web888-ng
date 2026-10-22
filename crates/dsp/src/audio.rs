@@ -233,8 +233,14 @@ impl AudioChain {
 
     /// Process RX samples of this channel, appending audio to `out`.
     pub fn process(&mut self, rx: impl IntoIterator<Item = Iq32>, out: &mut Vec<f32>) {
+        self.process_c32(rx.into_iter().map(rx_to_c32), out);
+    }
+
+    /// As `process`, with samples scaled as `rx_to_c32` does (a full-scale
+    /// sine has |z| = 1).
+    pub fn process_c32(&mut self, x: impl IntoIterator<Item = C32>, out: &mut Vec<f32>) {
         self.x.clear();
-        self.x.extend(rx.into_iter().map(rx_to_c32));
+        self.x.extend(x);
         if let Some(nb) = &mut self.nb {
             nb.process(&mut self.x);
         }

@@ -7,6 +7,7 @@ use std::time::Instant;
 use web888_dsp::C32;
 use web888_dsp::audio::{AudioChain, AudioSpec, Mode};
 use web888_dsp::chan::Droop;
+use web888_dsp::pfb::{PfbChannel, PfbSpec};
 use web888_dsp::wf::{WfEngine, WfSpec};
 use web888_radio::Iq32;
 use web888_radio::chan::{ADC_HZ_HF, rx_rate};
@@ -143,6 +144,29 @@ fn main() {
     s.nb = Some(8.0);
     s.squelch_db = Some(-100.0);
     audio("usb + nb + nr + squelch", s, fs, &rx, secs);
+    // the channelizer's per-user fine stage: a 60 kS/s bin in
+    let spec = PfbSpec::web888();
+    let bin: Vec<C32> = rx
+        .iter()
+        .take((spec.out_rate() * secs) as usize)
+        .map(|s| web888_dsp::rx_to_c32(*s))
+        .collect();
+    let mut bin60 = bin.clone();
+    // 48 kS/s samples stand in for 60 kS/s ones: same cost per sample
+    bin60.extend(bin.iter().take(bin.len() / 4));
+    let mut ch = PfbChannel::new(&spec, 7_074_000.0 + 7e3, AudioSpec::new(Mode::Usb));
+    let mut out = Vec::new();
+    let t = Instant::now();
+    for b in bin60.chunks((spec.out_rate() / 100.0) as usize) {
+        out.clear();
+        ch.process(b, &mut out);
+        black_box(&out);
+    }
+    report(
+        "pfb fine stage usb (60k in)",
+        t.elapsed().as_secs_f64(),
+        secs,
+    );
     println!("waterfall view:");
     waterfall(1024, 10.0, 30, 1.92e6, secs);
     waterfall(1024, 25.0, 30, 1.92e6, secs);
