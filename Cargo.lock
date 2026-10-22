@@ -1792,6 +1792,7 @@ version = "0.2.0"
 dependencies = [
  "num-complex",
  "rustfft",
+ "web888-iq",
  "web888-radio",
  "web888-sim",
 ]
