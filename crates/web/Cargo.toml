@@ -1,0 +1,28 @@
+[package]
+name = "web888-web"
+description = "web888d's web UI server: HTTP(S), static UI, WebSocket sessions"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+web888-radio.workspace = true
+web888-dsp.workspace = true
+web888-hw.workspace = true
+axum = { version = "0.8.9", features = ["ws"] }
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "net", "sync", "time", "macros"] }
+tower-http = { version = "0.7.1", features = ["fs", "compression-gzip"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"
+crossbeam-channel = "0.5.17"
+hyper-util = { version = "0.1.21", features = ["server-auto", "tokio", "service", "http1", "http2"] }
+tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "logging", "tls12"] }
+rcgen = { version = "0.14.10", default-features = false, features = ["pem", "ring"] }
+
+[dev-dependencies]
+futures-util = "0.3.34"
+num-complex.workspace = true
+rustfft.workspace = true
+tokio-tungstenite = "0.30.0"
+web888-sim = { path = "../sim" }

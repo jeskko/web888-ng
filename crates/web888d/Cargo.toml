@@ -13,8 +13,11 @@ web888-dsp.workspace = true
 web888-zynqsdr.workspace = true
 web888-hpsdr.workspace = true
 web888-iq.workspace = true
+web888-hw.workspace = true
+web888-web.workspace = true
 clap.workspace = true
 num-complex.workspace = true
+tokio = { version = "1.54.1", features = ["rt-multi-thread", "net"] }
 
 [features]
 # live SDR devices (HackRF, ...) for `--backend iq` through SoapySDR

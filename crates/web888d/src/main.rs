@@ -2,7 +2,8 @@
 //! web888d (M1).
 //!
 //! `serve`: run the radio (simulated, or the stock driver on a unit) and
-//! offer its channels over HPSDR Protocol 1 (UDP 1024):
+//! offer its channels over HPSDR Protocol 1 (UDP 1024) and the web UI
+//! (HTTPS/HTTP on 8073):
 //!
 //!   web888d serve --backend zynqsdr          # on the unit, stock server stopped
 //!   web888d serve --backend sim --tone 7.0755e6:-40 --noise
@@ -14,8 +15,6 @@
 //!
 //!   web888d sim --tone 7.0755e6:-40 --noise --tune 7.074e6 --mode usb \
 //!     | aplay -t raw -f FLOAT_LE -r 24000 -c 1
-
-mod hw;
 
 use clap::{Parser, Subcommand, ValueEnum};
 use std::io::Write;
@@ -42,8 +41,8 @@ struct Cli {
 enum Cmd {
     /// Run one receiver channel on the simulated radio.
     Sim(SimArgs),
-    /// Run the radio and serve its channels (HPSDR Protocol 1).
-    Serve(ServeArgs),
+    /// Run the radio and serve its channels (HPSDR Protocol 1, web UI).
+    Serve(Box<ServeArgs>),
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -76,9 +75,42 @@ struct ServeArgs {
     /// Board id reported to HPSDR clients (1 = Hermes, 5 = Orion, 6 = Hermes-Lite).
     #[arg(long, default_value_t = 1)]
     hpsdr_board: u8,
-    /// Receivers offered to HPSDR clients (max 7).
+    /// Receivers offered to HPSDR clients (max 7; the web user's channel
+    /// is not offered).
     #[arg(long, default_value_t = 7)]
     hpsdr_rx: usize,
+    /// Don't serve HPSDR.
+    #[arg(long)]
+    no_hpsdr: bool,
+    /// Web UI listen address (HTTPS and plain HTTP on one port).
+    #[arg(long, default_value = "0.0.0.0:8073")]
+    http: String,
+    /// Don't serve the web UI.
+    #[arg(long)]
+    no_web: bool,
+    /// Web UI files.
+    #[arg(long, default_value = "/usr/share/web888d/ui")]
+    ui_dir: std::path::PathBuf,
+    /// TLS certificate and key (PEM); default: a self-signed pair in --state-dir.
+    #[arg(long, requires = "tls_key")]
+    tls_cert: Option<std::path::PathBuf>,
+    #[arg(long, requires = "tls_cert")]
+    tls_key: Option<std::path::PathBuf>,
+    /// Plain HTTP only (e.g. behind a TLS-terminating proxy).
+    #[arg(long, conflicts_with = "tls_cert")]
+    no_tls: bool,
+    /// Where web888d keeps state (the self-signed certificate).
+    #[arg(long, default_value = "/var/lib/web888d")]
+    state_dir: std::path::PathBuf,
+    /// RX channel for the web user (default: the last one).
+    #[arg(long)]
+    web_rx: Option<usize>,
+    /// Initial web dial frequency in Hz (default: 7.074 MHz if in range).
+    #[arg(long)]
+    web_freq: Option<f64>,
+    /// Most FFTs averaged per waterfall line (CPU budget).
+    #[arg(long, default_value_t = 30)]
+    wf_budget: usize,
     /// Simulated scene (sim backend): tones FREQ_HZ:DBFS.
     #[arg(long = "tone", value_parser = parse_tone)]
     tones: Vec<(f64, f64)>,
@@ -222,7 +254,7 @@ fn main() {
             }
         }
         Cmd::Serve(a) => {
-            if let Err(e) = run_serve(a) {
+            if let Err(e) = run_serve(*a) {
                 eprintln!("web888d: {e}");
                 std::process::exit(1);
             }
@@ -317,56 +349,152 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         "radio: {} signature {:#010x}, {} RX / {} WF channels, ADC {:.0} Hz",
         id.backend, id.signature, caps.rx_channels, caps.wf_channels, caps.adc_hz
     );
-    // HPSDR P1 is served at 48 kS/s
-    radio.set_rx_rate(r2_for_rate(caps.adc_hz, 48_000.0))?;
+    // HPSDR P1 is served at 48 kS/s; the web audio chain decimates from it
+    let r2 = r2_for_rate(caps.adc_hz, 48_000.0);
+    radio.set_rx_rate(r2)?;
 
     let stop = Arc::new(AtomicBool::new(false));
+    let status = Arc::new(web888_hw::HwStatus::default());
     let (ctl_tx, ctl_rx) = mpsc::channel();
-    let (sub, blk_rx, _hpsdr_drops) = hw::Subscriber::new(64);
-    ctl_tx.send(hw::HwCmd::SubscribeRx(sub))?;
-
-    let sock = UdpSocket::bind(&a.hpsdr).map_err(|e| format!("bind {}: {e}", a.hpsdr))?;
-    let cfg = server::Config {
-        board: Board {
-            mac: eth0_mac(),
-            code_version: 1,
-            board_id: a.hpsdr_board,
-        },
-        max_rx: a.hpsdr_rx.min(caps.rx_channels).min(7),
+    let web_rx = if a.no_web {
+        None
+    } else {
+        let ch = a.web_rx.unwrap_or(caps.rx_channels - 1);
+        if ch >= caps.rx_channels {
+            return Err(
+                format!("--web-rx {ch}: the radio has {} channels", caps.rx_channels).into(),
+            );
+        }
+        Some(ch)
     };
-    let mut srv = server::Server::new(sock, cfg)?;
-    eprintln!(
-        "hpsdr: listening on {} ({} receivers)",
-        srv.local_addr()?,
-        cfg.max_rx
-    );
-    let srv_stop = stop.clone();
-    let srv_thread = std::thread::Builder::new()
-        .name("hpsdr".into())
-        .spawn(move || {
-            srv.run(
-                blk_rx,
-                move |c| {
-                    let cmd = match c {
-                        server::Control::Tune { rx, hz } => hw::HwCmd::Tune { ch: rx, hz },
-                        server::Control::Atten { db } => hw::HwCmd::Atten { db },
-                        server::Control::Streaming(_) => return,
-                    };
-                    let _ = ctl_tx.send(cmd);
-                },
-                srv_stop,
-            )
-        })?;
 
-    let hw = hw::HwLoop {
+    let mut threads = Vec::new();
+    if !a.no_hpsdr {
+        let (sub, blk_rx, _drops) = web888_hw::Subscriber::new(64);
+        ctl_tx.send(web888_hw::HwCmd::SubscribeRx(sub))?;
+        let sock = UdpSocket::bind(&a.hpsdr).map_err(|e| format!("bind {}: {e}", a.hpsdr))?;
+        // receivers map to channels 0..max_rx: keep the web user's out
+        let max_rx = a
+            .hpsdr_rx
+            .min(caps.rx_channels)
+            .min(web_rx.unwrap_or(usize::MAX))
+            .min(7);
+        let cfg = server::Config {
+            board: Board {
+                mac: eth0_mac(),
+                code_version: 1,
+                board_id: a.hpsdr_board,
+            },
+            max_rx,
+        };
+        let mut srv = server::Server::new(sock, cfg)?;
+        eprintln!(
+            "hpsdr: listening on {} ({max_rx} receivers)",
+            srv.local_addr()?
+        );
+        let srv_stop = stop.clone();
+        let ctl = ctl_tx.clone();
+        threads.push(
+            std::thread::Builder::new()
+                .name("hpsdr".into())
+                .spawn(move || {
+                    srv.run(
+                        blk_rx,
+                        move |c| {
+                            let cmd = match c {
+                                server::Control::Tune { rx, hz } => {
+                                    web888_hw::HwCmd::Tune { ch: rx, hz }
+                                }
+                                server::Control::Atten { db } => web888_hw::HwCmd::Atten { db },
+                                server::Control::Streaming(_) => return,
+                            };
+                            let _ = ctl.send(cmd);
+                        },
+                        srv_stop,
+                    )
+                })?,
+        );
+    }
+
+    if let Some(ch) = web_rx {
+        let rf = caps.rf_range.clone();
+        let default_hz = a
+            .web_freq
+            .unwrap_or(if rf.contains(&7_074_000.0) {
+                7_074_000.0
+            } else {
+                (rf.start() + rf.end()) / 2.0
+            })
+            .clamp(*rf.start(), *rf.end());
+        let shared = Arc::new(web888_web::session::Shared {
+            hw: std::sync::Mutex::new(ctl_tx.clone()),
+            status: status.clone(),
+            radio: web888_web::proto::RadioInfo {
+                backend: id.backend.into(),
+                variant: format!("{:?}", caps.variant).to_lowercase(),
+                adc_hz: caps.adc_hz,
+                rx_rate: rx_rate(caps.adc_hz, r2),
+                rf_lo: *rf.start(),
+                rf_hi: *rf.end(),
+                wf_decim_min: caps.wf_decim_min,
+                wf_decim_max: caps.wf_decim_max,
+            },
+            rx_channel: ch,
+            rx_r2: r2,
+            default_hz,
+            wf_budget: a.wf_budget.max(1),
+            busy: Default::default(),
+            generation: Default::default(),
+        });
+        let tls = match (&a.tls_cert, &a.tls_key) {
+            _ if a.no_tls => web888_web::Tls::Off,
+            (Some(cert), Some(key)) => web888_web::Tls::Files {
+                cert: cert.clone(),
+                key: key.clone(),
+            },
+            _ => web888_web::Tls::SelfSigned(a.state_dir.clone()),
+        };
+        let acceptor = web888_web::tls::acceptor(&tls).map_err(|e| format!("tls: {e}"))?;
+        let rt = tokio::runtime::Builder::new_multi_thread()
+            .worker_threads(2)
+            .thread_name("web")
+            .enable_all()
+            .build()?;
+        let listener = rt
+            .block_on(tokio::net::TcpListener::bind(&a.http))
+            .map_err(|e| format!("bind {}: {e}", a.http))?;
+        eprintln!(
+            "web: {}://{} (RX channel {ch}, UI from {})",
+            if acceptor.is_some() { "https" } else { "http" },
+            listener.local_addr()?,
+            a.ui_dir.display()
+        );
+        let app = web888_web::router(shared, a.ui_dir.clone());
+        let web_stop = stop.clone();
+        threads.push(
+            std::thread::Builder::new()
+                .name("web".into())
+                .spawn(move || {
+                    if let Err(e) = rt.block_on(web888_web::serve(listener, app, acceptor)) {
+                        eprintln!("web: {e}");
+                        web_stop.store(true, std::sync::atomic::Ordering::Relaxed);
+                    }
+                })?,
+        );
+    }
+    drop(ctl_tx);
+
+    let hw = web888_hw::HwLoop {
         radio,
         ctl: ctl_rx,
         stop: stop.clone(),
+        status,
         verbose: a.verbose,
     };
     let res = hw.run();
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
-    srv_thread.join().ok();
+    // the web thread runs until the process exits
+    drop(threads);
     res.map_err(|e| e.into())
 }
 

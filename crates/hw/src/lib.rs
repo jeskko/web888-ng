@@ -11,7 +11,6 @@ use web888_radio::clock::AdcClock;
 use web888_radio::*;
 
 /// Commands for the hw thread, from any consumer (HPSDR, web sessions).
-#[allow(dead_code)] // WF commands: the web session (M2 step 3)
 pub enum HwCmd {
     Tune {
         ch: usize,
@@ -168,10 +167,23 @@ pub fn read_pause(got: usize, frames_per_s: f64) -> Duration {
     Duration::from_secs_f64(missing.clamp(0.0, batch))
 }
 
+/// Health of the hw thread, readable by any consumer (status displays).
+#[derive(Debug, Default)]
+pub struct HwStatus {
+    /// RX blocks read while the ADC overflowed.
+    pub overload_blocks: AtomicU64,
+    /// PPS-corrected ADC clock error, ppb (0 without PPS).
+    pub clock_ppb: std::sync::atomic::AtomicI64,
+    /// The last rate window delivered the expected RX frames.
+    pub rx_rate_ok: AtomicBool,
+    pub rx_frames: AtomicU64,
+}
+
 pub struct HwLoop {
     pub radio: Box<dyn Radio>,
     pub ctl: Receiver<HwCmd>,
     pub stop: Arc<AtomicBool>,
+    pub status: Arc<HwStatus>,
     pub verbose: bool,
 }
 
@@ -208,6 +220,7 @@ impl HwLoop {
         let mut fe = FrontEnd::default();
         let mut rate = RateMonitor::new(Duration::from_secs(10));
         let mut last_stats = self.radio.hw_stats()?;
+        self.status.rx_rate_ok.store(true, Ordering::Relaxed);
 
         while !self.stop.load(Ordering::Relaxed) {
             while let Ok(c) = self.ctl.try_recv() {
@@ -268,19 +281,22 @@ impl HwLoop {
                 got as u64,
                 self.radio.rx_r2(),
                 self.radio.adc_hz(),
-            ) && (self.verbose || r.deficit() > 0.01)
-            {
-                eprintln!(
-                    "rx: {:.0} frames/s, expected {:.0} ({:+.1} %){}",
-                    r.got,
-                    r.want,
-                    -100.0 * r.deficit(),
-                    if r.deficit() > 0.01 {
-                        ": frames lost, the reader is falling behind"
-                    } else {
-                        ""
-                    }
-                );
+            ) {
+                let ok = r.deficit() <= 0.01;
+                self.status.rx_rate_ok.store(ok, Ordering::Relaxed);
+                if self.verbose || !ok {
+                    eprintln!(
+                        "rx: {:.0} frames/s, expected {:.0} ({:+.1} %){}",
+                        r.got,
+                        r.want,
+                        -100.0 * r.deficit(),
+                        if ok {
+                            ""
+                        } else {
+                            ": frames lost, the reader is falling behind"
+                        }
+                    );
+                }
             }
             let mut overload = false;
             if got > 0
@@ -304,7 +320,13 @@ impl HwLoop {
                 }
                 last_stats = Some(s);
             }
+            if overload {
+                self.status.overload_blocks.fetch_add(1, Ordering::Relaxed);
+            }
             if got > 0 {
+                self.status
+                    .rx_frames
+                    .fetch_add(got as u64, Ordering::Relaxed);
                 rx_out.send(RxBlock {
                     first_frame: frames,
                     nch: n,
@@ -349,6 +371,10 @@ impl HwLoop {
                 && let Some(hz) = clock.on_pps(p)
             {
                 self.radio.set_adc_hz(hz);
+                self.status.clock_ppb.store(
+                    ((hz / caps.adc_hz - 1.0) * 1e9).round() as i64,
+                    Ordering::Relaxed,
+                );
                 for (ch, f) in tuned.iter().enumerate() {
                     if let Some(f) = f {
                         self.radio.tune_rx(ch, *f)?;
@@ -399,6 +425,7 @@ mod tests {
             radio: Box::new(SimRadio::new(SimConfig::hf(scene, Pacing::RealTime))),
             ctl: rx,
             stop: stop.clone(),
+            status: Arc::default(),
             verbose: false,
         };
         let t = std::thread::spawn(move || hw.run());
