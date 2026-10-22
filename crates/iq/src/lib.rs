@@ -4,7 +4,11 @@
 //! channelized like the Web-888 FPGA (see [`ddc`]).
 //!
 //! The input covers `rate` around `center`, instead of the Web-888's
-//! 0..61 MHz: channels tuned outside it deliver zeros. The input rate must
+//! 0..61 MHz. Channels can be tuned up to one `rate` beyond either side:
+//! the offset wraps the way complex sampling does, so a channel there
+//! hears what the SDR's anti-alias filter let fold into the band, i.e.
+//! the real signal at that frequency, attenuated by the filter skirt (a
+//! test aid; within +-0.45 x rate is the clean band). The input rate must
 //! be the ADC clock (122.88 MHz) divided by a power of two from 8 to 256,
 //! so that every RX and WF rate divides it: 7.68 MS/s (/16) is the natural
 //! choice for a HackRF. WF decimations below that divisor are refused.
@@ -178,10 +182,13 @@ impl IqRadio {
 
     /// Offset of an NCO word from the input centre, if the channel lies
     /// inside the input band (with a margin for the anti-alias roll-off).
+    /// The channel's offset in the input, wrapped into its Nyquist zone
+    /// (`None` beyond one rate from either edge).
     fn offset(&self, word: u64) -> Option<f64> {
         let f = nco_freq(word, ADC_HZ_HF);
         let d = f - self.cfg.center_hz;
-        (d.abs() <= 0.45 * self.cfg.rate_hz).then_some(d)
+        let rate = self.cfg.rate_hz;
+        (d.abs() <= 1.5 * rate).then(|| d - rate * (d / rate).round())
     }
 
     fn make_rx_ddc(&self, word: u64) -> Option<Ddc> {
@@ -344,8 +351,8 @@ impl Radio for IqRadio {
             wf_decim_max: 8192,
             wf_block: WF_BLOCK,
             sample_counter: true,
-            rf_range: (self.cfg.center_hz - 0.45 * self.cfg.rate_hz).max(0.0)
-                ..=self.cfg.center_hz + 0.45 * self.cfg.rate_hz,
+            rf_range: (self.cfg.center_hz - 1.5 * self.cfg.rate_hz).max(0.0)
+                ..=self.cfg.center_hz + 1.5 * self.cfg.rate_hz,
         }
     }
 

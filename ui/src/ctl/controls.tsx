@@ -150,7 +150,9 @@ export function ZoomCtl() {
   const full = () => {
     let decim = r.wf_decim_max;
     while (decim > r.wf_decim_min && r.adc_hz / decim < r.rf_hi - r.rf_lo) decim /= 2;
-    setView({ ...s.wf, decim, center_hz: (r.rf_lo + r.rf_hi) / 2 });
+    // the whole range, or around the dial if the widest span can't cover it
+    const covers = r.adc_hz / decim >= r.rf_hi - r.rf_lo;
+    setView({ ...s.wf, decim, center_hz: covers ? (r.rf_lo + r.rf_hi) / 2 : s.hz });
   };
   const span = wfSpan(r.adc_hz, s.wf.decim);
   return (

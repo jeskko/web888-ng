@@ -120,7 +120,8 @@ struct ServeArgs {
     /// .cf32) or `soapy:ARGS` (e.g. soapy:driver=hackrf).
     #[arg(long)]
     iq: Option<String>,
-    /// IQ input centre frequency (Hz); channels work within +-0.45 x rate.
+    /// IQ input centre frequency (Hz); the clean band is +-0.45 x rate,
+    /// tuning works to +-1.5 x rate (out-of-band signals folded in).
     #[arg(long)]
     iq_freq: Option<f64>,
     /// IQ input sample rate: 122.88 MHz / 8, 16, ..., 256.
@@ -210,7 +211,7 @@ fn open_iq(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
         return Err("--iq: expected file:PATH or soapy:ARGS".into());
     };
     eprintln!(
-        "iq: {spec}, {:.3} MS/s around {:.6} MHz (channels {:.3}..{:.3} MHz)",
+        "iq: {spec}, {:.3} MS/s around {:.6} MHz (clean band {:.3}..{:.3} MHz)",
         a.iq_rate / 1e6,
         fc / 1e6,
         (fc - 0.45 * a.iq_rate) / 1e6,

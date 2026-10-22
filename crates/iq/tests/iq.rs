@@ -71,7 +71,9 @@ fn channels_see_their_tones_at_hardware_levels() {
     r.set_rx_rate(10).unwrap(); // 48 kS/s
     r.tune_rx(0, 7_074_000.0).unwrap();
     r.tune_rx(1, 13_900_000.0).unwrap();
-    r.tune_rx(2, 14_074_000.0).unwrap(); // outside the input band
+    // 7.68 MHz above the 7.075 MHz tone: beyond the band, the offset wraps
+    // onto the tone (what an SDR's filter lets fold in)
+    r.tune_rx(2, 7_074_000.0 + FS).unwrap();
     let n = r.caps().rx_channels;
     let mut buf = vec![Iq32::default(); 4800 * n];
     assert_eq!(r.read_rx(&mut buf).unwrap(), 4800);
@@ -85,8 +87,9 @@ fn channels_see_their_tones_at_hardware_levels() {
         "{a1}"
     );
     assert!((f1 - 500.0).abs() < 1.0, "{f1}");
-    let (a2, _) = measure(&buf, n, 2, 0, 48_000.0);
-    assert_eq!(a2, 0.0);
+    let (a2, f2) = measure(&buf, n, 2, 100, 48_000.0);
+    assert!((a2 / (0.1 * RX_SINE_FULL_SCALE) - 1.0).abs() < 0.01, "{a2}");
+    assert!((f2 - 1000.0).abs() < 1.0, "{f2}");
 
     // a channel tuned mid-stream joins the same frames
     r.tune_rx(3, 7_074_000.0).unwrap();

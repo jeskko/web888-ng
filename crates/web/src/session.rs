@@ -56,16 +56,22 @@ impl Shared {
         }
     }
 
-    /// The waterfall that shows the whole tunable range.
-    pub fn full_view(&self) -> WfReq {
+    /// The widest waterfall: the whole tunable range, or if the widest
+    /// span can't cover it (iq backend), centred on the dial `hz`.
+    pub fn full_view(&self, hz: f64) -> WfReq {
         let r = &self.radio;
         let width = (r.rf_hi - r.rf_lo).max(1.0);
         let mut decim = r.wf_decim_max;
         while decim > r.wf_decim_min && r.adc_hz / (decim as f64) < width {
             decim /= 2;
         }
+        let covers = r.adc_hz / (decim as f64) >= width;
         WfReq {
-            center_hz: (r.rf_lo + r.rf_hi) / 2.0,
+            center_hz: if covers {
+                (r.rf_lo + r.rf_hi) / 2.0
+            } else {
+                hz
+            },
             decim,
             bins: 1024,
             fps: 20.0,
@@ -173,7 +179,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
         pitch: defaults.pitch_hz,
         agc: true,
         gain_db: 100.0,
-        wf: sh.full_view(),
+        wf: sh.full_view(sh.default_hz),
     };
     let spec = audio_spec(&st);
     sync_state(&mut st, &spec);
