@@ -41,13 +41,21 @@ impl Out {
     }
 }
 
+/// Changes for the audio thread.
+#[derive(Clone, Copy, Debug)]
+pub enum AudioCmd {
+    Spec(AudioSpec),
+    /// The RX channel carrying the session's lease (none: no audio).
+    Channel(Option<usize>),
+}
+
 pub struct AudioWorker {
-    pub ch: usize,
+    pub ch: Option<usize>,
     pub rx_rate: f64,
     pub droop: Droop,
     pub spec: AudioSpec,
     pub blocks: Receiver<Arc<RxBlock>>,
-    pub cmd: CbReceiver<AudioSpec>,
+    pub cmd: CbReceiver<AudioCmd>,
     pub out: Out,
 }
 
@@ -59,10 +67,19 @@ impl AudioWorker {
         let mut flags = 0u8;
         let mut seq = 0u32;
         let mut rssi = -200.0;
+        let mut ch = self.ch;
         loop {
             loop {
                 match self.cmd.try_recv() {
-                    Ok(s) => chain.set_spec(s),
+                    Ok(AudioCmd::Spec(s)) => chain.set_spec(s),
+                    Ok(AudioCmd::Channel(c)) if c != ch => {
+                        // another channel's history: start over
+                        ch = c;
+                        chain = AudioChain::new(*chain.spec(), self.rx_rate, self.droop);
+                        pcm.clear();
+                        flags |= FLAG_GAP;
+                    }
+                    Ok(AudioCmd::Channel(_)) => {}
                     Err(TryRecvError::Empty) => break,
                     Err(TryRecvError::Disconnected) => return,
                 }
@@ -72,6 +89,10 @@ impl AudioWorker {
                 Err(RecvTimeoutError::Timeout) => continue,
                 Err(RecvTimeoutError::Disconnected) => return,
             };
+            let Some(ch) = ch else {
+                next_frame = None;
+                continue;
+            };
             if next_frame.is_some_and(|n| n != b.first_frame) {
                 flags |= FLAG_GAP;
             }
@@ -79,7 +100,7 @@ impl AudioWorker {
             if b.overload {
                 flags |= FLAG_OVERLOAD;
             }
-            chain.process(b.channel(self.ch), &mut pcm);
+            chain.process(b.channel(ch), &mut pcm);
             let mut used = 0;
             while pcm.len() - used >= AUDIO_FRAME {
                 // a block may finish several frames: they share its reading

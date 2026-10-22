@@ -20,6 +20,8 @@ hyper-util = { version = "0.1.21", features = ["server-auto", "tokio", "service"
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "logging", "tls12"] }
 rcgen = { version = "0.14.10", default-features = false, features = ["pem", "ring"] }
 web888-config.workspace = true
+web888-core.workspace = true
+tower = { version = "0.5.3", features = ["util"] }
 
 [dev-dependencies]
 futures-util = "0.3.34"

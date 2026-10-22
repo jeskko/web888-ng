@@ -9,18 +9,20 @@ pub mod tls;
 pub mod workers;
 
 use axum::Router;
-use axum::extract::{State, WebSocketUpgrade};
+use axum::extract::{ConnectInfo, State, WebSocketUpgrade};
 use axum::response::{Html, IntoResponse, Json};
 use axum::routing::get;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
 use hyper_util::service::TowerToHyperService;
 use session::Shared;
+use std::net::SocketAddr;
 use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::Ordering;
 use tokio::net::TcpListener;
 use tokio_rustls::TlsAcceptor;
+use tower::ServiceExt;
 use tower_http::compression::CompressionLayer;
 use tower_http::services::ServeDir;
 use tower_http::set_header::SetResponseHeaderLayer;
@@ -47,8 +49,12 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .with_state(shared)
 }
 
-async fn ws(up: WebSocketUpgrade, State(sh): State<Arc<Shared>>) -> impl IntoResponse {
-    up.on_upgrade(move |s| session::run(s, sh))
+async fn ws(
+    up: WebSocketUpgrade,
+    State(sh): State<Arc<Shared>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+) -> impl IntoResponse {
+    up.on_upgrade(move |s| session::run(s, sh, peer))
 }
 
 async fn status(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
@@ -72,13 +78,18 @@ pub async fn serve(
     tls: Option<TlsAcceptor>,
 ) -> std::io::Result<()> {
     loop {
-        let (sock, _) = listener.accept().await?;
+        let (sock, peer) = listener.accept().await?;
         let app = app.clone();
         let tls = tls.clone();
         tokio::spawn(async move {
             let _ = sock.set_nodelay(true);
             let mut first = [0u8; 1];
             let is_tls = matches!(sock.peek(&mut first).await, Ok(1) if first[0] == 0x16);
+            // handlers see the client's address (as with axum's own serve)
+            let app = app.map_request(move |mut r: axum::http::Request<_>| {
+                r.extensions_mut().insert(ConnectInfo(peer));
+                r
+            });
             let svc = TowerToHyperService::new(app);
             let http = Builder::new(TokioExecutor::new());
             match (is_tls, tls) {

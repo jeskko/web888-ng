@@ -25,6 +25,7 @@ use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
 use web888_config::{Backend, Config, TlsMode};
+use web888_core::leases::{Channels, Class, Lease, Policy};
 use web888_dsp::chan::{ChannelSpec, Droop, design};
 use web888_dsp::demod::{Am, ssb};
 use web888_dsp::ols::OverlapSave;
@@ -77,8 +78,8 @@ struct ServeArgs {
     /// Board id reported to HPSDR clients (1 = Hermes, 5 = Orion, 6 = Hermes-Lite).
     #[arg(long)]
     hpsdr_board: Option<u8>,
-    /// Receivers offered to HPSDR clients (max 7; the web user's channel
-    /// is not offered).
+    /// Receivers offered to HPSDR clients (max 7; each takes an RX channel
+    /// lease while the client streams, limits.hpsdr_channels at most).
     #[arg(long)]
     hpsdr_rx: Option<usize>,
     /// Don't serve HPSDR.
@@ -104,9 +105,6 @@ struct ServeArgs {
     /// Where web888d keeps state, e.g. the self-signed certificate [/var/lib/web888d].
     #[arg(long)]
     state_dir: Option<PathBuf>,
-    /// RX channel for the web user (default: the last one).
-    #[arg(long)]
-    web_rx: Option<usize>,
     /// Initial web dial frequency in Hz (default: 7.074 MHz if in range).
     #[arg(long)]
     web_freq: Option<f64>,
@@ -199,9 +197,6 @@ impl ServeArgs {
         }
         if self.no_tls {
             w.tls = TlsMode::Off;
-        }
-        if self.web_rx.is_some() {
-            w.rx_channel = self.web_rx;
         }
         if self.web_freq.is_some() {
             w.default_freq = self.web_freq;
@@ -433,7 +428,12 @@ extern "C" fn on_sighup(_: libc::c_int) {
 /// Reload the configuration when the file changes (checked every 2 s) or
 /// on SIGHUP. Settings that apply at once go out through `tx`; the others
 /// are logged as needing a restart. A broken file is logged and ignored.
-fn watch_config(a: ServeArgs, mut running: Config, tx: tokio::sync::watch::Sender<Arc<Config>>) {
+fn watch_config(
+    a: ServeArgs,
+    mut running: Config,
+    tx: tokio::sync::watch::Sender<Arc<Config>>,
+    channels: Arc<Channels>,
+) {
     // SAFETY: the handler only stores to an atomic
     unsafe { libc::signal(libc::SIGHUP, on_sighup as *const () as libc::sighandler_t) };
     let mtime = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
@@ -462,9 +462,59 @@ fn watch_config(a: ServeArgs, mut running: Config, tx: tokio::sync::watch::Sende
         }
         if ch.live {
             eprintln!("config: reloaded");
+            channels.set_policy(Policy::from_limits(&new.limits));
             let _ = tx.send(Arc::new(new.clone()));
         }
         running = new;
+    }
+}
+
+/// The HPSDR server's host: one RX channel lease per receiver while the
+/// client streams; receivers without a channel get zeros.
+struct HpsdrHost {
+    channels: Arc<Channels>,
+    hw: mpsc::Sender<web888_hw::HwCmd>,
+    /// Each receiver's frequency, kept while it has no lease.
+    hz: Vec<f64>,
+    leases: Vec<Lease>,
+}
+
+impl web888_hpsdr::server::Host for HpsdrHost {
+    fn control(&mut self, c: web888_hpsdr::server::Control) {
+        use web888_hpsdr::server::Control;
+        match c {
+            Control::Tune { rx, hz } => {
+                if let Some(f) = self.hz.get_mut(rx) {
+                    *f = hz;
+                }
+                if let Some(l) = self.leases.get(rx) {
+                    l.tune(hz);
+                }
+            }
+            Control::Atten { db } => {
+                let _ = self.hw.send(web888_hw::HwCmd::Atten { db });
+            }
+            Control::Receivers(n) => {
+                let n = n.min(self.hz.len());
+                self.leases.truncate(n);
+                while self.leases.len() < n {
+                    let rx = self.leases.len();
+                    let l = self.channels.acquire(
+                        Class::Protocol,
+                        &format!("hpsdr rx{rx}"),
+                        self.hz[rx],
+                    );
+                    if l.channel().is_none() {
+                        eprintln!("hpsdr: rx{rx} waits for a channel (zeros until then)");
+                    }
+                    self.leases.push(l);
+                }
+            }
+        }
+    }
+
+    fn channel(&mut self, rx: usize) -> Option<usize> {
+        self.leases.get(rx)?.channel()
     }
 }
 
@@ -480,14 +530,6 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     } else {
         eprintln!("config: {} not found, using defaults", a.config.display());
     }
-    let (live_tx, live_rx) = tokio::sync::watch::channel(Arc::new(cfg.clone()));
-    {
-        let (a, c) = (a.clone(), cfg.clone());
-        std::thread::Builder::new()
-            .name("config".into())
-            .spawn(move || watch_config(a, c, live_tx))?;
-    }
-
     let mut radio = open_radio(&cfg.radio)?;
     let caps = radio.caps();
     let id = radio.identity();
@@ -502,19 +544,18 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     let stop = Arc::new(AtomicBool::new(false));
     let status = Arc::new(web888_hw::HwStatus::default());
     let (ctl_tx, ctl_rx) = mpsc::channel();
-    let web_rx = if !cfg.web.enabled {
-        None
-    } else {
-        let ch = cfg.web.rx_channel.unwrap_or(caps.rx_channels - 1);
-        if ch >= caps.rx_channels {
-            return Err(format!(
-                "web rx channel {ch}: the radio has {} channels",
-                caps.rx_channels
-            )
-            .into());
-        }
-        Some(ch)
-    };
+    let channels = Channels::new(
+        caps.rx_channels,
+        Policy::from_limits(&cfg.limits),
+        ctl_tx.clone(),
+    );
+    let (live_tx, live_rx) = tokio::sync::watch::channel(Arc::new(cfg.clone()));
+    {
+        let (a, c, ch) = (a.clone(), cfg.clone(), channels.clone());
+        std::thread::Builder::new()
+            .name("config".into())
+            .spawn(move || watch_config(a, c, live_tx, ch))?;
+    }
 
     let mut threads = Vec::new();
     if cfg.hpsdr.enabled {
@@ -522,12 +563,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         let (sub, blk_rx, _drops) = web888_hw::Subscriber::new(64);
         ctl_tx.send(web888_hw::HwCmd::SubscribeRx(sub))?;
         let sock = UdpSocket::bind(&h.listen).map_err(|e| format!("bind {}: {e}", h.listen))?;
-        // receivers map to channels 0..max_rx: keep the web user's out
-        let max_rx = h
-            .receivers
-            .min(caps.rx_channels)
-            .min(web_rx.unwrap_or(usize::MAX))
-            .min(7);
+        let max_rx = h.receivers.min(caps.rx_channels).min(7);
         let scfg = server::Config {
             board: Board {
                 mac: eth0_mac(),
@@ -542,30 +578,20 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             srv.local_addr()?
         );
         let srv_stop = stop.clone();
-        let ctl = ctl_tx.clone();
+        let host = HpsdrHost {
+            channels: channels.clone(),
+            hw: ctl_tx.clone(),
+            hz: vec![7_074_000.0; max_rx],
+            leases: Vec::new(),
+        };
         threads.push(
             std::thread::Builder::new()
                 .name("hpsdr".into())
-                .spawn(move || {
-                    srv.run(
-                        blk_rx,
-                        move |c| {
-                            let cmd = match c {
-                                server::Control::Tune { rx, hz } => {
-                                    web888_hw::HwCmd::Tune { ch: rx, hz }
-                                }
-                                server::Control::Atten { db } => web888_hw::HwCmd::Atten { db },
-                                server::Control::Streaming(_) => return,
-                            };
-                            let _ = ctl.send(cmd);
-                        },
-                        srv_stop,
-                    )
-                })?,
+                .spawn(move || srv.run(blk_rx, host, srv_stop))?,
         );
     }
 
-    if let Some(ch) = web_rx {
+    if cfg.web.enabled {
         let w = &cfg.web;
         let rf = caps.rf_range.clone();
         let shared = Arc::new(web888_web::session::Shared {
@@ -581,7 +607,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 wf_decim_min: caps.wf_decim_min,
                 wf_decim_max: caps.wf_decim_max,
             },
-            rx_channel: ch,
+            channels: channels.clone(),
             rx_r2: r2,
             live: live_rx,
             busy: Default::default(),
@@ -605,7 +631,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             .block_on(tokio::net::TcpListener::bind(&w.listen))
             .map_err(|e| format!("bind {}: {e}", w.listen))?;
         eprintln!(
-            "web: {}://{} (RX channel {ch}, UI from {})",
+            "web: {}://{} (UI from {})",
             if acceptor.is_some() { "https" } else { "http" },
             listener.local_addr()?,
             w.ui_dir.display()

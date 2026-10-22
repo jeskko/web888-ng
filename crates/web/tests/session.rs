@@ -16,6 +16,15 @@ use web888_web::session::Shared;
 const TONE: f64 = 7_075_500.0;
 
 async fn start() -> (std::net::SocketAddr, Arc<AtomicBool>) {
+    let (addr, stop, _) = start_with_channels().await;
+    (addr, stop)
+}
+
+async fn start_with_channels() -> (
+    std::net::SocketAddr,
+    Arc<AtomicBool>,
+    Arc<web888_core::leases::Channels>,
+) {
     let scene = Scene::new().tone(TONE, -40.0).adc_noise();
     let mut radio = SimRadio::new(SimConfig::hf(scene, Pacing::RealTime));
     let caps = radio.caps();
@@ -32,6 +41,11 @@ async fn start() -> (std::net::SocketAddr, Arc<AtomicBool>) {
         verbose: false,
     };
     std::thread::spawn(move || hw.run());
+    let channels = web888_core::leases::Channels::new(
+        caps.rx_channels,
+        web888_core::leases::Policy::default(),
+        tx.clone(),
+    );
     let shared = Arc::new(Shared {
         hw: std::sync::Mutex::new(tx),
         status,
@@ -45,7 +59,7 @@ async fn start() -> (std::net::SocketAddr, Arc<AtomicBool>) {
             wf_decim_min: caps.wf_decim_min,
             wf_decim_max: caps.wf_decim_max,
         },
-        rx_channel: caps.rx_channels - 1,
+        channels: channels.clone(),
         rx_r2: r2,
         live: tokio::sync::watch::channel(Arc::new(web888_config::Config::default())).1,
         busy: Default::default(),
@@ -55,7 +69,7 @@ async fn start() -> (std::net::SocketAddr, Arc<AtomicBool>) {
     let addr = listener.local_addr().unwrap();
     let app = web888_web::router(shared, "/nonexistent".into());
     tokio::spawn(web888_web::serve(listener, app, None));
-    (addr, stop)
+    (addr, stop, channels)
 }
 
 fn json(m: &Message) -> Option<ServerMsg> {
@@ -204,5 +218,54 @@ async fn status_and_missing_ui() {
             "{path}: {r}"
         );
     }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Audio samples received within `t` (other messages skipped).
+async fn audio_within<S>(ws: &mut S, t: Duration) -> usize
+where
+    S: futures_util::Stream<
+            Item = std::result::Result<Message, tokio_tungstenite::tungstenite::Error>,
+        > + Unpin,
+{
+    let deadline = tokio::time::Instant::now() + t;
+    let mut n = 0;
+    while let Ok(Some(Ok(m))) = tokio::time::timeout_at(deadline, ws.next()).await {
+        if let Message::Binary(b) = m
+            && b[0] == proto::KIND_AUDIO
+        {
+            n += u16::from_le_bytes([b[2], b[3]]) as usize;
+        }
+    }
+    n
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn session_waits_for_a_channel() {
+    use web888_core::leases::{Class, LeaseState};
+    let (addr, stop, channels) = start_with_channels().await;
+    // HPSDR-like clients hold every channel
+    let held: Vec<_> = (0..12)
+        .map(|k| channels.acquire(Class::Protocol, "test", 1e6 * k as f64))
+        .collect();
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    assert_eq!(audio_within(&mut ws, Duration::from_millis(700)).await, 0);
+    let web = channels
+        .leases()
+        .into_iter()
+        .find(|l| l.class == Class::Web)
+        .unwrap();
+    assert_eq!(web.state, LeaseState::Waiting { position: 1 });
+    assert!(web.label.starts_with("web 127.0.0.1"), "{}", web.label);
+    assert_eq!(web.hz, 7_074_000.0);
+
+    // one frees: the session gets that channel, tuned to its dial
+    drop(held);
+    assert!(audio_within(&mut ws, Duration::from_millis(700)).await > 3000);
+    let web = channels.leases();
+    assert_eq!(web.len(), 1);
+    assert_eq!(web[0].state, LeaseState::Granted { ch: 0 });
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }

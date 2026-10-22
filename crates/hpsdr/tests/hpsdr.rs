@@ -156,3 +156,103 @@ fn two_receivers_over_udp() {
     // nothing where there is no signal
     assert!(db(tone_amp(&rx0, -1000.0, fs)) < db(want(-20.0, 0.0)) - 90.0);
 }
+
+/// Maps receiver 0 to channel 3 and receiver 1 to none, and records what
+/// the server reports.
+struct MapHost(mpsc::Sender<Control>);
+
+impl web888_hpsdr::server::Host for MapHost {
+    fn control(&mut self, c: Control) {
+        let _ = self.0.send(c);
+    }
+    fn channel(&mut self, rx: usize) -> Option<usize> {
+        (rx == 0).then_some(3)
+    }
+}
+
+#[test]
+fn host_maps_receivers_and_a_silent_client_is_stopped() {
+    let stop = Arc::new(AtomicBool::new(false));
+    let (blk_tx, blk_rx) = mpsc::sync_channel::<Arc<RxBlock>>(64);
+    let (ctl_tx, ctl_rx) = mpsc::channel::<Control>();
+    // blocks of 4 channels; channel k carries (k, -k) (24-bit) in every frame
+    let feed_stop = stop.clone();
+    let feed = std::thread::spawn(move || {
+        let mut first_frame = 0;
+        while !feed_stop.load(Ordering::Relaxed) {
+            let iq = (0..126 * 4i32)
+                .map(|n| {
+                    let k = n % 4;
+                    Iq32 {
+                        i: k << 7,
+                        q: -k << 7,
+                    }
+                })
+                .collect();
+            let blk = RxBlock {
+                first_frame,
+                nch: 4,
+                iq,
+                overload: false,
+            };
+            first_frame = blk.end_frame();
+            if blk_tx.send(Arc::new(blk)).is_err() {
+                break;
+            }
+            std::thread::sleep(Duration::from_millis(2));
+        }
+    });
+
+    let sock = UdpSocket::bind("127.0.0.1:0").unwrap();
+    let cfg = Config {
+        board: proto::Board {
+            mac: [2, 0, 0, 0x88, 0x88, 1],
+            code_version: 1,
+            board_id: 1,
+        },
+        max_rx: 7,
+    };
+    let mut server = Server::new(sock, cfg).unwrap();
+    let addr = server.local_addr().unwrap();
+    let srv_stop = stop.clone();
+    let srv = std::thread::spawn(move || server.run(blk_rx, MapHost(ctl_tx), srv_stop));
+
+    let c = UdpSocket::bind("127.0.0.1:0").unwrap();
+    c.set_read_timeout(Some(Duration::from_secs(2))).unwrap();
+    let cc = [host::cc_config(0, 2), host::cc_rx_freq(0, F0 as u32)];
+    c.send_to(&host::data(0, cc), addr).unwrap();
+    c.send_to(&host::start_stop(1), addr).unwrap();
+    let mut buf = [0u8; 2048];
+    for _ in 0..5 {
+        let (n, _) = c.recv_from(&mut buf).expect("EP6 data");
+        let (_, rx) = proto::decode_ep6(&buf[..n], 2).expect("EP6 packet");
+        assert!(
+            rx[0].iter().all(|&s| s == (3, -3)),
+            "rx0 from channel 3: {:?}",
+            &rx[0][..4]
+        );
+        assert!(rx[1].iter().all(|&s| s == (0, 0)), "rx1 has no channel");
+    }
+    let got: Vec<Control> = ctl_rx.try_iter().collect();
+    assert_eq!(
+        got,
+        [Control::Tune { rx: 0, hz: F0 }, Control::Receivers(2)]
+    );
+
+    // the client goes silent: stopped after the timeout
+    let t0 = std::time::Instant::now();
+    let r = ctl_rx
+        .recv_timeout(web888_hpsdr::server::CLIENT_TIMEOUT * 2)
+        .unwrap();
+    assert_eq!(r, Control::Receivers(0));
+    assert!(t0.elapsed() >= web888_hpsdr::server::CLIENT_TIMEOUT - Duration::from_millis(500));
+    // and no more data after what was in flight
+    c.set_read_timeout(Some(Duration::from_millis(200)))
+        .unwrap();
+    while c.recv_from(&mut buf).is_ok() {}
+    std::thread::sleep(Duration::from_millis(100));
+    assert!(c.recv_from(&mut buf).is_err(), "stopped streaming");
+    stop.store(true, Ordering::Relaxed);
+    srv.join().unwrap();
+    feed.join().unwrap();
+}

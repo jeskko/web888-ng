@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! One web user (M2: one at a time): a WebSocket connection, its RX
-//! channel and WF slot 0, and its two DSP threads.
+//! One web user (M2: one at a time): a WebSocket connection, an RX
+//! channel lease and WF slot 0, and its two DSP threads.
 
 use crate::proto::{self, ClientMsg, Limits, Mode, RadioInfo, ServerMsg, State, WfReq};
-use crate::workers::{AudioWorker, Out, WfConfig, WfWorker};
+use crate::workers::{AudioCmd, AudioWorker, Out, WfConfig, WfWorker};
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
+use web888_core::leases::{Channels, Class};
 use web888_dsp::agc::AgcSpec;
 use web888_dsp::audio::{AUDIO_RATE, AudioSpec};
 use web888_dsp::chan::Droop;
@@ -20,13 +21,12 @@ pub const FPS_MAX: f64 = 30.0;
 const WF_SLOT: usize = 0;
 
 /// What every session shares: the hw thread's command queue and status,
-/// the radio description, and the one-user lock.
+/// the radio description, the RX channel leases and the one-user lock.
 pub struct Shared {
     pub hw: Mutex<std::sync::mpsc::Sender<HwCmd>>,
     pub status: Arc<HwStatus>,
     pub radio: RadioInfo,
-    /// RX channel for the web user.
-    pub rx_channel: usize,
+    pub channels: Arc<Channels>,
     /// Stage-2 RX decimation the hardware runs at (droop compensation).
     pub rx_r2: u16,
     /// The configuration's live settings (reloaded without a restart).
@@ -167,7 +167,7 @@ async fn send_json(ws: &mut WebSocket, m: &ServerMsg) -> bool {
     ws.send(Message::Text(s.into())).await.is_ok()
 }
 
-pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
+pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr) {
     if sh.busy.swap(true, Ordering::AcqRel) {
         let _ = send_json(
             &mut ws,
@@ -200,6 +200,9 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
     };
     let spec = audio_spec(&st);
     sync_state(&mut st, &spec);
+    let mut lease = sh
+        .channels
+        .acquire(Class::Web, &format!("web {}", peer.ip()), st.hz);
 
     // DSP threads
     let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel(32);
@@ -212,7 +215,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
     let (wf_cmd, wf_cmd_rx) = crossbeam_channel::unbounded();
     let rx_rate = sh.radio.rx_rate;
     let worker = AudioWorker {
-        ch: sh.rx_channel,
+        ch: lease.channel(),
         rx_rate,
         droop: Droop::Rx {
             adc_hz: sh.radio.adc_hz,
@@ -248,10 +251,6 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
     }
     sh.hw(HwCmd::SubscribeRx(rx_sub));
     sh.hw(HwCmd::SubscribeWf(wf_sub));
-    sh.hw(HwCmd::Tune {
-        ch: sh.rx_channel,
-        hz: st.hz,
-    });
     let start_wf = |w: &WfReq| {
         let generation = sh.generation.fetch_add(1, Ordering::Relaxed) + 1;
         let fs = sh.radio.adc_hz / w.decim as f64;
@@ -308,7 +307,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
                     ClientMsg::Ping { t } => Some(ServerMsg::Pong { t }),
                     ClientMsg::Tune { hz } => {
                         st.hz = sh.clamp_hz(hz);
-                        sh.hw(HwCmd::Tune { ch: sh.rx_channel, hz: st.hz });
+                        lease.tune(st.hz);
                         Some(ServerMsg::State(st.clone()))
                     }
                     ClientMsg::Mode { mode, lo, hi, pitch } => {
@@ -319,7 +318,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
                         st.pitch = pitch.unwrap_or(st.pitch);
                         let a = audio_spec(&st);
                         sync_state(&mut st, &a);
-                        let _ = audio_cmd.send(a);
+                        let _ = audio_cmd.send(AudioCmd::Spec(a));
                         Some(ServerMsg::State(st.clone()))
                     }
                     ClientMsg::Audio { agc, gain_db } => {
@@ -327,7 +326,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
                         st.gain_db = gain_db.unwrap_or(st.gain_db);
                         let a = audio_spec(&st);
                         sync_state(&mut st, &a);
-                        let _ = audio_cmd.send(a);
+                        let _ = audio_cmd.send(AudioCmd::Spec(a));
                         Some(ServerMsg::State(st.clone()))
                     }
                     ClientMsg::Wf(w) => {
@@ -339,6 +338,10 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
                 if let Some(r) = reply && !send_json(&mut ws, &r).await {
                     break;
                 }
+            }
+            s = lease.changed() => {
+                // M3 step 5 tells the client (waiting / granted)
+                let _ = audio_cmd.send(AudioCmd::Channel(s.channel()));
             }
             Some(f) = audio_rx.recv() => {
                 if ws.send(Message::Binary(f.into())).await.is_err() {

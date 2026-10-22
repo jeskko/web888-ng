@@ -161,8 +161,6 @@ pub struct Web {
     pub tls_key: Option<PathBuf>,
     /// Where web888d keeps state (the self-signed certificate).
     pub state_dir: PathBuf,
-    /// RX channel for the web user (M2; default: the last one).
-    pub rx_channel: Option<usize>,
     /// Initial dial frequency (Hz; default 7.074 MHz if in range).
     pub default_freq: Option<f64>,
     /// Most FFTs averaged per waterfall line (CPU budget).
@@ -179,7 +177,6 @@ impl Default for Web {
             tls_cert: None,
             tls_key: None,
             state_dir: "/var/lib/web888d".into(),
-            rx_channel: None,
             default_freq: None,
             wf_budget: 30,
         }

@@ -1,0 +1,15 @@
+[package]
+name = "web888-core"
+description = "web888d's shared receiver resources: RX channel leases"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+web888-hw.workspace = true
+web888-config.workspace = true
+tokio = { version = "1.54.1", features = ["sync"] }
+
+[dev-dependencies]
+tokio = { version = "1.54.1", features = ["sync", "rt", "macros", "time"] }

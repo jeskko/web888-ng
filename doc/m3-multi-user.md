@@ -46,11 +46,16 @@ all hardware assignments, a **WF scheduler**, and a **DSP pool**.
   first: `admin > skimmer > protocol > web` (design.md §6). Skimmers
   arrive with M4; the class exists now.
 * The **channel manager** is the only code that retunes RX NCOs. Sessions
-  ask it (`Acquire`, `Tune`, `Release`); it answers with grants and
-  revocations. It runs as a task on the tokio runtime, and talks to the hw
-  thread with `HwCmd` (as now).
-* HPSDR: receivers become leases, taken when a client starts streaming and
-  released when it stops. Today it holds channels `0..7` for its lifetime.
+  ask it (acquire, tune, release a lease); it answers with grants and
+  revocations. It is a shared object behind a mutex (`web888_core::leases::
+  Channels`; the policy itself, `Manager`, has no threads or I/O), so the
+  HPSDR thread and the tokio sessions call it directly. It retunes through
+  the hw thread with `HwCmd`, and each lease's state (waiting with a queue
+  position, or granted a channel) goes to its holder through a
+  `tokio::sync::watch`: polled by the HPSDR thread, awaited by sessions.
+* HPSDR: receivers are leases, taken when a client starts streaming and
+  released when it stops (or goes silent for 3 s). A receiver waiting for
+  a channel sends zeros.
 
 ### 2.2 Policies (config, §6)
 

@@ -1640,6 +1640,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-core"
+version = "0.1.0"
+dependencies = [
+ "tokio",
+ "web888-config",
+ "web888-hw",
+]
+
+[[package]]
 name = "web888-dsp"
 version = "0.1.0"
 dependencies = [
@@ -1705,8 +1714,10 @@ dependencies = [
  "tokio",
  "tokio-rustls",
  "tokio-tungstenite 0.30.0",
+ "tower",
  "tower-http",
  "web888-config",
+ "web888-core",
  "web888-dsp",
  "web888-hw",
  "web888-radio",
@@ -1731,6 +1742,7 @@ dependencies = [
  "num-complex",
  "tokio",
  "web888-config",
+ "web888-core",
  "web888-dsp",
  "web888-hpsdr",
  "web888-hw",
