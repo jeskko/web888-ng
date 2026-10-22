@@ -1,14 +1,15 @@
 # Feature gap: web888-ng vs the stock Web-888 server and KiwiSDR
 
-Status: **proposal** (2026-10-22). Order and omissions are open (§4).
+Status: **proposal** (2026-10-22). Order and omissions are open (§5).
 
 Compared:
 
 * **Stock**: the Web-888 server (RaspSDR's KiwiSDR fork), source as of
   2026-09-27 (release web-888-20260919). From its source and release notes.
 * **Kiwi**: official KiwiSDR v1.902 (2026-07), from its CHANGE_LOG.
-* **OWRX+**: OpenWebRX+ (1.2.x), as a reference for a modern multi-user
-  server. Listed only where it shows a direction.
+* **OWRX+**: OpenWebRX+ 1.2.127 (2026-10), the active fork of OpenWebRX.
+  Upstream OpenWebRX is dormant: its last release is 1.2.2 (2023), and
+  develop was last touched in 2024. §4 covers both.
 * **ng**: web888-ng v0.2.0.
 
 Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
@@ -117,6 +118,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 |---|---|---|---|---|
 | Status, users + kick, config, passwords | ✓ | ✓ | ✓ | – |
 | Session time limit, inactivity limit | ✓ | ✓ | **config keys exist but aren't enforced** | **fix now** |
+| Client address behind a reverse proxy (trusted proxies, X-Forwarded-For) | ✓ | ✓ | ✗: behind a proxy all users share one address, so `per_ip` limits everyone together | **fix now** |
 | Per-IP daily limit, IP block list, ban from the user list | ✓ | ✓ | per-IP sessions only | **O** |
 | Channels without a password (open + private sets) | ✓ | ✓ | ✗ (all or nothing) | **O** |
 | Receiver info page (name, location, antenna, photo) | ✓ | ✓ | ✗ | **O** |
@@ -142,8 +144,10 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 
 Each step is a milestone like M3 (plan, steps, tests).
 
-1. **Fix now** (small, before M4): enforce `session_minutes` and
-   `idle_minutes`.
+1. **Fix now** (small, before M4):
+   * enforce `session_minutes` and `idle_minutes`
+   * trusted reverse proxies: take the client address from
+     X-Forwarded-For only when the peer is a configured proxy.
 2. **S — skimmers (M4)**:
    * A decoder supervisor (child processes, restart, CPU accounting).
    * FT8/FT4/FST4W and WSPR autoruns on Skimmer-class leases, pre-empted
@@ -154,36 +158,41 @@ Each step is a milestone like M3 (plan, steps, tests).
 
    This is what keeps a unit useful when nobody is listening, and what
    the stock firmware is mostly run for. It's the reason to switch.
-3. **R — receiver parity (M5)**:
+   Then **S2**: CW and RTTY skimmers to PSKReporter, if the A9 has room
+   (§4).
+3. **M — map** (small once S exists): spots with locators and lines,
+   EiBi transmitters on air (click to tune), and later HFDL aircraft.
+   Leaflet in the browser (§4).
+4. **R — receiver parity (M5)**:
    * DSP: SAM, NBFM, IQ mode, auto-notch, AGC threshold/decay.
    * Audio: a 24 kHz option, ADPCM audio.
    * RF attenuator, frequency offset, S-meter calibration.
    * UI: band bars and plan, DX labels (own + EiBi), memories, WAV
      recording, a few colormaps, peak hold, waterfall timestamps.
-4. **K — Kiwi protocol (M6)**: kiwirecorder, wsprdaemon and SuperSDR
+5. **K — Kiwi protocol (M6)**: kiwirecorder, wsprdaemon and SuperSDR
    work. `/status` and `/snr` for listings. It opens the existing tool
    ecosystem without us writing clients.
-5. **B — interactive decoders in the browser (M7)**: CW, FSK/RTTY,
+6. **B — interactive decoders in the browser (M7)**: CW, FSK/RTTY,
    NAVTEX/DSC, FAX, SSTV, time codes, as WASM/JS fed from the audio the
    page already gets.
    * The stock server runs these on the A9 per user. Our bench (m3 §4)
      says the A9 has little to spare, while a browser has plenty.
    * Only autoruns (S) and things needing more than the audio (D) run on
      the unit.
-6. **O — operations (with the os repo, can run alongside)**:
+7. **O — operations (with the os repo, can run alongside)**:
    * Access: per-IP daily limit, block list, open + private channel sets.
    * Receiver info page, log view, config download/upload.
    * os work: updates, network config.
-7. **D — heavier server-side decoders**: DRM (FDK-AAC strictly out of
+8. **D — heavier server-side decoders**: DRM (FDK-AAC strictly out of
    process; measure A9 CPU first) and HFDL (dumphfdl).
-8. **V — VHF airband and clocking (with hw)**: airband mode, AIS/ACARS,
+9. **V — VHF airband and clocking (with hw)**: airband mode, AIS/ACARS,
    external reference, ADC controls. These need the test unit and
    bitstream work.
-9. **Later**: CW skimmer, ALE, themes, IQ stream/rtl_tcp/SpyServer, ACME,
+10. **Later**: ALE, themes, IQ stream/rtl_tcp/SpyServer, ACME,
    TDoA (needs K and open-FPGA timestamps), waterfall compression.
 
 **Proposed omissions:**
-* chat, languages
+* languages (chat: see §5)
 * C-QUAM, MFSK/STANAG-4285/Loran-C
 * waterfall window and interpolation choices (ours averages)
 * the vendor reverse proxy, DUC and UPnP (document a reverse proxy
@@ -192,7 +201,41 @@ Each step is a milestone like M3 (plan, steps, tests).
 * usage analytics (metrics instead)
 * 32 MHz narrowband mode
 
-## 4. Open questions
+## 4. OpenWebRX and OpenWebRX+
+
+**Model.**
+* OWRX shares one SDR "profile" (centre frequency and rate) between all
+  users of a device, with one waterfall. Changing it moves everyone. The
+  lock-profile option, the "magic key" and the bot bans exist because of
+  that.
+* Each user gets a server-side demodulation chain decimating from the full
+  device rate. CPU per user is high: a few users on a Raspberry Pi 3.
+* web888-ng's per-user FPGA channels and shared views already avoid all
+  of this, so nothing from that side is needed.
+
+**What OWRX+ has that the Kiwi family doesn't, and how it would fit here:**
+
+| idea | what it is in OWRX+ | here | plan |
+|---|---|---|---|
+| Decoder scheduler: static, or daylight/greyline profiles | Background services follow a schedule when nobody listens | Skimmer leases by schedule (design §6), e.g. FT8 bands by daylight and greyline | **S** |
+| CW and RTTY skimmers to PSKReporter | csdr-skimmer: every signal in a 96 kHz slice, callsigns spotted | One 48 kHz channel per band segment. Kiwi's CW skimmer is interactive only and spots nothing | **S2** (after FT8/WSPR; A9 CPU to measure) |
+| MQTT event stream: spots, connects, channel use; federation between servers | Per-mode topics, JSON | MQTT is in S already; events cost little | **S** (federation later) |
+| Map | Locators with QSO/call lines, APRS, aircraft from HFDL/VDL2/ACARS, ships, other web SDRs with user counts, EiBi transmitters on air (click to tune) | Spots from S, HFDL aircraft from D, EiBi from R; Leaflet in the browser, server sends JSON | **M** (new, after S) |
+| Files gallery | SSTV/FAX images, NAVTEX/text logs, squelch-triggered MP3s, with a keep limit | Needs storage: the config partition is 32 MB, so use RAM with a cap or a USB stick | with **B**/**D** |
+| Scheduled squelched audio logger | MP3 per channel with SNR squelch and hang | e.g. VOLMET or a net; Opus at 12 kHz is cheap | later |
+| Bookmarks + scanner | Auto-bookmarks from EiBi (in range) and band plans; scanner steps through visible bookmarks with squelch | The scanner is client-side retuning; the server has squelch and power | **R** |
+| Chat, admin broadcast | Random nicknames, timestamps, federated over MQTT | Small. Moved from "omit" to a question (§5) | ? |
+| Abuse protection | Robot score from connection rate and rapid profile changes, timed IP bans, trusted proxies, session timeout with a policy page, LAN-only admin login | Trusted proxies are fixed now; the rest goes with **O** | **O** |
+| Opus audio | Wanted for years (upstream #220, a 2022 WebCodecs branch abandoned) | ADPCM first, Opus via WebCodecs where the browser has it | **R** |
+| Whisper speech-to-text | 20 s WAV chunks POSTed to an external Whisper server; transcripts to the page and MQTT | No inference on the unit; an optional URL in the config | later (novel; value on HF SSB unproven) |
+| FreeDV (700D/E, RADE) | Server-side decoder per user | HF digital voice. Better as WASM in the browser (RADE is a neural network) | later, browser |
+| Selcall/DTMF/EAS, POCSAG, ISM, AIS, ADS-B, DAB, HD Radio, LoRa, radiosondes | Many decoders, mostly VHF/UHF | Mostly outside HF; AIS/ACARS only with **V** | omit (except DSC, in **B**) |
+| Secondary audio-passband waterfall for digimodes (click sets the decoder offset) | Panels for text, tables and images | The browser-side decoder UI | **B** |
+| Keyboard help overlay, themes, Hz pointer readout, pinch zoom, log volume, saved passband per mode | Many small UI items | Cheap, client side | **R** |
+| Rig follow (Hamlib) | Radio follows the receiver, optional PTT | Private stations only | later |
+| JavaScript plugin API | Buttons, windows and panels from plugins | Against "small, owned surface" (design §1) for now | omit for now |
+
+## 5. Open questions
 
 1. Is S (skimmers) first? It is in the original plan (design §11, M4)
    and the most-used stock feature.
@@ -204,3 +247,6 @@ Each step is a milestone like M3 (plan, steps, tests).
 5. VHF airband (V): wanted, and how soon? It depends on the test unit and
    hw work.
 6. Anything in the omit list that you use?
+7. A map page (**M**, after the skimmers)? Chat? Whisper through an
+   external server (§4)?
+8. CW/RTTY skimmers (**S2**) right after FT8/WSPR, if the A9 has room?
