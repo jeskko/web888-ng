@@ -3,7 +3,18 @@
 
 import { render } from "preact";
 import { useEffect } from "preact/hooks";
-import { AudioCtl, Bandwidth, ContrastCtl, FreqDisplay, ModeBar, SMeter, StatusBar, ZoomCtl } from "./ctl/controls.tsx";
+import {
+  AudioCtl,
+  Bandwidth,
+  ContrastCtl,
+  FreqDisplay,
+  LeaseBanner,
+  ModeBar,
+  ShareCtl,
+  SMeter,
+  StatusBar,
+  ZoomCtl,
+} from "./ctl/controls.tsx";
 import { stepFor } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
 import { audioError, audioOn, conn, connNote, connect, reconnect, setMode, startAudio, st, tune } from "./state.ts";
@@ -60,6 +71,7 @@ function App() {
         <Bandwidth />
         <SMeter />
       </header>
+      <LeaseBanner />
       <main>
         <Pane />
         <Overlay />
@@ -69,6 +81,7 @@ function App() {
           <AudioCtl />
           <ZoomCtl />
           <ContrastCtl />
+          <ShareCtl />
         </div>
         <StatusBar />
       </footer>

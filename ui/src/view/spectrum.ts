@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Spectrum (Canvas 2D) above the waterfall: the newest line (peak of the
 // bins under each pixel), a slow average, dB grid, the frequency scale,
-// and the receiver's passband and dial marker.
+// the receiver's passband and dial marker, and other users' markers.
 
 import { FLAG_NEW_GEN, type WfLine } from "../proto.ts";
 import { tickLabel, tickStep } from "../fmt.ts";
@@ -13,6 +13,15 @@ export interface Passband {
   lo: number;
   hi: number;
 }
+
+/** Another user on the scale; `on`: the one listened along to. */
+export interface Marker {
+  hz: number;
+  on: boolean;
+}
+
+/** Marker triangle size (CSS px). */
+export const MARK_PX = 7;
 
 /** 20th percentile of a line's levels (dB): a robust noise floor. */
 export function noiseFloor(l: WfLine): number {
@@ -50,7 +59,15 @@ export class Spectrum {
     this.last = l;
   }
 
-  draw(start: number, span: number, minDb: number, maxDb: number, pb: Passband | null, dpr: number): void {
+  draw(
+    start: number,
+    span: number,
+    minDb: number,
+    maxDb: number,
+    pb: Passband | null,
+    dpr: number,
+    marks: Marker[] = [],
+  ): void {
     const { ctx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
@@ -151,5 +168,19 @@ export class Spectrum {
       ctx.fillText(tickLabel(f, step), xx, ph + sh / 2 + 2 * dpr);
     }
     ctx.textAlign = "start";
+
+    // other users: triangles on the scale's top edge
+    const m = MARK_PX * dpr;
+    for (const u of marks) {
+      const xx = x(u.hz);
+      if (xx < -m || xx > w + m) continue;
+      ctx.fillStyle = u.on ? "#ffd25a" : "#5ad17a";
+      ctx.beginPath();
+      ctx.moveTo(xx - m / 2, ph);
+      ctx.lineTo(xx + m / 2, ph);
+      ctx.lineTo(xx, ph + m);
+      ctx.closePath();
+      ctx.fill();
+    }
   }
 }

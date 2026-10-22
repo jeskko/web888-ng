@@ -6,6 +6,7 @@
 pub mod proto;
 pub mod session;
 pub mod tls;
+pub mod users;
 pub mod wfsvc;
 pub mod workers;
 

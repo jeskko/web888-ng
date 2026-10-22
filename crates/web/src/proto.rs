@@ -1,12 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! WebSocket protocol, version 1 (`doc/m2-web-ui.md` §4): JSON control in
-//! text frames, audio and waterfall data in binary frames (little endian).
+//! WebSocket protocol, version 2 (`doc/m2-web-ui.md` §4, with the M3
+//! additions in `doc/m3-multi-user.md` §8: lease, users, share, listen):
+//! JSON control in text frames, audio and waterfall data in binary frames
+//! (little endian).
 //! The TypeScript mirror is `ui/src/proto.ts`; `tests/proto/*.json` holds
 //! fixtures both sides check against.
 
 use serde::{Deserialize, Serialize};
 
-pub const PROTO: u32 = 1;
+pub const PROTO: u32 = 2;
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -60,6 +62,16 @@ pub enum ClientMsg {
     Ping {
         t: f64,
     },
+    /// Show my frequency to others and let them listen along (default
+    /// on), or not.
+    Share {
+        on: bool,
+    },
+    /// Listen along to another user's receiver (while waiting for one's
+    /// own), or stop (`user: null`).
+    Listen {
+        user: Option<u64>,
+    },
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -98,6 +110,18 @@ pub struct State {
     pub agc: bool,
     pub gain_db: f32,
     pub wf: WfReq,
+    /// Others see this user's frequency and may listen along.
+    pub share: bool,
+    /// The user listened along to (the dial follows theirs).
+    pub listen: Option<u64>,
+}
+
+/// Another user's receiver, for markers on the scale.
+#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+pub struct UserMark {
+    pub id: u64,
+    pub hz: f64,
+    pub mode: Mode,
 }
 
 /// Server to client.
@@ -111,8 +135,21 @@ pub enum ServerMsg {
         audio_rate: f64,
         radio: RadioInfo,
         limits: Limits,
+        /// This session's id (as others see it in `users`).
+        session: u64,
+        class: String,
     },
     State(State),
+    /// The session's receiver: granted, or waiting at `position` (1 =
+    /// next) in the queue.
+    Lease {
+        granted: bool,
+        position: usize,
+    },
+    /// Other users who share their frequency (changes only).
+    Users {
+        users: Vec<UserMark>,
+    },
     Status {
         adc_overloads: u64,
         clock_ppm: f64,

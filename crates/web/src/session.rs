@@ -3,7 +3,8 @@
 //! job on the DSP pool, and its waterfall: drawn from its own channel when
 //! the view lies inside it, else a (shared) hardware view.
 
-use crate::proto::{self, ClientMsg, Limits, Mode, RadioInfo, ServerMsg, State, WfReq};
+use crate::proto::{self, ClientMsg, Limits, Mode, RadioInfo, ServerMsg, State, UserMark, WfReq};
+use crate::users::{UserPub, Users};
 use crate::wfsvc::{HwView, Waterfalls};
 use crate::workers::{AudioCmd, AudioJob, ChanView, Out, WfSink};
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
@@ -12,7 +13,8 @@ use std::net::IpAddr;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::Duration;
-use web888_core::leases::{Channels, Class};
+use tokio::sync::watch;
+use web888_core::leases::{Channels, Class, Lease, LeaseState};
 use web888_core::pool::DspPool;
 use web888_core::wf::SessionId;
 use web888_dsp::agc::AgcSpec;
@@ -43,6 +45,7 @@ pub struct Shared {
     pub ips: Mutex<HashMap<IpAddr, usize>>,
     pub sessions: AtomicUsize,
     pub next_session: AtomicU64,
+    pub users: Users,
 }
 
 impl Shared {
@@ -65,8 +68,10 @@ impl Shared {
         self.live.borrow().web.wf_budget.max(1)
     }
 
-    pub fn hello(&self) -> ServerMsg {
+    pub fn hello(&self, session: SessionId) -> ServerMsg {
         ServerMsg::Hello {
+            session,
+            class: "web".into(),
             proto: proto::PROTO,
             server: format!("web888d {}", env!("CARGO_PKG_VERSION")),
             codec: "pcm16".into(),
@@ -188,6 +193,7 @@ impl<'a> Admission<'a> {
 impl Drop for Admission<'_> {
     fn drop(&mut self) {
         self.sh.waterfalls.remove(self.id);
+        self.sh.users.leave(self.id);
         let mut ips = self.sh.ips.lock().unwrap();
         if let Some(n) = ips.get_mut(&self.ip) {
             *n -= 1;
@@ -239,6 +245,207 @@ async fn send_json(ws: &mut WebSocket, m: &ServerMsg) -> bool {
     ws.send(Message::Text(s.into())).await.is_ok()
 }
 
+fn lease_msg(s: LeaseState) -> ServerMsg {
+    match s {
+        LeaseState::Granted { .. } => ServerMsg::Lease {
+            granted: true,
+            position: 0,
+        },
+        LeaseState::Waiting { position } => ServerMsg::Lease {
+            granted: false,
+            position,
+        },
+        LeaseState::Closed => ServerMsg::Lease {
+            granted: false,
+            position: 0,
+        },
+    }
+}
+
+/// The next publication of the user followed (none: they left); never
+/// ready when not following.
+async fn followed(f: &mut Option<(SessionId, watch::Receiver<UserPub>)>) -> Option<UserPub> {
+    match f {
+        Some((_, rx)) => match rx.changed().await {
+            Ok(()) => Some(*rx.borrow_and_update()),
+            Err(_) => None,
+        },
+        None => std::future::pending().await,
+    }
+}
+
+/// A session's state between messages.
+struct Session<'a> {
+    sh: &'a Shared,
+    id: SessionId,
+    st: State,
+    /// The user's own dial (`st.hz` follows the user listened along to).
+    own_hz: f64,
+    lease: Lease,
+    follow: Option<(SessionId, watch::Receiver<UserPub>)>,
+    me: watch::Sender<UserPub>,
+    audio: crossbeam_channel::Sender<AudioCmd>,
+    sink: WfSink,
+}
+
+impl Session<'_> {
+    /// The channel the audio comes from: the followed user's or our own.
+    fn channel(&self) -> Option<usize> {
+        match &self.follow {
+            Some((_, rx)) => rx.borrow().channel,
+            None => self.lease.channel(),
+        }
+    }
+
+    fn publish(&self) {
+        let p = UserPub {
+            hz: self.own_hz,
+            mode: self.st.mode,
+            channel: self.lease.channel(),
+            share: self.st.share,
+        };
+        self.me.send_if_modified(|v| {
+            let changed = *v != p;
+            *v = p;
+            changed
+        });
+    }
+
+    /// Point the audio and the waterfall at the current channel and dial.
+    fn route(&self) {
+        let ch = self.channel();
+        let _ = self.audio.send(AudioCmd::Channel(ch));
+        apply_wf(
+            self.sh,
+            self.id,
+            &self.st,
+            ch.is_some(),
+            &self.sink,
+            &self.audio,
+        );
+    }
+
+    fn listen(&mut self, user: SessionId) -> Result<(), String> {
+        if self.lease.channel().is_some() {
+            return Err("you have a receiver: tune to their frequency instead".into());
+        }
+        let rx = (user != self.id)
+            .then(|| self.sh.users.follow(user))
+            .flatten()
+            .filter(|rx| rx.borrow().followable())
+            .ok_or(format!("user {user} can't be listened to"))?;
+        self.st.hz = rx.borrow().hz;
+        self.follow = Some((user, rx));
+        self.st.listen = Some(user);
+        self.route();
+        Ok(())
+    }
+
+    fn stop_listening(&mut self) {
+        if self.follow.take().is_some() {
+            self.st.listen = None;
+            self.st.hz = self.own_hz;
+            self.route();
+        }
+    }
+
+    /// The followed user changed (`None`: left). Returns a notice when
+    /// listening along ended.
+    fn on_followed(&mut self, p: Option<UserPub>) -> Option<String> {
+        let user = self.follow.as_ref()?.0;
+        match p {
+            Some(p) if p.followable() => {
+                // their dial, and maybe their channel, moved
+                self.st.hz = p.hz;
+                self.route();
+                None
+            }
+            Some(p) if !p.share => {
+                self.stop_listening();
+                Some(format!("user {user} stopped sharing"))
+            }
+            Some(_) => {
+                self.stop_listening();
+                Some(format!("user {user} lost their receiver"))
+            }
+            None => {
+                self.stop_listening();
+                Some(format!("user {user} left"))
+            }
+        }
+    }
+
+    fn handle(&mut self, msg: ClientMsg) -> Vec<ServerMsg> {
+        let st = |s: &Self| ServerMsg::State(s.st.clone());
+        match msg {
+            ClientMsg::Hello { proto, .. } if proto != crate::proto::PROTO => {
+                vec![ServerMsg::Error {
+                    msg: format!(
+                        "protocol {proto} not supported (server: {})",
+                        crate::proto::PROTO
+                    ),
+                }]
+            }
+            ClientMsg::Hello { .. } => vec![],
+            ClientMsg::Ping { t } => vec![ServerMsg::Pong { t }],
+            ClientMsg::Tune { hz } => {
+                // tuning ends listening along
+                self.follow = None;
+                self.st.listen = None;
+                self.own_hz = self.sh.clamp_hz(hz);
+                self.st.hz = self.own_hz;
+                self.lease.tune(self.own_hz);
+                self.publish();
+                self.route();
+                vec![st(self)]
+            }
+            ClientMsg::Mode {
+                mode,
+                lo,
+                hi,
+                pitch,
+            } => {
+                let d = AudioSpec::new(mode.into());
+                self.st.mode = mode;
+                self.st.lo = lo.unwrap_or(d.lo_hz);
+                self.st.hi = hi.unwrap_or(d.hi_hz);
+                self.st.pitch = pitch.unwrap_or(self.st.pitch);
+                let a = audio_spec(&self.st);
+                sync_state(&mut self.st, &a);
+                let _ = self.audio.send(AudioCmd::Spec(a));
+                self.publish();
+                vec![st(self)]
+            }
+            ClientMsg::Audio { agc, gain_db } => {
+                self.st.agc = agc.unwrap_or(self.st.agc);
+                self.st.gain_db = gain_db.unwrap_or(self.st.gain_db);
+                let a = audio_spec(&self.st);
+                sync_state(&mut self.st, &a);
+                let _ = self.audio.send(AudioCmd::Spec(a));
+                vec![st(self)]
+            }
+            ClientMsg::Wf(w) => {
+                self.st.wf = self.sh.clamp_wf(w);
+                self.route();
+                vec![st(self)]
+            }
+            ClientMsg::Share { on } => {
+                self.st.share = on;
+                self.publish();
+                vec![st(self)]
+            }
+            ClientMsg::Listen { user: Some(u) } => match self.listen(u) {
+                Ok(()) => vec![st(self)],
+                Err(msg) => vec![ServerMsg::Error { msg }],
+            },
+            ClientMsg::Listen { user: None } => {
+                self.stop_listening();
+                vec![st(self)]
+            }
+        }
+    }
+}
+
 pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr) {
     let adm = match Admission::new(&sh, peer.ip()) {
         Ok(a) => a,
@@ -263,19 +470,22 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
 
     let mode = Mode::Usb;
     let defaults = AudioSpec::new(mode.into());
+    let hz = sh.default_hz();
     let mut st = State {
-        hz: sh.default_hz(),
+        hz,
         mode,
         lo: defaults.lo_hz,
         hi: defaults.hi_hz,
         pitch: defaults.pitch_hz,
         agc: true,
         gain_db: 100.0,
-        wf: sh.full_view(sh.default_hz()),
+        wf: sh.full_view(hz),
+        share: sh.live.borrow().limits.share_default,
+        listen: None,
     };
     let spec = audio_spec(&st);
     sync_state(&mut st, &spec);
-    let mut lease = sh
+    let lease = sh
         .channels
         .acquire(Class::Web, &format!("web {}", peer.ip()), st.hz);
 
@@ -308,17 +518,39 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
     let placed = sh.pool.add(Box::new(job));
     // the worker's losses count from here
     let rx_lost0 = placed.rx_dropped.load(Ordering::Relaxed);
-    apply_wf(&sh, id, &st, lease.channel().is_some(), &sink, &audio_cmd);
+    let me = sh.users.join(
+        id,
+        UserPub {
+            hz: st.hz,
+            mode: st.mode,
+            channel: lease.channel(),
+            share: st.share,
+        },
+    );
+    let mut s = Session {
+        sh: &sh,
+        id,
+        own_hz: st.hz,
+        st,
+        lease,
+        follow: None,
+        me,
+        audio: audio_cmd,
+        sink,
+    };
+    s.route();
 
-    if !send_json(&mut ws, &sh.hello()).await
-        || !send_json(&mut ws, &ServerMsg::State(st.clone())).await
+    if !send_json(&mut ws, &sh.hello(id)).await
+        || !send_json(&mut ws, &ServerMsg::State(s.st.clone())).await
+        || !send_json(&mut ws, &lease_msg(s.lease.state())).await
     {
         return;
     }
 
     let mut tick = tokio::time::interval(Duration::from_secs(1));
+    let mut users_sent: Option<Vec<UserMark>> = None;
     loop {
-        tokio::select! {
+        let replies = tokio::select! {
             m = ws.recv() => {
                 let Some(Ok(m)) = m else { break };
                 let text = match m {
@@ -326,87 +558,62 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
                     Message::Close(_) => break,
                     _ => continue,
                 };
-                let msg = match serde_json::from_str::<ClientMsg>(&text) {
-                    Ok(m) => m,
-                    Err(e) => {
-                        if !send_json(&mut ws, &ServerMsg::Error { msg: format!("bad message: {e}") }).await {
-                            break;
-                        }
-                        continue;
-                    }
-                };
-                let reply = match msg {
-                    ClientMsg::Hello { proto, .. } if proto != crate::proto::PROTO => {
-                        Some(ServerMsg::Error { msg: format!("protocol {proto} not supported (server: {})", crate::proto::PROTO) })
-                    }
-                    ClientMsg::Hello { .. } => None,
-                    ClientMsg::Ping { t } => Some(ServerMsg::Pong { t }),
-                    ClientMsg::Tune { hz } => {
-                        st.hz = sh.clamp_hz(hz);
-                        lease.tune(st.hz);
-                        apply_wf(&sh, id, &st, lease.channel().is_some(), &sink, &audio_cmd);
-                        Some(ServerMsg::State(st.clone()))
-                    }
-                    ClientMsg::Mode { mode, lo, hi, pitch } => {
-                        let d = AudioSpec::new(mode.into());
-                        st.mode = mode;
-                        st.lo = lo.unwrap_or(d.lo_hz);
-                        st.hi = hi.unwrap_or(d.hi_hz);
-                        st.pitch = pitch.unwrap_or(st.pitch);
-                        let a = audio_spec(&st);
-                        sync_state(&mut st, &a);
-                        let _ = audio_cmd.send(AudioCmd::Spec(a));
-                        Some(ServerMsg::State(st.clone()))
-                    }
-                    ClientMsg::Audio { agc, gain_db } => {
-                        st.agc = agc.unwrap_or(st.agc);
-                        st.gain_db = gain_db.unwrap_or(st.gain_db);
-                        let a = audio_spec(&st);
-                        sync_state(&mut st, &a);
-                        let _ = audio_cmd.send(AudioCmd::Spec(a));
-                        Some(ServerMsg::State(st.clone()))
-                    }
-                    ClientMsg::Wf(w) => {
-                        st.wf = sh.clamp_wf(w);
-                        apply_wf(&sh, id, &st, lease.channel().is_some(), &sink, &audio_cmd);
-                        Some(ServerMsg::State(st.clone()))
-                    }
-                };
-                if let Some(r) = reply && !send_json(&mut ws, &r).await {
-                    break;
+                match serde_json::from_str::<ClientMsg>(&text) {
+                    Ok(m) => s.handle(m),
+                    Err(e) => vec![ServerMsg::Error { msg: format!("bad message: {e}") }],
                 }
             }
-            s = lease.changed() => {
-                // M3 step 5 tells the client (waiting / granted)
-                let _ = audio_cmd.send(AudioCmd::Channel(s.channel()));
-                apply_wf(&sh, id, &st, s.channel().is_some(), &sink, &audio_cmd);
+            l = s.lease.changed() => {
+                s.publish();
+                if s.follow.is_none() {
+                    s.route();
+                }
+                vec![lease_msg(l)]
+            }
+            p = followed(&mut s.follow) => {
+                let mut r = vec![];
+                if let Some(msg) = s.on_followed(p) {
+                    r.push(ServerMsg::Error { msg });
+                }
+                r.push(ServerMsg::State(s.st.clone()));
+                r
             }
             Some(f) = audio_rx.recv() => {
                 if ws.send(Message::Binary(f.into())).await.is_err() {
                     break;
                 }
+                continue;
             }
             Some(f) = wf_rx.recv() => {
                 if ws.send(Message::Binary(f.into())).await.is_err() {
                     break;
                 }
+                continue;
             }
             _ = tick.tick() => {
-                let s = &sh.status;
-                let m = ServerMsg::Status {
-                    adc_overloads: s.overload_blocks.load(Ordering::Relaxed),
-                    clock_ppm: s.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
+                let hw = &sh.status;
+                let mut r = vec![ServerMsg::Status {
+                    adc_overloads: hw.overload_blocks.load(Ordering::Relaxed),
+                    clock_ppm: hw.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
                     audio_drops: audio_drops.load(Ordering::Relaxed)
                         + placed.rx_dropped.load(Ordering::Relaxed).saturating_sub(rx_lost0),
                     wf_drops: wf_drops.load(Ordering::Relaxed),
-                    hw_rate_ok: s.rx_rate_ok.load(Ordering::Relaxed),
-                };
-                if !send_json(&mut ws, &m).await {
-                    break;
+                    hw_rate_ok: hw.rx_rate_ok.load(Ordering::Relaxed),
+                }];
+                let users = sh.users.marks(id);
+                if users_sent.as_ref() != Some(&users) {
+                    users_sent = Some(users.clone());
+                    r.push(ServerMsg::Users { users });
                 }
+                r
+            }
+        };
+        for r in &replies {
+            if !send_json(&mut ws, r).await {
+                return;
             }
         }
     }
     // dropping the command sender ends the audio job; the admission
-    // takes the session off its waterfall view
+    // takes the session off its waterfall view and the users list
 }

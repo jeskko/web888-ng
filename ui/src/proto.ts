@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// WebSocket protocol v1, mirroring crates/web/src/proto.rs
-// (doc/m2-web-ui.md §4). Fixtures shared with the Rust tests:
-// crates/web/tests/proto/.
+// WebSocket protocol v2, mirroring crates/web/src/proto.rs
+// (doc/m2-web-ui.md §4; M3 additions in doc/m3-multi-user.md §8).
+// Fixtures shared with the Rust tests: crates/web/tests/proto/.
 
-export const PROTO = 1;
+export const PROTO = 2;
 
 export type Mode = "usb" | "lsb" | "cw" | "am";
 export const MODES: Mode[] = ["usb", "lsb", "cw", "am"];
@@ -40,6 +40,17 @@ export interface State {
   agc: boolean;
   gain_db: number;
   wf: WfReq;
+  /** Others see this user's frequency and may listen along. */
+  share: boolean;
+  /** The user listened along to (the dial follows theirs). */
+  listen: number | null;
+}
+
+/** Another user's receiver: a marker on the scale. */
+export interface UserMark {
+  id: number;
+  hz: number;
+  mode: Mode;
 }
 
 export interface Status {
@@ -59,8 +70,12 @@ export type ServerMsg =
       audio_rate: number;
       radio: RadioInfo;
       limits: Limits;
+      session: number;
+      class: string;
     }
   | ({ type: "state" } & State)
+  | { type: "lease"; granted: boolean; position: number }
+  | { type: "users"; users: UserMark[] }
   | ({ type: "status" } & Status)
   | { type: "pong"; t: number }
   | { type: "busy"; msg: string }
@@ -72,7 +87,9 @@ export type ClientMsg =
   | { type: "mode"; mode: Mode; lo?: number; hi?: number; pitch?: number }
   | { type: "audio"; agc?: boolean; gain_db?: number }
   | ({ type: "wf" } & WfReq)
-  | { type: "ping"; t: number };
+  | { type: "ping"; t: number }
+  | { type: "share"; on: boolean }
+  | { type: "listen"; user: number | null };
 
 export const KIND_AUDIO = 1;
 export const KIND_WF = 2;

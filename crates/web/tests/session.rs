@@ -83,6 +83,7 @@ async fn start_with(
         ips: Default::default(),
         sessions: Default::default(),
         next_session: Default::default(),
+        users: Default::default(),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -127,7 +128,7 @@ async fn session_streams_audio_and_waterfall() {
 
     let hello = json(&ws.next().await.unwrap().unwrap()).unwrap();
     let ServerMsg::Hello {
-        proto: 1,
+        proto: 2,
         audio_rate,
         radio,
         ..

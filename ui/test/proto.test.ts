@@ -45,4 +45,8 @@ test("message fixtures carry the fields the UI reads", () => {
   for (const k of ["center_hz", "decim", "bins", "fps"]) assert.ok(k in byType.state.wf, k);
   for (const k of ["rf_lo", "rf_hi", "adc_hz", "wf_decim_min", "wf_decim_max", "rx_rate"]) assert.ok(k in byType.hello.radio, k);
   for (const k of ["adc_overloads", "clock_ppm", "audio_drops", "wf_drops", "hw_rate_ok"]) assert.ok(k in byType.status, k);
+  for (const k of ["share", "listen"]) assert.ok(k in byType.state, k);
+  for (const k of ["session", "class"]) assert.ok(k in byType.hello, k);
+  for (const k of ["granted", "position"]) assert.ok(k in byType.lease, k);
+  for (const k of ["id", "hz", "mode"]) assert.ok(k in byType.users.users[0], k);
 });

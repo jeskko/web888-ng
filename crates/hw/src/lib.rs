@@ -223,10 +223,13 @@ impl Slot {
     }
 }
 
-/// WF samples per read; a few reads per loop pass at most, so a fast
-/// waterfall can't starve RX.
+/// WF samples per read, one read per slot and loop pass: ~3 MS/s per
+/// slot at ~200 passes a second. A waterfall line needs far less (the FFT
+/// budget, e.g. 30 x 2048 samples at 20 lines/s = 1.2 MS/s); reading a
+/// wide span's full rate (61 MS/s at decimation 2) would only cost the
+/// RX reads their time. Wider spans lose the rest in the ring (gaps).
 const WF_READ: usize = 16384;
-const WF_READS_PER_PASS: usize = 8;
+const WF_READS_PER_PASS: usize = 1;
 
 impl HwLoop {
     fn plan_wf(&mut self, slot: usize, w: &mut Slot, views: Vec<WfView>) -> Result<()> {

@@ -216,6 +216,24 @@ Each block gets unit tests in `crates/dsp` like the M2 ones (e.g. NB: a
 * New controls: `nb`, `nr`, `squelch`, `agc` threshold/speed.
 * Versioning: the server accepts v1 clients until the UI ships v2 (same
   release), then v1 is dropped.
+* As built (step 5), protocol 2 (v1 clients are refused with an
+  error; the UI ships with the server):
+
+  | message | dir | fields |
+  |---|---|---|
+  | `hello` | S→C | adds `session` (id), `class` (`"web"`) |
+  | `state` | S→C | adds `share` (bool), `listen` (user id or null) |
+  | `lease` | S→C | `granted` (bool), `position` (queue place, 1 = next; 0 if granted) |
+  | `users` | S→C | `users`: [{`id`, `hz`, `mode`}], others who share and have a receiver; sent when it changes (checked 1/s) |
+  | `share` | C→S | `on` (bool) |
+  | `listen` | C→S | `user` (id or null). Refused with an `error` if the session has a receiver of its own, or the user doesn't share / has none |
+  | WF frame | S→C | flags bit2 `stale`: no new samples since the previous line |
+
+  Listening along ends (an `error` saying why, then `state`) when the
+  user followed stops sharing, loses their receiver or leaves; tuning
+  ends it too. A granted receiver doesn't end it: the UI offers to
+  switch. Clicking a marker listens along while waiting, else tunes to
+  that user's frequency and mode.
 * **Load tool** (`crates/web/examples/webload.rs`): opens N WebSocket
   sessions with given tunings/views, counts audio frames, gaps and WF
   fps per session, prints a table. Runs in CI against the sim (N = 13),

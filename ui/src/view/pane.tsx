@@ -1,13 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Spectrum + waterfall pane: canvases, redraw loop, and the pointer
 // interactions: wheel zooms around the cursor, drag pans, click tunes,
-// shift+wheel steps the dial.
+// shift+wheel steps the dial, a click on a user marker picks that user.
 
 import { useEffect, useRef } from "preact/hooks";
-import { snap, snapFor, stepFor } from "../fmt.ts";
+import { formatKhz, snap, snapFor, stepFor } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
-import { limits, onLine, radio, range, setView, st, tune } from "../state.ts";
-import { noiseFloor, Spectrum } from "./spectrum.ts";
+import type { UserMark } from "../proto.ts";
+import { lease, limits, onLine, pickUser, radio, range, setView, st, tune, users } from "../state.ts";
+import { MARK_PX, noiseFloor, SCALE_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
 
 /** Auto colour range: follows the noise floor of recent lines. */
@@ -88,6 +89,9 @@ export function Pane() {
       dirty = true;
     });
     const unsubBins = limits.subscribe(() => wantBins());
+    const unsubUsers = users.subscribe(() => {
+      dirty = true;
+    });
 
     let raf = 0;
     const frame = () => {
@@ -99,7 +103,8 @@ export function Pane() {
       if (!v || !s) return;
       const { min, max } = currentRange();
       wf?.draw(v.start, v.span, min, max);
-      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr);
+      const marks = users.value.map((u) => ({ hz: u.hz, on: u.id === s.listen }));
+      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr, marks);
     };
     raf = requestAnimationFrame(frame);
     const unsubRange = range.subscribe(() => {
@@ -114,13 +119,44 @@ export function Pane() {
       const rect = box.getBoundingClientRect();
       return v.start + ((clientX - rect.left) / rect.width) * v.span;
     };
+    /** The user marker under a pointer on the spectrum's scale, if any. */
+    const markAt = (e: PointerEvent): UserMark | null => {
+      if (e.currentTarget !== sc) return null;
+      const rect = sc.getBoundingClientRect();
+      const y = e.clientY - rect.top;
+      const v = view();
+      if (!v || y < rect.height - SCALE_PX) return null;
+      let best: UserMark | null = null;
+      let bestPx = MARK_PX;
+      for (const u of users.value) {
+        const px = Math.abs(((u.hz - v.start) / v.span) * rect.width - (e.clientX - rect.left));
+        if (px <= bestPx) {
+          best = u;
+          bestPx = px;
+        }
+      }
+      return best;
+    };
     const down = (e: PointerEvent) => {
       const s = st.value;
       if (!s || e.button !== 0) return;
+      const m = markAt(e);
+      if (m) {
+        pickUser(m);
+        return;
+      }
       drag = { x: e.clientX, center: s.wf.center_hz, moved: false, id: e.pointerId };
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
+      if (!drag) {
+        const m = markAt(e);
+        const own = lease.value?.granted;
+        sc.title = m
+          ? `${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
+          : "";
+        sc.style.cursor = m ? "pointer" : "";
+      }
       const s = st.value;
       const v = view();
       if (!drag || !s || !v || e.pointerId !== drag.id) return;
@@ -170,6 +206,7 @@ export function Pane() {
       ro.disconnect();
       unsub();
       unsubBins();
+      unsubUsers();
       unsubRange();
     };
   }, []);

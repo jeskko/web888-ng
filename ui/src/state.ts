@@ -8,7 +8,7 @@ import { Player, type PlayerStats } from "./audio/player.ts";
 import { clamp, formatKhz } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
-import type { AudioFrame, Limits, Mode, RadioInfo, State, Status, WfLine, WfReq } from "./proto.ts";
+import type { AudioFrame, Limits, Mode, RadioInfo, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { FLAG_GAP, FLAG_OVERLOAD } from "./proto.ts";
 
 export const conn = signal<ConnState>("connecting");
@@ -17,11 +17,18 @@ export const radio = signal<RadioInfo | null>(null);
 export const limits = signal<Limits | null>(null);
 export const server = signal("");
 export const st = signal<State | null>(null);
+export const sessionId = signal<number | null>(null);
+/** The session's receiver: granted, or waiting at `position` in the queue. */
+export const lease = signal<{ granted: boolean; position: number } | null>(null);
+/** Other users who share their frequency. */
+export const users = signal<UserMark[]>([]);
+/** A passing message from the server (e.g. listening along ended). */
+export const notice = signal("");
 export const status = signal<Status | null>(null);
 export const latencyMs = signal<number | null>(null);
 export const rssi = signal(-200);
 /** Time (ms) of the last ADC overload seen in audio frames. */
-export const overloadAt = signal(0);
+export const overloadAt = signal(-Infinity);
 export const audioGaps = signal(0);
 export const player = new Player();
 export const audioOn = signal(false);
@@ -56,6 +63,7 @@ export function connect(): void {
             radio.value = m.radio;
             limits.value = m.limits;
             server.value = m.server;
+            sessionId.value = m.session;
           });
           break;
         case "state": {
@@ -71,11 +79,18 @@ export function connect(): void {
           status.value = s;
           break;
         }
+        case "lease":
+          lease.value = { granted: m.granted, position: m.position };
+          break;
+        case "users":
+          users.value = m.users;
+          break;
         case "busy":
           connNote.value = m.msg;
           break;
         case "error":
           console.warn("web888d:", m.msg);
+          showNotice(m.msg);
           break;
       }
     },
@@ -126,12 +141,42 @@ function update(p: Partial<State>): void {
   if (st.value) st.value = { ...st.value, ...p };
 }
 
+let noticeTimer: number | undefined;
+function showNotice(msg: string): void {
+  notice.value = msg;
+  clearTimeout(noticeTimer);
+  noticeTimer = window.setTimeout(() => (notice.value = ""), 6000);
+}
+
+/** Tune our own receiver (this ends listening along). */
 export function tune(hz: number): void {
   const r = radio.value;
   if (r) hz = clamp(hz, r.rf_lo, r.rf_hi);
   hz = Math.round(hz);
-  update({ hz });
+  update({ hz, listen: null });
   link?.send({ type: "tune", hz });
+}
+
+/** Show our frequency to others and let them listen along, or not. */
+export function setShare(on: boolean): void {
+  update({ share: on });
+  link?.send({ type: "share", on });
+}
+
+/** Listen along to another user (while waiting for our own receiver). */
+export function listenTo(user: number | null): void {
+  link?.send({ type: "listen", user });
+}
+
+/** A user marker was clicked: listen along while we have no receiver,
+ * else tune to their frequency and mode. */
+export function pickUser(m: UserMark): void {
+  if (lease.value?.granted) {
+    if (st.value?.mode !== m.mode) setMode(m.mode);
+    tune(m.hz);
+  } else {
+    listenTo(m.id);
+  }
 }
 
 export function setMode(mode: Mode): void {

@@ -622,6 +622,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             ips: Default::default(),
             sessions: Default::default(),
             next_session: Default::default(),
+            users: Default::default(),
         });
         let tls = match w.tls {
             TlsMode::Off => web888_web::Tls::Off,

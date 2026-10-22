@@ -7,6 +7,11 @@ import { bandwidths, formatKhz, parseFreq } from "../fmt.ts";
 import { MODES, wfSpan } from "../proto.ts";
 import {
   audioGaps,
+  lease,
+  listenTo,
+  notice,
+  setShare,
+  users,
   audioOn,
   audioStats,
   conn,
@@ -172,6 +177,65 @@ export function ZoomCtl() {
       <button onClick={full} title="Whole range">
         Full
       </button>
+    </div>
+  );
+}
+
+/** Whether others see this user's frequency and may listen along. */
+export function ShareCtl() {
+  const s = st.value;
+  if (!s) return null;
+  return (
+    <div class="group">
+      <button
+        class={s.share ? "on" : ""}
+        onClick={() => setShare(!s.share)}
+        title={
+          s.share
+            ? "Others see your frequency on their scale and may listen along while they wait for a receiver. Click to stop."
+            : "Your frequency is private. Click to share it."
+        }
+      >
+        {s.share ? "Shared" : "Private"}
+      </button>
+    </div>
+  );
+}
+
+/** The receiver's state when it isn't simply ours: waiting in the queue,
+ * listening along, or a message from the server. */
+export function LeaseBanner() {
+  const s = st.value;
+  const l = lease.value;
+  const n = notice.value;
+  let body = null;
+  if (s?.listen != null) {
+    body = l?.granted ? (
+      <>
+        <span>Your receiver is ready.</span>
+        <button onClick={() => listenTo(null)}>Switch to it</button>
+      </>
+    ) : (
+      <>
+        <span>
+          Listening along with user {s.listen} (waiting for a receiver of your own, #{l?.position ?? "?"} in the queue).
+        </span>
+        <button onClick={() => listenTo(null)}>Stop</button>
+      </>
+    );
+  } else if (l && !l.granted) {
+    body = (
+      <span>
+        All receivers are in use: you are #{l.position} in the queue, waterfall only until then.
+        {users.value.length > 0 && " Click a green marker on the scale to listen along with another user."}
+      </span>
+    );
+  }
+  if (!body && !n) return null;
+  return (
+    <div class="banner">
+      {body}
+      {n && <span class="warn">{n}</span>}
     </div>
   );
 }
