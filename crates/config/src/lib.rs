@@ -11,6 +11,7 @@ use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::Write;
+use std::net::IpAddr;
 use std::path::{Path, PathBuf};
 use std::str::FromStr;
 
@@ -182,6 +183,12 @@ pub struct Web {
     pub wf_budget: usize,
     /// Serve Prometheus metrics at `/metrics` (no login).
     pub metrics: bool,
+    /// Reverse proxies (addresses or networks, e.g. "10.0.0.5",
+    /// "192.168.0.0/16") whose X-Forwarded-For and X-Forwarded-Proto are
+    /// believed: for requests from them, the client is the rightmost
+    /// forwarded address that isn't a trusted proxy itself.
+    #[schemars(with = "Vec<String>")]
+    pub trusted_proxies: Vec<IpNet>,
 }
 
 impl Default for Web {
@@ -197,6 +204,7 @@ impl Default for Web {
             default_freq: None,
             wf_budget: if cfg!(target_arch = "arm") { 6 } else { 30 },
             metrics: false,
+            trusted_proxies: Vec::new(),
         }
     }
 }
@@ -253,6 +261,80 @@ fn link_target(path: &Path) -> PathBuf {
         };
     }
     p
+}
+
+/// An address or a network: `192.0.2.1`, `10.0.0.0/8`, `fd00::/8`.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct IpNet {
+    pub addr: IpAddr,
+    pub prefix: u8,
+}
+
+impl IpNet {
+    pub fn contains(&self, ip: IpAddr) -> bool {
+        match (self.addr.to_canonical(), ip.to_canonical()) {
+            (IpAddr::V4(n), IpAddr::V4(a)) => {
+                let mask = u32::MAX.checked_shl(32 - self.prefix as u32).unwrap_or(0);
+                u32::from(n) & mask == u32::from(a) & mask
+            }
+            (IpAddr::V6(n), IpAddr::V6(a)) => {
+                let mask = u128::MAX.checked_shl(128 - self.prefix as u32).unwrap_or(0);
+                u128::from(n) & mask == u128::from(a) & mask
+            }
+            _ => false,
+        }
+    }
+}
+
+impl FromStr for IpNet {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
+        let (a, p) = match s.split_once('/') {
+            Some((a, p)) => (a, Some(p)),
+            None => (s, None),
+        };
+        let addr: IpAddr = a
+            .trim()
+            .parse()
+            .map_err(|_| format!("{s:?}: not an IP address or network"))?;
+        let addr = addr.to_canonical();
+        let max = if addr.is_ipv4() { 32 } else { 128 };
+        let prefix = match p {
+            Some(p) => p
+                .trim()
+                .parse::<u8>()
+                .ok()
+                .filter(|&p| p <= max)
+                .ok_or(format!("{s:?}: bad prefix length"))?,
+            None => max,
+        };
+        Ok(IpNet { addr, prefix })
+    }
+}
+
+impl std::fmt::Display for IpNet {
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        let max = if self.addr.is_ipv4() { 32 } else { 128 };
+        if self.prefix == max {
+            write!(f, "{}", self.addr)
+        } else {
+            write!(f, "{}/{}", self.addr, self.prefix)
+        }
+    }
+}
+
+impl Serialize for IpNet {
+    fn serialize<S: serde::Serializer>(&self, s: S) -> Result<S::Ok, S::Error> {
+        s.collect_str(self)
+    }
+}
+
+impl<'de> Deserialize<'de> for IpNet {
+    fn deserialize<D: serde::Deserializer<'de>>(d: D) -> Result<Self, D::Error> {
+        String::deserialize(d)?
+            .parse()
+            .map_err(serde::de::Error::custom)
+    }
 }
 
 /// What a config change means for a running server.
@@ -347,6 +429,7 @@ impl Config {
             default_freq: None,
             wf_budget: 0,
             metrics: false,
+            trusted_proxies: Vec::new(),
             ..w.clone()
         };
         let web_restart = fixed(a) != fixed(b);
@@ -356,6 +439,7 @@ impl Config {
         c.live = a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics
+            || a.trusted_proxies != b.trusted_proxies
             || self.limits != new.limits
             || self.auth != new.auth;
         c
@@ -448,6 +532,31 @@ mod tests {
     }
 
     #[test]
+    fn networks_parse_and_match() {
+        let n: IpNet = "10.0.0.0/8".parse().unwrap();
+        assert!(n.contains("10.200.3.4".parse().unwrap()));
+        assert!(!n.contains("11.0.0.1".parse().unwrap()));
+        // a v4 peer seen on a v6 socket
+        assert!(n.contains("::ffff:10.1.2.3".parse().unwrap()));
+        let one: IpNet = "192.0.2.7".parse().unwrap();
+        assert!(one.contains("192.0.2.7".parse().unwrap()));
+        assert!(!one.contains("192.0.2.8".parse().unwrap()));
+        let v6: IpNet = "fd00::/8".parse().unwrap();
+        assert!(v6.contains("fd12::1".parse().unwrap()));
+        assert!(!v6.contains("10.0.0.1".parse().unwrap()));
+        let all: IpNet = "0.0.0.0/0".parse().unwrap();
+        assert!(all.contains("203.0.113.9".parse().unwrap()));
+        for bad in ["10.0.0.0/33", "nonsense", "10.0.0.0/x"] {
+            assert!(bad.parse::<IpNet>().is_err(), "{bad}");
+        }
+        let c =
+            Config::parse("[web]\ntrusted_proxies = [\"127.0.0.1\", \"10.0.0.0/8\"]\n").unwrap();
+        assert_eq!(c.web.trusted_proxies.len(), 2);
+        assert_eq!(Config::parse(&c.to_toml()).unwrap(), c);
+        assert!(Config::parse("[web]\ntrusted_proxies = [\"x\"]\n").is_err());
+    }
+
+    #[test]
     fn changes_are_classified() {
         let a = Config::default();
         let mut b = a.clone();
@@ -455,6 +564,7 @@ mod tests {
         b.limits.per_ip = 1;
         b.web.wf_budget = 10;
         b.web.metrics = true;
+        b.web.trusted_proxies = vec!["10.0.0.1".parse().unwrap()];
         assert_eq!(
             a.changes(&b),
             Changes {

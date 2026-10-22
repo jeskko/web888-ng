@@ -48,7 +48,8 @@
         "state_dir": "/var/lib/web888d",
         "default_freq": null,
         "wf_budget": 30,
-        "metrics": false
+        "metrics": false,
+        "trusted_proxies": []
       }
     },
     "limits": {
@@ -305,6 +306,14 @@
           "description": "Serve Prometheus metrics at `/metrics` (no login).",
           "type": "boolean",
           "default": false
+        },
+        "trusted_proxies": {
+          "description": "Reverse proxies (addresses or networks, e.g. \"10.0.0.5\",\n\"192.168.0.0/16\") whose X-Forwarded-For and X-Forwarded-Proto are\nbelieved: for requests from them, the client is the rightmost\nforwarded address that isn't a trusted proxy itself.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         }
       },
       "additionalProperties": false

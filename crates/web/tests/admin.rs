@@ -127,9 +127,24 @@ async fn http(
     token: Option<&str>,
     body: Option<Value>,
 ) -> Resp {
+    http_h(addr, method, path, token, body, &[]).await
+}
+
+/// `http` with extra request headers.
+async fn http_h(
+    addr: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+    body: Option<Value>,
+    extra: &[(&str, &str)],
+) -> Resp {
     let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
     let body = body.map(|b| b.to_string()).unwrap_or_default();
     let mut req = format!("{method} {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n");
+    for (k, v) in extra {
+        req += &format!("{k}: {v}\r\n");
+    }
     if let Some(t) = token {
         req += &format!("Cookie: {}={t}\r\n", auth::COOKIE);
     }
@@ -185,7 +200,19 @@ type Ws =
     tokio_tungstenite::WebSocketStream<tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>>;
 
 async fn ws(addr: std::net::SocketAddr, token: Option<&str>) -> Result<Ws, String> {
+    ws_h(addr, token, &[]).await
+}
+
+/// `ws` with extra request headers.
+async fn ws_h(
+    addr: std::net::SocketAddr,
+    token: Option<&str>,
+    extra: &[(&'static str, &str)],
+) -> Result<Ws, String> {
     let mut req = format!("ws://{addr}/ws").into_client_request().unwrap();
+    for (k, v) in extra {
+        req.headers_mut().insert(*k, v.parse().unwrap());
+    }
     if let Some(t) = token {
         req.headers_mut()
             .insert("cookie", format!("{}={t}", auth::COOKIE).parse().unwrap());
@@ -264,7 +291,10 @@ async fn admin_api() {
     assert_eq!(me("GET", "/api/auth", None).await.json()["role"], "admin");
 
     // sessions: an anonymous listener and the admin's own
-    let mut anon = ws(addr, None).await.unwrap();
+    // no trusted proxies: a forwarded address is ignored
+    let mut anon = ws_h(addr, None, &[("x-forwarded-for", "198.51.100.99")])
+        .await
+        .unwrap();
     let Some(ServerMsg::Hello { class, .. }) = next_json(&mut anon).await else {
         panic!()
     };
@@ -529,4 +559,82 @@ fn schema_fixture_is_current() {
         "{} is stale: UPDATE_FIXTURES=1 cargo test -p web888-web --test admin",
         p.display()
     );
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn trusted_proxies_forward_the_client() {
+    let path = temp("proxy");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    c.limits.per_ip = 1;
+    c.web.trusted_proxies = vec!["127.0.0.0/8".parse().unwrap()];
+    let (addr, stop) = start(c, path.clone()).await;
+    let a = [("x-forwarded-for", "198.51.100.7")];
+    let b = [("x-forwarded-for", "203.0.113.9, 198.51.100.8")];
+
+    // one session per client address, the forwarded one
+    let mut wa = ws_h(addr, None, &a).await.unwrap();
+    assert!(matches!(
+        next_json(&mut wa).await,
+        Some(ServerMsg::Hello { .. })
+    ));
+    let mut wb = ws_h(addr, None, &b).await.unwrap();
+    assert!(matches!(
+        next_json(&mut wb).await,
+        Some(ServerMsg::Hello { .. })
+    ));
+    let mut wa2 = ws_h(addr, None, &a).await.unwrap();
+    assert!(matches!(
+        next_json(&mut wa2).await,
+        Some(ServerMsg::Busy { .. })
+    ));
+
+    // the admin sees the clients, not the proxy; https from the proxy
+    // makes the cookie Secure
+    let r = http_h(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password": ADMIN_PW, "admin": true})),
+        &[
+            ("x-forwarded-for", "192.0.2.50"),
+            ("x-forwarded-proto", "https"),
+        ],
+    )
+    .await;
+    assert!(r.header("set-cookie").unwrap().contains("Secure"));
+    let s = http(addr, "GET", "/api/admin/sessions", Some(&r.token()), None)
+        .await
+        .json();
+    let mut ips: Vec<&str> = s["sessions"]
+        .as_array()
+        .unwrap()
+        .iter()
+        .map(|r| r["ip"].as_str().unwrap())
+        .collect();
+    ips.sort();
+    assert_eq!(ips, ["198.51.100.7", "198.51.100.8"], "{s}");
+
+    // failed logins count per forwarded client
+    let wrong = |ip: &'static str| async move {
+        http_h(
+            addr,
+            "POST",
+            "/api/login",
+            None,
+            Some(json!({"password": "guess", "admin": true})),
+            &[("x-forwarded-for", ip)],
+        )
+        .await
+    };
+    for _ in 0..auth::FAIL_LIMIT {
+        assert_eq!(wrong("192.0.2.66").await.status, 401);
+    }
+    assert_eq!(wrong("192.0.2.66").await.status, 429);
+    assert_eq!(wrong("192.0.2.67").await.status, 401);
+
+    drop((wa, wb, wa2));
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

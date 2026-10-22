@@ -65,6 +65,10 @@ as needing a restart. A file that doesn't parse is reported and ignored.
 self-signed certificate (generated on first start into `--state-dir`,
 default `/var/lib/web888d`; or `--tls-cert`/`--tls-key`), and plain HTTP on
 the same port for a TLS-terminating proxy (`--no-tls` for plain only).
+Behind a reverse proxy, list it in `[web] trusted_proxies` (addresses or
+networks): web888d then takes the client's address from
+`X-Forwarded-For` (and `https` from `X-Forwarded-Proto`), so per-address
+limits and logins count real clients, not the proxy.
 Browsers only play audio over HTTPS or from `localhost`. Web users and
 HPSDR receivers share the RX channels through leases (`[limits]`:
 `per_ip` sessions per address, default 4; `hpsdr_channels`); a web user

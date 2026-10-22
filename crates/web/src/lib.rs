@@ -45,6 +45,7 @@ const NO_UI: &str = "<!doctype html><title>web888d</title>\
 
 pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
     let ui = ServeDir::new(&ui_dir).fallback(get(|| async { Html(NO_UI) }));
+    let proxied = axum::middleware::from_fn_with_state(shared.clone(), client_addr);
     Router::new()
         .route("/ws", get(ws))
         .route("/api/status", get(status))
@@ -57,7 +58,80 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
             axum::http::HeaderValue::from_static("no-cache"),
         ))
         .layer(CompressionLayer::new())
+        .layer(proxied)
         .with_state(shared)
+}
+
+/// Behind a trusted reverse proxy, the client's address and scheme from
+/// X-Forwarded-For / X-Forwarded-Proto replace the proxy's, so per-IP
+/// limits, login rate limits and the session list see the real client.
+async fn client_addr(
+    State(sh): State<Arc<Shared>>,
+    mut req: axum::extract::Request,
+    next: axum::middleware::Next,
+) -> Response {
+    let peer = req
+        .extensions()
+        .get::<ConnectInfo<SocketAddr>>()
+        .map(|c| c.0);
+    if let Some(peer) = peer {
+        let trusted = sh.live.borrow().web.trusted_proxies.clone();
+        if trusted.iter().any(|n| n.contains(peer.ip())) {
+            let h = req.headers();
+            let client = forwarded_client(h, &trusted);
+            let https = h
+                .get_all("x-forwarded-proto")
+                .iter()
+                .filter_map(|v| v.to_str().ok())
+                .flat_map(|v| v.split(','))
+                .last()
+                .is_some_and(|p| p.trim().eq_ignore_ascii_case("https"));
+            if let Some(ip) = client {
+                req.extensions_mut()
+                    .insert(ConnectInfo(SocketAddr::new(ip, peer.port())));
+            }
+            if https {
+                req.extensions_mut().insert(IsTls(true));
+            }
+        }
+    }
+    next.run(req).await
+}
+
+/// The client in X-Forwarded-For: the rightmost address that isn't a
+/// trusted proxy (addresses left of it could be made up by the client).
+/// None if the header is missing or holds something that isn't an
+/// address where the client should be.
+pub fn forwarded_client(
+    h: &HeaderMap,
+    trusted: &[web888_config::IpNet],
+) -> Option<std::net::IpAddr> {
+    let hops: Vec<&str> = h
+        .get_all("x-forwarded-for")
+        .iter()
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .map(str::trim)
+        .filter(|s| !s.is_empty())
+        .collect();
+    let mut last = None;
+    for hop in hops.iter().rev() {
+        let ip = parse_hop(hop)?;
+        if !trusted.iter().any(|n| n.contains(ip)) {
+            return Some(ip);
+        }
+        last = Some(ip);
+    }
+    // every hop was a trusted proxy: the leftmost is as far as we know
+    last
+}
+
+/// "192.0.2.1", "192.0.2.1:1234", "2001:db8::1" or "[2001:db8::1]:1234".
+fn parse_hop(s: &str) -> Option<std::net::IpAddr> {
+    if let Ok(ip) = s.parse::<std::net::IpAddr>() {
+        return Some(ip.to_canonical());
+    }
+    s.parse::<SocketAddr>().ok().map(|a| a.ip().to_canonical())
 }
 
 /// A WebSocket session; with a listener password set, only for logins.
@@ -128,5 +202,49 @@ pub async fn serve(
                 }
             }
         });
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn xff(v: &[&str]) -> HeaderMap {
+        let mut h = HeaderMap::new();
+        for s in v {
+            h.append("x-forwarded-for", s.parse().unwrap());
+        }
+        h
+    }
+
+    #[test]
+    fn the_client_is_the_rightmost_untrusted_hop() {
+        let t: Vec<web888_config::IpNet> = vec!["10.0.0.0/8".parse().unwrap()];
+        let ip = |s: &str| Some(s.parse::<std::net::IpAddr>().unwrap());
+        assert_eq!(
+            forwarded_client(&xff(&["198.51.100.7"]), &t),
+            ip("198.51.100.7")
+        );
+        // a client prepending a made-up address doesn't get it believed
+        assert_eq!(
+            forwarded_client(&xff(&["1.2.3.4, 198.51.100.7"]), &t),
+            ip("198.51.100.7")
+        );
+        // proxies in a chain are skipped, also across header lines
+        assert_eq!(
+            forwarded_client(&xff(&["198.51.100.7", "10.1.1.1"]), &t),
+            ip("198.51.100.7")
+        );
+        assert_eq!(forwarded_client(&xff(&["10.2.2.2"]), &t), ip("10.2.2.2"));
+        assert_eq!(
+            forwarded_client(&xff(&["[2001:db8::5]:443"]), &t),
+            ip("2001:db8::5")
+        );
+        assert_eq!(
+            forwarded_client(&xff(&["198.51.100.7:5555"]), &t),
+            ip("198.51.100.7")
+        );
+        assert_eq!(forwarded_client(&xff(&["unknown"]), &t), None);
+        assert_eq!(forwarded_client(&HeaderMap::new(), &t), None);
     }
 }
