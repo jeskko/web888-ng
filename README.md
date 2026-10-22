@@ -101,6 +101,8 @@ put on the SD card as `/boot/web888d-admin` (one line, at least 8
 characters): it is applied at the next start and the file is deleted (also
 the way back in after a forgotten password). There is no default password.
 
+The admin pages are at `#/admin` on the receiver's address (link in its
+status bar): status, sessions (kick), the configuration form, passwords.
 Logins are `POST /api/login {"password": ..., "admin": true}` (a 12 h
 HttpOnly cookie; 5 failed tries per address per minute). With the admin
 cookie: `/api/admin/sessions` (and `.../{id}/kick`), `/api/admin/leases`,

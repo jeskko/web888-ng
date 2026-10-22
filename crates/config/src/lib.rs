@@ -7,6 +7,7 @@
 //! old or the new file, never a torn one. [`Config::changes`] tells which
 //! changed settings apply at once and which need a restart.
 
+use schemars::JsonSchema;
 use serde::{Deserialize, Serialize};
 use std::collections::BTreeMap;
 use std::io::Write;
@@ -15,7 +16,7 @@ use std::str::FromStr;
 
 pub const DEFAULT_PATH: &str = "/etc/web888d/web888d.toml";
 
-#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum Backend {
     /// Simulated radio (real time).
@@ -39,25 +40,33 @@ impl FromStr for Backend {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
+    /// The radio hardware (changes need a restart).
     pub radio: Radio,
+    /// HPSDR Protocol 1 server (changes need a restart).
     pub hpsdr: Hpsdr,
+    /// Web UI server.
     pub web: Web,
+    /// Sessions and channel sharing (apply at once).
     pub limits: Limits,
+    /// Password hashes (`web888d passwd`).
     pub auth: Auth,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Radio {
+    /// Where the samples come from.
     pub backend: Backend,
     /// zynqsdr: a path, `auto` (the image's or the stock one) or `none`.
     pub bitstream: String,
     /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock (Hz).
     pub si5351_adc: Option<f64>,
+    /// Backend sim: the simulated scene.
     pub sim: Sim,
+    /// Backend iq: the wideband IQ input.
     pub iq: Iq,
 }
 
@@ -73,7 +82,7 @@ impl Default for Radio {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Sim {
     /// Tones at the antenna: [frequency Hz, level dBFS].
@@ -82,7 +91,7 @@ pub struct Sim {
     pub noise: bool,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Iq {
     /// `file:PATH` (.cs8/.cs16/.cf32) or `soapy:ARGS`.
@@ -95,6 +104,7 @@ pub struct Iq {
     pub gains: BTreeMap<String, f64>,
     /// Device analog bandwidth (Hz, 0 = the driver's choice).
     pub bandwidth: f64,
+    /// Device antenna port (soapy).
     pub antenna: Option<String>,
     /// Start a file again at its end.
     #[serde(rename = "loop")]
@@ -115,10 +125,11 @@ impl Default for Iq {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Hpsdr {
     pub enabled: bool,
+    /// UDP listen address.
     pub listen: String,
     /// Board id reported to clients (1 = Hermes, 5 = Orion, 6 = Hermes-Lite).
     pub board: u8,
@@ -137,7 +148,7 @@ impl Default for Hpsdr {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default)]
+#[derive(Clone, Debug, PartialEq, Eq, Serialize, Deserialize, Default, JsonSchema)]
 #[serde(rename_all = "kebab-case")]
 pub enum TlsMode {
     /// A self-signed certificate, kept in `state_dir`.
@@ -149,15 +160,18 @@ pub enum TlsMode {
     Off,
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Web {
     pub enabled: bool,
     /// HTTPS and plain HTTP on one port.
     pub listen: String,
+    /// The web UI's files.
     pub ui_dir: PathBuf,
     pub tls: TlsMode,
+    /// tls = files: the certificate (PEM).
     pub tls_cert: Option<PathBuf>,
+    /// tls = files: the private key (PEM).
     pub tls_key: Option<PathBuf>,
     /// Where web888d keeps state (the self-signed certificate).
     pub state_dir: PathBuf,
@@ -187,7 +201,7 @@ impl Default for Web {
     }
 }
 
-#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Limits {
     /// Sessions per client address (0 = no limit).
@@ -218,7 +232,7 @@ impl Default for Limits {
     }
 }
 
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize)]
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Auth {
     /// argon2 hash of the admin password (`web888d passwd`); none = no
@@ -255,6 +269,11 @@ impl std::fmt::Display for Error {
 impl std::error::Error for Error {}
 
 impl Config {
+    /// JSON Schema of the file (the admin page builds its form from it).
+    pub fn schema() -> schemars::Schema {
+        schemars::schema_for!(Config)
+    }
+
     /// Read `path`; a missing file gives the defaults.
     pub fn load(path: &Path) -> Result<Self, Error> {
         match std::fs::read_to_string(path) {

@@ -406,7 +406,9 @@ export function StatusBar() {
       )}
       {s && !s.hw_rate_ok && <span class="warn">hardware falling behind</span>}
       {s && s.clock_ppm !== 0 && <span>clock {s.clock_ppm.toFixed(3)} ppm</span>}
-      <span class="right">{server.value}</span>
+      <span class="right">
+        {server.value} · <a href="#/admin">admin</a>
+      </span>
     </div>
   );
 }

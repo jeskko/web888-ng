@@ -316,6 +316,18 @@ async fn admin_api() {
     assert_eq!(s["sessions"].as_array().unwrap().len(), 1, "{s}");
     assert_eq!(s["sessions"][0]["id"], own_id);
 
+    // the schema: sections in file order, no passwords
+    assert_eq!(
+        http(addr, "GET", "/api/admin/schema", None, None)
+            .await
+            .status,
+        401
+    );
+    let sc = me("GET", "/api/admin/schema", None).await.json();
+    let keys: Vec<&String> = sc["properties"].as_object().unwrap().keys().collect();
+    assert_eq!(keys, ["radio", "hpsdr", "web", "limits"]);
+    assert!(sc["$defs"].get("Auth").is_none());
+
     // config: no hashes out, none in; validation; saving applies it
     let g = me("GET", "/api/admin/config", None).await.json();
     assert!(g["file"].get("auth").is_none() && g["running"].get("auth").is_none());
@@ -499,4 +511,22 @@ async fn listener_password_gates_the_receiver() {
 
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// `tests/proto/schema.json` (used by the UI's tests) is the server's
+/// schema; `UPDATE_FIXTURES=1` rewrites it.
+#[test]
+fn schema_fixture_is_current() {
+    let p = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("tests/proto/schema.json");
+    let mut want = serde_json::to_string_pretty(&web888_web::admin::config_schema()).unwrap();
+    want.push('\n');
+    if std::env::var_os("UPDATE_FIXTURES").is_some() {
+        std::fs::write(&p, &want).unwrap();
+    }
+    let have = std::fs::read_to_string(&p).unwrap_or_default();
+    assert!(
+        have == want,
+        "{} is stale: UPDATE_FIXTURES=1 cargo test -p web888-web --test admin",
+        p.display()
+    );
 }

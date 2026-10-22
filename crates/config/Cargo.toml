@@ -9,3 +9,7 @@ repository.workspace = true
 [dependencies]
 serde = { version = "1.0.229", features = ["derive"] }
 toml = "1.1.8"
+schemars = "1.2.3"
+
+[dev-dependencies]
+serde_json = { version = "1.0.154", features = ["preserve_order"] }

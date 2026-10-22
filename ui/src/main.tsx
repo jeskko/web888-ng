@@ -1,5 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// web888d web UI: layout, keyboard shortcuts, start-audio overlay.
+// web888d web UI: the receiver (layout, keyboard shortcuts, start-audio
+// overlay), or the admin pages under #/admin.
 
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
@@ -33,6 +34,7 @@ import {
   st,
   tune,
 } from "./state.ts";
+import { AdminApp } from "./admin/admin.tsx";
 import { Pane } from "./view/pane.tsx";
 
 const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", a: "am" };
@@ -133,5 +135,16 @@ function App() {
   );
 }
 
-void start();
-render(<App />, document.getElementById("app")!);
+const isAdmin = () => location.hash.startsWith("#/admin");
+const admin = isAdmin();
+// switching between the receiver and the admin pages starts afresh
+window.addEventListener("hashchange", () => {
+  if (isAdmin() !== admin) location.reload();
+});
+if (admin) {
+  document.title = "web888d admin";
+  render(<AdminApp />, document.getElementById("app")!);
+} else {
+  void start();
+  render(<App />, document.getElementById("app")!);
+}

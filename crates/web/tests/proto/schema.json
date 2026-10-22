@@ -1,0 +1,376 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "Config",
+  "type": "object",
+  "properties": {
+    "radio": {
+      "description": "The radio hardware (changes need a restart).",
+      "$ref": "#/$defs/Radio",
+      "default": {
+        "backend": "zynqsdr",
+        "bitstream": "auto",
+        "si5351_adc": null,
+        "sim": {
+          "tones": [],
+          "noise": false
+        },
+        "iq": {
+          "source": null,
+          "freq": null,
+          "rate": 7680000.0,
+          "gains": {},
+          "bandwidth": 0.0,
+          "antenna": null,
+          "loop": false
+        }
+      }
+    },
+    "hpsdr": {
+      "description": "HPSDR Protocol 1 server (changes need a restart).",
+      "$ref": "#/$defs/Hpsdr",
+      "default": {
+        "enabled": true,
+        "listen": "0.0.0.0:1024",
+        "board": 1,
+        "receivers": 7
+      }
+    },
+    "web": {
+      "description": "Web UI server.",
+      "$ref": "#/$defs/Web",
+      "default": {
+        "enabled": true,
+        "listen": "0.0.0.0:8073",
+        "ui_dir": "/usr/share/web888d/ui",
+        "tls": "self-signed",
+        "tls_cert": null,
+        "tls_key": null,
+        "state_dir": "/var/lib/web888d",
+        "default_freq": null,
+        "wf_budget": 30,
+        "metrics": false
+      }
+    },
+    "limits": {
+      "description": "Sessions and channel sharing (apply at once).",
+      "$ref": "#/$defs/Limits",
+      "default": {
+        "per_ip": 4,
+        "session_minutes": 0,
+        "idle_minutes": 0,
+        "preempt": false,
+        "hpsdr_channels": 7,
+        "share_default": true
+      }
+    }
+  },
+  "additionalProperties": false,
+  "$defs": {
+    "Radio": {
+      "type": "object",
+      "properties": {
+        "backend": {
+          "description": "Where the samples come from.",
+          "$ref": "#/$defs/Backend",
+          "default": "zynqsdr"
+        },
+        "bitstream": {
+          "description": "zynqsdr: a path, `auto` (the image's or the stock one) or `none`.",
+          "type": "string",
+          "default": "auto"
+        },
+        "si5351_adc": {
+          "description": "EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock (Hz).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "sim": {
+          "description": "Backend sim: the simulated scene.",
+          "$ref": "#/$defs/Sim",
+          "default": {
+            "tones": [],
+            "noise": false
+          }
+        },
+        "iq": {
+          "description": "Backend iq: the wideband IQ input.",
+          "$ref": "#/$defs/Iq",
+          "default": {
+            "source": null,
+            "freq": null,
+            "rate": 7680000.0,
+            "gains": {},
+            "bandwidth": 0.0,
+            "antenna": null,
+            "loop": false
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Backend": {
+      "oneOf": [
+        {
+          "description": "Simulated radio (real time).",
+          "type": "string",
+          "const": "sim"
+        },
+        {
+          "description": "Kernel driver `/dev/zynqsdr` (stock or open).",
+          "type": "string",
+          "const": "zynqsdr"
+        },
+        {
+          "description": "Wideband IQ from an SDR or a recording, channelized like the FPGA.",
+          "type": "string",
+          "const": "iq"
+        }
+      ]
+    },
+    "Sim": {
+      "type": "object",
+      "properties": {
+        "tones": {
+          "description": "Tones at the antenna: [frequency Hz, level dBFS].",
+          "type": "array",
+          "items": {
+            "type": "array",
+            "items": {
+              "type": "number",
+              "format": "double"
+            },
+            "minItems": 2,
+            "maxItems": 2
+          },
+          "default": []
+        },
+        "noise": {
+          "description": "Add the typical ADC noise floor.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Iq": {
+      "type": "object",
+      "properties": {
+        "source": {
+          "description": "`file:PATH` (.cs8/.cs16/.cf32) or `soapy:ARGS`.",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "freq": {
+          "description": "Input centre frequency (Hz).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "rate": {
+          "description": "Input sample rate: 122.88 MHz / 8, 16, ..., 256.",
+          "type": "number",
+          "format": "double",
+          "default": 7680000.0
+        },
+        "gains": {
+          "description": "Device gain elements (soapy), dB.",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          },
+          "default": {}
+        },
+        "bandwidth": {
+          "description": "Device analog bandwidth (Hz, 0 = the driver's choice).",
+          "type": "number",
+          "format": "double",
+          "default": 0.0
+        },
+        "antenna": {
+          "description": "Device antenna port (soapy).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "loop": {
+          "description": "Start a file again at its end.",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "Hpsdr": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "listen": {
+          "description": "UDP listen address.",
+          "type": "string",
+          "default": "0.0.0.0:1024"
+        },
+        "board": {
+          "description": "Board id reported to clients (1 = Hermes, 5 = Orion, 6 = Hermes-Lite).",
+          "type": "integer",
+          "format": "uint8",
+          "minimum": 0,
+          "maximum": 255,
+          "default": 1
+        },
+        "receivers": {
+          "description": "Receivers offered (max 7).",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 7
+        }
+      },
+      "additionalProperties": false
+    },
+    "Web": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        },
+        "listen": {
+          "description": "HTTPS and plain HTTP on one port.",
+          "type": "string",
+          "default": "0.0.0.0:8073"
+        },
+        "ui_dir": {
+          "description": "The web UI's files.",
+          "type": "string",
+          "default": "/usr/share/web888d/ui"
+        },
+        "tls": {
+          "$ref": "#/$defs/TlsMode",
+          "default": "self-signed"
+        },
+        "tls_cert": {
+          "description": "tls = files: the certificate (PEM).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "tls_key": {
+          "description": "tls = files: the private key (PEM).",
+          "type": [
+            "string",
+            "null"
+          ],
+          "default": null
+        },
+        "state_dir": {
+          "description": "Where web888d keeps state (the self-signed certificate).",
+          "type": "string",
+          "default": "/var/lib/web888d"
+        },
+        "default_freq": {
+          "description": "Initial dial frequency (Hz; default 7.074 MHz if in range).",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "default": null
+        },
+        "wf_budget": {
+          "description": "Most FFTs averaged per waterfall line (CPU budget; default 30, 6 on\n32-bit ARM, where an FFT costs ~100x more: `doc/m3-multi-user.md` §4).",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 30
+        },
+        "metrics": {
+          "description": "Serve Prometheus metrics at `/metrics` (no login).",
+          "type": "boolean",
+          "default": false
+        }
+      },
+      "additionalProperties": false
+    },
+    "TlsMode": {
+      "oneOf": [
+        {
+          "description": "A self-signed certificate, kept in `state_dir`.",
+          "type": "string",
+          "const": "self-signed"
+        },
+        {
+          "description": "`cert` and `key` (PEM).",
+          "type": "string",
+          "const": "files"
+        },
+        {
+          "description": "Plain HTTP only (behind a TLS-terminating proxy).",
+          "type": "string",
+          "const": "off"
+        }
+      ]
+    },
+    "Limits": {
+      "type": "object",
+      "properties": {
+        "per_ip": {
+          "description": "Sessions per client address (0 = no limit).",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 4
+        },
+        "session_minutes": {
+          "description": "Web session time limit, minutes (0 = none).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "idle_minutes": {
+          "description": "Idle (no input, hidden tab) limit, minutes (0 = none).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "preempt": {
+          "description": "Higher classes may take channels from lower ones.",
+          "type": "boolean",
+          "default": false
+        },
+        "hpsdr_channels": {
+          "description": "Most RX channels HPSDR clients may hold.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 7
+        },
+        "share_default": {
+          "description": "Show users' frequencies to others and allow listen-along, unless\nthe user opts out.",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    }
+  }
+}

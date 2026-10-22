@@ -266,6 +266,21 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
 * **Admin UI**: Preact pages in the same SPA under `#/admin` (status
   dashboard, sessions, config form generated from a schema the server
   serves, so the form follows the config). The receiver page stays as is.
+* As built (step 8, `ui/src/admin/`): `#/admin/{status,sessions,config,
+  passwords}`, linked from the receiver's status bar; switching between
+  the receiver and the admin pages reloads the page (no WebSocket on the
+  admin side). Status (every 2 s): RX rate, overloads, clock, the RX
+  channels and who holds them, the queue, DSP workers (busy % from the
+  busy-time deltas, shed level, drops), waterfall views, CPU per thread,
+  restart. Sessions: the list with kick. Configuration: built from
+  `GET /api/admin/schema` (schemars from the config structs; doc
+  comments are the help texts, keys in file order): a select per enum,
+  checkboxes, text/number inputs (empty = none for optional fields),
+  JSON for lists and maps. Edits are validated by the server as you type
+  ("applies at once" / "needs a restart: web"); values the running server
+  has differently (command line, or waiting for a restart) are tagged.
+  `tests/proto/schema.json` is the schema as served (checked by
+  `tests/admin.rs`, read by the UI's tests).
 
 ## 8. Protocol v2 and the load tool
 

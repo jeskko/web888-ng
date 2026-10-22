@@ -90,6 +90,7 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/leases", get(leases))
         .route("/api/admin/config", get(config_get).put(config_put))
         .route("/api/admin/config/validate", post(config_validate))
+        .route("/api/admin/schema", get(schema))
         .route("/api/admin/password", post(password))
         .route("/api/admin/stats", get(stats))
         .route("/api/admin/restart", post(restart))
@@ -342,6 +343,22 @@ async fn config_get(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Response {
         },
     }))
     .into_response()
+}
+
+async fn schema(_: AdminOnly) -> Json<Value> {
+    Json(config_schema())
+}
+
+/// The config's JSON Schema, without `auth` (as the API's configs).
+pub fn config_schema() -> Value {
+    let mut v = serde_json::to_value(Config::schema()).expect("schema serialises");
+    if let Some(p) = v.get_mut("properties").and_then(Value::as_object_mut) {
+        p.remove("auth");
+    }
+    if let Some(d) = v.get_mut("$defs").and_then(Value::as_object_mut) {
+        d.remove("Auth");
+    }
+    v
 }
 
 /// A config from the API (no `auth`: passwords have their own call).
