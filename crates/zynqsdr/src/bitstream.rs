@@ -20,16 +20,31 @@ pub const FPGA_MGR: &str = "/sys/class/fpga_manager/fpga0";
 pub const FW_DIR: &str = "/run/web888/firmware";
 /// Its name for the firmware loader (relative to `/lib/firmware`).
 pub const FW_NAME: &str = "web888/web888-pl.bin";
+/// Bitstreams installed by the web888-ng-os image.
+pub const IMAGE_DIR: &str = "/usr/share/web888";
 /// SD card FAT partition on the stock image.
 pub const SD_DIR: &str = "/media/mmcblk0p1";
 
-/// Stock file name for a variant: `websdr_hf.bit` / `websdr_vhf.bit`.
-pub fn default_path(variant: Variant) -> PathBuf {
-    let name = match variant {
+/// File name for a variant (stock names): `websdr_hf.bit` / `websdr_vhf.bit`.
+pub fn file_name(variant: Variant) -> &'static str {
+    match variant {
         Variant::Hf => "websdr_hf.bit",
         Variant::Vhf => "websdr_vhf.bit",
-    };
-    Path::new(SD_DIR).join(name)
+    }
+}
+
+/// Stock location for a variant, on the SD card.
+pub fn default_path(variant: Variant) -> PathBuf {
+    Path::new(SD_DIR).join(file_name(variant))
+}
+
+/// `--bitstream auto`: the image's bitstream if there is one in `dirs`
+/// (normally [`IMAGE_DIR`]), else the stock one on the SD card.
+pub fn auto_path(variant: Variant, dirs: &[&Path]) -> PathBuf {
+    dirs.iter()
+        .map(|d| d.join(file_name(variant)))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| default_path(variant))
 }
 
 /// The vendor kernel's devcfg driver is there. Checks for a character
@@ -161,6 +176,17 @@ mod tests {
             default_path(Variant::Vhf),
             Path::new("/media/mmcblk0p1/websdr_vhf.bit")
         );
+    }
+
+    #[test]
+    fn auto_prefers_the_image_bitstream() {
+        let d = tmp("auto");
+        let none = d.join("none");
+        assert_eq!(auto_path(Variant::Hf, &[&none]), default_path(Variant::Hf));
+        std::fs::write(d.join("websdr_vhf.bit"), b"x").unwrap();
+        assert_eq!(auto_path(Variant::Vhf, &[&d]), d.join("websdr_vhf.bit"));
+        assert_eq!(auto_path(Variant::Hf, &[&d]), default_path(Variant::Hf));
+        std::fs::remove_dir_all(&d).unwrap();
     }
 
     #[test]

@@ -56,7 +56,8 @@ struct ServeArgs {
     #[arg(long, value_enum, default_value = "zynqsdr")]
     backend: Backend,
     /// Bitstream to load first (zynqsdr backend): a path, `auto` for the
-    /// stock file on the SD card, or `none` if it's already loaded.
+    /// variant's file in /usr/share/web888 (web888-ng-os image) or else the
+    /// stock one on the SD card, or `none` if it's already loaded.
     #[arg(long, default_value = "auto")]
     bitstream: String,
     /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock to this
@@ -177,7 +178,10 @@ fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
             }
             let bit = match a.bitstream.as_str() {
                 "none" => None,
-                "auto" => Some(bitstream::default_path(cfg.variant)),
+                "auto" => Some(bitstream::auto_path(
+                    cfg.variant,
+                    &[std::path::Path::new(bitstream::IMAGE_DIR)],
+                )),
                 p => Some(std::path::PathBuf::from(p)),
             };
             if let Some(bit) = bit {
