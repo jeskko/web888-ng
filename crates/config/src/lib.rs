@@ -166,6 +166,8 @@ pub struct Web {
     /// Most FFTs averaged per waterfall line (CPU budget; default 30, 6 on
     /// 32-bit ARM, where an FFT costs ~100x more: `doc/m3-multi-user.md` §4).
     pub wf_budget: usize,
+    /// Serve Prometheus metrics at `/metrics` (no login).
+    pub metrics: bool,
 }
 
 impl Default for Web {
@@ -180,6 +182,7 @@ impl Default for Web {
             state_dir: "/var/lib/web888d".into(),
             default_freq: None,
             wf_budget: if cfg!(target_arch = "arm") { 6 } else { 30 },
+            metrics: false,
         }
     }
 }
@@ -305,20 +308,20 @@ impl Config {
             c.restart.push("hpsdr");
         }
         let (a, b) = (&self.web, &new.web);
-        let web_restart = Web {
+        // what applies at once
+        let fixed = |w: &Web| Web {
             default_freq: None,
             wf_budget: 0,
-            ..a.clone()
-        } != Web {
-            default_freq: None,
-            wf_budget: 0,
-            ..b.clone()
+            metrics: false,
+            ..w.clone()
         };
+        let web_restart = fixed(a) != fixed(b);
         if web_restart {
             c.restart.push("web");
         }
         c.live = a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
+            || a.metrics != b.metrics
             || self.limits != new.limits
             || self.auth != new.auth;
         c
@@ -400,6 +403,7 @@ mod tests {
         assert_eq!(a.changes(&b), Changes::default());
         b.limits.per_ip = 1;
         b.web.wf_budget = 10;
+        b.web.metrics = true;
         assert_eq!(
             a.changes(&b),
             Changes {

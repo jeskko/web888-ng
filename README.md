@@ -88,6 +88,28 @@ shift+wheel steps the dial; arrows step, `u`/`l`/`c`/`a` pick the mode.
 The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`).
 The protocol is in `doc/m2-web-ui.md` §4.
 
+### Passwords, admin API, metrics
+
+```
+web888d passwd                 # the admin password (asked twice), into the config file
+web888d passwd --listener      # a shared listener password: a private receiver
+web888d passwd --listener --remove
+```
+
+A running server picks the change up. A first admin password can also be
+put on the SD card as `/boot/web888d-admin` (one line, at least 8
+characters): it is applied at the next start and the file is deleted (also
+the way back in after a forgotten password). There is no default password.
+
+Logins are `POST /api/login {"password": ..., "admin": true}` (a 12 h
+HttpOnly cookie; 5 failed tries per address per minute). With the admin
+cookie: `/api/admin/sessions` (and `.../{id}/kick`), `/api/admin/leases`,
+`/api/admin/config` (get, `PUT` saves the file, `/validate` says what a
+change would need), `/api/admin/password`, `/api/admin/stats` (CPU per
+thread, DSP pool, waterfall views) and `POST /api/admin/restart` (exits
+75; the service restarts it). `[web] metrics = true` serves Prometheus
+metrics at `/metrics` (no login). Details: `doc/m3-multi-user.md` §7.
+
 ### Real signals without a Web-888 (HackRF, IQ recordings)
 
 `--backend iq` feeds web888d from a wideband IQ stream instead of the

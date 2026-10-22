@@ -11,6 +11,11 @@
 //!   web888d serve --backend iq --iq soapy:driver=hackrf --iq-freq 10.5e6 \
 //!     --iq-gain LNA=16 --iq-gain VGA=20     (built with --features soapy)
 //!
+//! `passwd`: set the admin password (or `--listener`: the shared listener
+//! password) in the configuration file; a running server picks it up:
+//!
+//!   web888d passwd
+//!
 //! `sim`: one demodulated channel to stdout (raw f32 LE), for listening:
 //!
 //!   web888d sim --tone 7.0755e6:-40 --noise --tune 7.074e6 --mode usb \
@@ -46,6 +51,21 @@ enum Cmd {
     Sim(SimArgs),
     /// Run the radio and serve its channels (HPSDR Protocol 1, web UI).
     Serve(Box<ServeArgs>),
+    /// Set the admin password (read from the terminal or stdin).
+    Passwd(PasswdArgs),
+}
+
+#[derive(clap::Args)]
+struct PasswdArgs {
+    /// Configuration file to write the password hash to.
+    #[arg(long, default_value = web888_config::DEFAULT_PATH)]
+    config: PathBuf,
+    /// Set the shared listener password instead (a private receiver).
+    #[arg(long)]
+    listener: bool,
+    /// Remove the listener password (an open receiver again).
+    #[arg(long, requires = "listener")]
+    remove: bool,
 }
 
 /// `serve` options. Each overrides its key in the configuration file
@@ -337,10 +357,99 @@ fn main() {
                 std::process::exit(1);
             }
         }
+        Cmd::Passwd(a) => {
+            if let Err(e) = run_passwd(a) {
+                eprintln!("web888d: {e}");
+                std::process::exit(1);
+            }
+        }
     }
 }
 
 type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
+
+/// Read a line from stdin; without echo, after `prompt`, on a terminal.
+fn read_password(prompt: &str) -> AnyResult<String> {
+    // SAFETY: isatty/tcgetattr/tcsetattr on fd 0 with a zeroed termios
+    let tty = unsafe { libc::isatty(0) } == 1;
+    let mut old: libc::termios = unsafe { std::mem::zeroed() };
+    if tty {
+        eprint!("{prompt}");
+        unsafe {
+            libc::tcgetattr(0, &mut old);
+            let mut t = old;
+            t.c_lflag &= !libc::ECHO;
+            libc::tcsetattr(0, libc::TCSANOW, &t);
+        }
+    }
+    let mut line = String::new();
+    let r = std::io::stdin().read_line(&mut line);
+    if tty {
+        unsafe { libc::tcsetattr(0, libc::TCSANOW, &old) };
+        eprintln!();
+    }
+    r?;
+    Ok(line.trim_end_matches(['\r', '\n']).to_string())
+}
+
+fn run_passwd(a: PasswdArgs) -> AnyResult<()> {
+    use web888_web::auth;
+    let mut c = Config::load(&a.config)?;
+    let what = if a.listener { "listener" } else { "admin" };
+    if a.remove {
+        c.auth.listener_hash = None;
+    } else {
+        let pw = read_password(&format!("New {what} password: "))?;
+        // SAFETY: isatty has no preconditions
+        if unsafe { libc::isatty(0) } == 1 && read_password("Again: ")? != pw {
+            return Err("the passwords differ".into());
+        }
+        let min = if a.listener { 1 } else { auth::ADMIN_MIN_LEN };
+        if pw.chars().count() < min {
+            return Err(format!("the {what} password needs at least {min} characters").into());
+        }
+        let h = auth::hash(&pw);
+        if a.listener {
+            c.auth.listener_hash = Some(h);
+        } else {
+            c.auth.admin_hash = Some(h);
+        }
+    }
+    c.save(&a.config)?;
+    eprintln!(
+        "{what} password {} in {}",
+        if a.remove { "removed" } else { "set" },
+        a.config.display()
+    );
+    Ok(())
+}
+
+/// A first admin password put on the SD card: applied at start, then the
+/// file is deleted (also a way back in after a forgotten password).
+const FIRST_PASSWORD: &str = "/boot/web888d-admin";
+
+fn first_password(config: &std::path::Path) -> AnyResult<()> {
+    let p = std::path::Path::new(FIRST_PASSWORD);
+    let Ok(s) = std::fs::read_to_string(p) else {
+        return Ok(());
+    };
+    let pw = s.lines().next().unwrap_or("").trim_end_matches('\r');
+    if pw.chars().count() < web888_web::auth::ADMIN_MIN_LEN {
+        eprintln!(
+            "auth: {FIRST_PASSWORD}: too short (at least {} characters), ignored",
+            web888_web::auth::ADMIN_MIN_LEN
+        );
+    } else {
+        let mut c = Config::load(config)?;
+        c.auth.admin_hash = Some(web888_web::auth::hash(pw));
+        c.save(config)?;
+        eprintln!("auth: admin password set from {FIRST_PASSWORD}");
+    }
+    if let Err(e) = std::fs::remove_file(p) {
+        eprintln!("auth: can't delete {FIRST_PASSWORD}: {e}");
+    }
+    Ok(())
+}
 
 fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
     match a.backend {
@@ -425,34 +534,20 @@ extern "C" fn on_sighup(_: libc::c_int) {
     RELOAD.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
-/// Reload the configuration when the file changes (checked every 2 s) or
-/// on SIGHUP. Settings that apply at once go out through `tx`; the others
-/// are logged as needing a restart. A broken file is logged and ignored.
-fn watch_config(
-    a: ServeArgs,
-    mut running: Config,
+/// Applies the configuration file to the running server: settings that
+/// apply at once go out through `tx`, the others are logged as needing a
+/// restart.
+struct Reloader {
+    args: ServeArgs,
+    running: std::sync::Mutex<Config>,
     tx: tokio::sync::watch::Sender<Arc<Config>>,
     channels: Arc<Channels>,
-) {
-    // SAFETY: the handler only stores to an atomic
-    unsafe { libc::signal(libc::SIGHUP, on_sighup as *const () as libc::sighandler_t) };
-    let mtime = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
-    let mut seen = mtime(&a.config);
-    loop {
-        std::thread::sleep(Duration::from_secs(2));
-        let now = mtime(&a.config);
-        let hup = RELOAD.swap(false, std::sync::atomic::Ordering::Relaxed);
-        if now == seen && !hup {
-            continue;
-        }
-        seen = now;
-        let new = match a.effective() {
-            Ok(c) => c,
-            Err(e) => {
-                eprintln!("config: not reloaded: {e}");
-                continue;
-            }
-        };
+}
+
+impl Reloader {
+    fn reload(&self) -> std::result::Result<(), String> {
+        let new = self.args.effective().map_err(|e| e.to_string())?;
+        let mut running = self.running.lock().unwrap();
         let ch = running.changes(&new);
         if !ch.restart.is_empty() {
             eprintln!(
@@ -462,10 +557,32 @@ fn watch_config(
         }
         if ch.live {
             eprintln!("config: reloaded");
-            channels.set_policy(Policy::from_limits(&new.limits));
-            let _ = tx.send(Arc::new(new.clone()));
+            self.channels.set_policy(Policy::from_limits(&new.limits));
+            let _ = self.tx.send(Arc::new(new.clone()));
         }
-        running = new;
+        *running = new;
+        Ok(())
+    }
+}
+
+/// Reload the configuration when the file changes (checked every 2 s) or
+/// on SIGHUP. A broken file is logged and ignored.
+fn watch_config(r: Arc<Reloader>) {
+    // SAFETY: the handler only stores to an atomic
+    unsafe { libc::signal(libc::SIGHUP, on_sighup as *const () as libc::sighandler_t) };
+    let mtime = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let mut seen = mtime(&r.args.config);
+    loop {
+        std::thread::sleep(Duration::from_secs(2));
+        let now = mtime(&r.args.config);
+        let hup = RELOAD.swap(false, std::sync::atomic::Ordering::Relaxed);
+        if now == seen && !hup {
+            continue;
+        }
+        seen = now;
+        if let Err(e) = r.reload() {
+            eprintln!("config: not reloaded: {e}");
+        }
     }
 }
 
@@ -520,6 +637,9 @@ impl web888_hpsdr::server::Host for HpsdrHost {
 
 fn run_serve(a: ServeArgs) -> AnyResult<()> {
     use web888_hpsdr::{proto::Board, server};
+    if !a.print_config {
+        first_password(&a.config)?;
+    }
     let cfg = a.effective()?;
     if a.print_config {
         print!("{}", cfg.to_toml());
@@ -550,11 +670,17 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         ctl_tx.clone(),
     );
     let (live_tx, live_rx) = tokio::sync::watch::channel(Arc::new(cfg.clone()));
+    let reloader = Arc::new(Reloader {
+        args: a.clone(),
+        running: std::sync::Mutex::new(cfg.clone()),
+        tx: live_tx,
+        channels: channels.clone(),
+    });
     {
-        let (a, c, ch) = (a.clone(), cfg.clone(), channels.clone());
+        let r = reloader.clone();
         std::thread::Builder::new()
             .name("config".into())
-            .spawn(move || watch_config(a, c, live_tx, ch))?;
+            .spawn(move || watch_config(r))?;
     }
 
     let mut threads = Vec::new();
@@ -623,6 +749,19 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             sessions: Default::default(),
             next_session: Default::default(),
             users: Default::default(),
+            admin: web888_web::admin::Admin::new(web888_web::admin::Hooks {
+                config_path: Some(a.config.clone()),
+                reload: Some(Box::new(move || reloader.reload())),
+                restart: Some(Box::new(|| {
+                    eprintln!("web888d: restart requested by the admin");
+                    // non-zero: systemd's Restart=on-failure starts it again
+                    std::process::exit(75);
+                })),
+                overlay: Some(Box::new({
+                    let a = a.clone();
+                    move |c| a.apply(c)
+                })),
+            }),
         });
         let tls = match w.tls {
             TlsMode::Off => web888_web::Tls::Off,

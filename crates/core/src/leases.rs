@@ -354,6 +354,11 @@ impl Channels {
         self.inner.lock().unwrap().mgr.leases()
     }
 
+    /// RX channels managed.
+    pub fn channels(&self) -> usize {
+        self.inner.lock().unwrap().mgr.channels()
+    }
+
     fn release(&self, id: LeaseId) {
         let mut g = self.inner.lock().unwrap();
         g.watchers.remove(&id);

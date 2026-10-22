@@ -7,7 +7,8 @@ import { parseFrame, PROTO, type AudioFrame, type ClientMsg, type ServerMsg, typ
 export type ConnState = "connecting" | "open" | "closed" | "busy";
 
 export interface ConnHandlers {
-  onState(s: ConnState, why?: string): void;
+  /** `opened`: closed after it had opened (else the connect failed). */
+  onState(s: ConnState, why?: string, opened?: boolean): void;
   onMessage(m: ServerMsg): void;
   onAudio(f: AudioFrame): void;
   onWf(l: WfLine): void;
@@ -20,6 +21,7 @@ export class Conn {
   private timer: number | undefined;
   private pinger: number | undefined;
   private busy = false;
+  private stopped = false;
   private url: string;
   private h: ConnHandlers;
 
@@ -31,11 +33,14 @@ export class Conn {
   connect(): void {
     clearTimeout(this.timer);
     this.busy = false;
+    this.stopped = false;
+    let opened = false;
     this.h.onState("connecting");
     const ws = new WebSocket(this.url);
     ws.binaryType = "arraybuffer";
     this.ws = ws;
     ws.onopen = () => {
+      opened = true;
       this.retry = 0;
       this.h.onState("open");
       this.send({ type: "hello", proto: PROTO, codecs: ["pcm16"] });
@@ -62,9 +67,17 @@ export class Conn {
         return;
       }
       const delay = [1000, 2000, 5000, 10000][Math.min(this.retry++, 3)];
-      this.h.onState("closed", `reconnecting in ${delay / 1000} s`);
       this.timer = window.setTimeout(() => this.connect(), delay);
+      this.h.onState("closed", `reconnecting in ${delay / 1000} s`, opened);
     };
+  }
+
+  /** No more reconnecting (until `connect`). */
+  stop(): void {
+    this.stopped = true;
+    clearTimeout(this.timer);
+    this.ws?.close();
+    this.ws = null;
   }
 
   send(m: ClientMsg): void {

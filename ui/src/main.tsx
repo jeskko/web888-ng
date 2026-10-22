@@ -2,7 +2,7 @@
 // web888d web UI: layout, keyboard shortcuts, start-audio overlay.
 
 import { render } from "preact";
-import { useEffect } from "preact/hooks";
+import { useEffect, useState } from "preact/hooks";
 import {
   AudioCtl,
   Bandwidth,
@@ -18,7 +18,21 @@ import {
 } from "./ctl/controls.tsx";
 import { stepFor } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
-import { audioError, audioOn, conn, connNote, connect, reconnect, setMode, startAudio, st, tune } from "./state.ts";
+import {
+  audioError,
+  audioOn,
+  conn,
+  connNote,
+  login,
+  loginError,
+  needLogin,
+  reconnect,
+  setMode,
+  start,
+  startAudio,
+  st,
+  tune,
+} from "./state.ts";
 import { Pane } from "./view/pane.tsx";
 
 const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", a: "am" };
@@ -42,7 +56,35 @@ function useKeys() {
   }, []);
 }
 
+function Login() {
+  const [pw, setPw] = useState("");
+  const [busy, setBusy] = useState(false);
+  const submit = async (e: Event) => {
+    e.preventDefault();
+    setBusy(true);
+    await login(pw).finally(() => setBusy(false));
+  };
+  return (
+    <form class="overlay login" onSubmit={submit}>
+      <p>This receiver is private.</p>
+      <input
+        type="password"
+        placeholder="Password"
+        autocomplete="current-password"
+        autofocus
+        value={pw}
+        onInput={(e) => setPw((e.target as HTMLInputElement).value)}
+      />
+      <button type="submit" disabled={busy || !pw}>
+        Listen
+      </button>
+      {loginError.value && <p class="warn">{loginError.value}</p>}
+    </form>
+  );
+}
+
 function Overlay() {
+  if (needLogin.value) return <Login />;
   if (conn.value === "busy") {
     return (
       <div class="overlay">
@@ -91,5 +133,5 @@ function App() {
   );
 }
 
-connect();
+void start();
 render(<App />, document.getElementById("app")!);

@@ -44,6 +44,11 @@ impl Users {
         self.map.lock().unwrap().remove(&id);
     }
 
+    /// Session `id`'s current publication.
+    pub fn get(&self, id: SessionId) -> Option<UserPub> {
+        self.map.lock().unwrap().get(&id).map(|rx| *rx.borrow())
+    }
+
     /// Follow session `id`'s publication.
     pub fn follow(&self, id: SessionId) -> Option<watch::Receiver<UserPub>> {
         let mut rx = self.map.lock().unwrap().get(&id)?.clone();

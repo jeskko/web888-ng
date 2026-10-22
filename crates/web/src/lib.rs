@@ -1,8 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! web888d's web server (`doc/m2-web-ui.md`): the UI's static files, the
-//! WebSocket session (`/ws`) and `/api/status`, over HTTPS and plain HTTP
-//! on one port (a TLS ClientHello is told apart by its first byte).
+//! WebSocket session (`/ws`), `/api/status`, logins and the admin API
+//! (`admin`), over HTTPS and plain HTTP on one port (a TLS ClientHello is
+//! told apart by its first byte).
 
+pub mod admin;
+pub mod auth;
 pub mod proto;
 pub mod session;
 pub mod tls;
@@ -12,7 +15,8 @@ pub mod workers;
 
 use axum::Router;
 use axum::extract::{ConnectInfo, State, WebSocketUpgrade};
-use axum::response::{Html, IntoResponse, Json};
+use axum::http::{HeaderMap, StatusCode};
+use axum::response::{Html, IntoResponse, Json, Response};
 use axum::routing::get;
 use hyper_util::rt::{TokioExecutor, TokioIo};
 use hyper_util::server::conn::auto::Builder;
@@ -31,6 +35,10 @@ use tower_http::set_header::SetResponseHeaderLayer;
 
 pub use tls::Tls;
 
+/// Request extension: the connection is TLS (cookies get `Secure`).
+#[derive(Clone, Copy, Debug)]
+pub struct IsTls(pub bool);
+
 const NO_UI: &str = "<!doctype html><title>web888d</title>\
 <p>web888d is running, but its web UI files are not installed \
 (<code>--ui-dir</code>). The WebSocket API is at <code>/ws</code>.";
@@ -40,6 +48,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
     Router::new()
         .route("/ws", get(ws))
         .route("/api/status", get(status))
+        .merge(admin::routes())
         .fallback_service(ui)
         // revalidate every load (cheap with ETags): a new UI build is
         // picked up at once, never mixed with cached old files
@@ -51,12 +60,20 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .with_state(shared)
 }
 
+/// A WebSocket session; with a listener password set, only for logins.
 async fn ws(
     up: WebSocketUpgrade,
     State(sh): State<Arc<Shared>>,
     ConnectInfo(peer): ConnectInfo<SocketAddr>,
-) -> impl IntoResponse {
-    up.on_upgrade(move |s| session::run(s, sh, peer))
+    headers: HeaderMap,
+) -> Response {
+    let role = admin::role(&sh, &headers);
+    let open = sh.live.borrow().auth.listener_hash.is_none();
+    if role.is_none() && !open {
+        return (StatusCode::UNAUTHORIZED, "login required").into_response();
+    }
+    up.on_upgrade(move |s| session::run(s, sh, peer, role))
+        .into_response()
 }
 
 async fn status(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
@@ -90,6 +107,7 @@ pub async fn serve(
             // handlers see the client's address (as with axum's own serve)
             let app = app.map_request(move |mut r: axum::http::Request<_>| {
                 r.extensions_mut().insert(ConnectInfo(peer));
+                r.extensions_mut().insert(IsTls(is_tls));
                 r
             });
             let svc = TowerToHyperService::new(app);

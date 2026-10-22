@@ -84,6 +84,7 @@ async fn start_with(
         sessions: Default::default(),
         next_session: Default::default(),
         users: Default::default(),
+        admin: Default::default(),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

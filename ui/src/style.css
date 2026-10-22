@@ -56,6 +56,7 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .overlay.small { inset: auto 0 16px 0; background: none; pointer-events: none; }
 .overlay.small > * { pointer-events: auto; }
 .overlay .start { font-size: 18px; padding: 10px 22px; background: var(--accent-bg); border-color: var(--accent); }
+.overlay.login input { width: min(260px, 80vw); font-size: 16px; padding: 6px 10px; }
 .warn { color: var(--warn); }
 .banner { display: flex; flex-wrap: wrap; align-items: center; gap: 6px 12px; padding: 6px 16px; background: var(--accent-bg); border-bottom: 1px solid var(--accent); font-size: 13px; }
 

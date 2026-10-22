@@ -230,6 +230,39 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   channel reservations, config (get, validate, put), stats (per-thread CPU
   from `/proc/self/task`, queue depths, drops, WF fairness), restart.
 * **Metrics**: `GET /metrics` (Prometheus text), off by default.
+* As built (step 7, `crates/web/src/{auth,admin}.rs`):
+  * argon2id with the crate's default parameters (19 MiB, 2 passes);
+    hashes are checked one at a time, so login attempts can't take the
+    A9's cores. 5 failed logins per address per minute, then 429 with
+    `Retry-After`; failures age out (a success doesn't clear them, or the
+    listener password would reset the count between admin guesses).
+  * The cookie gets `Secure` on TLS connections only (behind a plain-HTTP
+    proxy it would never be sent back). A login records the hash its
+    password matched and is valid only while that hash is still set, so
+    a password change logs out its old logins (the admin who changed it
+    gets a new cookie).
+  * The admin password also opens a private receiver. HPSDR has no
+    login (a LAN protocol).
+  * Admin sessions get the Admin lease class and aren't counted against
+    `per_ip`. Kick: an `error` message ("disconnected by the admin") and
+    close code 1008.
+  * Config over the API: JSON without `auth` (passwords only through
+    `/api/admin/password`); `PUT` writes the file atomically and reloads
+    it at once; the answer says whether it applied live or which sections
+    need a restart, with the command-line options laid over the file as
+    the server would. GET shows the file and the running config side by
+    side (the difference is the command line).
+  * `web888d passwd [--listener [--remove]]`; `/boot/web888d-admin`
+    applied at start and deleted, also when a password is already set.
+  * `/metrics` is `[web] metrics` (live): sessions, channels in use,
+    lease queue, ADC overloads, RX frames, clock ppm, per-worker pool
+    busy/jobs/shed/drops, CPU per thread name.
+  * Restart exits with code 75; the unit's service has
+    `Restart=on-failure`.
+  * The receiver page asks for the listener password when one is set,
+    and again if a reconnect is refused (password changed, login expired).
+  * Not done: channel reservations (an admin holding a channel for a
+    class); the lease manager has no notion of it yet.
 * **Admin UI**: Preact pages in the same SPA under `#/admin` (status
   dashboard, sessions, config form generated from a schema the server
   serves, so the form follows the config). The receiver page stays as is.

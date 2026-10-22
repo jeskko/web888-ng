@@ -46,6 +46,8 @@ pub struct Shared {
     pub sessions: AtomicUsize,
     pub next_session: AtomicU64,
     pub users: Users,
+    /// Logins, the session registry and the admin's hooks.
+    pub admin: crate::admin::Admin,
 }
 
 impl Shared {
@@ -68,10 +70,10 @@ impl Shared {
         self.live.borrow().web.wf_budget.max(1)
     }
 
-    pub fn hello(&self, session: SessionId) -> ServerMsg {
+    pub fn hello(&self, session: SessionId, class: Class) -> ServerMsg {
         ServerMsg::Hello {
             session,
-            class: "web".into(),
+            class: class.name().into(),
             proto: proto::PROTO,
             server: format!("web888d {}", env!("CARGO_PKG_VERSION")),
             codec: "pcm16".into(),
@@ -171,8 +173,8 @@ fn sync_state(s: &mut State, a: &AudioSpec) {
     }
 }
 
-/// A session's place: counted per client address; its waterfall is
-/// released when dropped.
+/// A session's place: counted per client address; its waterfall, user
+/// and registry entries are removed when dropped.
 struct Admission<'a> {
     sh: &'a Shared,
     ip: IpAddr,
@@ -180,12 +182,13 @@ struct Admission<'a> {
 }
 
 impl<'a> Admission<'a> {
-    /// None if the address has its limit of sessions already.
-    fn new(sh: &'a Shared, ip: IpAddr) -> Result<Self, usize> {
+    /// Err if the address has its limit of sessions already (`exempt`:
+    /// admins aren't limited).
+    fn new(sh: &'a Shared, ip: IpAddr, exempt: bool) -> Result<Self, usize> {
         let limit = sh.live.borrow().limits.per_ip;
         let mut ips = sh.ips.lock().unwrap();
         let n = ips.entry(ip).or_insert(0);
-        if limit > 0 && *n >= limit {
+        if limit > 0 && *n >= limit && !exempt {
             return Err(limit);
         }
         *n += 1;
@@ -202,6 +205,7 @@ impl Drop for Admission<'_> {
     fn drop(&mut self) {
         self.sh.waterfalls.remove(self.id);
         self.sh.users.leave(self.id);
+        self.sh.admin.sessions.lock().unwrap().remove(&self.id);
         let mut ips = self.sh.ips.lock().unwrap();
         if let Some(n) = ips.get_mut(&self.ip) {
             *n -= 1;
@@ -294,9 +298,16 @@ struct Session<'a> {
     me: watch::Sender<UserPub>,
     audio: crossbeam_channel::Sender<AudioCmd>,
     sink: WfSink,
+    /// `st.listen` for the admin (0: none).
+    listen_pub: Arc<AtomicU64>,
 }
 
 impl Session<'_> {
+    fn set_listen(&mut self, user: Option<SessionId>) {
+        self.st.listen = user;
+        self.listen_pub.store(user.unwrap_or(0), Ordering::Relaxed);
+    }
+
     /// The channel the audio comes from: the followed user's or our own.
     fn channel(&self) -> Option<usize> {
         match &self.follow {
@@ -344,14 +355,14 @@ impl Session<'_> {
             .ok_or(format!("user {user} can't be listened to"))?;
         self.st.hz = rx.borrow().hz;
         self.follow = Some((user, rx));
-        self.st.listen = Some(user);
+        self.set_listen(Some(user));
         self.route();
         Ok(())
     }
 
     fn stop_listening(&mut self) {
         if self.follow.take().is_some() {
-            self.st.listen = None;
+            self.set_listen(None);
             self.st.hz = self.own_hz;
             self.route();
         }
@@ -399,7 +410,7 @@ impl Session<'_> {
             ClientMsg::Tune { hz } => {
                 // tuning ends listening along
                 self.follow = None;
-                self.st.listen = None;
+                self.set_listen(None);
                 self.own_hz = self.sh.clamp_hz(hz);
                 self.st.hz = self.own_hz;
                 self.lease.tune(self.own_hz);
@@ -471,8 +482,19 @@ impl Session<'_> {
     }
 }
 
-pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr) {
-    let adm = match Admission::new(&sh, peer.ip()) {
+/// Serve one WebSocket session; `role` is the client's login.
+pub async fn run(
+    mut ws: WebSocket,
+    sh: Arc<Shared>,
+    peer: std::net::SocketAddr,
+    role: Option<crate::auth::Role>,
+) {
+    let class = if role == Some(crate::auth::Role::Admin) {
+        Class::Admin
+    } else {
+        Class::Web
+    };
+    let adm = match Admission::new(&sh, peer.ip(), class == Class::Admin) {
         Ok(a) => a,
         Err(limit) => {
             let _ = send_json(
@@ -517,7 +539,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
     sync_state(&mut st, &spec);
     let lease = sh
         .channels
-        .acquire(Class::Web, &format!("web {}", peer.ip()), st.hz);
+        .acquire(class, &format!("{} {}", class.name(), peer.ip()), st.hz);
 
     // DSP: the channel (audio, narrow waterfalls) on the pool; wider
     // waterfalls from the shared hardware views
@@ -557,6 +579,21 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
             share: st.share,
         },
     );
+    let kick = Arc::new(tokio::sync::Notify::new());
+    let listen_pub = Arc::new(AtomicU64::new(0));
+    sh.admin.sessions.lock().unwrap().insert(
+        id,
+        crate::admin::Entry {
+            ip: peer.ip(),
+            class,
+            since: std::time::SystemTime::now(),
+            lease: lease.id(),
+            kick: kick.clone(),
+            listen: listen_pub.clone(),
+            audio_drops: audio_drops.clone(),
+            wf_drops: wf_drops.clone(),
+        },
+    );
     let mut s = Session {
         sh: &sh,
         id,
@@ -567,10 +604,11 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
         me,
         audio: audio_cmd,
         sink,
+        listen_pub,
     };
     s.route();
 
-    if !send_json(&mut ws, &sh.hello(id)).await
+    if !send_json(&mut ws, &sh.hello(id, class)).await
         || !send_json(&mut ws, &ServerMsg::State(s.st.clone())).await
         || !send_json(&mut ws, &lease_msg(s.lease.state())).await
     {
@@ -607,6 +645,20 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
                 }
                 r.push(ServerMsg::State(s.st.clone()));
                 r
+            }
+            _ = kick.notified() => {
+                let _ = send_json(
+                    &mut ws,
+                    &ServerMsg::Error { msg: "disconnected by the admin".into() },
+                )
+                .await;
+                let _ = ws
+                    .send(Message::Close(Some(CloseFrame {
+                        code: 1008,
+                        reason: Utf8Bytes::from_static("kicked"),
+                    })))
+                    .await;
+                break;
             }
             Some(f) = audio_rx.recv() => {
                 if ws.send(Message::Binary(f.into())).await.is_err() {

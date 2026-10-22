@@ -12,6 +12,9 @@ import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, State, Status, User
 import { FLAG_GAP, FLAG_OVERLOAD } from "./proto.ts";
 
 export const conn = signal<ConnState>("connecting");
+/** The receiver wants its listener password (and we have no login). */
+export const needLogin = signal(false);
+export const loginError = signal("");
 export const connNote = signal("");
 export const radio = signal<RadioInfo | null>(null);
 export const limits = signal<Limits | null>(null);
@@ -50,11 +53,67 @@ let link: Conn | null = null;
 /** Hash state to apply once the server said hello. */
 let pendingHash = parseHash(location.hash);
 
+/** URL of a server path next to the page. */
+function api(path: string): string {
+  return location.pathname.replace(/[^/]*$/, "") + path;
+}
+
+/** Does the receiver want a password we haven't given? */
+async function loginNeeded(): Promise<boolean> {
+  try {
+    const r = await fetch(api("api/auth"));
+    const a = (await r.json()) as { role: string | null; listener_password: boolean };
+    return a.listener_password && a.role === null;
+  } catch {
+    return false; // the server isn't there: the connection retries
+  }
+}
+
+/** Ask for the password first if the receiver has one, then connect. */
+export async function start(): Promise<void> {
+  if (await loginNeeded()) askLogin();
+  else connect();
+}
+
+function askLogin(): void {
+  batch(() => {
+    needLogin.value = true;
+    conn.value = "closed";
+    connNote.value = "password needed";
+  });
+}
+
+export async function login(password: string): Promise<void> {
+  loginError.value = "";
+  const r = await fetch(api("api/login"), {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ password }),
+  });
+  if (r.ok) {
+    needLogin.value = false;
+    if (link) link.connect();
+    else connect();
+    return;
+  }
+  const body = (await r.json().catch(() => ({}))) as { error?: string };
+  loginError.value = body.error ?? `login failed (${r.status})`;
+}
+
 export function connect(): void {
   link = new Conn(wsUrl(location), {
-    onState(s, why) {
+    onState(s, why, opened) {
       conn.value = s;
       connNote.value = why ?? "";
+      // refused: the password changed, or the login expired
+      if (s === "closed" && !opened) {
+        void loginNeeded().then((need) => {
+          if (need) {
+            link?.stop();
+            askLogin();
+          }
+        });
+      }
     },
     onMessage(m) {
       switch (m.type) {
