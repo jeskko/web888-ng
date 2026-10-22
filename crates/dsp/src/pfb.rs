@@ -171,6 +171,104 @@ impl Pfb {
     }
 }
 
+/// The bank for complex input (the iq backend: an SDR's I/Q around a
+/// centre frequency): M bins covering the whole input, bin k at offset
+/// `k fs/M` from the centre (k >= M/2: negative offsets). Same filter and
+/// rates as [`Pfb`]; the phase factor is the same, and the sum over
+/// branches is an inverse FFT: `X_k = (-1)^{km} Σ_r u[r] e^{j2πkr/M}`.
+/// Scaling: a complex tone of amplitude A gives |X| = A.
+pub struct PfbComplex {
+    spec: PfbSpec,
+    h: Vec<f32>,
+    buf: Vec<C32>,
+    since: usize,
+    frame: u64,
+    ifft: Arc<dyn Fft<f32>>,
+    u: Vec<C32>,
+    scratch: Vec<C32>,
+}
+
+impl PfbComplex {
+    pub fn new(spec: PfbSpec) -> Self {
+        assert!(spec.branches.is_power_of_two() && spec.taps >= 1);
+        let ifft = FftPlanner::new().plan_fft_inverse(spec.branches);
+        let scratch = vec![C32::default(); ifft.get_inplace_scratch_len()];
+        // unity gain for complex input (the real bank doubles it)
+        let h = spec.prototype().into_iter().map(|v| v / 2.0).collect();
+        PfbComplex {
+            h,
+            buf: Vec::new(),
+            since: 0,
+            frame: 0,
+            u: vec![C32::default(); spec.branches],
+            ifft,
+            scratch,
+            spec,
+        }
+    }
+
+    pub fn spec(&self) -> &PfbSpec {
+        &self.spec
+    }
+
+    /// The bin for an offset from the centre, and the offset from its centre.
+    pub fn bin_of(&self, offset_hz: f64) -> (usize, f64) {
+        let m = self.spec.branches as i64;
+        let k = (offset_hz / self.spec.bin_hz()).round() as i64;
+        (
+            k.rem_euclid(m) as usize,
+            offset_hz - k as f64 * self.spec.bin_hz(),
+        )
+    }
+
+    /// Add input samples; `frame` gets every frame's M bins.
+    pub fn push(&mut self, x: &[C32], mut frame: impl FnMut(&[C32])) {
+        let d = self.spec.branches / 2;
+        let l = self.spec.branches * self.spec.taps;
+        let mut rest = x;
+        while !rest.is_empty() {
+            let n = (d - self.since).min(rest.len());
+            self.buf.extend_from_slice(&rest[..n]);
+            rest = &rest[n..];
+            self.since += n;
+            if self.since == d {
+                self.since = 0;
+                if self.buf.len() >= l {
+                    self.compute();
+                    frame(&self.u);
+                }
+                if self.buf.len() > 4 * l {
+                    let k = self.buf.len() - l;
+                    self.buf.drain(..k);
+                }
+            }
+        }
+    }
+
+    fn compute(&mut self) {
+        let m = self.spec.branches;
+        let l = m * self.spec.taps;
+        let s = &self.buf[self.buf.len() - l..];
+        for r in 0..m {
+            let mut acc = C32::default();
+            for t in 0..self.spec.taps {
+                acc += s[l - 1 - r - t * m] * self.h[r + t * m];
+            }
+            self.u[r] = acc;
+        }
+        self.ifft
+            .process_with_scratch(&mut self.u, &mut self.scratch);
+        if self.frame % 2 == 1 {
+            for (k, x) in self.u.iter_mut().enumerate() {
+                if k % 2 == 1 {
+                    *x = -*x;
+                }
+            }
+        }
+        self.frame += 1;
+    }
+}
+
 /// One user's channel from its bin: shift the dial to 0 Hz, then the
 /// audio chain at the bin rate (what the CPU would do per user).
 pub struct PfbChannel {
@@ -183,7 +281,11 @@ pub struct PfbChannel {
 impl PfbChannel {
     pub fn new(spec: &PfbSpec, dial_hz: f64, audio: AudioSpec) -> Self {
         let bin = spec.bin_of(dial_hz);
-        let offset = dial_hz - bin as f64 * spec.bin_hz();
+        Self::at(spec, bin, dial_hz - bin as f64 * spec.bin_hz(), audio)
+    }
+
+    /// From bin `bin`, the dial `offset` Hz from its centre.
+    pub fn at(spec: &PfbSpec, bin: usize, offset: f64, audio: AudioSpec) -> Self {
         PfbChannel {
             bin,
             shift: Shifter::new(-offset, spec.out_rate()),
@@ -292,6 +394,31 @@ mod tests {
         for off in [39e3, 45e3, 60e3, 81e3, -45e3, -75e3] {
             let db = leak_db(spec, off);
             assert!(db < -95.0, "{off} Hz: {db:.1} dB");
+        }
+    }
+
+    #[test]
+    fn the_complex_bank_places_positive_and_negative_offsets() {
+        let spec = PfbSpec {
+            fs: 7.68e6,
+            branches: 256,
+            ..PfbSpec::web888()
+        };
+        for off in [1_234_567.0, -2_500_100.0, 14_000.0] {
+            let mut pfb = PfbComplex::new(spec);
+            let (k, rest) = pfb.bin_of(off);
+            let w = 2.0 * std::f64::consts::PI * off / spec.fs;
+            let x: Vec<C32> = (0..128 * 120)
+                .map(|i| {
+                    let p = w * i as f64;
+                    C32::new((0.3 * p.cos()) as f32, (0.3 * p.sin()) as f32)
+                })
+                .collect();
+            let mut s = Vec::new();
+            pfb.push(&x, |f| s.push(f[k]));
+            let (a, residue) = measure(&s[30..], rest, spec.out_rate());
+            assert!((20.0 * (a / 0.3).log10()).abs() < 0.01, "{off}: level {a}");
+            assert!(10.0 * (residue / (a * a)).log10() < -80.0, "{off}: residue");
         }
     }
 
