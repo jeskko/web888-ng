@@ -83,6 +83,7 @@ async fn start(channels: usize, users: usize) -> (String, Arc<AtomicBool>) {
         next_session: Default::default(),
         users: Default::default(),
         admin: Default::default(),
+        limit_unit: std::time::Duration::from_millis(100),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

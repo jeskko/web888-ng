@@ -48,6 +48,78 @@ pub struct Shared {
     pub users: Users,
     /// Logins, the session registry and the admin's hooks.
     pub admin: crate::admin::Admin,
+    /// One minute of `limits.session_minutes` / `idle_minutes` (60 s;
+    /// tests shorten it).
+    pub limit_unit: Duration,
+}
+
+/// Close codes of sessions the server ends by its limits.
+pub const CLOSE_TIME_LIMIT: u16 = 4001;
+pub const CLOSE_IDLE: u16 = 4002;
+
+/// What the session and idle limits say now.
+#[derive(Debug, PartialEq)]
+enum Timeout {
+    /// A minute left.
+    Warn(String),
+    /// Over: close with this code and reason.
+    End(u16, String),
+}
+
+/// The session time limit and the idle limit, with a warning one minute
+/// ahead (limits of two minutes or more). Admins aren't limited.
+#[derive(Default)]
+struct Timeouts {
+    warned_age: bool,
+    warned_idle: bool,
+}
+
+impl Timeouts {
+    fn check(
+        &mut self,
+        l: &web888_config::Limits,
+        unit: Duration,
+        age: Duration,
+        idle: Duration,
+    ) -> Option<Timeout> {
+        if l.session_minutes > 0 {
+            let t = unit * l.session_minutes;
+            if age >= t {
+                return Some(Timeout::End(
+                    CLOSE_TIME_LIMIT,
+                    format!("session time limit ({} min) reached", l.session_minutes),
+                ));
+            }
+            if l.session_minutes >= 2 && age + unit >= t && !self.warned_age {
+                self.warned_age = true;
+                return Some(Timeout::Warn(
+                    "the session time limit ends this session in a minute".into(),
+                ));
+            }
+        }
+        if l.idle_minutes > 0 {
+            let t = unit * l.idle_minutes;
+            if idle >= t {
+                return Some(Timeout::End(
+                    CLOSE_IDLE,
+                    format!("no activity for {} min", l.idle_minutes),
+                ));
+            }
+            if l.idle_minutes >= 2 && idle + unit >= t && !self.warned_idle {
+                self.warned_idle = true;
+                return Some(Timeout::Warn(
+                    "no activity: this session ends in a minute (tune or change anything to stay)"
+                        .into(),
+                ));
+            }
+        }
+        None
+    }
+
+    /// The user did something.
+    fn input(&mut self) {
+        self.warned_idle = false;
+    }
 }
 
 impl Shared {
@@ -617,6 +689,10 @@ pub async fn run(
 
     let mut tick = tokio::time::interval(Duration::from_secs(1));
     let mut users_sent: Option<Vec<UserMark>> = None;
+    let started = std::time::Instant::now();
+    let mut last_input = started;
+    let mut timeouts = Timeouts::default();
+    let mut limit_tick = tokio::time::interval((sh.limit_unit / 4).min(Duration::from_secs(1)));
     loop {
         let replies = tokio::select! {
             m = ws.recv() => {
@@ -627,7 +703,14 @@ pub async fn run(
                     _ => continue,
                 };
                 match serde_json::from_str::<ClientMsg>(&text) {
-                    Ok(m) => s.handle(m),
+                    Ok(m) => {
+                        // the client's own pings aren't activity
+                        if !matches!(m, ClientMsg::Ping { .. } | ClientMsg::Hello { .. }) {
+                            last_input = std::time::Instant::now();
+                            timeouts.input();
+                        }
+                        s.handle(m)
+                    }
                     Err(e) => vec![ServerMsg::Error { msg: format!("bad message: {e}") }],
                 }
             }
@@ -645,6 +728,20 @@ pub async fn run(
                 }
                 r.push(ServerMsg::State(s.st.clone()));
                 r
+            }
+            _ = limit_tick.tick(), if class != Class::Admin => {
+                let l = sh.live.borrow().limits.clone();
+                match timeouts.check(&l, sh.limit_unit, started.elapsed(), last_input.elapsed()) {
+                    Some(Timeout::Warn(msg)) => vec![ServerMsg::Error { msg }],
+                    Some(Timeout::End(code, msg)) => {
+                        let _ = send_json(&mut ws, &ServerMsg::Error { msg: msg.clone() }).await;
+                        let _ = ws
+                            .send(Message::Close(Some(CloseFrame { code, reason: msg.into() })))
+                            .await;
+                        break;
+                    }
+                    None => continue,
+                }
             }
             _ = kick.notified() => {
                 let _ = send_json(
@@ -698,4 +795,41 @@ pub async fn run(
     }
     // dropping the command sender ends the audio job; the admission
     // takes the session off its waterfall view and the users list
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn limits_warn_a_minute_ahead_then_end() {
+        let m = Duration::from_secs(60);
+        let mut l = web888_config::Limits::default();
+        let mut t = Timeouts::default();
+        assert_eq!(t.check(&l, m, m * 1000, m * 1000), None, "no limits");
+        l.session_minutes = 10;
+        l.idle_minutes = 3;
+        assert_eq!(t.check(&l, m, m * 5, m), None);
+        assert!(matches!(t.check(&l, m, m * 9, m), Some(Timeout::Warn(_))));
+        assert_eq!(t.check(&l, m, m * 9, m), None, "warned once");
+        assert!(matches!(
+            t.check(&l, m, m * 10, m),
+            Some(Timeout::End(CLOSE_TIME_LIMIT, _))
+        ));
+        // idle: warned, input resets the warning, then the end
+        let mut t = Timeouts::default();
+        l.session_minutes = 0;
+        assert!(matches!(t.check(&l, m, m, m * 2), Some(Timeout::Warn(_))));
+        t.input();
+        assert_eq!(t.check(&l, m, m, m), None);
+        assert!(matches!(t.check(&l, m, m, m * 2), Some(Timeout::Warn(_))));
+        assert!(matches!(
+            t.check(&l, m, m, m * 3),
+            Some(Timeout::End(CLOSE_IDLE, _))
+        ));
+        // a one-minute limit: no warning, just the end
+        let mut t = Timeouts::default();
+        l.idle_minutes = 1;
+        assert_eq!(t.check(&l, m, m, m / 2), None);
+    }
 }

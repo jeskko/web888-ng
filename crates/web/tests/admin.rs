@@ -85,6 +85,7 @@ async fn start(config: Config, path: PathBuf) -> (std::net::SocketAddr, Arc<Atom
             restart: None,
             overlay: None,
         }),
+        limit_unit: Duration::from_millis(100),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();

@@ -318,6 +318,11 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   fps per session, prints a table. Runs in CI against the sim (N = 13),
   and against the board later. No browser needed.
 
+Sessions the server ends by its limits close with code 4001 (session
+time limit) or 4002 (idle), after an `error` message with the reason; a
+minute before, an `error` message warns. Clients shouldn't reconnect by
+themselves after these (the UI offers a button).
+
 ## 9. Steps (each ends in a commit)
 
 | # | content | done when |

@@ -117,8 +117,8 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | feature | stock | Kiwi | ng | plan |
 |---|---|---|---|---|
 | Status, users + kick, config, passwords | ✓ | ✓ | ✓ | – |
-| Session time limit, inactivity limit | ✓ | ✓ | **config keys exist but aren't enforced** | **fix now** |
-| Client address behind a reverse proxy (trusted proxies, X-Forwarded-For) | ✓ | ✓ | ✗: behind a proxy all users share one address, so `per_ip` limits everyone together | **fix now** |
+| Session time limit, inactivity limit | ✓ | ✓ | ✓ (fixed 2026-10-23) | – |
+| Client address behind a reverse proxy (trusted proxies, X-Forwarded-For) | ✓ | ✓ | ✓ `[web] trusted_proxies` (fixed 2026-10-23) | – |
 | Per-IP daily limit, IP block list, ban from the user list | ✓ | ✓ | per-IP sessions only | **O** |
 | Channels without a password (open + private sets) | ✓ | ✓ | ✗ (all or nothing) | **O** |
 | Receiver info page (name, location, antenna, photo) | ✓ | ✓ | ✗ | **O** |
@@ -144,10 +144,9 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 
 Each step is a milestone like M3 (plan, steps, tests).
 
-1. **Fix now** (small, before M4):
-   * enforce `session_minutes` and `idle_minutes`
-   * trusted reverse proxies: take the client address from
-     X-Forwarded-For only when the peer is a configured proxy.
+1. **Fix now** (small, before M4): done 2026-10-23.
+   * `session_minutes` and `idle_minutes` are enforced.
+   * Trusted reverse proxies (`[web] trusted_proxies`) are honoured.
 2. **S — skimmers (M4)**:
    * A decoder supervisor (child processes, restart, CPU accounting).
    * FT8/FT4/FST4W and WSPR autoruns on Skimmer-class leases, pre-empted

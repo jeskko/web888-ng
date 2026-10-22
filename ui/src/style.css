@@ -64,7 +64,7 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .status { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 16px 6px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); }
 .status .right { margin-left: auto; }
 .conn.open { color: var(--ok); }
-.conn.closed, .conn.busy { color: var(--bad); }
+.conn.closed, .conn.busy, .conn.ended { color: var(--bad); }
 .conn.connecting { color: var(--warn); }
 
 @media (max-width: 640px) {

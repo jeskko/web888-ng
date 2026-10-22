@@ -65,6 +65,10 @@ as needing a restart. A file that doesn't parse is reported and ignored.
 self-signed certificate (generated on first start into `--state-dir`,
 default `/var/lib/web888d`; or `--tls-cert`/`--tls-key`), and plain HTTP on
 the same port for a TLS-terminating proxy (`--no-tls` for plain only).
+`[limits] session_minutes` and `idle_minutes` end web sessions after a
+time, or after that long without input (admins exempt; a notice comes a
+minute before, and the page offers a Reconnect button rather than
+reconnecting by itself).
 Behind a reverse proxy, list it in `[web] trusted_proxies` (addresses or
 networks): web888d then takes the client's address from
 `X-Forwarded-For` (and `https` from `X-Forwarded-Proto`), so per-address

@@ -1,10 +1,15 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The WebSocket to web888d: JSON messages and binary frames, reconnect
-// with backoff (not when the receiver is busy), ping for latency.
+// with backoff (not when the receiver is busy, nor after the server ended
+// the session by its time or idle limit), ping for latency.
 
 import { parseFrame, PROTO, type AudioFrame, type ClientMsg, type ServerMsg, type WfLine } from "./proto.ts";
 
-export type ConnState = "connecting" | "open" | "closed" | "busy";
+export type ConnState = "connecting" | "open" | "closed" | "busy" | "ended";
+
+/** Close codes of sessions the server ended by its limits. */
+const CLOSE_TIME_LIMIT = 4001;
+const CLOSE_IDLE = 4002;
 
 export interface ConnHandlers {
   /** `opened`: closed after it had opened (else the connect failed). */
@@ -62,6 +67,11 @@ export class Conn {
       clearInterval(this.pinger);
       if (this.ws !== ws) return;
       this.ws = null;
+      if (e.code === CLOSE_TIME_LIMIT || e.code === CLOSE_IDLE) {
+        // reconnecting by itself would make the limits moot
+        this.h.onState("ended", e.reason || "session ended");
+        return;
+      }
       if (this.busy || e.code === 1013) {
         this.h.onState("busy");
         return;

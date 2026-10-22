@@ -85,6 +85,7 @@ async fn start_with(
         next_session: Default::default(),
         users: Default::default(),
         admin: Default::default(),
+        limit_unit: std::time::Duration::from_millis(100),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -349,5 +350,85 @@ async fn narrow_view_comes_from_the_channel() {
         lines += 1;
     }
     assert!(lines >= 5, "{lines} lines");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// What a session saw within `dur`, tuning every 100 ms if `active`:
+/// (warnings, the close code if it was closed).
+async fn watch(
+    ws: &mut tokio_tungstenite::WebSocketStream<
+        tokio_tungstenite::MaybeTlsStream<tokio::net::TcpStream>,
+    >,
+    dur: Duration,
+    active: bool,
+) -> (Vec<String>, Option<u16>) {
+    let end = tokio::time::Instant::now() + dur;
+    let mut next_tune = tokio::time::Instant::now();
+    let mut errors = Vec::new();
+    loop {
+        let now = tokio::time::Instant::now();
+        if now >= end {
+            return (errors, None);
+        }
+        if active && now >= next_tune {
+            next_tune = now + Duration::from_millis(100);
+            let req = r#"{"type":"tune","hz":7074000}"#;
+            if ws.send(Message::Text(req.into())).await.is_err() {
+                return (errors, None);
+            }
+        }
+        let wait = end.min(if active { next_tune } else { end }) - now;
+        match tokio::time::timeout(wait, ws.next()).await {
+            Err(_) => {}
+            Ok(None) | Ok(Some(Err(_))) => return (errors, None),
+            Ok(Some(Ok(Message::Close(f)))) => return (errors, f.map(|f| u16::from(f.code))),
+            Ok(Some(Ok(m))) => {
+                if let Some(ServerMsg::Error { msg }) = json(&m) {
+                    errors.push(msg);
+                }
+            }
+        }
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn idle_and_time_limits_end_sessions() {
+    // a "minute" is 100 ms in the tests
+    let mut c = web888_config::Config::default();
+    c.limits.idle_minutes = 3;
+    let (addr, stop, _) = start_with(c).await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    // tuning keeps it alive past the idle limit
+    let (warn, closed) = watch(&mut ws, Duration::from_millis(700), true).await;
+    assert_eq!(closed, None, "{warn:?}");
+    // then quiet: a warning, then the end
+    let (warn, closed) = watch(&mut ws, Duration::from_millis(1500), false).await;
+    assert_eq!(closed, Some(web888_web::session::CLOSE_IDLE));
+    assert!(warn.iter().any(|w| w.contains("in a minute")), "{warn:?}");
+    assert!(
+        warn.iter().any(|w| w.contains("no activity for 3 min")),
+        "{warn:?}"
+    );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    let mut c = web888_config::Config::default();
+    c.limits.session_minutes = 5;
+    let (addr, stop, _) = start_with(c).await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    // activity doesn't extend the time limit
+    let (warn, closed) = watch(&mut ws, Duration::from_millis(1500), true).await;
+    assert_eq!(
+        closed,
+        Some(web888_web::session::CLOSE_TIME_LIMIT),
+        "{warn:?}"
+    );
+    assert!(
+        warn.iter().any(|w| w.contains("time limit (5 min)")),
+        "{warn:?}"
+    );
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }

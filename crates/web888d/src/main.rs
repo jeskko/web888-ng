@@ -783,6 +783,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                     move |c| a.apply(c)
                 })),
             }),
+            limit_unit: Duration::from_secs(60),
         });
         let tls = match w.tls {
             TlsMode::Off => web888_web::Tls::Off,

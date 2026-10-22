@@ -348,14 +348,14 @@
           "default": 4
         },
         "session_minutes": {
-          "description": "Web session time limit, minutes (0 = none).",
+          "description": "Web session time limit, minutes (0 = none). Admins aren't\nlimited; users get a notice a minute before, and reconnect by hand.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0,
           "default": 0
         },
         "idle_minutes": {
-          "description": "Idle (no input, hidden tab) limit, minutes (0 = none).",
+          "description": "Idle limit, minutes without input (tuning, mode, waterfall or\naudio changes; 0 = none). As `session_minutes` otherwise.",
           "type": "integer",
           "format": "uint32",
           "minimum": 0,

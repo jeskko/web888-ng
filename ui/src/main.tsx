@@ -87,6 +87,14 @@ function Login() {
 
 function Overlay() {
   if (needLogin.value) return <Login />;
+  if (conn.value === "ended") {
+    return (
+      <div class="overlay">
+        <p>Session ended: {connNote.value}.</p>
+        <button onClick={reconnect}>Reconnect</button>
+      </div>
+    );
+  }
   if (conn.value === "busy") {
     return (
       <div class="overlay">

@@ -214,9 +214,11 @@ impl Default for Web {
 pub struct Limits {
     /// Sessions per client address (0 = no limit).
     pub per_ip: usize,
-    /// Web session time limit, minutes (0 = none).
+    /// Web session time limit, minutes (0 = none). Admins aren't
+    /// limited; users get a notice a minute before, and reconnect by hand.
     pub session_minutes: u32,
-    /// Idle (no input, hidden tab) limit, minutes (0 = none).
+    /// Idle limit, minutes without input (tuning, mode, waterfall or
+    /// audio changes; 0 = none). As `session_minutes` otherwise.
     pub idle_minutes: u32,
     /// Higher classes may take channels from lower ones.
     pub preempt: bool,
