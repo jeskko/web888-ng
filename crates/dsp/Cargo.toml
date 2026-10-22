@@ -13,3 +13,4 @@ rustfft.workspace = true
 
 [dev-dependencies]
 web888-sim.workspace = true
+web888-iq.workspace = true
