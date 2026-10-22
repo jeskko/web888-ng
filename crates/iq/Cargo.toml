@@ -1,0 +1,16 @@
+[package]
+name = "web888-iq"
+description = "Web-888 radio backend fed by wideband IQ (SDR device or file), channelized like the FPGA"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[features]
+# live devices through SoapySDR (needs libSoapySDR to build)
+soapy = ["dep:soapysdr"]
+
+[dependencies]
+web888-radio.workspace = true
+num-complex.workspace = true
+soapysdr = { version = "0.5.1", optional = true }

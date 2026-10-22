@@ -12,5 +12,10 @@ web888-sim.workspace = true
 web888-dsp.workspace = true
 web888-zynqsdr.workspace = true
 web888-hpsdr.workspace = true
+web888-iq.workspace = true
 clap.workspace = true
 num-complex.workspace = true
+
+[features]
+# live SDR devices (HackRF, ...) for `--backend iq` through SoapySDR
+soapy = ["web888-iq/soapy"]

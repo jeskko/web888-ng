@@ -6,6 +6,9 @@
 //!
 //!   web888d serve --backend zynqsdr          # on the unit, stock server stopped
 //!   web888d serve --backend sim --tone 7.0755e6:-40 --noise
+//!   web888d serve --backend iq --iq file:cap.cs8 --iq-freq 10.5e6 --iq-loop
+//!   web888d serve --backend iq --iq soapy:driver=hackrf --iq-freq 10.5e6 \
+//!     --iq-gain LNA=16 --iq-gain VGA=20     (built with --features soapy)
 //!
 //! `sim`: one demodulated channel to stdout (raw f32 LE), for listening:
 //!
@@ -49,6 +52,9 @@ enum Backend {
     Sim,
     /// Stock kernel driver /dev/zynqsdr (on the unit; stop the stock server first).
     Zynqsdr,
+    /// Real signals: wideband IQ from an SDR or a recording (--iq ...),
+    /// channelized like the FPGA.
+    Iq,
 }
 
 #[derive(clap::Args)]
@@ -78,6 +84,28 @@ struct ServeArgs {
     tones: Vec<(f64, f64)>,
     #[arg(long)]
     noise: bool,
+    /// IQ backend input: `file:PATH` (.cs8 as from hackrf_transfer, .cs16,
+    /// .cf32) or `soapy:ARGS` (e.g. soapy:driver=hackrf).
+    #[arg(long)]
+    iq: Option<String>,
+    /// IQ input centre frequency (Hz); channels work within +-0.45 x rate.
+    #[arg(long)]
+    iq_freq: Option<f64>,
+    /// IQ input sample rate: 122.88 MHz / 8, 16, ..., 256.
+    #[arg(long, default_value_t = 7.68e6)]
+    iq_rate: f64,
+    /// Device gain element NAME=DB (soapy; repeatable), e.g. LNA=16, VGA=20, AMP=0.
+    #[arg(long = "iq-gain", value_parser = parse_gain)]
+    iq_gains: Vec<(String, f64)>,
+    /// Device analog bandwidth in Hz (soapy; default: the driver's choice).
+    #[arg(long, default_value_t = 0.0)]
+    iq_bw: f64,
+    /// Device antenna port (soapy).
+    #[arg(long)]
+    iq_antenna: Option<String>,
+    /// Start a file again at its end.
+    #[arg(long)]
+    iq_loop: bool,
     #[arg(short, long)]
     verbose: bool,
 }
@@ -125,6 +153,65 @@ fn parse_tone(s: &str) -> std::result::Result<(f64, f64), String> {
     ))
 }
 
+fn parse_gain(s: &str) -> std::result::Result<(String, f64), String> {
+    let (n, g) = s.split_once('=').ok_or("expected NAME=DB")?;
+    Ok((n.to_string(), g.parse().map_err(|e| format!("{e}"))?))
+}
+
+fn open_iq(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
+    use web888_iq::source::{FileSource, Format, IqSource};
+    use web888_iq::{IqConfig, IqRadio};
+    let spec =
+        a.iq.as_deref()
+            .ok_or("--backend iq needs --iq file:PATH or --iq soapy:ARGS")?;
+    let fc = a
+        .iq_freq
+        .ok_or("--backend iq needs --iq-freq (input centre frequency)")?;
+    let cfg = IqConfig::new(fc, a.iq_rate);
+    let src: Box<dyn IqSource> = if let Some(p) = spec.strip_prefix("file:") {
+        let path = std::path::Path::new(p);
+        let fmt = Format::from_path(path).ok_or("IQ file: use extension .cs8, .cs16 or .cf32")?;
+        Box::new(FileSource::open(path, fmt, a.iq_loop).map_err(|e| format!("{p}: {e}"))?)
+    } else if let Some(args) = spec.strip_prefix("soapy:") {
+        open_soapy(args, fc, a)?
+    } else {
+        return Err("--iq: expected file:PATH or soapy:ARGS".into());
+    };
+    eprintln!(
+        "iq: {spec}, {:.3} MS/s around {:.6} MHz (channels {:.3}..{:.3} MHz)",
+        a.iq_rate / 1e6,
+        fc / 1e6,
+        (fc - 0.45 * a.iq_rate) / 1e6,
+        (fc + 0.45 * a.iq_rate) / 1e6
+    );
+    Ok(Box::new(IqRadio::new(cfg, src)?))
+}
+
+#[cfg(feature = "soapy")]
+fn open_soapy(
+    args: &str,
+    fc: f64,
+    a: &ServeArgs,
+) -> AnyResult<Box<dyn web888_iq::source::IqSource>> {
+    use web888_iq::source::{SoapyConfig, SoapySource};
+    let c = SoapyConfig {
+        args: args.to_string(),
+        center_hz: fc,
+        rate_hz: a.iq_rate,
+        bandwidth_hz: a.iq_bw,
+        gains: a.iq_gains.clone(),
+        antenna: a.iq_antenna.clone(),
+    };
+    Ok(Box::new(
+        SoapySource::open(&c).map_err(|e| format!("soapy:{args}: {e}"))?,
+    ))
+}
+
+#[cfg(not(feature = "soapy"))]
+fn open_soapy(_: &str, _: f64, _: &ServeArgs) -> AnyResult<Box<dyn web888_iq::source::IqSource>> {
+    Err("this web888d was built without SoapySDR (cargo build --features soapy)".into())
+}
+
 fn main() {
     let cli = Cli::parse();
     match cli.cmd {
@@ -160,6 +247,7 @@ fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
                 Pacing::RealTime,
             ))))
         }
+        Backend::Iq => open_iq(a),
         Backend::Zynqsdr => {
             use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev, si5351};
             let mut cfg = ZynqConfig::default();

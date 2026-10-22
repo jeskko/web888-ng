@@ -118,7 +118,8 @@ Backends:
 |---|---|---|
 | `ZynqsdrIoctl` | M1 | talks to the **stock** kernel driver (ioctl ABI from `web888-ng-hw/docs/stock-driver.md`). Works with the stock and the open bitstream on unmodified firmware |
 | `Uio` / open driver | later | own register access: timestamps, IRQs, extended status; needs the open driver or a DT overlay |
-| `Sim` | M0 | synthetic signals (tones, noise, recorded IQ files) with the real channel model and timing; used by tests and CI |
+| `Sim` | M0 | synthetic signals (tones, noise) with the real channel model and timing; used by tests and CI |
+| `Iq` | M1+ | real signals for development without a unit: wideband IQ from an SDR via SoapySDR (HackRF on an HF antenna) or a recording (cs8/cs16/cf32), channelized like the FPGA (crate `web888-iq`) |
 
 Clock/si5351 handling lives beside the backend (I2C via `i2cdev`), because
 it's needed before the bitstream is loaded and for GPS discipline.
