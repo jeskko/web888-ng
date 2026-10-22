@@ -321,8 +321,9 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     radio.set_rx_rate(r2_for_rate(caps.adc_hz, 48_000.0))?;
 
     let stop = Arc::new(AtomicBool::new(false));
-    let (blk_tx, blk_rx) = mpsc::sync_channel(64);
     let (ctl_tx, ctl_rx) = mpsc::channel();
+    let (sub, blk_rx, _hpsdr_drops) = hw::Subscriber::new(64);
+    ctl_tx.send(hw::HwCmd::SubscribeRx(sub))?;
 
     let sock = UdpSocket::bind(&a.hpsdr).map_err(|e| format!("bind {}: {e}", a.hpsdr))?;
     let cfg = server::Config {
@@ -342,12 +343,24 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     let srv_stop = stop.clone();
     let srv_thread = std::thread::Builder::new()
         .name("hpsdr".into())
-        .spawn(move || srv.run(blk_rx, ctl_tx, srv_stop))?;
+        .spawn(move || {
+            srv.run(
+                blk_rx,
+                move |c| {
+                    let cmd = match c {
+                        server::Control::Tune { rx, hz } => hw::HwCmd::Tune { ch: rx, hz },
+                        server::Control::Atten { db } => hw::HwCmd::Atten { db },
+                        server::Control::Streaming(_) => return,
+                    };
+                    let _ = ctl_tx.send(cmd);
+                },
+                srv_stop,
+            )
+        })?;
 
     let hw = hw::HwLoop {
         radio,
         ctl: ctl_rx,
-        out: blk_tx,
         stop: stop.clone(),
         verbose: a.verbose,
     };

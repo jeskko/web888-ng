@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Protocol 1 server loop. Runs on its own thread with a blocking UDP
-//! socket; exchanges sample blocks and control commands with the hardware
-//! thread over channels, so it never touches the radio directly.
+//! socket; takes sample blocks from the hardware thread over a channel and
+//! hands control commands to a callback, so it never touches the radio
+//! directly.
 //!
 //! Receivers map to hardware channels `0..nrx` (leases come in M3). Only
 //! 48 kS/s is supported, so the hardware must run at 48 kS/s (r2 = 10 at
@@ -11,20 +12,11 @@ use crate::proto::*;
 use std::net::{SocketAddr, UdpSocket};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, Sender, TryRecvError};
+use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::Duration;
+use web888_radio::RxBlock;
 
-/// A block of whole RX frames (`nch` samples per frame), from the hw thread.
-#[derive(Clone, Debug)]
-pub struct Block {
-    pub nch: usize,
-    /// Interleaved (i, q) per channel, frame-major.
-    pub iq: Vec<(i32, i32)>,
-    /// ADC overload seen in this block.
-    pub overload: bool,
-}
-
-/// Commands to the hw thread.
+/// Commands for the hw thread.
 #[derive(Clone, Debug, PartialEq)]
 pub enum Control {
     Tune {
@@ -80,11 +72,16 @@ impl Server {
     }
 
     /// Run until `stop` is set.
-    pub fn run(&mut self, blocks: Receiver<Block>, ctl: Sender<Control>, stop: Arc<AtomicBool>) {
+    pub fn run(
+        &mut self,
+        blocks: Receiver<Arc<RxBlock>>,
+        mut ctl: impl FnMut(Control),
+        stop: Arc<AtomicBool>,
+    ) {
         let mut buf = [0u8; 2048];
         while !stop.load(Ordering::Relaxed) {
             match self.sock.recv_from(&mut buf) {
-                Ok((n, from)) => self.on_packet(&buf[..n], from, &ctl),
+                Ok((n, from)) => self.on_packet(&buf[..n], from, &mut ctl),
                 Err(e)
                     if matches!(
                         e.kind(),
@@ -102,7 +99,7 @@ impl Server {
         }
     }
 
-    fn on_packet(&mut self, pkt: &[u8], from: SocketAddr, ctl: &Sender<Control>) {
+    fn on_packet(&mut self, pkt: &[u8], from: SocketAddr, ctl: &mut impl FnMut(Control)) {
         match parse(pkt) {
             Some(HostPacket::Discovery) => {
                 let r = discovery_reply(&self.cfg.board, self.streaming, self.cfg.max_rx as u8);
@@ -116,7 +113,7 @@ impl Server {
                 }
                 if on != self.streaming {
                     self.streaming = on;
-                    let _ = ctl.send(Control::Streaming(on));
+                    ctl(Control::Streaming(on));
                 }
             }
             Some(HostPacket::Data { cc, .. }) => {
@@ -126,7 +123,7 @@ impl Server {
                     let old_att = self.state.atten_db;
                     for rx in self.state.apply(c) {
                         if rx < self.cfg.max_rx {
-                            let _ = ctl.send(Control::Tune {
+                            ctl(Control::Tune {
                                 rx,
                                 hz: self.state.rx_hz[rx] as f64,
                             });
@@ -142,7 +139,7 @@ impl Server {
                         );
                     }
                     if self.state.atten_db != old_att {
-                        let _ = ctl.send(Control::Atten {
+                        ctl(Control::Atten {
                             db: self.state.atten_db.unwrap_or(0) as f32,
                         });
                     }
@@ -152,7 +149,7 @@ impl Server {
         }
     }
 
-    fn on_block(&mut self, b: &Block) {
+    fn on_block(&mut self, b: &RxBlock) {
         if !self.streaming {
             return;
         }

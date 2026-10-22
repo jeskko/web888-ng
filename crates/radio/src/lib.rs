@@ -9,9 +9,11 @@
 
 use std::fmt;
 
+pub mod block;
 pub mod chan;
 pub mod clock;
 
+pub use block::*;
 pub use chan::*;
 
 /// One RX sample of one channel, exactly as in the DMA ring
@@ -21,6 +23,12 @@ pub use chan::*;
 pub struct Iq32 {
     pub i: i32,
     pub q: i32,
+}
+
+impl From<Iq32> for (i32, i32) {
+    fn from(s: Iq32) -> Self {
+        (s.i, s.q)
+    }
 }
 
 /// One waterfall sample, as in the WF ring (I in bits 15:0, Q in 31:16).
@@ -49,12 +57,17 @@ pub struct Caps {
     pub adc_hz: f64,
     /// Accepted stage-2 RX decimation range (total decimation = 256 * r2).
     pub rx_r2: std::ops::RangeInclusive<u16>,
-    /// Largest WF decimation (powers of two from 1).
+    /// Smallest and largest WF decimation (powers of two).
+    pub wf_decim_min: u16,
     pub wf_decim_max: u16,
     /// WF block length in one-shot mode.
     pub wf_block: usize,
     /// Open FPGA: 64-bit sample counter available.
     pub sample_counter: bool,
+    /// Frequencies (Hz) the RX and WF channels can be tuned to with a
+    /// useful signal: the ADC's first Nyquist zone on hardware, the input
+    /// band on the iq backend.
+    pub rf_range: std::ops::RangeInclusive<f64>,
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -167,6 +180,12 @@ pub trait Radio: Send {
     fn start_wf(&mut self, slot: usize, f_hz: f64, decim: u16, mode: WfMode) -> Result<()>;
     /// Read WF samples; returns the count (0 if none ready, or one-shot done).
     fn read_wf(&mut self, slot: usize, buf: &mut [Iq16]) -> Result<usize>;
+    /// Discontinuities in a continuous WF stream since `start_wf` (block
+    /// restarts on the stock driver, overruns). A gap counted by the time a
+    /// `read_wf` returns lies before the samples of the next read.
+    fn wf_gaps(&self, _slot: usize) -> u64 {
+        0
+    }
 
     fn front_end(&mut self, fe: FrontEnd) -> Result<()>;
 

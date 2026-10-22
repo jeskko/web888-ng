@@ -194,10 +194,11 @@ impl Ep6Builder {
 
     /// Add one sample slot (`iq[k]` for receiver k); returns a finished
     /// 1032-byte packet when two frames are full.
-    pub fn push(&mut self, iq: &[(i32, i32)]) -> Option<[u8; PACKET]> {
+    pub fn push<S: Copy + Into<(i32, i32)>>(&mut self, iq: &[S]) -> Option<[u8; PACKET]> {
         let base = 8 + self.slot * (6 * self.nrx + 2);
         let f = &mut self.frames[self.frame];
-        for (k, &(i, q)) in iq.iter().take(self.nrx).enumerate() {
+        for (k, &s) in iq.iter().take(self.nrx).enumerate() {
+            let (i, q) = s.into();
             put24(&mut f[base + 6 * k..base + 6 * k + 3], i);
             put24(&mut f[base + 6 * k + 3..base + 6 * k + 6], q);
         }

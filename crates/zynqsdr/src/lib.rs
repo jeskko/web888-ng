@@ -49,6 +49,8 @@ struct WfState {
     last_data: Instant,
     active: bool,
     stage: Vec<u8>,
+    /// Continuous-mode restarts since `start_wf` (`Radio::wf_gaps`).
+    gaps: u64,
 }
 
 pub struct ZynqsdrRadio<D: Device> {
@@ -109,6 +111,7 @@ impl<D: Device> ZynqsdrRadio<D> {
                     last_data: Instant::now(),
                     active: false,
                     stage: Vec::new(),
+                    gaps: 0,
                 })
                 .collect(),
             gpio,
@@ -155,9 +158,12 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             wf_channels: self.wf_ch,
             adc_hz: self.cfg.adc_hz,
             rx_r2: 5..=40,
+            wf_decim_min: 1,
             wf_decim_max: 8192,
             wf_block: WF_BLOCK,
             sample_counter: false,
+            // the VHF bitstream's higher zones (undersampling) come later
+            rf_range: 0.0..=self.cfg.adc_hz / 2.0,
         }
     }
 
@@ -233,7 +239,12 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         s.decim = decim;
         s.mode = mode;
         s.word = word;
+        s.gaps = 0;
         self.wf_restart(slot)
+    }
+
+    fn wf_gaps(&self, slot: usize) -> u64 {
+        self.wf.get(slot).map_or(0, |s| s.gaps)
     }
 
     fn read_wf(&mut self, slot: usize, buf: &mut [Iq16]) -> Result<usize> {
@@ -279,6 +290,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         {
             // stock driver: one-shot only, start the next block now
             self.wf_restart(slot)?;
+            self.wf[slot].gaps += 1;
         }
         Ok(n)
     }

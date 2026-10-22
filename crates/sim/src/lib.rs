@@ -304,9 +304,11 @@ impl Radio for SimRadio {
             wf_channels: WF_SLOTS,
             adc_hz: self.cfg.adc_hz,
             rx_r2: 5..=40,
+            wf_decim_min: 1,
             wf_decim_max: 8192,
             wf_block: WF_BLOCK,
             sample_counter: true,
+            rf_range: 0.0..=self.cfg.adc_hz / 2.0,
         }
     }
 

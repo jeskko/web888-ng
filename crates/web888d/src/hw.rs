@@ -1,14 +1,95 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The hardware thread: sole owner of the `Radio`. Applies control commands,
-//! reads RX frames and fans them out, and runs the PPS clock loop.
+//! reads RX frames and waterfall samples and fans them out to subscribers,
+//! and runs the PPS clock loop.
 
 use std::sync::Arc;
-use std::sync::atomic::{AtomicBool, Ordering};
-use std::sync::mpsc::{Receiver, SyncSender, TrySendError};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::time::{Duration, Instant};
-use web888_hpsdr::server::{Block, Control};
 use web888_radio::clock::AdcClock;
 use web888_radio::*;
+
+/// Commands for the hw thread, from any consumer (HPSDR, web sessions).
+#[allow(dead_code)] // WF commands: the web session (M2 step 3)
+pub enum HwCmd {
+    Tune {
+        ch: usize,
+        hz: f64,
+    },
+    Atten {
+        db: f32,
+    },
+    /// Stream WF slot `slot` continuously; its blocks carry `generation`.
+    WfStart {
+        slot: usize,
+        hz: f64,
+        decim: u16,
+        generation: u64,
+    },
+    WfStop {
+        slot: usize,
+    },
+    SubscribeRx(Subscriber<RxBlock>),
+    SubscribeWf(Subscriber<WfBlock>),
+}
+
+/// A consumer's end of the fan-out: a bounded queue that loses blocks
+/// (counted) instead of stalling the hw thread. It is dropped from the
+/// fan-out when its receiver goes away.
+pub struct Subscriber<T> {
+    tx: SyncSender<Arc<T>>,
+    dropped: Arc<AtomicU64>,
+}
+
+impl<T> Subscriber<T> {
+    /// A subscriber queueing up to `depth` blocks, its receiver and its
+    /// drop counter.
+    pub fn new(depth: usize) -> (Self, Receiver<Arc<T>>, Arc<AtomicU64>) {
+        let (tx, rx) = sync_channel(depth);
+        let dropped = Arc::new(AtomicU64::new(0));
+        (
+            Subscriber {
+                tx,
+                dropped: dropped.clone(),
+            },
+            rx,
+            dropped,
+        )
+    }
+}
+
+/// Hands each block to every subscriber.
+pub struct Fanout<T> {
+    subs: Vec<Subscriber<T>>,
+}
+
+impl<T> Default for Fanout<T> {
+    fn default() -> Self {
+        Fanout { subs: Vec::new() }
+    }
+}
+
+impl<T> Fanout<T> {
+    pub fn add(&mut self, s: Subscriber<T>) {
+        self.subs.push(s);
+    }
+
+    pub fn send(&mut self, block: T) {
+        if self.subs.is_empty() {
+            return;
+        }
+        let b = Arc::new(block);
+        self.subs.retain(|s| match s.tx.try_send(b.clone()) {
+            Ok(()) => true,
+            Err(TrySendError::Full(_)) => {
+                s.dropped.fetch_add(1, Ordering::Relaxed);
+                true
+            }
+            Err(TrySendError::Disconnected(_)) => false,
+        });
+    }
+}
 
 /// Detects lost RX frames by comparing what arrived with the configured
 /// rate over a window. The stock driver reports no ring overruns, so with
@@ -89,20 +170,39 @@ pub fn read_pause(got: usize, frames_per_s: f64) -> Duration {
 
 pub struct HwLoop {
     pub radio: Box<dyn Radio>,
-    pub ctl: Receiver<Control>,
-    pub out: SyncSender<Block>,
+    pub ctl: Receiver<HwCmd>,
     pub stop: Arc<AtomicBool>,
     pub verbose: bool,
 }
+
+/// A WF slot being streamed.
+struct WfRun {
+    hz: f64,
+    decim: u16,
+    generation: u64,
+    seq: u64,
+    /// `Radio::wf_gaps` already accounted for.
+    gaps_seen: u64,
+    /// Mark the next block as following a gap (restart after a retune).
+    force_gap: bool,
+}
+
+/// WF samples per read; a few reads per loop pass at most, so a fast
+/// waterfall can't starve RX.
+const WF_READ: usize = 16384;
+const WF_READS_PER_PASS: usize = 8;
 
 impl HwLoop {
     pub fn run(mut self) -> Result<()> {
         let caps = self.radio.caps();
         let n = caps.rx_channels;
         let mut tuned: Vec<Option<f64>> = vec![None; n];
+        let mut wf: Vec<Option<WfRun>> = (0..caps.wf_channels).map(|_| None).collect();
+        let mut rx_out = Fanout::<RxBlock>::default();
+        let mut wf_out = Fanout::<WfBlock>::default();
         let mut clock = AdcClock::new(caps.adc_hz);
         let mut buf = vec![Iq32::default(); 512 * n];
-        let mut dropped = 0u64;
+        let mut wf_buf = vec![Iq16::default(); WF_READ];
         let mut frames = 0u64;
         let mut last_report = Instant::now();
         let mut fe = FrontEnd::default();
@@ -111,16 +211,54 @@ impl HwLoop {
 
         while !self.stop.load(Ordering::Relaxed) {
             while let Ok(c) = self.ctl.try_recv() {
-                match c {
-                    Control::Tune { rx, hz } if rx < n => {
-                        self.radio.tune_rx(rx, hz)?;
-                        tuned[rx] = Some(hz);
-                    }
-                    Control::Atten { db } => {
+                let res = match c {
+                    HwCmd::Tune { ch, hz } => self.radio.tune_rx(ch, hz).map(|()| {
+                        tuned[ch] = Some(hz);
+                    }),
+                    HwCmd::Atten { db } => {
                         fe.atten_db = db.clamp(0.0, 31.5);
-                        self.radio.front_end(fe)?;
+                        self.radio.front_end(fe)
                     }
-                    _ => {}
+                    HwCmd::WfStart {
+                        slot,
+                        hz,
+                        decim,
+                        generation,
+                    } => self
+                        .radio
+                        .start_wf(slot, hz, decim, WfMode::Continuous)
+                        .map(|()| {
+                            wf[slot] = Some(WfRun {
+                                hz,
+                                decim,
+                                generation,
+                                seq: 0,
+                                gaps_seen: 0,
+                                force_gap: false,
+                            });
+                        }),
+                    HwCmd::WfStop { slot } if slot < wf.len() => {
+                        // a one-shot block ends the stream on every backend
+                        let r = match &wf[slot] {
+                            Some(w) => self.radio.start_wf(slot, w.hz, w.decim, WfMode::OneShot),
+                            None => Ok(()),
+                        };
+                        wf[slot] = None;
+                        r
+                    }
+                    HwCmd::WfStop { .. } => Err(Error::InvalidChannel(usize::MAX)),
+                    HwCmd::SubscribeRx(s) => {
+                        rx_out.add(s);
+                        Ok(())
+                    }
+                    HwCmd::SubscribeWf(s) => {
+                        wf_out.add(s);
+                        Ok(())
+                    }
+                };
+                // a bad request from a client must not stop the radio
+                if let Err(e) = res {
+                    eprintln!("hw: command refused: {e}");
                 }
             }
 
@@ -167,18 +305,40 @@ impl HwLoop {
                 last_stats = Some(s);
             }
             if got > 0 {
-                frames += got as u64;
-                let iq = buf[..got * n].iter().map(|s| (s.i, s.q)).collect();
-                match self.out.try_send(Block {
+                rx_out.send(RxBlock {
+                    first_frame: frames,
                     nch: n,
-                    iq,
+                    iq: buf[..got * n].to_vec(),
                     overload,
-                }) {
-                    Ok(()) => {}
-                    Err(TrySendError::Full(_)) => dropped += 1,
-                    Err(TrySendError::Disconnected(_)) => return Ok(()),
+                });
+                frames += got as u64;
+            }
+
+            for (slot, run) in wf.iter_mut().enumerate() {
+                let Some(w) = run else { continue };
+                for _ in 0..WF_READS_PER_PASS {
+                    // gaps counted by now lie before this read's samples
+                    let gaps = self.radio.wf_gaps(slot);
+                    let got = self.radio.read_wf(slot, &mut wf_buf)?;
+                    if got == 0 {
+                        break;
+                    }
+                    let gap_before = std::mem::take(&mut w.force_gap) || gaps != w.gaps_seen;
+                    w.gaps_seen = gaps;
+                    wf_out.send(WfBlock {
+                        slot,
+                        generation: w.generation,
+                        seq: w.seq,
+                        gap_before,
+                        iq: wf_buf[..got].to_vec(),
+                    });
+                    w.seq += 1;
+                    if got < wf_buf.len() {
+                        break;
+                    }
                 }
             }
+
             let fps = self.radio.adc_hz() / (256.0 * self.radio.rx_r2() as f64);
             let pause = read_pause(got, fps);
             if !pause.is_zero() {
@@ -194,6 +354,14 @@ impl HwLoop {
                         self.radio.tune_rx(ch, *f)?;
                     }
                 }
+                for (slot, run) in wf.iter_mut().enumerate() {
+                    if let Some(w) = run {
+                        self.radio
+                            .start_wf(slot, w.hz, w.decim, WfMode::Continuous)?;
+                        w.gaps_seen = 0;
+                        w.force_gap = true;
+                    }
+                }
                 eprintln!(
                     "clock: ADC {:.3} Hz ({:+.3} ppm), channels retuned",
                     hz,
@@ -203,7 +371,7 @@ impl HwLoop {
 
             if self.verbose && last_report.elapsed() >= Duration::from_secs(10) {
                 last_report = Instant::now();
-                eprintln!("hw: {frames} frames, {dropped} blocks dropped");
+                eprintln!("hw: {frames} frames");
             }
         }
         Ok(())
@@ -213,6 +381,111 @@ impl HwLoop {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use std::sync::mpsc::channel;
+    use web888_sim::{Pacing, Scene, SimConfig, SimRadio};
+
+    const F0: f64 = 7_074_000.0;
+
+    fn start(
+        scene: Scene,
+    ) -> (
+        std::sync::mpsc::Sender<HwCmd>,
+        Arc<AtomicBool>,
+        std::thread::JoinHandle<Result<()>>,
+    ) {
+        let (tx, rx) = channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let hw = HwLoop {
+            radio: Box::new(SimRadio::new(SimConfig::hf(scene, Pacing::RealTime))),
+            ctl: rx,
+            stop: stop.clone(),
+            verbose: false,
+        };
+        let t = std::thread::spawn(move || hw.run());
+        (tx, stop, t)
+    }
+
+    #[test]
+    fn rx_fanout_survives_a_stalled_subscriber() {
+        let (tx, stop, t) = start(Scene::new().tone(F0, -20.0));
+        let (a, a_rx, a_drops) = Subscriber::new(64);
+        let (b, b_rx, _) = Subscriber::new(64);
+        let (c, _c_rx, c_drops) = Subscriber::new(1); // never read
+        for s in [a, b, c] {
+            tx.send(HwCmd::SubscribeRx(s)).unwrap();
+        }
+        let mut next = None;
+        for _ in 0..40 {
+            let x = a_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            let y = b_rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            assert_eq!(x, y);
+            assert!(x.frames() > 0 && x.nch == 12);
+            if let Some(n) = next {
+                assert_eq!(x.first_frame, n, "the readers lost no block");
+            }
+            next = Some(x.end_frame());
+        }
+        stop.store(true, Ordering::Relaxed);
+        t.join().unwrap().unwrap();
+        assert_eq!(a_drops.load(Ordering::Relaxed), 0);
+        assert!(c_drops.load(Ordering::Relaxed) > 0);
+    }
+
+    /// Mean phase step per sample of a complex stream (tone frequency / fs).
+    fn cycles_per_sample(iq: &[Iq16]) -> f64 {
+        let z: Vec<num_complex::Complex64> = iq
+            .iter()
+            .map(|s| num_complex::Complex64::new(s.i as f64, s.q as f64))
+            .collect();
+        let acc: num_complex::Complex64 = z.windows(2).map(|w| w[1] * w[0].conj()).sum();
+        acc.arg() / (2.0 * std::f64::consts::PI)
+    }
+
+    #[test]
+    fn wf_streams_with_generation_and_sequence() {
+        // decim 64: fs 1.92 MHz; the tone sits fs/8 above the centre
+        let fs = ADC_HZ_HF / 64.0;
+        let (tx, stop, t) = start(Scene::new().tone(F0 + fs / 8.0, -10.0));
+        let (s, rx, _) = Subscriber::new(256);
+        tx.send(HwCmd::SubscribeWf(s)).unwrap();
+        let wf_start = |generation| HwCmd::WfStart {
+            slot: 0,
+            hz: F0,
+            decim: 64,
+            generation,
+        };
+        tx.send(wf_start(7)).unwrap();
+        let mut prev: Option<Arc<WfBlock>> = None;
+        let mut samples = 0;
+        while samples < 100_000 {
+            let b = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+            assert_eq!((b.slot, b.generation), (0, 7));
+            match &prev {
+                None => assert_eq!(b.seq, 0),
+                Some(p) => assert!(b.continues(p), "seq {} after {}", b.seq, p.seq),
+            }
+            if b.iq.len() > 100 {
+                let c = cycles_per_sample(&b.iq);
+                assert!((c - 0.125).abs() < 1e-3, "{c}");
+            }
+            samples += b.iq.len();
+            prev = Some(b);
+        }
+
+        tx.send(HwCmd::WfStop { slot: 0 }).unwrap();
+        std::thread::sleep(Duration::from_millis(100));
+        while rx.try_recv().is_ok() {}
+        assert!(
+            rx.recv_timeout(Duration::from_millis(100)).is_err(),
+            "stopped"
+        );
+
+        tx.send(wf_start(8)).unwrap();
+        let b = rx.recv_timeout(Duration::from_secs(2)).unwrap();
+        assert_eq!((b.generation, b.seq), (8, 0));
+        stop.store(true, Ordering::Relaxed);
+        t.join().unwrap().unwrap();
+    }
 
     #[test]
     fn read_pause_waits_for_the_rest_of_a_batch() {

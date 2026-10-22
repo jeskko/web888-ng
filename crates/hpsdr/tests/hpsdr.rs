@@ -8,7 +8,7 @@ use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc;
 use std::time::Duration;
 use web888_hpsdr::proto::{self, host};
-use web888_hpsdr::server::{Block, Config, Control, Server};
+use web888_hpsdr::server::{Config, Control, Server};
 use web888_radio::*;
 use web888_sim::*;
 
@@ -43,7 +43,7 @@ fn db(x: f64) -> f64 {
 #[test]
 fn two_receivers_over_udp() {
     let stop = Arc::new(AtomicBool::new(false));
-    let (blk_tx, blk_rx) = mpsc::sync_channel::<Block>(32);
+    let (blk_tx, blk_rx) = mpsc::sync_channel::<Arc<RxBlock>>(32);
     let (ctl_tx, ctl_rx) = mpsc::channel::<Control>();
 
     // hw thread: simulator at 48 kS/s, applies tune commands
@@ -56,6 +56,7 @@ fn two_receivers_over_udp() {
         r.set_rx_rate(10).unwrap();
         let n = r.caps().rx_channels;
         let mut buf = vec![Iq32::default(); 240 * n];
+        let mut first_frame = 0;
         while !hw_stop.load(Ordering::Relaxed) {
             while let Ok(c) = ctl_rx.try_recv() {
                 if let Control::Tune { rx, hz } = c {
@@ -63,15 +64,14 @@ fn two_receivers_over_udp() {
                 }
             }
             let got = r.read_rx(&mut buf).unwrap();
-            let iq = buf[..got * n].iter().map(|s| (s.i, s.q)).collect();
-            if blk_tx
-                .send(Block {
-                    nch: n,
-                    iq,
-                    overload: false,
-                })
-                .is_err()
-            {
+            let blk = RxBlock {
+                first_frame,
+                nch: n,
+                iq: buf[..got * n].to_vec(),
+                overload: false,
+            };
+            first_frame = blk.end_frame();
+            if blk_tx.send(Arc::new(blk)).is_err() {
                 break;
             }
         }
@@ -89,7 +89,15 @@ fn two_receivers_over_udp() {
     let mut server = Server::new(sock, cfg).unwrap();
     let addr = server.local_addr().unwrap();
     let srv_stop = stop.clone();
-    let srv = std::thread::spawn(move || server.run(blk_rx, ctl_tx, srv_stop));
+    let srv = std::thread::spawn(move || {
+        server.run(
+            blk_rx,
+            move |c| {
+                let _ = ctl_tx.send(c);
+            },
+            srv_stop,
+        )
+    });
 
     // client
     let c = UdpSocket::bind("127.0.0.1:0").unwrap();

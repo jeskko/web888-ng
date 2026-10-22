@@ -87,6 +87,7 @@ struct WfSlot {
     q: VecDeque<Iq16>,
     produced: u64,
     active: bool,
+    gaps: u64,
 }
 
 pub struct IqRadio {
@@ -147,6 +148,7 @@ impl IqRadio {
                     q: VecDeque::new(),
                     produced: 0,
                     active: false,
+                    gaps: 0,
                 })
                 .collect(),
             gain: 1.0,
@@ -278,6 +280,7 @@ impl IqRadio {
             if s.mode == WfMode::Continuous && s.q.len() > RING_BYTES / 4 {
                 let lost = s.q.len() - RING_BYTES / 4;
                 s.q.drain(..lost);
+                s.gaps += 1;
             }
         }
         self.pre = x;
@@ -337,9 +340,12 @@ impl Radio for IqRadio {
             wf_channels: WF_SLOTS,
             adc_hz: ADC_HZ_HF,
             rx_r2: 5..=40,
+            wf_decim_min: self.m as u16,
             wf_decim_max: 8192,
             wf_block: WF_BLOCK,
             sample_counter: true,
+            rf_range: (self.cfg.center_hz - 0.45 * self.cfg.rate_hz).max(0.0)
+                ..=self.cfg.center_hz + 0.45 * self.cfg.rate_hz,
         }
     }
 
@@ -418,7 +424,12 @@ impl Radio for IqRadio {
         s.q.clear();
         s.produced = 0;
         s.active = true;
+        s.gaps = 0;
         Ok(())
+    }
+
+    fn wf_gaps(&self, slot: usize) -> u64 {
+        self.wf.get(slot).map_or(0, |s| s.gaps)
     }
 
     fn read_wf(&mut self, slot: usize, buf: &mut [Iq16]) -> Result<usize> {
