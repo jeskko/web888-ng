@@ -1,0 +1,4 @@
+# esbuild ships its binary in a platform package; its install script only
+# verifies it, so no dependency build scripts run.
+allowBuilds:
+  esbuild: false

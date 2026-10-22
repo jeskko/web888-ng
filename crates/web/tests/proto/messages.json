@@ -1,0 +1,23 @@
+{
+  "client": [
+    {"type": "hello", "proto": 1, "codecs": ["pcm16"]},
+    {"type": "tune", "hz": 7074000},
+    {"type": "mode", "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700},
+    {"type": "mode", "mode": "am"},
+    {"type": "audio", "agc": true, "gain_db": 80},
+    {"type": "wf", "center_hz": 8600000, "decim": 16, "bins": 1024, "fps": 20},
+    {"type": "ping", "t": 1234.5}
+  ],
+  "server": [
+    {"type": "hello", "proto": 1, "server": "web888d 0.0.1", "codec": "pcm16", "audio_rate": 12000,
+     "radio": {"backend": "sim", "variant": "hf", "adc_hz": 122880000, "rx_rate": 48000,
+               "rf_lo": 0, "rf_hi": 61440000, "wf_decim_min": 1, "wf_decim_max": 8192},
+     "limits": {"bins_max": 4096, "fps_max": 30}},
+    {"type": "state", "hz": 7074000, "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700, "agc": true, "gain_db": 100,
+     "wf": {"center_hz": 30720000, "decim": 2, "bins": 1024, "fps": 20}},
+    {"type": "status", "adc_overloads": 3, "clock_ppm": -1.25, "audio_drops": 0, "wf_drops": 2, "hw_rate_ok": true},
+    {"type": "pong", "t": 1234.5},
+    {"type": "busy", "msg": "another user has the receiver"},
+    {"type": "error", "msg": "bad message"}
+  ]
+}

@@ -5,7 +5,7 @@ protocols (HPSDR, rtl_tcp, IQ), decoders, and KiwiSDR protocol
 compatibility. It runs on the stock firmware (stock or open bitstream) and
 later on the open driver from [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status: **M1 in progress** (see `doc/design.md` §11): stock-driver backend and HPSDR Protocol 1 work against the simulator and a fake driver. They haven't been tested on a unit yet.
+Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR Protocol 1 work against the simulator and a fake driver, not yet tested on a unit. **M2** web UI in progress (`doc/m2-web-ui.md`): waterfall, SSB/CW/AM audio and tuning work against the simulator and real signals (HackRF/recordings).
 
 | crate | content |
 |---|---|
@@ -14,8 +14,11 @@ Status: **M1 in progress** (see `doc/design.md` §11): stock-driver backend and 
 | `crates/dsp` | Kaiser FIR, droop-compensated channel design, overlap-save filter, shifter, SSB/AM demod |
 | `crates/zynqsdr` | backend for the stock kernel driver (`/dev/zynqsdr` ioctls), bitstream loading |
 | `crates/hpsdr` | OpenHPSDR Protocol 1 receive server (discovery, up to 7 receivers, 48 kS/s) |
+| `crates/hw` | the hardware thread: owns the radio, fans RX/WF blocks out to HPSDR and web sessions |
+| `crates/web` | web UI server: HTTPS/HTTP on one port, WebSocket sessions (audio + waterfall) |
+| `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet) |
 | `crates/iq` | backend fed by real signals: wideband IQ from an SDR (SoapySDR, e.g. HackRF) or a recording, channelized like the FPGA |
-| `crates/web888d` | the daemon: `serve` (radio + HPSDR), `sim` (one channel to stdout) |
+| `crates/web888d` | the daemon: `serve` (radio + HPSDR + web UI), `sim` (one channel to stdout) |
 
 ```
 cargo test --workspace
@@ -32,6 +35,30 @@ rc-service sdrd stop      # the driver allows one opener
 
 Then point an HPSDR client (SparkSDR, SDR++ hermes source, Thetis, ...) at
 the unit at 48 kS/s. `rc-service sdrd start` brings the stock server back.
+
+### Web UI
+
+`web888d serve` also serves the web UI on port 8073: HTTPS with a
+self-signed certificate (generated on first start into `--state-dir`,
+default `/var/lib/web888d`; or `--tls-cert`/`--tls-key`), and plain HTTP on
+the same port for a TLS-terminating proxy (`--no-tls` for plain only).
+Browsers only play audio over HTTPS or from `localhost`. One web user at
+a time (M2); it gets the last RX channel, which HPSDR then doesn't offer.
+
+The UI lives in `ui/` (TypeScript + Preact, built with esbuild; needs
+Node 24 and pnpm):
+
+```
+cd ui && pnpm install && pnpm build      # -> ui/dist (pnpm dev: rebuild on change)
+cargo run --release -p web888d -- serve --backend iq --iq file:hf.cs8 --iq-freq 8.6e6 --iq-loop \
+  --ui-dir ui/dist --state-dir /tmp/web888d
+# then https://localhost:8073 (or http://localhost:8073)
+```
+
+Waterfall: wheel zooms around the cursor, drag pans, click tunes,
+shift+wheel steps the dial; arrows step, `u`/`l`/`c`/`a` pick the mode.
+The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`).
+The protocol is in `doc/m2-web-ui.md` §4.
 
 ### Real signals without a Web-888 (HackRF, IQ recordings)
 
