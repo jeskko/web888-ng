@@ -190,6 +190,11 @@ impl Manager {
         self.schedule()
     }
 
+    /// The lease holding channel `ch`.
+    pub fn holder(&self, ch: usize) -> Option<LeaseId> {
+        self.owner.get(ch).copied().flatten()
+    }
+
     pub fn state(&self, id: LeaseId) -> Option<LeaseState> {
         let e = self.leases.get(&id)?;
         Some(match e.granted {
@@ -352,8 +357,15 @@ impl Channels {
     fn release(&self, id: LeaseId) {
         let mut g = self.inner.lock().unwrap();
         g.watchers.remove(&id);
+        let ch = g.mgr.state(id).and_then(LeaseState::channel);
         let tunes = g.mgr.release(id);
         g.apply(tunes);
+        // a channel nobody took over is idle (software backends stop it)
+        if let Some(ch) = ch
+            && g.mgr.holder(ch).is_none()
+        {
+            let _ = g.hw.send(HwCmd::IdleRx { ch });
+        }
     }
 
     fn tune(&self, id: LeaseId, hz: f64) {
@@ -614,5 +626,7 @@ mod tests {
         assert_eq!(chans.leases().len(), 1);
         drop(b);
         assert!(chans.leases().is_empty());
+        // nobody took the channel over: it goes idle
+        assert!(matches!(rx.try_recv(), Ok(HwCmd::IdleRx { ch: 0 })));
     }
 }

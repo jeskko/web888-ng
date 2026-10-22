@@ -172,6 +172,12 @@ pub trait Radio: Send {
     fn set_rx_rate(&mut self, r2: u16) -> Result<()>;
     fn rx_r2(&self) -> u16;
     fn tune_rx(&mut self, ch: usize, f_hz: f64) -> Result<()>;
+    /// Nobody needs channel `ch`'s output until it is tuned again. The
+    /// FPGA runs every channel anyway; a backend that computes channels
+    /// in software stops it (it reads zeros).
+    fn idle_rx(&mut self, _ch: usize) -> Result<()> {
+        Ok(())
+    }
 
     /// Read whole RX frames (`caps().rx_channels` samples each, channel 0
     /// first) into `buf`. Returns the number of frames; 0 if none are ready.

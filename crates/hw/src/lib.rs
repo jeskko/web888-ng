@@ -19,6 +19,10 @@ pub enum HwCmd {
         ch: usize,
         hz: f64,
     },
+    /// Channel `ch` is free (`Radio::idle_rx`).
+    IdleRx {
+        ch: usize,
+    },
     Atten {
         db: f32,
     },
@@ -202,6 +206,10 @@ struct Slot {
     gaps_seen: u64,
     /// Mark the next block as following a gap (restart after a retune).
     force_gap: bool,
+    /// Samples a continuous slot may still read (`WF_MAX_RATE`), and when
+    /// that was worked out.
+    allowance: f64,
+    refilled: Option<Instant>,
 }
 
 struct Shot {
@@ -223,13 +231,16 @@ impl Slot {
     }
 }
 
-/// WF samples per read, one read per slot and loop pass: ~3 MS/s per
-/// slot at ~200 passes a second. A waterfall line needs far less (the FFT
-/// budget, e.g. 30 x 2048 samples at 20 lines/s = 1.2 MS/s); reading a
-/// wide span's full rate (61 MS/s at decimation 2) would only cost the
-/// RX reads their time. Wider spans lose the rest in the ring (gaps).
+/// WF samples per read; one read per slot and loop pass at most, and a
+/// continuous slot no more than `WF_MAX_RATE`: reading a wide span's full
+/// rate (61 MS/s at decimation 2) would only cost the RX reads their time.
 const WF_READ: usize = 16384;
 const WF_READS_PER_PASS: usize = 1;
+/// Most WF samples a continuous slot reads per second. A line uses the
+/// FFT budget's worth of samples (30 x 2048 at 20 lines/s = 1.2 MS/s);
+/// a wider span loses the rest in the ring, and a backend computing its
+/// WF in software (iq) then doesn't compute it.
+const WF_MAX_RATE: f64 = 1.5e6;
 
 impl HwLoop {
     fn plan_wf(&mut self, slot: usize, w: &mut Slot, views: Vec<WfView>) -> Result<()> {
@@ -290,13 +301,24 @@ impl HwLoop {
             return Ok(());
         }
         if let Some(v) = w.cont {
+            let now = Instant::now();
+            let dt = w
+                .refilled
+                .map_or(0.0, |t| now.duration_since(t).as_secs_f64());
+            w.refilled = Some(now);
+            // at most one read's worth banked, so no bursts
+            w.allowance = (w.allowance + dt * WF_MAX_RATE).min(buf.len() as f64);
             for _ in 0..WF_READS_PER_PASS {
+                if w.allowance < buf.len() as f64 {
+                    break;
+                }
                 // gaps counted by now lie before this read's samples
                 let gaps = self.radio.wf_gaps(slot);
                 let got = self.radio.read_wf(slot, buf)?;
                 if got == 0 {
                     break;
                 }
+                w.allowance -= got as f64;
                 let gap_before = std::mem::take(&mut w.force_gap) || gaps != w.gaps_seen;
                 w.gaps_seen = gaps;
                 out.send(WfBlock {
@@ -370,6 +392,9 @@ impl HwLoop {
                 let res = match c {
                     HwCmd::Tune { ch, hz } => self.radio.tune_rx(ch, hz).map(|()| {
                         tuned[ch] = Some(hz);
+                    }),
+                    HwCmd::IdleRx { ch } => self.radio.idle_rx(ch).map(|()| {
+                        tuned[ch] = None;
                     }),
                     HwCmd::Atten { db } => {
                         fe.atten_db = db.clamp(0.0, 31.5);
@@ -569,8 +594,9 @@ mod tests {
 
     #[test]
     fn wf_streams_with_generation_and_sequence() {
-        // decim 64: fs 1.92 MHz; the tone sits fs/8 above the centre
-        let fs = ADC_HZ_HF / 64.0;
+        // decim 128: fs 960 kHz (under the read cap, so nothing is lost);
+        // the tone sits fs/8 above the centre
+        let fs = ADC_HZ_HF / 128.0;
         let (tx, stop, t) = start(Scene::new().tone(F0 + fs / 8.0, -10.0));
         let (s, rx, _) = Subscriber::new(256);
         tx.send(HwCmd::SubscribeWf(s)).unwrap();
@@ -578,7 +604,7 @@ mod tests {
             slot: 0,
             views: vec![WfView {
                 hz: F0,
-                decim: 64,
+                decim: 128,
                 generation,
                 fps: 20.0,
             }],
@@ -618,6 +644,37 @@ mod tests {
         assert_eq!((b.generation, b.seq), (8, 0));
         stop.store(true, Ordering::Relaxed);
         t.join().unwrap().unwrap();
+    }
+
+    #[test]
+    fn a_wide_continuous_view_is_read_at_the_capped_rate() {
+        let (tx, stop, t) = start(Scene::new().tone(F0, -10.0));
+        let (s, rx, _) = Subscriber::new(1024);
+        tx.send(HwCmd::SubscribeWf(s)).unwrap();
+        // decim 8: 15.36 MS/s
+        tx.send(HwCmd::WfPlan {
+            slot: 0,
+            views: vec![WfView {
+                hz: F0,
+                decim: 8,
+                generation: 1,
+                fps: 20.0,
+            }],
+        })
+        .unwrap();
+        let t0 = Instant::now();
+        let mut samples = 0;
+        while t0.elapsed() < Duration::from_secs(2) {
+            if let Ok(b) = rx.recv_timeout(Duration::from_millis(100)) {
+                samples += b.iq.len();
+            }
+        }
+        stop.store(true, Ordering::Relaxed);
+        t.join().unwrap().unwrap();
+        // (the sim makes WF samples as they're read; hardware and the iq
+        // backend lose the rest in their rings, as gaps)
+        let rate = samples as f64 / 2.0;
+        assert!((1.0e6..=1.6e6).contains(&rate), "{rate} S/s read");
     }
 
     #[test]

@@ -80,6 +80,8 @@ enum Input {
 
 struct RxChan {
     word: u64,
+    /// Tuned and not idled since: only such channels are computed.
+    tuned: bool,
     ddc: Option<Ddc>,
 }
 
@@ -92,6 +94,8 @@ struct WfSlot {
     produced: u64,
     active: bool,
     gaps: u64,
+    /// Continuous: the ring was full and input went by uncomputed.
+    skipped: bool,
 }
 
 pub struct IqRadio {
@@ -138,7 +142,13 @@ impl IqRadio {
             input,
             adc_assumed: ADC_HZ_HF,
             r2: 20,
-            rx: (0..n).map(|_| RxChan { word: 0, ddc: None }).collect(),
+            rx: (0..n)
+                .map(|_| RxChan {
+                    word: 0,
+                    tuned: false,
+                    ddc: None,
+                })
+                .collect(),
             rx_k: 0,
             pre: Vec::new(),
             out: Vec::new(),
@@ -153,6 +163,7 @@ impl IqRadio {
                     produced: 0,
                     active: false,
                     gaps: 0,
+                    skipped: false,
                 })
                 .collect(),
             gain: 1.0,
@@ -165,6 +176,11 @@ impl IqRadio {
         };
         r.set_rx_rate(20)?;
         Ok(r)
+    }
+
+    /// RX channels being computed (tuned, inside the input's range).
+    pub fn active_rx(&self) -> usize {
+        self.rx.iter().filter(|c| c.ddc.is_some()).count()
     }
 
     /// The source has ended (file without looping, or a device error).
@@ -199,6 +215,11 @@ impl IqRadio {
     }
 
     fn rebuild_rx(&mut self, ch: usize) {
+        if !self.rx[ch].tuned {
+            // an untuned channel costs nothing (it reads zeros)
+            self.rx[ch].ddc = None;
+            return;
+        }
         let word = self.rx[ch].word;
         let keep = self.rx[ch].ddc.is_some() && self.offset(word).is_some();
         if keep {
@@ -271,6 +292,17 @@ impl IqRadio {
                 continue;
             }
             let Some(ddc) = &mut s.ddc else { continue };
+            let ring = RING_BYTES / 4;
+            if s.mode == WfMode::Continuous && s.q.len() >= ring {
+                // the reader is behind (a wide span is read only in part):
+                // lose this input uncomputed, as a full ring would, but
+                // without spending the DDC on it
+                s.skipped = true;
+                continue;
+            }
+            if std::mem::take(&mut s.skipped) {
+                s.gaps += 1;
+            }
             ddc.process(&x, &mut out);
             for y in &out {
                 let z = y * wf_scale;
@@ -284,8 +316,8 @@ impl IqRadio {
                     break;
                 }
             }
-            if s.mode == WfMode::Continuous && s.q.len() > RING_BYTES / 4 {
-                let lost = s.q.len() - RING_BYTES / 4;
+            if s.mode == WfMode::Continuous && s.q.len() > ring {
+                let lost = s.q.len() - ring;
                 s.q.drain(..lost);
                 s.gaps += 1;
             }
@@ -387,7 +419,15 @@ impl Radio for IqRadio {
             return Err(Error::InvalidChannel(ch));
         }
         self.rx[ch].word = nco_word(f_hz, self.adc_assumed);
+        self.rx[ch].tuned = true;
         self.rebuild_rx(ch);
+        Ok(())
+    }
+
+    fn idle_rx(&mut self, ch: usize) -> Result<()> {
+        let c = self.rx.get_mut(ch).ok_or(Error::InvalidChannel(ch))?;
+        c.tuned = false;
+        c.ddc = None;
         Ok(())
     }
 
@@ -432,6 +472,7 @@ impl Radio for IqRadio {
         s.produced = 0;
         s.active = true;
         s.gaps = 0;
+        s.skipped = false;
         Ok(())
     }
 

@@ -194,3 +194,28 @@ fn hackrf_cs8_file() {
     assert_eq!(r.read_rx(&mut buf).unwrap(), 0);
     std::fs::remove_file(&path).unwrap();
 }
+
+#[test]
+fn only_tuned_channels_are_computed() {
+    let mut r = radio(&[]);
+    // 0 Hz (an untuned channel's word) is within the wrapped range of an
+    // 8.6 MHz input, but untuned channels cost nothing
+    assert_eq!(r.active_rx(), 0);
+    r.set_rx_rate(10).unwrap();
+    assert_eq!(r.active_rx(), 0);
+    r.tune_rx(0, 7.074e6).unwrap();
+    r.tune_rx(3, 10.1e6).unwrap();
+    assert_eq!(r.active_rx(), 2);
+    r.idle_rx(0).unwrap();
+    assert_eq!(r.active_rx(), 1);
+    // idled channels read zeros
+    let n = r.caps().rx_channels;
+    let mut buf = vec![Iq32::default(); 480 * n];
+    let mut got = 0;
+    while got == 0 {
+        got = r.read_rx(&mut buf).unwrap();
+    }
+    assert!(buf[..got * n].chunks(n).all(|f| f[0] == Iq32::default()));
+    r.set_rx_rate(10).unwrap();
+    assert_eq!(r.active_rx(), 1, "a rate change keeps the tuned one");
+}
