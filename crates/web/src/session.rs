@@ -29,15 +29,32 @@ pub struct Shared {
     pub rx_channel: usize,
     /// Stage-2 RX decimation the hardware runs at (droop compensation).
     pub rx_r2: u16,
-    /// Initial dial frequency.
-    pub default_hz: f64,
-    /// FFTs per waterfall line at most.
-    pub wf_budget: usize,
+    /// The configuration's live settings (reloaded without a restart).
+    pub live: tokio::sync::watch::Receiver<Arc<web888_config::Config>>,
     pub busy: AtomicBool,
     pub generation: AtomicU64,
 }
 
 impl Shared {
+    /// Initial dial frequency: the configured one, else 7.074 MHz if in
+    /// range, else the middle of the range.
+    pub fn default_hz(&self) -> f64 {
+        let r = &self.radio;
+        let want = self.live.borrow().web.default_freq.unwrap_or(
+            if (r.rf_lo..=r.rf_hi).contains(&7_074_000.0) {
+                7_074_000.0
+            } else {
+                (r.rf_lo + r.rf_hi) / 2.0
+            },
+        );
+        want.clamp(r.rf_lo, r.rf_hi)
+    }
+
+    /// FFTs per waterfall line at most.
+    pub fn wf_budget(&self) -> usize {
+        self.live.borrow().web.wf_budget.max(1)
+    }
+
     fn hw(&self, c: HwCmd) {
         let _ = self.hw.lock().unwrap().send(c);
     }
@@ -100,7 +117,7 @@ impl Shared {
         if hz.is_finite() {
             hz.clamp(self.radio.rf_lo, self.radio.rf_hi)
         } else {
-            self.default_hz
+            self.default_hz()
         }
     }
 }
@@ -172,14 +189,14 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
     let mode = Mode::Usb;
     let defaults = AudioSpec::new(mode.into());
     let mut st = State {
-        hz: sh.default_hz,
+        hz: sh.default_hz(),
         mode,
         lo: defaults.lo_hz,
         hi: defaults.hi_hz,
         pitch: defaults.pitch_hz,
         agc: true,
         gain_db: 100.0,
-        wf: sh.full_view(sh.default_hz),
+        wf: sh.full_view(sh.default_hz()),
     };
     let spec = audio_spec(&st);
     sync_state(&mut st, &spec);
@@ -244,7 +261,7 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>) {
             spec: WfSpec {
                 fs,
                 bins: w.bins,
-                budget: sh.wf_budget,
+                budget: sh.wf_budget(),
                 fps: w.fps,
                 droop: Some((sh.radio.adc_hz, w.decim)),
             },

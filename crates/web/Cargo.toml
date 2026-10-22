@@ -19,6 +19,7 @@ crossbeam-channel = "0.5.17"
 hyper-util = { version = "0.1.21", features = ["server-auto", "tokio", "service", "http1", "http2"] }
 tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring", "logging", "tls12"] }
 rcgen = { version = "0.14.10", default-features = false, features = ["pem", "ring"] }
+web888-config.workspace = true
 
 [dev-dependencies]
 futures-util = "0.3.34"

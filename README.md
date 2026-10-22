@@ -36,6 +36,28 @@ rc-service sdrd stop      # the driver allows one opener
 Then point an HPSDR client (SparkSDR, SDR++ hermes source, Thetis, ...) at
 the unit at 48 kS/s. `rc-service sdrd start` brings the stock server back.
 
+### Configuration
+
+`web888d serve` reads `/etc/web888d/web888d.toml` (`--config`; a missing
+file means all defaults). Every option has a key there, options on the
+command line override the file, and `serve --print-config` prints the
+result, which also serves as a template:
+
+```toml
+[radio]
+backend = "iq"
+[radio.iq]
+source = "soapy:driver=hackrf"
+freq = 8.6e6
+gains = { LNA = 16, VGA = 20, AMP = 0 }
+[web]
+tls = "off"            # self-signed (default) | files | off
+```
+
+Changes are picked up within 2 s (or on SIGHUP): limits, auth and web
+defaults apply at once; radio, HPSDR and listen/TLS settings are logged
+as needing a restart. A file that doesn't parse is reported and ignored.
+
 ### Web UI
 
 `web888d serve` also serves the web UI on port 8073: HTTPS with a

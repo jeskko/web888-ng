@@ -47,8 +47,7 @@ async fn start() -> (std::net::SocketAddr, Arc<AtomicBool>) {
         },
         rx_channel: caps.rx_channels - 1,
         rx_r2: r2,
-        default_hz: 7_074_000.0,
-        wf_budget: 30,
+        live: tokio::sync::watch::channel(Arc::new(web888_config::Config::default())).1,
         busy: Default::default(),
         generation: Default::default(),
     });

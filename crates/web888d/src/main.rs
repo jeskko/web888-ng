@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! web888d (M1).
+//! web888d.
 //!
 //! `serve`: run the radio (simulated, or the stock driver on a unit) and
 //! offer its channels over HPSDR Protocol 1 (UDP 1024) and the web UI
@@ -19,10 +19,12 @@
 use clap::{Parser, Subcommand, ValueEnum};
 use std::io::Write;
 use std::net::UdpSocket;
+use std::path::PathBuf;
 use std::sync::Arc;
 use std::sync::atomic::AtomicBool;
 use std::sync::mpsc;
 use std::time::{Duration, Instant};
+use web888_config::{Backend, Config, TlsMode};
 use web888_dsp::chan::{ChannelSpec, Droop, design};
 use web888_dsp::demod::{Am, ssb};
 use web888_dsp::ols::OverlapSave;
@@ -45,73 +47,73 @@ enum Cmd {
     Serve(Box<ServeArgs>),
 }
 
-#[derive(Clone, Copy, ValueEnum)]
-enum Backend {
-    /// Simulated radio (real-time).
-    Sim,
-    /// Stock kernel driver /dev/zynqsdr (on the unit; stop the stock server first).
-    Zynqsdr,
-    /// Real signals: wideband IQ from an SDR or a recording (--iq ...),
-    /// channelized like the FPGA.
-    Iq,
-}
-
-#[derive(clap::Args)]
+/// `serve` options. Each overrides its key in the configuration file
+/// (`--print-config` shows the result); flags can only switch things on
+/// or off as named.
+#[derive(clap::Args, Clone)]
 struct ServeArgs {
-    #[arg(long, value_enum, default_value = "zynqsdr")]
-    backend: Backend,
+    /// Configuration file (TOML; a missing file means all defaults).
+    #[arg(long, default_value = web888_config::DEFAULT_PATH)]
+    config: PathBuf,
+    /// Print the effective configuration (file + options) and exit.
+    #[arg(long)]
+    print_config: bool,
+    /// Radio: sim (simulated), zynqsdr (/dev/zynqsdr; stop the stock server
+    /// first), iq (wideband IQ from an SDR or a recording, --iq ...).
+    #[arg(long)]
+    backend: Option<Backend>,
     /// Bitstream to load first (zynqsdr backend): a path, `auto` for the
     /// variant's file in /usr/share/web888 (web888-ng-os image) or else the
     /// stock one on the SD card, or `none` if it's already loaded.
-    #[arg(long, default_value = "auto")]
-    bitstream: String,
+    #[arg(long)]
+    bitstream: Option<String>,
     /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock to this
     /// frequency before loading the bitstream. Default: keep the FSBL setting.
     #[arg(long)]
     si5351_adc: Option<f64>,
-    /// HPSDR Protocol 1 listen address.
-    #[arg(long, default_value = "0.0.0.0:1024")]
-    hpsdr: String,
+    /// HPSDR Protocol 1 listen address [0.0.0.0:1024].
+    #[arg(long)]
+    hpsdr: Option<String>,
     /// Board id reported to HPSDR clients (1 = Hermes, 5 = Orion, 6 = Hermes-Lite).
-    #[arg(long, default_value_t = 1)]
-    hpsdr_board: u8,
+    #[arg(long)]
+    hpsdr_board: Option<u8>,
     /// Receivers offered to HPSDR clients (max 7; the web user's channel
     /// is not offered).
-    #[arg(long, default_value_t = 7)]
-    hpsdr_rx: usize,
+    #[arg(long)]
+    hpsdr_rx: Option<usize>,
     /// Don't serve HPSDR.
     #[arg(long)]
     no_hpsdr: bool,
-    /// Web UI listen address (HTTPS and plain HTTP on one port).
-    #[arg(long, default_value = "0.0.0.0:8073")]
-    http: String,
+    /// Web UI listen address, HTTPS and plain HTTP on one port [0.0.0.0:8073].
+    #[arg(long)]
+    http: Option<String>,
     /// Don't serve the web UI.
     #[arg(long)]
     no_web: bool,
-    /// Web UI files.
-    #[arg(long, default_value = "/usr/share/web888d/ui")]
-    ui_dir: std::path::PathBuf,
+    /// Web UI files [/usr/share/web888d/ui].
+    #[arg(long)]
+    ui_dir: Option<PathBuf>,
     /// TLS certificate and key (PEM); default: a self-signed pair in --state-dir.
     #[arg(long, requires = "tls_key")]
-    tls_cert: Option<std::path::PathBuf>,
+    tls_cert: Option<PathBuf>,
     #[arg(long, requires = "tls_cert")]
-    tls_key: Option<std::path::PathBuf>,
+    tls_key: Option<PathBuf>,
     /// Plain HTTP only (e.g. behind a TLS-terminating proxy).
     #[arg(long, conflicts_with = "tls_cert")]
     no_tls: bool,
-    /// Where web888d keeps state (the self-signed certificate).
-    #[arg(long, default_value = "/var/lib/web888d")]
-    state_dir: std::path::PathBuf,
+    /// Where web888d keeps state, e.g. the self-signed certificate [/var/lib/web888d].
+    #[arg(long)]
+    state_dir: Option<PathBuf>,
     /// RX channel for the web user (default: the last one).
     #[arg(long)]
     web_rx: Option<usize>,
     /// Initial web dial frequency in Hz (default: 7.074 MHz if in range).
     #[arg(long)]
     web_freq: Option<f64>,
-    /// Most FFTs averaged per waterfall line (CPU budget).
-    #[arg(long, default_value_t = 30)]
-    wf_budget: usize,
-    /// Simulated scene (sim backend): tones FREQ_HZ:DBFS.
+    /// Most FFTs averaged per waterfall line, a CPU budget [30].
+    #[arg(long)]
+    wf_budget: Option<usize>,
+    /// Simulated scene (sim backend): tones FREQ_HZ:DBFS (replaces the file's).
     #[arg(long = "tone", value_parser = parse_tone)]
     tones: Vec<(f64, f64)>,
     #[arg(long)]
@@ -124,15 +126,16 @@ struct ServeArgs {
     /// tuning works to +-1.5 x rate (out-of-band signals folded in).
     #[arg(long)]
     iq_freq: Option<f64>,
-    /// IQ input sample rate: 122.88 MHz / 8, 16, ..., 256.
-    #[arg(long, default_value_t = 7.68e6)]
-    iq_rate: f64,
-    /// Device gain element NAME=DB (soapy; repeatable), e.g. LNA=16, VGA=20, AMP=0.
+    /// IQ input sample rate: 122.88 MHz / 8, 16, ..., 256 [7.68e6].
+    #[arg(long)]
+    iq_rate: Option<f64>,
+    /// Device gain element NAME=DB (soapy; repeatable, replaces the file's),
+    /// e.g. LNA=16, VGA=20, AMP=0.
     #[arg(long = "iq-gain", value_parser = parse_gain)]
     iq_gains: Vec<(String, f64)>,
     /// Device analog bandwidth in Hz (soapy; default: the driver's choice).
-    #[arg(long, default_value_t = 0.0)]
-    iq_bw: f64,
+    #[arg(long)]
+    iq_bw: Option<f64>,
     /// Device antenna port (soapy).
     #[arg(long)]
     iq_antenna: Option<String>,
@@ -141,6 +144,80 @@ struct ServeArgs {
     iq_loop: bool,
     #[arg(short, long)]
     verbose: bool,
+}
+
+impl ServeArgs {
+    /// Apply the options given on the command line over `c`.
+    fn apply(&self, c: &mut Config) {
+        fn set<T: Clone>(dst: &mut T, v: &Option<T>) {
+            if let Some(v) = v {
+                *dst = v.clone();
+            }
+        }
+        let r = &mut c.radio;
+        set(&mut r.backend, &self.backend);
+        set(&mut r.bitstream, &self.bitstream);
+        if self.si5351_adc.is_some() {
+            r.si5351_adc = self.si5351_adc;
+        }
+        if !self.tones.is_empty() {
+            r.sim.tones = self.tones.iter().map(|&(f, l)| [f, l]).collect();
+        }
+        r.sim.noise |= self.noise;
+        if self.iq.is_some() {
+            r.iq.source = self.iq.clone();
+        }
+        if self.iq_freq.is_some() {
+            r.iq.freq = self.iq_freq;
+        }
+        set(&mut r.iq.rate, &self.iq_rate);
+        if !self.iq_gains.is_empty() {
+            r.iq.gains = self.iq_gains.iter().cloned().collect();
+        }
+        set(&mut r.iq.bandwidth, &self.iq_bw);
+        if self.iq_antenna.is_some() {
+            r.iq.antenna = self.iq_antenna.clone();
+        }
+        r.iq.loop_file |= self.iq_loop;
+
+        let h = &mut c.hpsdr;
+        set(&mut h.listen, &self.hpsdr);
+        set(&mut h.board, &self.hpsdr_board);
+        set(&mut h.receivers, &self.hpsdr_rx);
+        if self.no_hpsdr {
+            h.enabled = false;
+        }
+
+        let w = &mut c.web;
+        set(&mut w.listen, &self.http);
+        set(&mut w.ui_dir, &self.ui_dir);
+        set(&mut w.state_dir, &self.state_dir);
+        if self.tls_cert.is_some() {
+            w.tls = TlsMode::Files;
+            w.tls_cert = self.tls_cert.clone();
+            w.tls_key = self.tls_key.clone();
+        }
+        if self.no_tls {
+            w.tls = TlsMode::Off;
+        }
+        if self.web_rx.is_some() {
+            w.rx_channel = self.web_rx;
+        }
+        if self.web_freq.is_some() {
+            w.default_freq = self.web_freq;
+        }
+        set(&mut w.wf_budget, &self.wf_budget);
+        if self.no_web {
+            w.enabled = false;
+        }
+    }
+
+    /// The configuration file with the command line applied.
+    fn effective(&self) -> AnyResult<Config> {
+        let mut c = Config::load(&self.config)?;
+        self.apply(&mut c);
+        Ok(c)
+    }
 }
 
 #[derive(Clone, Copy, ValueEnum)]
@@ -191,20 +268,21 @@ fn parse_gain(s: &str) -> std::result::Result<(String, f64), String> {
     Ok((n.to_string(), g.parse().map_err(|e| format!("{e}"))?))
 }
 
-fn open_iq(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
+fn open_iq(a: &web888_config::Iq) -> AnyResult<Box<dyn Radio>> {
     use web888_iq::source::{FileSource, Format, IqSource};
     use web888_iq::{IqConfig, IqRadio};
-    let spec =
-        a.iq.as_deref()
-            .ok_or("--backend iq needs --iq file:PATH or --iq soapy:ARGS")?;
+    let spec = a
+        .source
+        .as_deref()
+        .ok_or("backend iq needs --iq file:PATH or --iq soapy:ARGS ([radio.iq] source)")?;
     let fc = a
-        .iq_freq
-        .ok_or("--backend iq needs --iq-freq (input centre frequency)")?;
-    let cfg = IqConfig::new(fc, a.iq_rate);
+        .freq
+        .ok_or("backend iq needs --iq-freq, the input centre frequency ([radio.iq] freq)")?;
+    let cfg = IqConfig::new(fc, a.rate);
     let src: Box<dyn IqSource> = if let Some(p) = spec.strip_prefix("file:") {
         let path = std::path::Path::new(p);
         let fmt = Format::from_path(path).ok_or("IQ file: use extension .cs8, .cs16 or .cf32")?;
-        Box::new(FileSource::open(path, fmt, a.iq_loop).map_err(|e| format!("{p}: {e}"))?)
+        Box::new(FileSource::open(path, fmt, a.loop_file).map_err(|e| format!("{p}: {e}"))?)
     } else if let Some(args) = spec.strip_prefix("soapy:") {
         open_soapy(args, fc, a)?
     } else {
@@ -212,10 +290,10 @@ fn open_iq(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
     };
     eprintln!(
         "iq: {spec}, {:.3} MS/s around {:.6} MHz (clean band {:.3}..{:.3} MHz)",
-        a.iq_rate / 1e6,
+        a.rate / 1e6,
         fc / 1e6,
-        (fc - 0.45 * a.iq_rate) / 1e6,
-        (fc + 0.45 * a.iq_rate) / 1e6
+        (fc - 0.45 * a.rate) / 1e6,
+        (fc + 0.45 * a.rate) / 1e6
     );
     Ok(Box::new(IqRadio::new(cfg, src)?))
 }
@@ -224,16 +302,16 @@ fn open_iq(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
 fn open_soapy(
     args: &str,
     fc: f64,
-    a: &ServeArgs,
+    a: &web888_config::Iq,
 ) -> AnyResult<Box<dyn web888_iq::source::IqSource>> {
     use web888_iq::source::{SoapyConfig, SoapySource};
     let c = SoapyConfig {
         args: args.to_string(),
         center_hz: fc,
-        rate_hz: a.iq_rate,
-        bandwidth_hz: a.iq_bw,
-        gains: a.iq_gains.clone(),
-        antenna: a.iq_antenna.clone(),
+        rate_hz: a.rate,
+        bandwidth_hz: a.bandwidth,
+        gains: a.gains.iter().map(|(k, v)| (k.clone(), *v)).collect(),
+        antenna: a.antenna.clone(),
     };
     Ok(Box::new(
         SoapySource::open(&c).map_err(|e| format!("soapy:{args}: {e}"))?,
@@ -241,7 +319,11 @@ fn open_soapy(
 }
 
 #[cfg(not(feature = "soapy"))]
-fn open_soapy(_: &str, _: f64, _: &ServeArgs) -> AnyResult<Box<dyn web888_iq::source::IqSource>> {
+fn open_soapy(
+    _: &str,
+    _: f64,
+    _: &web888_config::Iq,
+) -> AnyResult<Box<dyn web888_iq::source::IqSource>> {
     Err("this web888d was built without SoapySDR (cargo build --features soapy)".into())
 }
 
@@ -263,16 +345,16 @@ fn main() {
     }
 }
 
-type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error>>;
+type AnyResult<T> = std::result::Result<T, Box<dyn std::error::Error + Send + Sync>>;
 
-fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
+fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
     match a.backend {
         Backend::Sim => {
             let mut scene = Scene::new();
-            for &(f, l) in &a.tones {
+            for &[f, l] in &a.sim.tones {
                 scene = scene.tone(f, l);
             }
-            if a.noise {
+            if a.sim.noise {
                 scene = scene.adc_noise();
             }
             Ok(Box::new(SimRadio::new(SimConfig::hf(
@@ -280,7 +362,7 @@ fn open_radio(a: &ServeArgs) -> AnyResult<Box<dyn Radio>> {
                 Pacing::RealTime,
             ))))
         }
-        Backend::Iq => open_iq(a),
+        Backend::Iq => open_iq(&a.iq),
         Backend::Zynqsdr => {
             use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev, si5351};
             let mut cfg = ZynqConfig::default();
@@ -341,9 +423,72 @@ fn eth0_mac() -> [u8; 6] {
     mac
 }
 
+/// Set by SIGHUP: reload the configuration now.
+static RELOAD: AtomicBool = AtomicBool::new(false);
+
+extern "C" fn on_sighup(_: libc::c_int) {
+    RELOAD.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Reload the configuration when the file changes (checked every 2 s) or
+/// on SIGHUP. Settings that apply at once go out through `tx`; the others
+/// are logged as needing a restart. A broken file is logged and ignored.
+fn watch_config(a: ServeArgs, mut running: Config, tx: tokio::sync::watch::Sender<Arc<Config>>) {
+    // SAFETY: the handler only stores to an atomic
+    unsafe { libc::signal(libc::SIGHUP, on_sighup as *const () as libc::sighandler_t) };
+    let mtime = |p: &std::path::Path| std::fs::metadata(p).and_then(|m| m.modified()).ok();
+    let mut seen = mtime(&a.config);
+    loop {
+        std::thread::sleep(Duration::from_secs(2));
+        let now = mtime(&a.config);
+        let hup = RELOAD.swap(false, std::sync::atomic::Ordering::Relaxed);
+        if now == seen && !hup {
+            continue;
+        }
+        seen = now;
+        let new = match a.effective() {
+            Ok(c) => c,
+            Err(e) => {
+                eprintln!("config: not reloaded: {e}");
+                continue;
+            }
+        };
+        let ch = running.changes(&new);
+        if !ch.restart.is_empty() {
+            eprintln!(
+                "config: changes to [{}] take effect after a restart",
+                ch.restart.join("], [")
+            );
+        }
+        if ch.live {
+            eprintln!("config: reloaded");
+            let _ = tx.send(Arc::new(new.clone()));
+        }
+        running = new;
+    }
+}
+
 fn run_serve(a: ServeArgs) -> AnyResult<()> {
     use web888_hpsdr::{proto::Board, server};
-    let mut radio = open_radio(&a)?;
+    let cfg = a.effective()?;
+    if a.print_config {
+        print!("{}", cfg.to_toml());
+        return Ok(());
+    }
+    if std::fs::metadata(&a.config).is_ok() {
+        eprintln!("config: {}", a.config.display());
+    } else {
+        eprintln!("config: {} not found, using defaults", a.config.display());
+    }
+    let (live_tx, live_rx) = tokio::sync::watch::channel(Arc::new(cfg.clone()));
+    {
+        let (a, c) = (a.clone(), cfg.clone());
+        std::thread::Builder::new()
+            .name("config".into())
+            .spawn(move || watch_config(a, c, live_tx))?;
+    }
+
+    let mut radio = open_radio(&cfg.radio)?;
     let caps = radio.caps();
     let id = radio.identity();
     eprintln!(
@@ -357,38 +502,41 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     let stop = Arc::new(AtomicBool::new(false));
     let status = Arc::new(web888_hw::HwStatus::default());
     let (ctl_tx, ctl_rx) = mpsc::channel();
-    let web_rx = if a.no_web {
+    let web_rx = if !cfg.web.enabled {
         None
     } else {
-        let ch = a.web_rx.unwrap_or(caps.rx_channels - 1);
+        let ch = cfg.web.rx_channel.unwrap_or(caps.rx_channels - 1);
         if ch >= caps.rx_channels {
-            return Err(
-                format!("--web-rx {ch}: the radio has {} channels", caps.rx_channels).into(),
-            );
+            return Err(format!(
+                "web rx channel {ch}: the radio has {} channels",
+                caps.rx_channels
+            )
+            .into());
         }
         Some(ch)
     };
 
     let mut threads = Vec::new();
-    if !a.no_hpsdr {
+    if cfg.hpsdr.enabled {
+        let h = &cfg.hpsdr;
         let (sub, blk_rx, _drops) = web888_hw::Subscriber::new(64);
         ctl_tx.send(web888_hw::HwCmd::SubscribeRx(sub))?;
-        let sock = UdpSocket::bind(&a.hpsdr).map_err(|e| format!("bind {}: {e}", a.hpsdr))?;
+        let sock = UdpSocket::bind(&h.listen).map_err(|e| format!("bind {}: {e}", h.listen))?;
         // receivers map to channels 0..max_rx: keep the web user's out
-        let max_rx = a
-            .hpsdr_rx
+        let max_rx = h
+            .receivers
             .min(caps.rx_channels)
             .min(web_rx.unwrap_or(usize::MAX))
             .min(7);
-        let cfg = server::Config {
+        let scfg = server::Config {
             board: Board {
                 mac: eth0_mac(),
                 code_version: 1,
-                board_id: a.hpsdr_board,
+                board_id: h.board,
             },
             max_rx,
         };
-        let mut srv = server::Server::new(sock, cfg)?;
+        let mut srv = server::Server::new(sock, scfg)?;
         eprintln!(
             "hpsdr: listening on {} ({max_rx} receivers)",
             srv.local_addr()?
@@ -418,15 +566,8 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     }
 
     if let Some(ch) = web_rx {
+        let w = &cfg.web;
         let rf = caps.rf_range.clone();
-        let default_hz = a
-            .web_freq
-            .unwrap_or(if rf.contains(&7_074_000.0) {
-                7_074_000.0
-            } else {
-                (rf.start() + rf.end()) / 2.0
-            })
-            .clamp(*rf.start(), *rf.end());
         let shared = Arc::new(web888_web::session::Shared {
             hw: std::sync::Mutex::new(ctl_tx.clone()),
             status: status.clone(),
@@ -442,18 +583,17 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             },
             rx_channel: ch,
             rx_r2: r2,
-            default_hz,
-            wf_budget: a.wf_budget.max(1),
+            live: live_rx,
             busy: Default::default(),
             generation: Default::default(),
         });
-        let tls = match (&a.tls_cert, &a.tls_key) {
-            _ if a.no_tls => web888_web::Tls::Off,
-            (Some(cert), Some(key)) => web888_web::Tls::Files {
-                cert: cert.clone(),
-                key: key.clone(),
+        let tls = match w.tls {
+            TlsMode::Off => web888_web::Tls::Off,
+            TlsMode::Files => web888_web::Tls::Files {
+                cert: w.tls_cert.clone().ok_or("tls = \"files\" needs tls_cert")?,
+                key: w.tls_key.clone().ok_or("tls = \"files\" needs tls_key")?,
             },
-            _ => web888_web::Tls::SelfSigned(a.state_dir.clone()),
+            TlsMode::SelfSigned => web888_web::Tls::SelfSigned(w.state_dir.clone()),
         };
         let acceptor = web888_web::tls::acceptor(&tls).map_err(|e| format!("tls: {e}"))?;
         let rt = tokio::runtime::Builder::new_multi_thread()
@@ -462,15 +602,15 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             .enable_all()
             .build()?;
         let listener = rt
-            .block_on(tokio::net::TcpListener::bind(&a.http))
-            .map_err(|e| format!("bind {}: {e}", a.http))?;
+            .block_on(tokio::net::TcpListener::bind(&w.listen))
+            .map_err(|e| format!("bind {}: {e}", w.listen))?;
         eprintln!(
             "web: {}://{} (RX channel {ch}, UI from {})",
             if acceptor.is_some() { "https" } else { "http" },
             listener.local_addr()?,
-            a.ui_dir.display()
+            w.ui_dir.display()
         );
-        let app = web888_web::router(shared, a.ui_dir.clone());
+        let app = web888_web::router(shared, w.ui_dir.clone());
         let web_stop = stop.clone();
         threads.push(
             std::thread::Builder::new()

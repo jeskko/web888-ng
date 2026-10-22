@@ -1,0 +1,11 @@
+[package]
+name = "web888-config"
+description = "web888d configuration: TOML file, defaults, atomic save, change classification"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+serde = { version = "1.0.229", features = ["derive"] }
+toml = "1.1.8"
