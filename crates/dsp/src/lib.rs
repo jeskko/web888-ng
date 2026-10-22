@@ -2,11 +2,15 @@
 //! DSP building blocks for web888d. Samples are `Complex32` (f32 I/Q);
 //! design-time math is f64.
 
+pub mod agc;
+pub mod audio;
 pub mod chan;
+pub mod decim;
 pub mod demod;
 pub mod fir;
 pub mod nco;
 pub mod ols;
+pub mod wf;
 
 pub use num_complex::Complex32 as C32;
 

@@ -21,8 +21,14 @@ impl OverlapSave {
     /// `taps[0]` applies to the newest sample. FFT size defaults to the next
     /// power of two >= 4 * len (at least 256).
     pub fn new(taps: &[C32]) -> Self {
+        Self::with_fft_size(taps, (4 * taps.len()).next_power_of_two().max(256))
+    }
+
+    /// FFT size `n` (power of two, > taps): smaller means less latency
+    /// (outputs come in blocks of `n - taps + 1`) at more cost per sample.
+    pub fn with_fft_size(taps: &[C32], n: usize) -> Self {
         let m = taps.len();
-        let n = (4 * m).next_power_of_two().max(256);
+        assert!(n.is_power_of_two() && n > m);
         let mut planner = FftPlanner::new();
         let fwd = planner.plan_fft_forward(n);
         let inv = planner.plan_fft_inverse(n);

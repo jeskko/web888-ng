@@ -88,7 +88,9 @@ RxBlock ─▶ pick channel ─▶ rx_to_c32 ─▶ decimate ×4 (FIR, flat to �
   `Droop::Rx` depends only on f, so `design()` works at 12 k unchanged.
 * Modes and default passbands: USB 300..2700, LSB −2700..−300, CW ±250
   around the carrier with the pitch shift (default 700 Hz), AM ±5000. The
-  UI sends `lo/hi` within per-mode limits (AM up to ±5.5 kHz at 12 k).
+  UI sends `lo/hi`; edges are clamped to ±5 kHz (the pre-decimation filter
+  is flat to 5.3 kHz, 160 taps). The channel filter's overlap-save FFT is
+  sized for about 60 ms blocks (latency) rather than the default 150 ms.
   On a filter change, the new taps are designed on the audio thread
   (a few ms) and swapped in between blocks.
 * Tuning: the hardware NCO is set to the dial frequency (the carrier). CW
@@ -107,8 +109,10 @@ RxBlock ─▶ pick channel ─▶ rx_to_c32 ─▶ decimate ×4 (FIR, flat to �
 * FFT size `N = max(1024, next_pow2(2·bins))`, ≤ 8192. Window:
   4-term Blackman-Harris. Hop: N/2.
 * Per frame interval (1/fps): sum |X|² over all FFTs that fit, capped by a
-  **budget** (FFTs per frame, `--wf-budget`, adaptive later). Above the budget,
-  skip input between FFTs evenly instead of only taking the start.
+  **budget** (FFTs per frame, `--wf-budget`, adaptive later). The engine
+  streams with bounded memory: an FFT every `stride` samples, stride =
+  max(N/2, samples in the previous line / budget), so above the budget the
+  FFTs spread evenly over the interval instead of taking only the start.
 * Narrow spans (fewer than N/2 new samples per interval): the hop shrinks
   so that each frame still has ≥ 1 FFT over the newest N samples (a
   sliding window). Frames never wait longer than 1/fps.
@@ -177,7 +181,7 @@ Waterfall (`kind = 2`), one line:
 | 8 | f64 | frequency of the first bin's centre (Hz) |
 | 16 | f64 | bin width (Hz) |
 | 24 | f32 | dB of value 0 (dBFS) |
-| 28 | f32 | dB per step (0.5) |
+| 28 | f32 | dB per step (160/255: −160..0 dBFS) |
 | 32 | f64 | time, Unix ms (of the end of the interval) |
 | 40 | u8 × bins | levels |
 
