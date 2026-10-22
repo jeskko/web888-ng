@@ -36,7 +36,12 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .num { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 4ch; }
 
 .smeter { display: flex; align-items: center; gap: 8px; margin-left: auto; }
-.smeter .bar { width: 140px; height: 10px; background: #0a0d14; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+.smeter .bar { position: relative; width: 140px; height: 10px; background: #0a0d14; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
+.smeter .sql { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--warn); }
+.seg { display: inline-flex; }
+.seg button { padding: 4px 7px; border-radius: 0; }
+.seg button:first-child { border-radius: 4px 0 0 4px; }
+.seg button:last-child { border-radius: 0 4px 4px 0; }
 .smeter .fill { height: 100%; background: linear-gradient(90deg, #2a7a4a, var(--ok) 60%, var(--warn) 85%, var(--bad)); transition: width 60ms linear; }
 .lamp { font-size: 11px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--dim); }
 .lamp.lit { background: var(--bad); color: #fff; border-color: var(--bad); }

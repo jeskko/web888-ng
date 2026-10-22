@@ -2,8 +2,10 @@
 //! One receiver's audio chain, from hardware RX samples to audio:
 //!
 //! ```text
-//! Iq32 @ rx rate ─▶ decimate to 12 kS/s ─▶ channel filter (CIC droop folded in)
-//!   ─▶ CW: shift by +pitch ─▶ demod ─▶ AGC or fixed gain ─▶ f32 audio
+//! Iq32 @ rx rate ─▶ NB ─▶ decimate to 12 kS/s ─▶ channel filter (CIC droop
+//!   folded in; its power is the S-meter and the squelch's input)
+//!   ─▶ CW: shift by +pitch ─▶ demod (AM with AGC: carrier-referenced)
+//!   ─▶ NR ─▶ SSB/CW: AGC, or fixed gain ─▶ squelch ─▶ f32 audio
 //! ```
 //!
 //! The hardware NCO sits on the dial frequency (the carrier); the passband
@@ -14,8 +16,11 @@ use crate::agc::{Agc, AgcSpec};
 use crate::chan::{ChannelSpec, Droop, design};
 use crate::decim::Decimator;
 use crate::demod::{Am, ssb};
+use crate::nb::NoiseBlanker;
 use crate::nco::Shifter;
+use crate::nr::NoiseReduction;
 use crate::ols::OverlapSave;
+use crate::squelch::Squelch;
 use crate::{C32, rx_to_c32};
 use web888_radio::Iq32;
 
@@ -42,6 +47,12 @@ pub struct AudioSpec {
     /// `None`: fixed gain `gain_db`.
     pub agc: Option<AgcSpec>,
     pub gain_db: f32,
+    /// Noise blanker threshold (impulse / mean magnitude); `None`: off.
+    pub nb: Option<f32>,
+    /// Noise reduction strength 0..1 (0: off).
+    pub nr: f32,
+    /// Squelch threshold (channel power, dBFS); `None`: off.
+    pub squelch_db: Option<f32>,
 }
 
 impl AudioSpec {
@@ -60,6 +71,9 @@ impl AudioSpec {
             pitch_hz: 700.0,
             agc: Some(agc),
             gain_db: 0.0,
+            nb: None,
+            nr: 0.0,
+            squelch_db: None,
         }
     }
 
@@ -70,6 +84,13 @@ impl AudioSpec {
         self.hi_hz = self.hi_hz.clamp(self.lo_hz + 50.0, MAX_EDGE_HZ);
         self.pitch_hz = self.pitch_hz.clamp(200.0, 2000.0);
         self.gain_db = self.gain_db.clamp(-20.0, 100.0);
+        self.nb = self.nb.map(|k| k.clamp(2.0, 50.0));
+        self.nr = if self.nr.is_finite() {
+            self.nr.clamp(0.0, 1.0)
+        } else {
+            0.0
+        };
+        self.squelch_db = self.squelch_db.map(|d| d.clamp(-160.0, 0.0));
         self
     }
 
@@ -92,10 +113,14 @@ pub struct AudioChain {
     am: Am,
     agc: Option<Agc>,
     gain: f32,
+    nb: Option<NoiseBlanker>,
+    nr: Option<NoiseReduction>,
+    squelch: Option<Squelch>,
     // scratch
     x: Vec<C32>,
     y: Vec<C32>,
     z: Vec<C32>,
+    pw: Vec<f32>,
     // channel power since the last `take_power`
     pow_sum: f64,
     pow_n: usize,
@@ -120,9 +145,13 @@ impl AudioChain {
             am: Am::new(AUDIO_RATE),
             agc: spec.agc.map(|a| Agc::new(a, AUDIO_RATE)),
             gain: Self::gain(&spec),
+            nb: spec.nb.map(NoiseBlanker::new),
+            nr: (spec.nr > 0.0).then(|| NoiseReduction::new(spec.nr)),
+            squelch: spec.squelch_db.map(|d| Squelch::new(d, AUDIO_RATE)),
             x: Vec::new(),
             y: Vec::new(),
             z: Vec::new(),
+            pw: Vec::new(),
             pow_sum: 0.0,
             pow_n: 0,
         }
@@ -159,7 +188,27 @@ impl AudioChain {
             self.am = Am::new(AUDIO_RATE);
         }
         self.gain = Self::gain(&spec);
+        match (spec.nb, &mut self.nb) {
+            (None, _) => self.nb = None,
+            (Some(k), Some(nb)) => nb.set_threshold(k),
+            (Some(k), None) => self.nb = Some(NoiseBlanker::new(k)),
+        }
+        match (spec.nr > 0.0, &mut self.nr) {
+            (false, _) => self.nr = None,
+            (true, Some(nr)) => nr.set_strength(spec.nr),
+            (true, None) => self.nr = Some(NoiseReduction::new(spec.nr)),
+        }
+        match (spec.squelch_db, &mut self.squelch) {
+            (None, _) => self.squelch = None,
+            (Some(d), Some(sq)) => sq.set_threshold(d),
+            (Some(d), None) => self.squelch = Some(Squelch::new(d, AUDIO_RATE)),
+        }
         self.spec = spec;
+    }
+
+    /// The squelch is on and closed.
+    pub fn squelched(&self) -> bool {
+        self.squelch.as_ref().is_some_and(|s| !s.is_open())
     }
 
     /// Mean channel power (dBFS, before AGC) since the last call, if any
@@ -186,29 +235,47 @@ impl AudioChain {
     pub fn process(&mut self, rx: impl IntoIterator<Item = Iq32>, out: &mut Vec<f32>) {
         self.x.clear();
         self.x.extend(rx.into_iter().map(rx_to_c32));
+        if let Some(nb) = &mut self.nb {
+            nb.process(&mut self.x);
+        }
         self.y.clear();
         self.decim.process(&self.x, &mut self.y);
         self.z.clear();
         self.filter.process(&self.y, &mut self.z);
-        for s in &self.z {
-            self.pow_sum += s.norm_sqr() as f64;
-        }
+        self.pw.clear();
+        self.pw.extend(self.z.iter().map(|s| s.norm_sqr()));
+        self.pow_sum += self.pw.iter().map(|&p| p as f64).sum::<f64>();
         self.pow_n += self.z.len();
         let start = out.len();
+        let carrier_agc = self.spec.mode == Mode::Am && self.agc.is_some();
         match self.spec.mode {
             Mode::Usb | Mode::Lsb => ssb(&self.z, out),
             Mode::Cw => {
                 self.shift.process(&mut self.z);
                 ssb(&self.z, out);
             }
-            Mode::Am => self.am.process(&self.z, out),
+            Mode::Am => match self.spec.agc {
+                Some(a) => {
+                    let min_carrier = 10f32.powf(-a.max_gain_db / 20.0);
+                    self.am
+                        .process_carrier_agc(&self.z, out, a.target, min_carrier)
+                }
+                None => self.am.process(&self.z, out),
+            },
         }
         let a = &mut out[start..];
+        if let Some(nr) = &mut self.nr {
+            nr.process(a);
+        }
         match &mut self.agc {
+            Some(_) if carrier_agc => {}
             Some(agc) => agc.process(a),
             None => a
                 .iter_mut()
                 .for_each(|x| *x = (*x * self.gain).clamp(-1.0, 1.0)),
+        }
+        if let Some(sq) = &mut self.squelch {
+            sq.process(&self.pw, a);
         }
     }
 }

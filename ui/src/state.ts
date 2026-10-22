@@ -8,7 +8,7 @@ import { Player, type PlayerStats } from "./audio/player.ts";
 import { clamp, formatKhz } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
-import type { AudioFrame, Limits, Mode, RadioInfo, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
+import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { FLAG_GAP, FLAG_OVERLOAD } from "./proto.ts";
 
 export const conn = signal<ConnState>("connecting");
@@ -191,8 +191,13 @@ export function setPassband(lo: number, hi: number): void {
 }
 
 export function setAgc(agc: boolean, gain_db?: number): void {
-  update({ agc, ...(gain_db !== undefined ? { gain_db } : {}) });
-  link?.send({ type: "audio", agc, gain_db });
+  setAudio({ agc, ...(gain_db !== undefined ? { gain_db } : {}) });
+}
+
+/** AGC, noise blanker, noise reduction, squelch. */
+export function setAudio(p: AudioReq): void {
+  update(p);
+  link?.send({ type: "audio", ...p });
 }
 
 /** Throttled: dragging sends at most every 100 ms, and always the last. */

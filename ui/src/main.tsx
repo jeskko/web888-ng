@@ -7,6 +7,7 @@ import {
   AudioCtl,
   Bandwidth,
   ContrastCtl,
+  DspCtl,
   FreqDisplay,
   LeaseBanner,
   ModeBar,
@@ -79,6 +80,7 @@ function App() {
       <footer>
         <div class="controls">
           <AudioCtl />
+          <DspCtl />
           <ZoomCtl />
           <ContrastCtl />
           <ShareCtl />

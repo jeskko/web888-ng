@@ -4,7 +4,7 @@
 
 import { useSignal } from "@preact/signals";
 import { bandwidths, formatKhz, parseFreq } from "../fmt.ts";
-import { MODES, wfSpan } from "../proto.ts";
+import { MODES, wfSpan, type AgcSpeed } from "../proto.ts";
 import {
   audioGaps,
   lease,
@@ -24,6 +24,7 @@ import {
   rssi,
   server,
   setAgc,
+  setAudio,
   setMode,
   setPassband,
   setView,
@@ -117,9 +118,18 @@ export function AudioCtl() {
   if (!s) return null;
   return (
     <div class="group">
-      <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control">
+      <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control (AM: follows the carrier)">
         AGC
       </button>
+      {s.agc && s.mode !== "am" && (
+        <span class="seg" title="AGC recovery: fast, medium, slow">
+          {(["fast", "medium", "slow"] as AgcSpeed[]).map((v) => (
+            <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
+              {v[0].toUpperCase()}
+            </button>
+          ))}
+        </span>
+      )}
       <label title={s.agc ? "Maximum AGC gain" : "Fixed gain"}>
         {s.agc ? "max" : "gain"}
         <input
@@ -143,6 +153,79 @@ export function AudioCtl() {
         onInput={(e) => setVolume(Number(e.currentTarget.value), false)}
         title="Volume"
       />
+    </div>
+  );
+}
+
+/** Last levels of the noise blanker and noise reduction, for turning
+ * them back on. */
+const nbLevel = { v: 8 };
+const nrLevel = { v: 0.6 };
+
+/** Noise blanker, noise reduction, squelch. */
+export function DspCtl() {
+  const s = st.value;
+  if (!s) return null;
+  if (s.nb > 0) nbLevel.v = s.nb;
+  if (s.nr > 0) nrLevel.v = s.nr;
+  return (
+    <div class="group">
+      <button
+        class={s.nb > 0 ? "on" : ""}
+        onClick={() => setAudio({ nb: s.nb > 0 ? 0 : nbLevel.v })}
+        title="Noise blanker: removes short impulses (ignition, switching noise)"
+      >
+        NB
+      </button>
+      {s.nb > 0 && (
+        <input
+          type="range"
+          min={3}
+          max={30}
+          step={0.5}
+          value={33 - s.nb}
+          onInput={(e) => setAudio({ nb: 33 - Number(e.currentTarget.value) })}
+          title={`Blanker sensitivity: impulses over ${s.nb.toFixed(1)} x the average`}
+        />
+      )}
+      <button
+        class={s.nr > 0 ? "on" : ""}
+        onClick={() => setAudio({ nr: s.nr > 0 ? 0 : nrLevel.v })}
+        title="Noise reduction: lowers steady background noise"
+      >
+        NR
+      </button>
+      {s.nr > 0 && (
+        <input
+          type="range"
+          min={0.1}
+          max={1}
+          step={0.05}
+          value={s.nr}
+          onInput={(e) => setAudio({ nr: Number(e.currentTarget.value) })}
+          title={`Noise reduction strength ${(s.nr * 100).toFixed(0)} %`}
+        />
+      )}
+      <button
+        class={s.squelch ? "on" : ""}
+        onClick={() => setAudio({ squelch: !s.squelch })}
+        title="Squelch: mute while the signal is below the threshold (marked on the S-meter)"
+      >
+        SQL
+      </button>
+      {s.squelch && (
+        <>
+          <input
+            type="range"
+            min={-140}
+            max={-20}
+            value={s.squelch_db}
+            onInput={(e) => setAudio({ squelch_db: Number(e.currentTarget.value) })}
+            title="Squelch threshold"
+          />
+          <span class="num">{s.squelch_db.toFixed(0)} dB</span>
+        </>
+      )}
     </div>
   );
 }
@@ -278,12 +361,15 @@ export function SMeter() {
   const p = rssi.value;
   const lo = -140;
   const hi = -20;
-  const t = Math.min(1, Math.max(0, (p - lo) / (hi - lo)));
+  const pos = (db: number) => Math.min(1, Math.max(0, (db - lo) / (hi - lo)));
+  const t = pos(p);
   const over = performance.now() - overloadAt.value < 1000;
+  const s = st.value;
   return (
     <div class="smeter" title="Channel power before AGC (dBFS)">
       <div class="bar">
         <div class="fill" style={{ width: `${(t * 100).toFixed(1)}%` }} />
+        {s?.squelch && <div class="sql" style={{ left: `${(pos(s.squelch_db) * 100).toFixed(1)}%` }} title="Squelch threshold" />}
       </div>
       <span class="num">{p > -199 ? `${p.toFixed(1)} dBFS` : "—"}</span>
       <span class={over ? "lamp lit" : "lamp"} title="ADC overload">

@@ -114,10 +114,118 @@ fn am_demodulates_with_agc() {
     let scene = Scene::new().am(F0, -50.0, 1000.0, 0.5);
     let (a, p) = run(scene, AudioSpec::new(Mode::Am), 2.0);
     let tone = amp(&a[6000..], 1000.0);
-    // the AGC follows the demodulated audio's peaks (not the carrier)
+    // carrier-referenced: 100 % modulation peaks at the target, so 50 %
+    // gives half of it
     let target = 0.3;
-    assert!((tone / target - 1.0).abs() < 0.05, "tone {tone}");
+    assert!((tone / (0.5 * target) - 1.0).abs() < 0.05, "tone {tone}");
     assert!(p < -45.0 && p > -52.0, "power {p}");
+}
+
+#[test]
+fn am_agc_keeps_the_modulation_depth_at_any_level() {
+    // 50 % at -70 dBFS and 25 % at -20 dBFS: the same loudness for the
+    // same depth, and the shallower one 6 dB quieter
+    let (weak, _) = run(
+        Scene::new().am(F0, -70.0, 1000.0, 0.5),
+        AudioSpec::new(Mode::Am),
+        2.0,
+    );
+    let (strong, _) = run(
+        Scene::new().am(F0, -20.0, 1000.0, 0.25),
+        AudioSpec::new(Mode::Am),
+        2.0,
+    );
+    let w = db(amp(&weak[6000..], 1000.0));
+    let s = db(amp(&strong[6000..], 1000.0));
+    assert!((w - db(0.15)).abs() < 0.5, "weak {w:.2} dB");
+    assert!(
+        (w - s - 6.02).abs() < 0.5,
+        "depth difference {:.2} dB",
+        w - s
+    );
+}
+
+#[test]
+fn noise_blanker_restores_a_tone_under_impulses() {
+    // USB: a -100 dBFS tone at +1 kHz in noise (about 15 dB SNR in the
+    // passband), plus 100 Hz impulses 40 dB over the tone, a few samples
+    // long as they leave the hardware CIC
+    let fs: f64 = 48_000.0;
+    let secs = 3.0;
+    let n = (fs * secs) as usize;
+    let mut rng = 0x1234_5678u64;
+    let mut gauss = || {
+        let mut u = || {
+            rng ^= rng << 13;
+            rng ^= rng >> 7;
+            rng ^= rng << 17;
+            ((rng >> 11) as f64 + 0.5) / (1u64 << 53) as f64
+        };
+        let (a, b) = (u(), u());
+        let r = (-2.0 * a.ln()).sqrt();
+        (
+            r * (2.0 * std::f64::consts::PI * b).cos(),
+            r * (2.0 * std::f64::consts::PI * b).sin(),
+        )
+    };
+    let tone_a = 10f64.powf(-100.0 / 20.0);
+    let noise_rms = tone_a * 10f64.powf(-15.0 / 20.0) * (fs / 2400.0).sqrt() / 2f64.sqrt();
+    let full = RX_SINE_FULL_SCALE;
+    let clean: Vec<Iq32> = (0..n)
+        .map(|k| {
+            let ph = 2.0 * std::f64::consts::PI * 1000.0 * k as f64 / fs;
+            let (gi, gq) = gauss();
+            Iq32 {
+                i: ((tone_a * ph.cos() + noise_rms * gi) * full) as i32,
+                q: ((tone_a * ph.sin() + noise_rms * gq) * full) as i32,
+            }
+        })
+        .collect();
+    let mut noisy = clean.clone();
+    for k in (0..n).step_by(480) {
+        for (j, a) in [0.5, 1.0, 0.7, 0.3].iter().enumerate() {
+            if k + j < n {
+                noisy[k + j].i += (a * 100.0 * tone_a * full) as i32;
+                noisy[k + j].q -= (a * 60.0 * tone_a * full) as i32;
+            }
+        }
+    }
+    let snr = |iq: &[Iq32], nb: Option<f32>| {
+        let mut spec = fixed(Mode::Usb);
+        spec.gain_db = 60.0;
+        spec.nb = nb;
+        let mut chain = AudioChain::new(spec, fs, Droop::None);
+        let mut out = Vec::new();
+        for c in iq.chunks(240) {
+            chain.process(c.iter().copied(), &mut out);
+        }
+        let a = &out[6000..];
+        let t = amp(a, 1000.0);
+        let total = a.iter().map(|v| (*v as f64).powi(2)).sum::<f64>() / a.len() as f64;
+        db(t / 2f64.sqrt()) - 0.5 * db(total - t * t / 2.0)
+    };
+    let clean_snr = snr(&clean, None);
+    let hit = snr(&noisy, None);
+    let blanked = snr(&noisy, Some(8.0));
+    eprintln!("SNR: clean {clean_snr:.1} dB, impulses {hit:.1} dB, blanked {blanked:.1} dB");
+    assert!(
+        hit < clean_snr - 10.0,
+        "impulses: {hit:.1} dB (clean {clean_snr:.1})"
+    );
+    assert!(
+        blanked > clean_snr - 3.0,
+        "blanked: {blanked:.1} dB (clean {clean_snr:.1}, hit {hit:.1})"
+    );
+}
+
+#[test]
+fn squelch_mutes_a_quiet_channel() {
+    let mut spec = AudioSpec::new(Mode::Am);
+    spec.squelch_db = Some(-60.0);
+    let (a, _) = run(Scene::new().adc_noise(), spec, 1.0);
+    assert!(a.iter().all(|&x| x == 0.0), "closed on noise");
+    let (a, _) = run(Scene::new().am(F0, -40.0, 1000.0, 0.5), spec, 1.0);
+    assert!(amp(&a, 1000.0) > 0.1, "open on a signal");
 }
 
 #[test]

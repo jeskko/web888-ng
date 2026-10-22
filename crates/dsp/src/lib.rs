@@ -8,8 +8,11 @@ pub mod chan;
 pub mod decim;
 pub mod demod;
 pub mod fir;
+pub mod nb;
 pub mod nco;
+pub mod nr;
 pub mod ols;
+pub mod squelch;
 pub mod wf;
 
 pub use num_complex::Complex32 as C32;

@@ -36,4 +36,25 @@ impl Am {
             out.push(e - self.dc);
         }
     }
+
+    /// Carrier-referenced AGC: the audio relative to the carrier, scaled so
+    /// that 100 % modulation peaks at `target`. The modulation depth is
+    /// kept (a peak AGC would bring every signal to the same loudness);
+    /// `min_carrier` caps the gain.
+    pub fn process_carrier_agc(
+        &mut self,
+        input: &[C32],
+        out: &mut Vec<f32>,
+        target: f32,
+        min_carrier: f32,
+    ) {
+        for z in input {
+            let e = z.norm();
+            if self.dc == 0.0 {
+                self.dc = e; // start on the carrier, not from silence
+            }
+            self.dc += self.alpha * (e - self.dc);
+            out.push(((e - self.dc) / self.dc.max(min_carrier) * target).clamp(-1.0, 1.0));
+        }
+    }
 }

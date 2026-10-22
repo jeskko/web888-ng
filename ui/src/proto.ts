@@ -6,6 +6,7 @@
 export const PROTO = 2;
 
 export type Mode = "usb" | "lsb" | "cw" | "am";
+export type AgcSpeed = "fast" | "medium" | "slow";
 export const MODES: Mode[] = ["usb", "lsb", "cw", "am"];
 
 export interface WfReq {
@@ -39,11 +40,30 @@ export interface State {
   pitch: number;
   agc: boolean;
   gain_db: number;
+  agc_speed: AgcSpeed;
+  /** Noise blanker threshold (impulse / mean level); 0: off. */
+  nb: number;
+  /** Noise reduction strength 0..1; 0: off. */
+  nr: number;
+  squelch: boolean;
+  /** Squelch threshold, channel power (dBFS). */
+  squelch_db: number;
   wf: WfReq;
   /** Others see this user's frequency and may listen along. */
   share: boolean;
   /** The user listened along to (the dial follows theirs). */
   listen: number | null;
+}
+
+/** Audio settings to change (the others stay). */
+export interface AudioReq {
+  agc?: boolean;
+  gain_db?: number;
+  agc_speed?: AgcSpeed;
+  nb?: number;
+  nr?: number;
+  squelch?: boolean;
+  squelch_db?: number;
 }
 
 /** Another user's receiver: a marker on the scale. */
@@ -85,7 +105,7 @@ export type ClientMsg =
   | { type: "hello"; proto: number; codecs: string[] }
   | { type: "tune"; hz: number }
   | { type: "mode"; mode: Mode; lo?: number; hi?: number; pitch?: number }
-  | { type: "audio"; agc?: boolean; gain_db?: number }
+  | ({ type: "audio" } & AudioReq)
   | ({ type: "wf" } & WfReq)
   | { type: "ping"; t: number }
   | { type: "share"; on: boolean }

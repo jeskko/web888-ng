@@ -139,11 +139,14 @@ fn audio_spec(s: &State) -> AudioSpec {
     a.hi_hz = s.hi;
     a.pitch_hz = s.pitch;
     a.gain_db = s.gain_db;
+    a.nb = (s.nb > 0.0).then_some(s.nb);
+    a.nr = s.nr;
+    a.squelch_db = s.squelch.then_some(s.squelch_db);
     a.agc = if s.agc {
         let base = if s.mode == Mode::Am {
             AgcSpec::am()
         } else {
-            AgcSpec::ssb()
+            AgcSpec::ssb_at(s.agc_speed.into())
         };
         Some(AgcSpec {
             max_gain_db: s.gain_db,
@@ -161,6 +164,11 @@ fn sync_state(s: &mut State, a: &AudioSpec) {
     s.hi = a.hi_hz;
     s.pitch = a.pitch_hz;
     s.gain_db = a.gain_db;
+    s.nb = a.nb.unwrap_or(0.0);
+    s.nr = a.nr;
+    if let Some(d) = a.squelch_db {
+        s.squelch_db = d;
+    }
 }
 
 /// A session's place: counted per client address; its waterfall is
@@ -416,9 +424,26 @@ impl Session<'_> {
                 self.publish();
                 vec![st(self)]
             }
-            ClientMsg::Audio { agc, gain_db } => {
-                self.st.agc = agc.unwrap_or(self.st.agc);
-                self.st.gain_db = gain_db.unwrap_or(self.st.gain_db);
+            ClientMsg::Audio {
+                agc,
+                gain_db,
+                agc_speed,
+                nb,
+                nr,
+                squelch,
+                squelch_db,
+            } => {
+                let s = &mut self.st;
+                s.agc = agc.unwrap_or(s.agc);
+                s.gain_db = gain_db.unwrap_or(s.gain_db);
+                s.agc_speed = agc_speed.unwrap_or(s.agc_speed);
+                s.nb = nb.filter(|v| v.is_finite()).unwrap_or(s.nb);
+                s.nr = nr.filter(|v| v.is_finite()).unwrap_or(s.nr);
+                s.squelch = squelch.unwrap_or(s.squelch);
+                s.squelch_db = squelch_db
+                    .filter(|v| v.is_finite())
+                    .unwrap_or(s.squelch_db)
+                    .clamp(-160.0, 0.0);
                 let a = audio_spec(&self.st);
                 sync_state(&mut self.st, &a);
                 let _ = self.audio.send(AudioCmd::Spec(a));
@@ -479,6 +504,11 @@ pub async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: std::net::SocketAddr)
         pitch: defaults.pitch_hz,
         agc: true,
         gain_db: 100.0,
+        agc_speed: Default::default(),
+        nb: 0.0,
+        nr: 0.0,
+        squelch: false,
+        squelch_db: -100.0,
         wf: sh.full_view(hz),
         share: sh.live.borrow().limits.share_default,
         listen: None,

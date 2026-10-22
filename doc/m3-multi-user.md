@@ -171,6 +171,21 @@ Each block gets unit tests in `crates/dsp` like the M2 ones (e.g. NB: a
 -60 dBFS tone with 100 Hz impulses at +40 dB, tone SNR restored within
 3 dB of the impulse-free case).
 
+As built (step 6), chain order: NB (48 kS/s, 4-sample look-ahead, 4
+after, threshold x running mean) -> decimate -> channel filter -> channel
+power (S-meter, squelch) -> demod (AM with AGC: audio / carrier x target,
+so 100 % modulation peaks at the target at any carrier level) -> NR
+(256-point frames, 50 % sqrt-Hann, minimum statistics over ~1.4 s, gain
+1 - 3 x strength x noise / power, floor -20 dB at full strength, smoothed)
+-> SSB/CW AGC (fast 0.1 s / 40 dB/s, medium 0.3 s / 20 dB/s, slow 0.8 s /
+10 dB/s) or fixed gain -> squelch (opens at the threshold, closes 3 dB
+under it after 0.3 s, 5 ms fades). NR treats a carrier steady for longer
+than its window as noise. Tests: NB tone SNR 15.9 dB clean, -5.8 dB
+with impulses, 13.9 dB blanked; NR keyed tone within 1 dB, noise beside
+it > 10 dB down; AM 50 % at -70 dBFS vs 25 % at -20 dBFS 6 dB apart.
+Protocol: `state` and `audio` gain `agc_speed`, `nb` (threshold, 0 =
+off), `nr` (0..1), `squelch`, `squelch_db`.
+
 ## 6. Configuration
 
 * TOML file (`--config`, default `/etc/web888d/web888d.toml`); every CLI

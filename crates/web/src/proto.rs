@@ -53,10 +53,21 @@ pub enum ClientMsg {
         pitch: Option<f64>,
     },
     /// AGC on/off; `gain_db` is the fixed gain without AGC, the maximum
-    /// gain with it.
+    /// gain with it. Noise blanker threshold and noise reduction strength
+    /// (0: off), squelch on/off and threshold (channel dBFS).
     Audio {
         agc: Option<bool>,
         gain_db: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agc_speed: Option<AgcSpeed>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        nb: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        nr: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        squelch: Option<bool>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        squelch_db: Option<f32>,
     },
     Wf(WfReq),
     Ping {
@@ -72,6 +83,27 @@ pub enum ClientMsg {
     Listen {
         user: Option<u64>,
     },
+}
+
+/// SSB/CW AGC recovery speed.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
+#[serde(rename_all = "lowercase")]
+pub enum AgcSpeed {
+    Fast,
+    #[default]
+    Medium,
+    Slow,
+}
+
+impl From<AgcSpeed> for web888_dsp::agc::AgcSpeed {
+    fn from(s: AgcSpeed) -> Self {
+        use web888_dsp::agc::AgcSpeed as S;
+        match s {
+            AgcSpeed::Fast => S::Fast,
+            AgcSpeed::Medium => S::Medium,
+            AgcSpeed::Slow => S::Slow,
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -109,6 +141,14 @@ pub struct State {
     pub pitch: f64,
     pub agc: bool,
     pub gain_db: f32,
+    pub agc_speed: AgcSpeed,
+    /// Noise blanker threshold (impulse / mean level); 0: off.
+    pub nb: f32,
+    /// Noise reduction strength 0..1; 0: off.
+    pub nr: f32,
+    pub squelch: bool,
+    /// Squelch threshold, channel power (dBFS).
+    pub squelch_db: f32,
     pub wf: WfReq,
     /// Others see this user's frequency and may listen along.
     pub share: bool,

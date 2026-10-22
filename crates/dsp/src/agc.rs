@@ -14,7 +14,33 @@ pub struct AgcSpec {
     pub decay_db_s: f64,
 }
 
+/// How quickly the gain recovers after a signal drops.
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
+pub enum AgcSpeed {
+    /// 100 ms hang, 40 dB/s.
+    Fast,
+    /// 300 ms hang, 20 dB/s.
+    #[default]
+    Medium,
+    /// 800 ms hang, 10 dB/s.
+    Slow,
+}
+
 impl AgcSpec {
+    /// SSB/CW at `speed`.
+    pub fn ssb_at(speed: AgcSpeed) -> Self {
+        let (hang_s, decay_db_s) = match speed {
+            AgcSpeed::Fast => (0.1, 40.0),
+            AgcSpeed::Medium => (0.3, 20.0),
+            AgcSpeed::Slow => (0.8, 10.0),
+        };
+        AgcSpec {
+            hang_s,
+            decay_db_s,
+            ..Self::ssb()
+        }
+    }
+
     /// SSB/CW: 300 ms hang.
     pub fn ssb() -> Self {
         AgcSpec {
@@ -26,7 +52,8 @@ impl AgcSpec {
         }
     }
 
-    /// AM: no hang (the carrier holds the level).
+    /// AM: the gain follows the carrier (`AudioChain`); `target` is the
+    /// output peak at 100 % modulation.
     pub fn am() -> Self {
         AgcSpec {
             hang_s: 0.0,
