@@ -9,9 +9,10 @@
 //! * RX_READ/WF_READ may return partial frames; whole frames are assembled here.
 //! * Waterfall: one-shot is a plain `WF_START` (like the stock server);
 //!   continuous adds `WF_READ_CONTINUES`. One-shot reads stop after one
-//!   block. The flag's effect on the stock bitstream is not yet confirmed
-//!   on hardware, so a continuous stream that stalls (as a one-shot capture
-//!   would) is still restarted.
+//!   block. The stock driver ignores the flag (a bug: it always selects
+//!   one-shot), so without the open driver continuous is emulated: the
+//!   next block is started as soon as one is read, with a gap between
+//!   blocks. A continuous stream that stalls anyway is restarted.
 
 pub mod abi;
 pub mod bitstream;
@@ -65,6 +66,7 @@ pub struct ZynqsdrRadio<D: Device> {
     gpio: u32,
     /// From GET_STATS at open (open driver + open bitstream).
     build_id: Option<u32>,
+    /// Open driver: GET_STATS works, and `WF_READ_CONTINUES` is honoured.
     has_stats: bool,
 }
 
@@ -267,13 +269,15 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         }
         s.stage.drain(..n * 4);
         s.produced += n as u64;
-        if s.mode == WfMode::OneShot && s.produced >= WF_BLOCK as u64 {
+        let block_done = s.produced >= WF_BLOCK as u64;
+        if s.mode == WfMode::OneShot && block_done {
             s.active = false;
         }
-        if n == 0
-            && self.wf[slot].mode == WfMode::Continuous
-            && self.wf[slot].last_data.elapsed() > self.wf_stall_limit(slot)
+        if self.wf[slot].mode == WfMode::Continuous
+            && ((!self.has_stats && block_done && self.wf[slot].stage.is_empty())
+                || (n == 0 && self.wf[slot].last_data.elapsed() > self.wf_stall_limit(slot)))
         {
+            // stock driver: one-shot only, start the next block now
             self.wf_restart(slot)?;
         }
         Ok(n)

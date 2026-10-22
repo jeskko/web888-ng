@@ -276,9 +276,35 @@ fn wf_one_shot_and_never_sets_continue_flag() {
     );
 }
 
+/// Open driver: GET_STATS answers, WF_READ_CONTINUES is honoured.
+fn open_driver(mut d: FakeDriver) -> FakeDriver {
+    d.stats = Some(Stats {
+        size: 64,
+        ..Default::default()
+    });
+    d
+}
+
+#[test]
+fn wf_continuous_on_the_stock_driver_restarts_after_each_block() {
+    // the stock driver always selects one-shot
+    let mut drv = FakeDriver::new(Scene::new().tone(F0 + 1e6, -6.0));
+    drv.wf_oneshot_hw = true;
+    let mut r = ZynqsdrRadio::new(drv, ZynqConfig::default()).unwrap();
+    r.start_wf(1, F0, 1, WfMode::Continuous).unwrap();
+    let mut buf = vec![Iq16::default(); 4096];
+    let mut total = 0;
+    // no stall wait: the next block is started as soon as one is read
+    for _ in 0..100 {
+        total += r.read_wf(1, &mut buf).unwrap();
+    }
+    assert!(total >= 3 * WF_BLOCK, "{total} samples");
+}
+
 #[test]
 fn wf_continuous_restarts_on_one_shot_hardware() {
-    let mut drv = FakeDriver::new(Scene::new().tone(F0 + 1e6, -6.0));
+    // open driver, but the stream stops anyway: the stall restart
+    let mut drv = open_driver(FakeDriver::new(Scene::new().tone(F0 + 1e6, -6.0)));
     drv.wf_oneshot_hw = true;
     let mut r = ZynqsdrRadio::new(drv, ZynqConfig::default()).unwrap();
     r.start_wf(1, F0, 1, WfMode::Continuous).unwrap();
@@ -305,12 +331,20 @@ fn wf_continuous_restarts_on_one_shot_hardware() {
 
 #[test]
 fn wf_continuous_sets_continue_flag() {
-    let mut r = radio(Scene::new().tone(F0 + 250_000.0, -6.0));
+    let drv = open_driver(FakeDriver::new(Scene::new().tone(F0 + 250_000.0, -6.0)));
+    let mut r = ZynqsdrRadio::new(drv, ZynqConfig::default()).unwrap();
     r.start_wf(0, F0, 16, WfMode::Continuous).unwrap();
     let mut buf = vec![Iq16::default(); 4096];
     let mut total = 0;
     while total < 3 * WF_BLOCK {
         total += r.read_wf(0, &mut buf).unwrap();
     }
-    assert!(r.device().log.contains(&(WF_START, WF_READ_CONTINUES)));
+    let starts: Vec<_> = r
+        .device()
+        .log
+        .iter()
+        .filter(|&&(c, _)| c == WF_START)
+        .collect();
+    // one start, streaming: no restarts
+    assert_eq!(starts, [&(WF_START, WF_READ_CONTINUES)]);
 }
