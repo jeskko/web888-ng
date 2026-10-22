@@ -123,10 +123,11 @@ RxBlock ─▶ pick channel ─▶ rx_to_c32 ─▶ decimate ×4 (FIR, flat to �
 * Test: the impulsive-noise criterion from `design.md` §5.2 (line-to-line
   spread within 0.3 dB of stationary noise). This is a dsp test with a
   synthetic 100 Hz-gated noise burst, not the `web888-pl` scene.
-* Cost on the A9: about 0.25 ms per complex 2048-point FFT. With
-  20 fps × 30 FFTs that is about 15 % of one core. The default budget is
-  set so that WF + one audio channel + HPSDR stay below 50 % of one core.
-  Measure on the board, not in the emulator.
+* Cost on the A9 (estimated here at 0.25 ms per 2048-point FFT) was
+  measured in M3 at 0.41 ms, ~0.6 ms with window and accumulation: 20 fps
+  × 30 FFTs is ~35 % of a core, so the default budget is 6 on 32-bit ARM
+  (30 elsewhere). Samples between the budgeted FFTs are skipped
+  unconverted. See `doc/m3-multi-user.md` §4.
 
 ## 4. WebSocket protocol (`/ws`, version 1)
 

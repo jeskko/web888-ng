@@ -155,7 +155,7 @@ musl build, one A9 core at nice 19 next to the stock server, 2026-10-22):
 | audio chain, USB / AM, per session | 3.5 % of a core | 0.2 % |
 | with NB + NR + squelch | 6 % | 0.3 % |
 | WF view 1024 bins, 25 fps, 30 FFTs/line | 55 % | 0.5 % |
-| WF view 1024 bins, 25 fps, 8 FFTs/line | 21 % | 0.25 % |
+| WF view 1024 bins, 25 fps, 8 FFTs/line | 21 % (13 % skipping unused samples) | 0.25 % (0.17 %) |
 | complex FFT 2048 (rustfft) | 410 µs | 3.5 µs |
 | f32 FIR | 106 M MAC/s | 1290 M MAC/s |
 
@@ -163,8 +163,12 @@ musl build, one A9 core at nice 19 next to the stock server, 2026-10-22):
 workstation default: rustfft has no NEON code on armv7 (and LLVM doesn't
 vectorize f32 for NEON, so `-C target-cpu=cortex-a9` changes nothing,
 measured), and every FFT costs ~0.6 ms with its window and accumulation.
-On the A9 the WF budget (FFTs per line) has to start low, and the FFT is
-the kernel worth a NEON implementation.
+On the A9 the WF budget (FFTs per line) has to start low: the default is
+6 there (30 elsewhere). The engine skips samples between budgeted FFTs
+without converting them (before, ~8 % of an A9 core per view at 1.92 MS/s
+went to buffering samples no FFT used). The unit's own load (FT8 decoder
+bursts every 15 s) makes single runs at nice 19 noisy; repeat them. The FFT is the kernel worth a NEON
+implementation if the board still needs it.
 
 ## 5. DSP additions
 

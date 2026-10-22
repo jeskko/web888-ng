@@ -108,7 +108,7 @@ struct ServeArgs {
     /// Initial web dial frequency in Hz (default: 7.074 MHz if in range).
     #[arg(long)]
     web_freq: Option<f64>,
-    /// Most FFTs averaged per waterfall line, a CPU budget [30].
+    /// Most FFTs averaged per waterfall line, a CPU budget [30, 6 on armv7].
     #[arg(long)]
     wf_budget: Option<usize>,
     /// Simulated scene (sim backend): tones FREQ_HZ:DBFS (replaces the file's).

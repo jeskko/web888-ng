@@ -163,7 +163,8 @@ pub struct Web {
     pub state_dir: PathBuf,
     /// Initial dial frequency (Hz; default 7.074 MHz if in range).
     pub default_freq: Option<f64>,
-    /// Most FFTs averaged per waterfall line (CPU budget).
+    /// Most FFTs averaged per waterfall line (CPU budget; default 30, 6 on
+    /// 32-bit ARM, where an FFT costs ~100x more: `doc/m3-multi-user.md` §4).
     pub wf_budget: usize,
 }
 
@@ -178,7 +179,7 @@ impl Default for Web {
             tls_key: None,
             state_dir: "/var/lib/web888d".into(),
             default_freq: None,
-            wf_budget: 30,
+            wf_budget: if cfg!(target_arch = "arm") { 6 } else { 30 },
         }
     }
 }

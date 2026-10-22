@@ -157,10 +157,7 @@ impl WfEngine {
     /// before them (no FFT spans a gap).
     pub fn push(&mut self, iq: &[Iq16], contiguous: bool) {
         let k = (1.0 / WF_SINE_FULL_SCALE) as f32;
-        self.push_c32(
-            iq.iter().map(|s| C32::new(s.i as f32 * k, s.q as f32 * k)),
-            contiguous,
-        );
+        self.push_c32(Wf16(iq.iter(), k), contiguous);
     }
 
     /// Add RX channel samples (as `push`).
@@ -169,19 +166,40 @@ impl WfEngine {
     }
 
     /// Add samples scaled so that a full-scale ADC sine has |z| = 1.
-    pub fn push_c32(&mut self, iq: impl Iterator<Item = C32>, contiguous: bool) {
+    /// Samples between FFTs (stride > N) are skipped, not converted.
+    pub fn push_c32(&mut self, mut iq: impl Iterator<Item = C32>, contiguous: bool) {
         if !contiguous {
             self.buf.clear();
             self.next = 0;
         }
-        let before = self.buf.len();
-        self.buf.extend(iq);
-        self.fresh += self.buf.len() - before;
-        while self.next + self.n <= self.buf.len() {
-            if self.nacc < self.spec.budget {
-                self.fft_at(self.next);
+        loop {
+            // before the next FFT and not needed by this line's fallback
+            // (it has an FFT already): drop
+            if self.nacc > 0 && self.next > self.buf.len() {
+                self.next -= self.buf.len();
+                self.buf.clear();
+                let want = self.next;
+                let got = skip(&mut iq, want);
+                self.fresh += got;
+                self.next -= got;
+                if got < want {
+                    break;
+                }
             }
-            self.next += self.stride;
+            let want = self.next + self.n - self.buf.len().min(self.next + self.n);
+            let before = self.buf.len();
+            self.buf.extend(iq.by_ref().take(want));
+            let got = self.buf.len() - before;
+            self.fresh += got;
+            while self.next + self.n <= self.buf.len() {
+                if self.nacc < self.spec.budget {
+                    self.fft_at(self.next);
+                }
+                self.next += self.stride;
+            }
+            if got < want || want == 0 {
+                break;
+            }
         }
         // keep the newest N samples (narrow-span fallback) and the next FFT's
         let keep = self.next.min(self.buf.len().saturating_sub(self.n));
@@ -243,6 +261,41 @@ impl WfEngine {
         self.set_stride(self.fresh);
         self.fresh = 0;
         Some(line)
+    }
+}
+
+/// WF slot samples to `C32`, skipping without converting.
+struct Wf16<'a>(std::slice::Iter<'a, Iq16>, f32);
+
+impl Iterator for Wf16<'_> {
+    type Item = C32;
+    fn next(&mut self) -> Option<C32> {
+        let s = self.0.next()?;
+        Some(C32::new(s.i as f32 * self.1, s.q as f32 * self.1))
+    }
+    fn nth(&mut self, n: usize) -> Option<C32> {
+        let s = self.0.nth(n)?;
+        Some(C32::new(s.i as f32 * self.1, s.q as f32 * self.1))
+    }
+    fn size_hint(&self) -> (usize, Option<usize>) {
+        self.0.size_hint()
+    }
+}
+
+/// Skip up to `k` items of `it`; returns how many were skipped.
+fn skip(it: &mut impl Iterator<Item = C32>, k: usize) -> usize {
+    if k == 0 {
+        return 0;
+    }
+    match it.size_hint() {
+        (lo, Some(hi)) if lo == hi => {
+            let k = k.min(lo);
+            if k > 0 {
+                it.nth(k - 1);
+            }
+            k
+        }
+        _ => it.by_ref().take(k).count(),
     }
 }
 
@@ -371,6 +424,33 @@ mod tests {
         e.push(&x, true);
         assert_eq!(e.line().unwrap().ffts, 10);
         assert_eq!(e.stride, 2 * per_line / 10);
+    }
+
+    #[test]
+    fn lines_do_not_depend_on_the_chunking() {
+        // budget 4 at 1.92 MS/s, 20 fps: the stride skips most samples
+        let mut rng = Noise(5);
+        let x: Vec<Iq16> = (0..96_000 * 4)
+            .map(|_| {
+                let (a, b) = rng.gauss();
+                iq(300.0 * a, 300.0 * b)
+            })
+            .collect();
+        let run = |chunk: usize| {
+            let mut e = WfEngine::new(spec(1_920_000.0, 4));
+            let mut lines = Vec::new();
+            for l in x.chunks(96_000) {
+                for c in l.chunks(chunk) {
+                    e.push(c, true);
+                }
+                lines.push(e.line().unwrap());
+            }
+            lines
+        };
+        let whole = run(96_000);
+        assert!(whole.iter().skip(1).all(|l| l.ffts == 4));
+        assert_eq!(whole, run(997));
+        assert_eq!(whole, run(1));
     }
 
     #[test]
