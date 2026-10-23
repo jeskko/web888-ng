@@ -488,10 +488,14 @@ fn start_skimmers(
             / 3600
             % 24) as u32
     };
-    // before the bands start, so syslog has their start events
+    // before the bands start, so syslog and MQTT have their start events
     {
         let live = live.clone();
         web888_skim::syslog::spawn(sk.bus.clone(), move || live.borrow().syslog.clone())?;
+    }
+    {
+        let live = live.clone();
+        web888_skim::mqtt::spawn(sk.bus.clone(), move || live.borrow().mqtt.clone())?;
     }
     sk.apply(&cfg.skimmer, hour());
     if !cfg.skimmer.is_empty() && !radio_live {

@@ -361,7 +361,7 @@ async fn admin_api() {
     assert_eq!(
         keys,
         [
-            "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog"
+            "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());

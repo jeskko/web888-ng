@@ -10,6 +10,7 @@
 //! the config and the hours of the day say.
 
 pub mod events;
+pub mod mqtt;
 pub mod pskreporter;
 pub mod slots;
 pub mod spot;

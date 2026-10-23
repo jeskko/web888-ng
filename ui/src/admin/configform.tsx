@@ -57,7 +57,9 @@ function TextField({ ctx, path, s }: { ctx: Ctx; path: string[]; s: Schema }) {
     <>
       <input
         class={err ? "bad" : ""}
-        type="text"
+        // secrets in the config (e.g. [mqtt] password) aren't shown
+        type={(path[path.length - 1] === "password" ? "password" : "text") as "text"}
+        autocomplete="off"
         value={text}
         disabled={ctx.readOnly}
         placeholder={nullable ? "(none)" : ""}

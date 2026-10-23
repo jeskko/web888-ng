@@ -202,9 +202,38 @@ local config (never a default in the repo).
 
 ### 6.4 MQTT
 
-`[mqtt]` broker URL. Spots go to `<prefix>/spots/<mode>` as JSON, and
-skimmer start/stop events to `<prefix>/skimmer`. Later: temperature,
-users.
+`[mqtt] server` (`host[:port]`, 1883), with an optional `username`,
+`password` and `client_id` (default `web888-<host name>`). It is an
+MQTT 3.1.1 publisher at QoS 0 over plain TCP, as the stock firmware's,
+and it reconnects. Topics start with `topic` (default
+`web888/<host name>`):
+* `<topic>/spot/<MODE>`: JSON with the web protocol's spot fields, plus
+  the stock `timestamp` and `server`, plus `live`.
+* `<topic>/band` and `<topic>/upload`: JSON events with `source`,
+  `level` and `text`.
+* `<topic>/status`: `online`, retained, and `offline` as the last will.
+
+Later: temperature, users.
+
+### 6.4.1 What goes where
+
+The user asked for this (2026-10-24): each sink chooses its events.
+`events` takes any of `spot`, `band` (bands starting and stopping, and
+their problems) and `upload` (uploader results and errors); the default
+is all three. `modes` limits spots to those modes; empty means all. The
+setting is per sink, so a kind can go to syslog, MQTT, both or neither,
+e.g. spots to MQTT and band and upload events to syslog:
+
+```toml
+[syslog]
+server = "logs.example.net"
+events = ["band", "upload"]
+
+[mqtt]
+server = "broker.example.net"
+events = ["spot", "band"]
+modes = ["ft8", "wspr"]
+```
 
 ### 6.5 Station position
 
@@ -215,8 +244,8 @@ which takes a 6-character locator from the fix.
 
 The user asked for this (2026-10-24). `[syslog] server` (`host[:port]`)
 sends the skimmers' log to a syslog receiver. The log is the band start
-and stop events, the uploaders' results and errors, and each spot
-(`spots = true`, the default). It uses RFC 5424 (default) or RFC 3164,
+and stop events, the uploaders' results and errors, and each spot,
+chosen with `events` and `modes` (§6.4.1). It uses RFC 5424 (default) or RFC 3164,
 over UDP (default) or TCP with RFC 6587 octet counting, and reconnects.
 `facility` defaults to local0 and `hostname` to the system's. MSGID is
 the source (`skim`, `pskreporter`, `wsprnet`, `spot`). Severities:
@@ -316,6 +345,13 @@ that can't go are dropped. It applies live.
 * Syslog (§6.6, 2026-10-24): `skim::events` takes the skimmers' log
   lines (stderr as before), and `skim::syslog` sends them and the spots.
   Checked live against a local UDP listener.
+
+* MQTT (§6.4, 2026-10-24): `skim::mqtt`, a minimal 3.1.1 publisher (no
+  new dependencies). Per-sink `events` and `modes` (§6.4.1) replace
+  syslog's `spots` switch. Checked live against mosquitto 2.0.20 in
+  podman: the routing above, `status` going `online` and then
+  `offline` (last will) when web888d was killed. The admin form hides
+  fields named `password`.
 
 ## 8. Open
 

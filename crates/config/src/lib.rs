@@ -63,6 +63,59 @@ pub struct Config {
     /// The skimmers' log (spots, band and upload events) to a syslog
     /// receiver (apply at once).
     pub syslog: Syslog,
+    /// The same to an MQTT broker (apply at once).
+    pub mqtt: Mqtt,
+}
+
+/// What the skimmers log, for choosing what goes to syslog and MQTT.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum LogEvent {
+    /// Each decoded spot.
+    Spot,
+    /// Bands starting and stopping, and their problems.
+    Band,
+    /// What the uploaders (PSKReporter, WSPRnet) did, and their errors.
+    Upload,
+}
+
+fn all_events() -> Vec<LogEvent> {
+    vec![LogEvent::Spot, LogEvent::Band, LogEvent::Upload]
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Mqtt {
+    /// The broker, `host` or `host:port` (port 1883; IPv6 in brackets);
+    /// empty: off.
+    pub server: String,
+    pub username: String,
+    pub password: String,
+    /// Client id; empty: `web888-<host name>`.
+    pub client_id: String,
+    /// Topics start with this; empty: `web888/<host name>`. Spots go to
+    /// `<topic>/spot/<MODE>`, events to `<topic>/band` and
+    /// `<topic>/upload`, and `<topic>/status` is `online` (retained;
+    /// `offline` as the broker's last will).
+    pub topic: String,
+    /// What to publish.
+    pub events: Vec<LogEvent>,
+    /// Spots of these modes only; empty: all.
+    pub modes: Vec<SkimMode>,
+}
+
+impl Default for Mqtt {
+    fn default() -> Self {
+        Mqtt {
+            server: String::new(),
+            username: String::new(),
+            password: String::new(),
+            client_id: String::new(),
+            topic: String::new(),
+            events: all_events(),
+            modes: vec![],
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
@@ -93,8 +146,10 @@ pub struct Syslog {
     pub format: SyslogFormat,
     /// kern, user, daemon, local0 ... local7.
     pub facility: String,
-    /// Send each spot (else only band and upload events).
-    pub spots: bool,
+    /// What to send.
+    pub events: Vec<LogEvent>,
+    /// Spots of these modes only; empty: all.
+    pub modes: Vec<SkimMode>,
     /// The host name in messages; empty: the system's.
     pub hostname: String,
 }
@@ -106,7 +161,8 @@ impl Default for Syslog {
             transport: SyslogTransport::Udp,
             format: SyslogFormat::Rfc5424,
             facility: "local0".into(),
-            spots: true,
+            events: all_events(),
+            modes: vec![],
             hostname: String::new(),
         }
     }
@@ -591,6 +647,7 @@ impl Config {
             || self.skimmer != new.skimmer
             || self.report != new.report
             || self.syslog != new.syslog
+            || self.mqtt != new.mqtt
             || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics

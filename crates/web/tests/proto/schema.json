@@ -100,8 +100,30 @@
         "transport": "udp",
         "format": "rfc5424",
         "facility": "local0",
-        "spots": true,
+        "events": [
+          "spot",
+          "band",
+          "upload"
+        ],
+        "modes": [],
         "hostname": ""
+      }
+    },
+    "mqtt": {
+      "description": "The same to an MQTT broker (apply at once).",
+      "$ref": "#/$defs/Mqtt",
+      "default": {
+        "server": "",
+        "username": "",
+        "password": "",
+        "client_id": "",
+        "topic": "",
+        "events": [
+          "spot",
+          "band",
+          "upload"
+        ],
+        "modes": []
       }
     }
   },
@@ -527,10 +549,25 @@
           "type": "string",
           "default": "local0"
         },
-        "spots": {
-          "description": "Send each spot (else only band and upload events).",
-          "type": "boolean",
-          "default": true
+        "events": {
+          "description": "What to send.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LogEvent"
+          },
+          "default": [
+            "spot",
+            "band",
+            "upload"
+          ]
+        },
+        "modes": {
+          "description": "Spots of these modes only; empty: all.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkimMode"
+          },
+          "default": []
         },
         "hostname": {
           "description": "The host name in messages; empty: the system's.",
@@ -560,6 +597,75 @@
           "const": "rfc3164"
         }
       ]
+    },
+    "LogEvent": {
+      "description": "What the skimmers log, for choosing what goes to syslog and MQTT.",
+      "oneOf": [
+        {
+          "description": "Each decoded spot.",
+          "type": "string",
+          "const": "spot"
+        },
+        {
+          "description": "Bands starting and stopping, and their problems.",
+          "type": "string",
+          "const": "band"
+        },
+        {
+          "description": "What the uploaders (PSKReporter, WSPRnet) did, and their errors.",
+          "type": "string",
+          "const": "upload"
+        }
+      ]
+    },
+    "Mqtt": {
+      "type": "object",
+      "properties": {
+        "server": {
+          "description": "The broker, `host` or `host:port` (port 1883; IPv6 in brackets);\nempty: off.",
+          "type": "string",
+          "default": ""
+        },
+        "username": {
+          "type": "string",
+          "default": ""
+        },
+        "password": {
+          "type": "string",
+          "default": ""
+        },
+        "client_id": {
+          "description": "Client id; empty: `web888-<host name>`.",
+          "type": "string",
+          "default": ""
+        },
+        "topic": {
+          "description": "Topics start with this; empty: `web888/<host name>`. Spots go to\n`<topic>/spot/<MODE>`, events to `<topic>/band` and\n`<topic>/upload`, and `<topic>/status` is `online` (retained;\n`offline` as the broker's last will).",
+          "type": "string",
+          "default": ""
+        },
+        "events": {
+          "description": "What to publish.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/LogEvent"
+          },
+          "default": [
+            "spot",
+            "band",
+            "upload"
+          ]
+        },
+        "modes": {
+          "description": "Spots of these modes only; empty: all.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/SkimMode"
+          },
+          "default": []
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The skimmers' log to a syslog receiver (`doc/m4-skimmers.md` §6.6):
-//! band and upload events (`events`) and, if asked, each spot. RFC 5424
+//! the spots, band and upload events it is configured for. RFC 5424
 //! or RFC 3164 messages, over UDP (one per datagram) or TCP (RFC 6587
 //! octet counting, reconnecting). Messages that can't go are dropped.
 
@@ -90,17 +90,6 @@ pub fn format(
             )
         }
     }
-}
-
-fn system_hostname() -> String {
-    let mut buf = [0u8; 256];
-    // SAFETY: gethostname writes at most `len` bytes into `buf`.
-    let r = unsafe { libc::gethostname(buf.as_mut_ptr() as *mut libc::c_char, buf.len()) };
-    if r != 0 {
-        return "web888".into();
-    }
-    let n = buf.iter().position(|&b| b == 0).unwrap_or(buf.len());
-    String::from_utf8_lossy(&buf[..n]).into_owned()
 }
 
 enum Link {
@@ -198,7 +187,7 @@ pub fn spawn(
                     };
                 }
                 let host = if c.hostname.is_empty() {
-                    system_hostname()
+                    events::hostname()
                 } else {
                     c.hostname.clone()
                 };
@@ -207,20 +196,27 @@ pub fn spawn(
                 loop {
                     use tokio::sync::broadcast::error::TryRecvError;
                     match evs.try_recv() {
-                        Ok(e) => {
+                        Ok(e) if events::wants(&c.events, &c.modes, e.kind(), None) => {
                             let e: &Event = &e;
                             out.push(format(
                                 c.format, fac, e.level, e.time, &host, pid, e.source, &e.text,
                             ));
                         }
-                        Err(TryRecvError::Lagged(_)) => {}
+                        Ok(_) | Err(TryRecvError::Lagged(_)) => {}
                         Err(_) => break,
                     }
                 }
                 loop {
                     use tokio::sync::broadcast::error::TryRecvError;
                     match spots.try_recv() {
-                        Ok(s) if c.spots => {
+                        Ok(s)
+                            if events::wants(
+                                &c.events,
+                                &c.modes,
+                                web888_config::LogEvent::Spot,
+                                Some(s.mode),
+                            ) =>
+                        {
                             let s: &Spot = &s;
                             out.push(format(
                                 c.format,
