@@ -17,7 +17,7 @@ pub struct RealFft {
 
 impl RealFft {
     pub fn new(n: usize) -> Self {
-        assert!(n % 2 == 0);
+        assert!(n.is_multiple_of(2));
         let mut p = FftPlanner::new();
         let tw = (0..n / 2)
             .map(|k| {
@@ -102,9 +102,9 @@ mod tests {
             );
         }
         let back = r.inverse(&got);
-        for i in 0..n {
+        for (i, b) in back.iter().enumerate() {
             let want = x.get(i).copied().unwrap_or(0.0);
-            assert!((back[i] / n as f32 - want).abs() < 1e-4, "sample {i}");
+            assert!((b / n as f32 - want).abs() < 1e-4, "sample {i}");
         }
     }
 }
