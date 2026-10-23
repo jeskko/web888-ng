@@ -177,7 +177,9 @@ fn thread_cpu() -> Duration {
 fn idle_priority() {
     #[cfg(target_os = "linux")]
     {
-        let p = libc::sched_param { sched_priority: 0 };
+        // zeroed: 32-bit musl's sched_param has more fields (SCHED_SPORADIC)
+        // SAFETY: an all-zero sched_param is valid.
+        let p: libc::sched_param = unsafe { std::mem::zeroed() };
         // SAFETY: plain syscall on the calling thread.
         if unsafe { libc::sched_setscheduler(0, libc::SCHED_IDLE, &p) } != 0 {
             eprintln!("skim: SCHED_IDLE: {}", std::io::Error::last_os_error());
