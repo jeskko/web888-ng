@@ -237,8 +237,15 @@ modes = ["ft8", "wspr"]
 
 ### 6.5 Station position
 
-`[station] locator`, or gpsd (`[station] gpsd = "127.0.0.1:2947"`),
-which takes a 6-character locator from the fix.
+`[station] locator`, or gpsd: `[station] gpsd = "127.0.0.1"` (port
+2947). The client sends `?WATCH` for JSON and takes the 6-character
+locator of each 2D or 3D fix (TPV). A change is taken once the new
+locator has held for 5 reports, so a position on a subsquare's edge
+doesn't flap. The first locator is taken at once. Without a fix the last
+locator stays, and until there is one the configured locator is used.
+The uploaders use this locator. Changes and connection problems are
+`band` events (source `gpsd`). The admin card shows the server, fix and
+locator.
 
 ### 6.6 Syslog
 
@@ -352,6 +359,10 @@ that can't go are dropped. It applies live.
   podman: the routing above, `status` going `online` and then
   `offline` (last will) when web888d was killed. The admin form hides
   fields named `password`.
+
+* gpsd (§6.5, 2026-10-24): `skim::gpsd`. Checked against gpsd 3.26.1
+  (Alpine in podman, NMEA served over TCP): web888d logged `gpsd:
+  locator KP25ra` for a fix in Oulu.
 
 ## 8. Open
 

@@ -483,6 +483,7 @@ async fn spots_come_recent_first_then_new() {
         skimmers: None,
         pskreporter: None,
         wsprnet: None,
+        gpsd: None,
         live: false,
     };
     let (addr, stop, _) = start_skim(config, Some(skim)).await;

@@ -661,12 +661,32 @@ async fn skimmers(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
             "last_error": w.last_error,
         })
     });
+    let gps = sk
+        .gpsd
+        .as_ref()
+        .filter(|_| !cfg.station.gpsd.is_empty())
+        .map(|g| {
+            let g = g.lock().unwrap().clone();
+            json!({
+                "server": cfg.station.gpsd,
+                "connected": g.connected,
+                "mode": g.mode,
+                "locator": g.locator,
+                "last_fix": g.last_fix.map(|t| t as u64),
+                "last_error": g.last_error,
+            })
+        });
+    let locator = gps
+        .as_ref()
+        .and_then(|g| g["locator"].as_str().map(str::to_string))
+        .unwrap_or_else(|| cfg.station.locator.clone());
     Json(json!({
         "available": true,
         "live": sk.live,
+        "gpsd": gps,
         "wsprnet": wsprnet,
         "callsign": cfg.station.callsign,
-        "locator": cfg.station.locator,
+        "locator": locator,
         "bands": bands,
         "pskreporter": psk,
     }))

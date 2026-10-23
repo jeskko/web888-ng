@@ -14,4 +14,5 @@ web888-config.workspace = true
 web888-ftx.workspace = true
 web888-wspr.workspace = true
 libc.workspace = true
+serde_json = "1.0.154"
 tokio = { version = "1.54.1", features = ["sync"] }

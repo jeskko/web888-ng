@@ -18,7 +18,7 @@ pub struct Event {
     /// UTC seconds.
     pub time: f64,
     pub level: Level,
-    /// "skim", "pskreporter", "wsprnet".
+    /// "skim", "gpsd", "pskreporter", "wsprnet".
     pub source: &'static str,
     pub text: String,
 }
@@ -26,7 +26,7 @@ pub struct Event {
 impl Event {
     pub fn kind(&self) -> LogEvent {
         match self.source {
-            "skim" => LogEvent::Band,
+            "skim" | "gpsd" => LogEvent::Band,
             _ => LogEvent::Upload,
         }
     }

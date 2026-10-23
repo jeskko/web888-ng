@@ -468,6 +468,21 @@ fn first_password(
     Ok(())
 }
 
+/// The station as reported: the configured one, with gpsd's locator
+/// once there is one.
+fn station(
+    s: &web888_config::Station,
+    gps: &std::sync::Mutex<web888_skim::gpsd::Status>,
+) -> web888_config::Station {
+    let mut s = s.clone();
+    if !s.gpsd.is_empty()
+        && let Some(l) = gps.lock().unwrap().locator.clone()
+    {
+        s.locator = l;
+    }
+    s
+}
+
 /// Background decoders: bands from the config (and its reloads), run in
 /// their UTC hours; spots are logged.
 fn start_skimmers(
@@ -514,24 +529,28 @@ fn start_skimmers(
                 s.apply(&c.skimmer, hour());
             }
         })?;
-    let psk = {
+    let gps = {
         let live = live.clone();
+        web888_skim::gpsd::spawn(move || live.borrow().station.gpsd.clone())?
+    };
+    let psk = {
+        let (live, gps) = (live.clone(), gps.clone());
         web888_skim::pskreporter::spawn(
             sk.bus.clone(),
             move || {
                 let c = live.borrow().clone();
-                (c.station.clone(), c.report.clone())
+                (station(&c.station, &gps), c.report.clone())
             },
             env!("CARGO_PKG_VERSION"),
         )?
     };
     let wsprnet = {
-        let live = live.clone();
+        let (live, gps) = (live.clone(), gps.clone());
         web888_skim::wsprnet::spawn(
             sk.bus.clone(),
             move || {
                 let c = live.borrow().clone();
-                (c.station.clone(), c.report.clone())
+                (station(&c.station, &gps), c.report.clone())
             },
             env!("CARGO_PKG_VERSION"),
         )?
@@ -553,6 +572,7 @@ fn start_skimmers(
         skimmers: Some(sk),
         pskreporter: Some(psk),
         wsprnet: Some(wsprnet),
+        gpsd: Some(gps),
         live: radio_live,
     })
 }

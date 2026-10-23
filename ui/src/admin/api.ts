@@ -101,7 +101,16 @@ export interface Skimmers {
   available: boolean;
   live?: boolean;
   callsign?: string;
+  /** In use: gpsd's once it has one, else the configured one. */
   locator?: string;
+  gpsd?: {
+    server: string;
+    connected: boolean;
+    mode: number;
+    locator: string | null;
+    last_fix: number | null;
+    last_error: string | null;
+  } | null;
   bands?: SkimBand[];
   pskreporter?: {
     enabled: boolean;

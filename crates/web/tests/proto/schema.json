@@ -71,7 +71,8 @@
       "default": {
         "callsign": "",
         "locator": "",
-        "antenna": ""
+        "antenna": "",
+        "gpsd": ""
       }
     },
     "skimmer": {
@@ -457,12 +458,17 @@
           "default": ""
         },
         "locator": {
-          "description": "Maidenhead locator, 4 or 6 characters (needed for uploads).",
+          "description": "Maidenhead locator, 4 or 6 characters (needed for uploads; with\ngpsd, used until there is a fix).",
           "type": "string",
           "default": ""
         },
         "antenna": {
           "description": "Antenna, as shown on PSKReporter.",
+          "type": "string",
+          "default": ""
+        },
+        "gpsd": {
+          "description": "gpsd to take the locator from, `host` or `host:port` (port 2947),\ne.g. `127.0.0.1`; empty: off.",
           "type": "string",
           "default": ""
         }
@@ -607,7 +613,7 @@
           "const": "spot"
         },
         {
-          "description": "Bands starting and stopping, and their problems.",
+          "description": "Bands starting and stopping, their problems, and the station's\nlocator from gpsd.",
           "type": "string",
           "const": "band"
         },

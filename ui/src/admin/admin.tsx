@@ -314,6 +314,24 @@ function SkimCard({ skim }: { skim: Skimmers }) {
           the deadline.
         </p>
       )}
+      {skim.gpsd && (
+        <>
+          <h4>gpsd</h4>
+          <dl>
+            <dt>Server</dt>
+            <dd class={skim.gpsd.connected ? "" : "warn"}>
+              {skim.gpsd.server} {skim.gpsd.connected ? "" : `(not connected${skim.gpsd.last_error ? `: ${skim.gpsd.last_error}` : ""})`}
+            </dd>
+            <dt>Fix</dt>
+            <dd>
+              {skim.gpsd.mode >= 3 ? "3D" : skim.gpsd.mode === 2 ? "2D" : "none"}
+              {skim.gpsd.last_fix ? `, last ${ago(skim.gpsd.last_fix)} ago` : ""}
+            </dd>
+            <dt>Locator</dt>
+            <dd>{skim.gpsd.locator ?? `none yet (using ${skim.locator || "no locator"})`}</dd>
+          </dl>
+        </>
+      )}
       <h4>PSKReporter</h4>
       {!p || !p.enabled ? (
         <p class="dim">Not uploading{!skim.callsign || (skim.locator ?? "").length < 4 ? ": [station] needs a callsign and a locator" : ""}.</p>

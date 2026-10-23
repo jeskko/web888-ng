@@ -73,7 +73,8 @@ pub struct Config {
 pub enum LogEvent {
     /// Each decoded spot.
     Spot,
-    /// Bands starting and stopping, and their problems.
+    /// Bands starting and stopping, their problems, and the station's
+    /// locator from gpsd.
     Band,
     /// What the uploaders (PSKReporter, WSPRnet) did, and their errors.
     Upload,
@@ -373,10 +374,14 @@ pub struct Auth {
 pub struct Station {
     /// Callsign spots are reported under (needed for uploads).
     pub callsign: String,
-    /// Maidenhead locator, 4 or 6 characters (needed for uploads).
+    /// Maidenhead locator, 4 or 6 characters (needed for uploads; with
+    /// gpsd, used until there is a fix).
     pub locator: String,
     /// Antenna, as shown on PSKReporter.
     pub antenna: String,
+    /// gpsd to take the locator from, `host` or `host:port` (port 2947),
+    /// e.g. `127.0.0.1`; empty: off.
+    pub gpsd: String,
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
