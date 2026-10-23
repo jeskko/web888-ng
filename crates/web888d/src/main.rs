@@ -477,7 +477,7 @@ fn start_skimmers(
     pool: Arc<web888_core::pool::DspPool>,
     rx_rate: f64,
     radio_live: bool,
-) -> AnyResult<Arc<web888_skim::Skimmers>> {
+) -> AnyResult<web888_web::session::Skim> {
     let threads = pool.workers();
     let sk = web888_skim::Skimmers::new(channels, pool, rx_rate, radio_live, threads)?;
     let hour = || {
@@ -505,7 +505,7 @@ fn start_skimmers(
                 s.apply(&c.skimmer, hour());
             }
         })?;
-    {
+    let psk = {
         let live = live.clone();
         web888_skim::pskreporter::spawn(
             sk.bus.clone(),
@@ -514,8 +514,8 @@ fn start_skimmers(
                 (c.station.clone(), c.report.clone())
             },
             env!("CARGO_PKG_VERSION"),
-        )?;
-    }
+        )?
+    };
     let mut spots = sk.bus.subscribe();
     std::thread::Builder::new()
         .name("skim-log".into())
@@ -542,7 +542,12 @@ fn start_skimmers(
                 }
             }
         })?;
-    Ok(sk)
+    Ok(web888_web::session::Skim {
+        bus: sk.bus.clone(),
+        skimmers: Some(sk),
+        pskreporter: Some(psk),
+        live: radio_live,
+    })
 }
 
 fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
@@ -784,7 +789,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     let mut threads = Vec::new();
     let pool = Arc::new(web888_core::pool::DspPool::per_cpu(&ctl_tx)?);
     eprintln!("dsp: {} pool workers", pool.workers());
-    start_skimmers(
+    let skim = start_skimmers(
         &cfg,
         &live_rx,
         channels.clone(),
@@ -868,6 +873,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                     move |c| a.apply(c)
                 })),
             }),
+            skim: Some(skim),
             limit_unit: Duration::from_secs(60),
         });
         let tls = match w.tls {

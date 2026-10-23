@@ -49,4 +49,6 @@ test("message fixtures carry the fields the UI reads", () => {
   for (const k of ["session", "class"]) assert.ok(k in byType.hello, k);
   for (const k of ["granted", "position"]) assert.ok(k in byType.lease, k);
   for (const k of ["id", "hz", "mode"]) assert.ok(k in byType.users.users[0], k);
+  assert.equal(byType.hello.spots, true);
+  for (const k of ["t", "mode", "band", "dial", "hz", "snr", "dt", "msg", "call", "grid"]) assert.ok(k in byType.spots.spots[0], k);
 });

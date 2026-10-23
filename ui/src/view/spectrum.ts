@@ -1,10 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Spectrum (Canvas 2D) above the waterfall: the newest line (peak of the
 // bins under each pixel), a slow average, dB grid, the frequency scale,
-// the receiver's passband and dial marker, and other users' markers.
+// the receiver's passband and dial marker, other users' markers, and the
+// skimmers' latest spots as labels above the scale.
 
 import { FLAG_NEW_GEN, type WfLine } from "../proto.ts";
 import { tickLabel, tickStep } from "../fmt.ts";
+import { placeLabels } from "../spots.ts";
 
 export const SCALE_PX = 20;
 
@@ -19,6 +21,28 @@ export interface Marker {
   hz: number;
   on: boolean;
 }
+
+/** A spot on the scale: its signal's frequency and label. */
+export interface SpotLabel<T = unknown> {
+  hz: number;
+  text: string;
+  /** Not FT8: drawn in another colour. */
+  other: boolean;
+  item: T;
+}
+
+/** Where a spot's label was drawn (device px), for pointer hits. */
+export interface SpotHit<T = unknown> {
+  x0: number;
+  x1: number;
+  y0: number;
+  y1: number;
+  item: T;
+}
+
+/** Spot label rows and row height (CSS px). */
+const SPOT_ROWS = 3;
+const SPOT_ROW_PX = 13;
 
 /** Marker triangle size (CSS px). */
 export const MARK_PX = 7;
@@ -41,6 +65,8 @@ export class Spectrum {
   private ctx: CanvasRenderingContext2D;
   private last: WfLine | null = null;
   private avg: Float32Array | null = null;
+  /** The spot labels of the last draw. */
+  spotHits: SpotHit[] = [];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -67,6 +93,7 @@ export class Spectrum {
     pb: Passband | null,
     dpr: number,
     marks: Marker[] = [],
+    spots: SpotLabel[] = [],
   ): void {
     const { ctx, canvas } = this;
     const w = canvas.width;
@@ -138,6 +165,32 @@ export class Spectrum {
       const avg = this.avg;
       trace((k) => avg[k], "rgba(255, 210, 90, 0.9)", false);
       trace((k) => l.db0 + l.levels[k] * l.dbStep, "rgba(180, 220, 255, 0.45)", true);
+    }
+
+    // spots: a tick each, and labels in rows above the scale where they fit
+    this.spotHits = [];
+    if (spots.length) {
+      ctx.font = `${10 * dpr}px system-ui, sans-serif`;
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "center";
+      const rowH = SPOT_ROW_PX * dpr;
+      const items = spots.map((s) => ({ item: s, x: x(s.hz), width: ctx.measureText(s.text).width })).filter((s) => s.x >= 0 && s.x <= w);
+      for (const p of placeLabels(items, SPOT_ROWS, 4 * dpr)) {
+        const s = p.item;
+        const colour = s.other ? "#c89bff" : "#7fd1ff";
+        ctx.fillStyle = colour;
+        ctx.fillRect(Math.round(p.x), ph - 3 * dpr, dpr, 3 * dpr);
+        if (p.row < 0) continue;
+        const base = ph - 4 * dpr - p.row * rowH;
+        const tw = ctx.measureText(s.text).width;
+        ctx.fillStyle = "rgba(11, 14, 22, 0.7)";
+        ctx.fillRect(p.x - tw / 2 - dpr, base - rowH + 2 * dpr, tw + 2 * dpr, rowH);
+        ctx.fillStyle = colour;
+        ctx.fillText(s.text, p.x, base - dpr);
+        this.spotHits.push({ x0: p.x - tw / 2, x1: p.x + tw / 2, y0: base - rowH + 2 * dpr, y1: base + 2 * dpr, item: s.item });
+      }
+      ctx.textAlign = "start";
+      ctx.textBaseline = "middle";
     }
 
     // dial marker

@@ -246,6 +246,21 @@ which takes a 6-character locator from the fix.
   check anything (the bare domain is behind a web proxy, and nothing sent
   to port 14739 shows on the analysis page).
 
+* Step 6 (2026-10-24): the spot bus keeps 10k spots and hands a
+  session the recent ones and the new ones without loss or doubles.
+  Protocol: `hello.spots` says the server runs skimmers. The client
+  sends `{"type":"spots","on":true}`. The server answers with the last 30
+  minutes (at most 1000), then sends each new batch once a second.
+  `/api/spots?since=&mode=&band=` sits behind the same gate as `/ws`.
+  `/api/admin/skimmers` lists the bands (state, spots and CPU per slot,
+  last slot) and the PSKReporter uploader. Metrics: `skim_*`,
+  `pskreporter_reports_total`.
+  UI: a spot list beside the waterfall (below it on narrow screens),
+  filtered by band, mode and text. Clicking a row tunes to the skimmer's
+  dial in USB. The scale shows the last 40 s of spots as call labels,
+  up to 3 rows. The admin status page has a skimmer card. Checked live
+  from the HackRF with `ui/tools/cdp/spots.mjs`.
+
 ## 8. Open
 
 * Board CPU: how many FT8 bands fit next to 12 users. Measured on the

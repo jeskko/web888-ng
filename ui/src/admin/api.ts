@@ -80,6 +80,41 @@ export interface Stats {
   hw: { adc_overloads: number; clock_ppm: number; hw_rate_ok: boolean; rx_frames: number };
 }
 
+export interface SkimBand {
+  mode: string;
+  dial: number;
+  band: string;
+  hours: string;
+  enabled: boolean;
+  running: boolean;
+  granted?: boolean;
+  slots?: number;
+  spots?: number;
+  cut_short?: number;
+  dropped?: number;
+  cpu_s?: number;
+  cpu_per_slot_s?: number;
+  last_slot?: number | null;
+}
+
+export interface Skimmers {
+  available: boolean;
+  live?: boolean;
+  callsign?: string;
+  locator?: string;
+  bands?: SkimBand[];
+  pskreporter?: {
+    enabled: boolean;
+    pending: number;
+    datagrams: number;
+    reports: number;
+    skipped_not_live: number;
+    skipped_recent: number;
+    last_sent: number | null;
+    last_error: string | null;
+  } | null;
+}
+
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 
 export interface ConfigView {

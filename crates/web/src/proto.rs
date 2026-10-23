@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! WebSocket protocol, version 2 (`doc/m2-web-ui.md` §4, with the M3
-//! additions in `doc/m3-multi-user.md` §8: lease, users, share, listen):
+//! additions in `doc/m3-multi-user.md` §8: lease, users, share, listen;
+//! M4's spots in `doc/m4-skimmers.md` §5):
 //! JSON control in text frames, audio and waterfall data in binary frames
 //! (little endian).
 //! The TypeScript mirror is `ui/src/proto.ts`; `tests/proto/*.json` holds
@@ -83,6 +84,11 @@ pub enum ClientMsg {
     Listen {
         user: Option<u64>,
     },
+    /// Send the skimmers' spots: the recent ones, then new ones as they
+    /// come (or stop).
+    Spots {
+        on: bool,
+    },
 }
 
 /// SSB/CW AGC recovery speed.
@@ -164,6 +170,45 @@ pub struct UserMark {
     pub mode: Mode,
 }
 
+/// A decoded transmission from a skimmer.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SpotMsg {
+    /// Slot start, UTC seconds.
+    pub t: f64,
+    pub mode: String,
+    /// "40m", or "" outside the amateur bands.
+    pub band: String,
+    /// The skimmer's dial (USB).
+    pub dial: f64,
+    /// RF frequency of the signal (its lowest tone).
+    pub hz: f64,
+    pub snr: f32,
+    pub dt: f32,
+    pub msg: String,
+    /// The sender and its locator, when the message says.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub call: Option<String>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub grid: Option<String>,
+}
+
+impl From<&web888_skim::Spot> for SpotMsg {
+    fn from(s: &web888_skim::Spot) -> Self {
+        SpotMsg {
+            t: s.time,
+            mode: s.mode.into(),
+            band: web888_skim::spot::band_name(s.dial_hz).into(),
+            dial: s.dial_hz,
+            hz: s.freq_hz.round(),
+            snr: s.snr_db.round(),
+            dt: (s.dt_s * 10.0).round() / 10.0,
+            msg: s.message.clone(),
+            call: s.sender.clone(),
+            grid: s.grid.clone(),
+        }
+    }
+}
+
 /// Server to client.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 #[serde(tag = "type", rename_all = "lowercase")]
@@ -178,6 +223,9 @@ pub enum ServerMsg {
         /// This session's id (as others see it in `users`).
         session: u64,
         class: String,
+        /// The server runs skimmers (spots can be asked for).
+        #[serde(default)]
+        spots: bool,
     },
     State(State),
     /// The session's receiver: granted, or waiting at `position` (1 =
@@ -189,6 +237,11 @@ pub enum ServerMsg {
     /// Other users who share their frequency (changes only).
     Users {
         users: Vec<UserMark>,
+    },
+    /// Spots, oldest first: the recent ones after a `spots` request, then
+    /// each new batch.
+    Spots {
+        spots: Vec<SpotMsg>,
     },
     Status {
         adc_overloads: u64,

@@ -17,7 +17,8 @@ html, body { margin: 0; height: 100%; background: var(--bg); color: var(--text);
 header, footer { background: var(--panel); border-color: var(--line); border-style: solid; border-width: 0; }
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 6px 16px; border-bottom-width: 1px; }
 footer { border-top-width: 1px; }
-main { position: relative; flex: 1; min-height: 200px; }
+main { display: flex; flex: 1; min-height: 200px; }
+main .view { position: relative; flex: 1; min-width: 0; }
 
 .freq { font: 600 30px/1 ui-monospace, "SF Mono", Menlo, Consolas, monospace; letter-spacing: 0.02em; cursor: text; user-select: none; min-width: 9ch; }
 .freq .digit { padding: 0 0.02em; border-radius: 3px; }
@@ -66,6 +67,22 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .conn.open { color: var(--ok); }
 .conn.closed, .conn.busy, .conn.ended { color: var(--bad); }
 .conn.connecting { color: var(--warn); }
+
+.spots { display: flex; flex-direction: column; width: min(420px, 40vw); border-left: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+.spots-bar { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; padding: 6px 8px; border-bottom: 1px solid var(--line); }
+.spots-bar input[type="text"] { flex: 1; min-width: 80px; }
+.spots-bar .close { margin-left: auto; padding: 2px 8px; }
+.spots-list { flex: 1; overflow: auto; padding: 0 8px 8px; }
+.spots-list p { margin: 12px 0; }
+.spots-list table { width: 100%; }
+.spots-list thead th { position: sticky; top: 0; background: var(--panel); padding-top: 4px; }
+.spots-list td.msg { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
+.spots-list tbody tr { cursor: pointer; }
+.spots-list tbody tr:hover td { background: var(--accent-bg); }
+@media (max-width: 900px) {
+  main { flex-direction: column; }
+  .spots { width: auto; height: 40%; border-left: 0; border-top: 1px solid var(--line); }
+}
 
 @media (max-width: 640px) {
   header { padding: 6px 16px; }

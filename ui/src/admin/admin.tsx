@@ -6,7 +6,7 @@
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
-import { call, get, loggedOut, type Auth, type LeaseRow, type Session, type Stats } from "./api.ts";
+import { call, get, loggedOut, type Auth, type LeaseRow, type Session, type Skimmers, type Stats } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
 type Tab = "status" | "sessions" | "config" | "passwords";
@@ -80,8 +80,7 @@ function Login({ auth, onDone }: { auth: Auth; onDone(): void }) {
         <p>No admin password is set. On the unit's console run</p>
         <pre>web888d passwd</pre>
         <p>
-          or put the password (one line, at least 8 characters) in <code>/boot/web888d-admin</code> on the SD card and
-          restart.
+          or put the password (one line, at least 8 characters) in <code>/boot/web888d-admin</code> on the SD card and restart.
         </p>
       </div>
     );
@@ -123,11 +122,14 @@ function StatusPage() {
   const [leases, setLeases] = useState<{ channels: number; leases: LeaseRow[] } | null>(null);
   const prev = useRef<{ t: number; s: Stats } | null>(null);
   const [rates, setRates] = useState<{ frames: number; busy: number[] } | null>(null);
+  const [skim, setSkim] = useState<Skimmers | null>(null);
   usePoll(async () => {
-    const [s, l] = await Promise.all([
+    const [s, l, k] = await Promise.all([
       get<Stats>("api/admin/stats"),
       get<{ channels: number; leases: LeaseRow[] }>("api/admin/leases"),
+      get<Skimmers>("api/admin/skimmers"),
     ]);
+    setSkim(k);
     const t = performance.now();
     const p = prev.current;
     if (p) {
@@ -241,6 +243,7 @@ function StatusPage() {
           </table>
         )}
       </section>
+      {skim?.available && <SkimCard skim={skim} />}
       <section class="card">
         <h3>CPU per thread</h3>
         <table>
@@ -264,6 +267,82 @@ function StatusPage() {
         <p class="dim">% of one core since the last refresh, summed over threads of a name.</p>
       </section>
     </div>
+  );
+}
+
+function SkimCard({ skim }: { skim: Skimmers }) {
+  const bands = skim.bands ?? [];
+  const p = skim.pskreporter;
+  return (
+    <section class="card">
+      <h3>Skimmers</h3>
+      {bands.length === 0 ? (
+        <p class="dim">None configured ([[skimmer]] in the config).</p>
+      ) : (
+        <table>
+          <thead>
+            <tr>
+              <th>band</th>
+              <th>state</th>
+              <th class="r">spots/slot</th>
+              <th class="r">CPU/slot</th>
+              <th class="r">last</th>
+            </tr>
+          </thead>
+          <tbody>
+            {bands.map((b, k) => {
+              const state = !b.enabled ? "off" : !b.running ? `idle (hours ${b.hours})` : b.granted ? "running" : "waiting";
+              const late = b.running && b.granted && (!b.last_slot || Date.now() / 1000 - b.last_slot > 60);
+              return (
+                <tr key={k} class={b.running ? "" : "dim"}>
+                  <td>
+                    {b.mode.toUpperCase()} {formatKhz(b.dial).slice(0, -4)} {b.band && <span class="dim">{b.band}</span>}
+                  </td>
+                  <td class={b.running && !b.granted ? "warn" : ""}>{state}</td>
+                  <td class="r">{b.slots ? (b.spots! / b.slots).toFixed(1) : "–"}</td>
+                  <td class="r">{b.slots ? `${(b.cpu_per_slot_s! * 1e3).toFixed(0)} ms` : "–"}</td>
+                  <td class={`r ${late ? "warn" : ""}`}>{b.last_slot ? `${ago(b.last_slot)} ago` : "–"}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      )}
+      {bands.some((b) => (b.dropped ?? 0) + (b.cut_short ?? 0) > 0) && (
+        <p class="warn">
+          Behind: {bands.reduce((a, b) => a + (b.dropped ?? 0), 0)} slots dropped, {bands.reduce((a, b) => a + (b.cut_short ?? 0), 0)} cut short by
+          the deadline.
+        </p>
+      )}
+      <h4>PSKReporter</h4>
+      {!p || !p.enabled ? (
+        <p class="dim">Not uploading{!skim.callsign || (skim.locator ?? "").length < 4 ? ": [station] needs a callsign and a locator" : ""}.</p>
+      ) : (
+        <dl>
+          <dt>As</dt>
+          <dd>
+            {skim.callsign} {skim.locator}
+          </dd>
+          <dt>Sent</dt>
+          <dd>
+            {p.reports} reports in {p.datagrams} datagrams{p.last_sent ? `, last ${ago(p.last_sent)} ago` : ""}
+          </dd>
+          <dt>Waiting</dt>
+          <dd>{p.pending}</dd>
+          <dt>Not sent</dt>
+          <dd>
+            {p.skipped_recent} reported within the hour, {p.skipped_not_live} not live
+          </dd>
+          {p.last_error && (
+            <>
+              <dt>Error</dt>
+              <dd class="warn">{p.last_error}</dd>
+            </>
+          )}
+        </dl>
+      )}
+      {!skim.live && <p class="warn">This radio isn't live (a recording or a simulation): no spots are uploaded.</p>}
+    </section>
   );
 }
 
@@ -313,11 +392,7 @@ function SessionsPage() {
                 <td class="r">{khz(s.hz)}</td>
                 <td>{s.mode ?? "–"}</td>
                 <td>
-                  {s.channel !== null
-                    ? `channel ${s.channel}`
-                    : s.waiting !== null
-                      ? `#${s.waiting} in queue`
-                      : "–"}
+                  {s.channel !== null ? `channel ${s.channel}` : s.waiting !== null ? `#${s.waiting} in queue` : "–"}
                   {s.listen !== null && `, listening to #${s.listen}`}
                 </td>
                 <td>{s.share ? "yes" : "no"}</td>

@@ -94,6 +94,7 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/password", post(password))
         .route("/api/admin/stats", get(stats))
         .route("/api/admin/restart", post(restart))
+        .route("/api/admin/skimmers", get(skimmers))
         .route("/metrics", get(metrics))
 }
 
@@ -596,6 +597,66 @@ async fn stats(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
     }))
 }
 
+/// The configured skimmer bands, what the running ones did, and the
+/// uploaders.
+async fn skimmers(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
+    let Some(sk) = &sh.skim else {
+        return Json(json!({ "available": false }));
+    };
+    let cfg = sh.live.borrow().clone();
+    let running = sk.skimmers.as_ref().map(|s| s.bands()).unwrap_or_default();
+    let bands: Vec<Value> = cfg
+        .skimmer
+        .iter()
+        .map(|c| {
+            let mut v = json!({
+                "mode": c.mode,
+                "dial": c.dial,
+                "band": web888_skim::spot::band_name(c.dial),
+                "hours": c.hours,
+                "enabled": c.enabled,
+                "running": false,
+            });
+            if let Some(b) = running.iter().find(|b| b.cfg == *c) {
+                let st = &b.status;
+                let n = |a: &AtomicU64| a.load(Ordering::Relaxed);
+                let slots = n(&st.slots);
+                v["running"] = json!(true);
+                v["granted"] = json!(st.granted.load(Ordering::Relaxed));
+                v["slots"] = json!(slots);
+                v["spots"] = json!(n(&st.spots));
+                v["cut_short"] = json!(n(&st.cut_short));
+                v["dropped"] = json!(n(&st.dropped));
+                v["cpu_s"] = json!(n(&st.cpu_us) as f64 / 1e6);
+                v["cpu_per_slot_s"] = json!(n(&st.cpu_us) as f64 / 1e6 / slots.max(1) as f64);
+                v["last_slot"] = json!(Some(n(&st.last_slot)).filter(|&t| t > 0));
+            }
+            v
+        })
+        .collect();
+    let psk = sk.pskreporter.as_ref().map(|p| {
+        let p = p.lock().unwrap().clone();
+        json!({
+            "enabled": p.enabled,
+            "pending": p.pending,
+            "datagrams": p.datagrams,
+            "reports": p.reports,
+            "skipped_not_live": p.skipped_not_live,
+            "skipped_recent": p.skipped_recent,
+            "last_sent": p.last_sent,
+            "last_error": p.last_error,
+        })
+    });
+    Json(json!({
+        "available": true,
+        "live": sk.live,
+        "callsign": cfg.station.callsign,
+        "locator": cfg.station.locator,
+        "bands": bands,
+        "pskreporter": psk,
+    }))
+}
+
 async fn restart(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Response {
     let Some(_) = &sh.admin.hooks.restart else {
         return error(StatusCode::NOT_IMPLEMENTED, "restart is not available");
@@ -718,6 +779,49 @@ async fn metrics(State(sh): State<Arc<Shared>>) -> Response {
         "WF blocks a DSP worker lost.",
         &per(&|w| w.wf_dropped as f64),
     );
+    if let Some(sk) = sh.skim.as_ref().and_then(|k| k.skimmers.as_ref()) {
+        let bands = sk.bands();
+        let per = |f: &dyn Fn(&web888_skim::BandStatus) -> f64| -> Vec<(String, f64)> {
+            bands
+                .iter()
+                .map(|b| (format!("{{band=\"{}\"}}", b.label), f(&b.status)))
+                .collect()
+        };
+        let n = |a: &AtomicU64| a.load(Ordering::Relaxed) as f64;
+        put(
+            "skim_slots_total",
+            "counter",
+            "Slots a skimmer band decoded.",
+            &per(&|s| n(&s.slots)),
+        );
+        put(
+            "skim_spots_total",
+            "counter",
+            "Spots a skimmer band decoded.",
+            &per(&|s| n(&s.spots)),
+        );
+        put(
+            "skim_slots_dropped_total",
+            "counter",
+            "Slots dropped: the decoders were behind.",
+            &per(&|s| n(&s.dropped)),
+        );
+        put(
+            "skim_cpu_seconds_total",
+            "counter",
+            "Decoder CPU time of a skimmer band.",
+            &per(&|s| n(&s.cpu_us) / 1e6),
+        );
+    }
+    if let Some(p) = sh.skim.as_ref().and_then(|k| k.pskreporter.as_ref()) {
+        let p = p.lock().unwrap().clone();
+        put(
+            "pskreporter_reports_total",
+            "counter",
+            "Spots sent to PSKReporter.",
+            &one(p.reports as f64),
+        );
+    }
     let hz = clock_ticks();
     let mut by_name: BTreeMap<String, u64> = BTreeMap::new();
     for (_, name, ticks) in threads() {

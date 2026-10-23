@@ -49,6 +49,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
     Router::new()
         .route("/ws", get(ws))
         .route("/api/status", get(status))
+        .route("/api/spots", get(spots))
         .merge(admin::routes())
         .fallback_service(ui)
         // revalidate every load (cheap with ETags): a new UI build is
@@ -160,6 +161,54 @@ async fn status(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
         "hw_rate_ok": s.rx_rate_ok.load(Ordering::Relaxed),
         "rx_frames": s.rx_frames.load(Ordering::Relaxed),
     }))
+}
+
+#[derive(serde::Deserialize)]
+struct SpotQuery {
+    /// UTC seconds; default: the last 30 minutes.
+    since: Option<f64>,
+    mode: Option<String>,
+    band: Option<String>,
+}
+
+/// Recent spots (`doc/m4-skimmers.md` §5), oldest first; with a listener
+/// password, for logged-in users only (as `/ws`).
+async fn spots(
+    State(sh): State<Arc<Shared>>,
+    headers: HeaderMap,
+    axum::extract::Query(q): axum::extract::Query<SpotQuery>,
+) -> Response {
+    let open = sh.live.borrow().auth.listener_hash.is_none();
+    if admin::role(&sh, &headers).is_none() && !open {
+        return (StatusCode::UNAUTHORIZED, "login required").into_response();
+    }
+    let Some(sk) = &sh.skim else {
+        return Json(serde_json::json!({ "spots": [] })).into_response();
+    };
+    let since = q.since.unwrap_or_else(|| {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs_f64()
+            - 1800.0
+    });
+    let list: Vec<proto::SpotMsg> = sk
+        .bus
+        .recent(since)
+        .iter()
+        .map(|s| proto::SpotMsg::from(&**s))
+        .filter(|s| {
+            q.mode
+                .as_ref()
+                .is_none_or(|m| s.mode.eq_ignore_ascii_case(m))
+        })
+        .filter(|s| {
+            q.band
+                .as_ref()
+                .is_none_or(|b| s.band.eq_ignore_ascii_case(b))
+        })
+        .collect();
+    Json(serde_json::json!({ "spots": list })).into_response()
 }
 
 /// Accept connections until the listener fails: TLS when the client opens

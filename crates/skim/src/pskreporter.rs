@@ -196,6 +196,12 @@ pub fn datagram(
 /// What the uploader has done (admin page).
 #[derive(Clone, Debug, Default)]
 pub struct Status {
+    /// Uploading (on, with a callsign and a locator).
+    pub enabled: bool,
+    /// Spots waiting for the next datagram.
+    pub pending: usize,
+    /// UTC seconds of the last datagram sent.
+    pub last_sent: Option<u64>,
     pub datagrams: u64,
     pub reports: u64,
     /// Spots not sent: not live, no sender, or reported recently.
@@ -296,6 +302,7 @@ impl Uploader {
                 Ok(_) => {
                     self.status.datagrams += 1;
                     self.status.reports += batch.len() as u64;
+                    self.status.last_sent = Some(unix as u64);
                     self.status.last_error = None;
                 }
                 Err(e) => self.status.last_error = Some(e.to_string()),
@@ -335,6 +342,7 @@ pub fn spawn(
                     && station.locator.len() >= 4;
                 if !enabled {
                     up = None;
+                    st.lock().unwrap().enabled = false;
                 } else if up
                     .as_ref()
                     .is_none_or(|u| u.server != report.pskreporter_server)
@@ -383,7 +391,10 @@ pub fn spawn(
                                 .unwrap_or_default()
                         );
                     }
-                    *st.lock().unwrap() = u.status.clone();
+                    let mut s = u.status.clone();
+                    s.enabled = true;
+                    s.pending = u.pending.len();
+                    *st.lock().unwrap() = s;
                 }
                 std::thread::sleep(Duration::from_secs(1));
             }

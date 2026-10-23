@@ -10,19 +10,24 @@
     {"type": "ping", "t": 1234.5},
     {"type": "share", "on": false},
     {"type": "listen", "user": 7},
-    {"type": "listen", "user": null}
+    {"type": "listen", "user": null},
+    {"type": "spots", "on": true}
   ],
   "server": [
     {"type": "hello", "proto": 2, "server": "web888d 0.1.0", "codec": "pcm16", "audio_rate": 12000,
      "radio": {"backend": "sim", "variant": "hf", "adc_hz": 122880000, "rx_rate": 48000,
                "rf_lo": 0, "rf_hi": 61440000, "wf_decim_min": 1, "wf_decim_max": 8192},
-     "limits": {"bins_max": 4096, "fps_max": 30}, "session": 12, "class": "web"},
+     "limits": {"bins_max": 4096, "fps_max": 30}, "session": 12, "class": "web", "spots": true},
     {"type": "state", "hz": 7074000, "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700, "agc": true, "gain_db": 100,
      "agc_speed": "medium", "nb": 0, "nr": 0, "squelch": false, "squelch_db": -100,
      "wf": {"center_hz": 30720000, "decim": 2, "bins": 1024, "fps": 20}, "share": true, "listen": null},
     {"type": "lease", "granted": false, "position": 2},
     {"type": "users", "users": [{"id": 3, "hz": 7074000, "mode": "usb"}, {"id": 5, "hz": 3573000, "mode": "lsb"}]},
     {"type": "status", "adc_overloads": 3, "clock_ppm": -1.25, "audio_drops": 0, "wf_drops": 2, "hw_rate_ok": true},
+    {"type": "spots", "spots": [{"t": 1792789740, "mode": "FT8", "band": "40m", "dial": 7074000, "hz": 7075234,
+      "snr": -12, "dt": 0.5, "msg": "CQ K1ABC FN42", "call": "K1ABC", "grid": "FN42"},
+      {"t": 1792789740, "mode": "FT8", "band": "40m", "dial": 7074000, "hz": 7074811, "snr": 3, "dt": -0.25,
+       "msg": "<...> K1ABC RR73"}]},
     {"type": "pong", "t": 1234.5},
     {"type": "busy", "msg": "too many sessions from your address (at most 4)"},
     {"type": "error", "msg": "bad message"}

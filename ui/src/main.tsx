@@ -17,6 +17,7 @@ import {
   StatusBar,
   ZoomCtl,
 } from "./ctl/controls.tsx";
+import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { stepFor } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
 import {
@@ -43,7 +44,7 @@ function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const t = e.target as HTMLElement;
-      if (t.tagName === "INPUT" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (t.tagName === "INPUT" || t.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
       const s = st.value;
       if (!s) return;
       const step = stepFor(s.mode) * (e.shiftKey ? 10 : 1);
@@ -126,8 +127,11 @@ function App() {
       </header>
       <LeaseBanner />
       <main>
-        <Pane />
-        <Overlay />
+        <div class="view">
+          <Pane />
+          <Overlay />
+        </div>
+        <SpotPanel />
       </main>
       <footer>
         <div class="controls">
@@ -136,6 +140,7 @@ function App() {
           <ZoomCtl />
           <ContrastCtl />
           <ShareCtl />
+          <SpotsCtl />
         </div>
         <StatusBar />
       </footer>

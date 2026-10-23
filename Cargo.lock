@@ -1885,6 +1885,7 @@ dependencies = [
  "web888-hw",
  "web888-radio",
  "web888-sim",
+ "web888-skim",
 ]
 
 [[package]]

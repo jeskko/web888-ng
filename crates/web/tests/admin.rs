@@ -85,6 +85,7 @@ async fn start(config: Config, path: PathBuf) -> (std::net::SocketAddr, Arc<Atom
             restart: None,
             overlay: None,
         }),
+        skim: None,
         limit_unit: Duration::from_millis(100),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -262,6 +263,7 @@ async fn admin_api() {
         ("GET", "/api/admin/sessions"),
         ("GET", "/api/admin/config"),
         ("GET", "/api/admin/stats"),
+        ("GET", "/api/admin/skimmers"),
         ("POST", "/api/admin/sessions/1/kick"),
     ] {
         assert_eq!(http(addr, m, p, None, None).await.status, 401, "{p}");
@@ -419,6 +421,10 @@ async fn admin_api() {
     let threads = s["threads"].as_array().unwrap();
     assert!(threads.iter().any(|t| t["cpu_pct"].is_f64()), "{s}");
     assert_eq!(s["sessions"], 1);
+
+    // no skimmer service in this server
+    let k = me("GET", "/api/admin/skimmers", None).await.json();
+    assert_eq!(k, json!({"available": false}));
 
     // restart isn't wired up here
     assert_eq!(me("POST", "/api/admin/restart", None).await.status, 501);

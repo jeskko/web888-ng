@@ -35,6 +35,17 @@ async fn start_with(
     Arc<AtomicBool>,
     Arc<web888_core::leases::Channels>,
 ) {
+    start_skim(config, None).await
+}
+
+async fn start_skim(
+    config: web888_config::Config,
+    skim: Option<web888_web::session::Skim>,
+) -> (
+    std::net::SocketAddr,
+    Arc<AtomicBool>,
+    Arc<web888_core::leases::Channels>,
+) {
     let scene = Scene::new().tone(TONE, -40.0).adc_noise();
     let mut radio = SimRadio::new(SimConfig::hf(scene, Pacing::RealTime));
     let caps = radio.caps();
@@ -85,6 +96,7 @@ async fn start_with(
         next_session: Default::default(),
         users: Default::default(),
         admin: Default::default(),
+        skim,
         limit_unit: std::time::Duration::from_millis(100),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
@@ -430,5 +442,93 @@ async fn idle_and_time_limits_end_sessions() {
         warn.iter().any(|w| w.contains("time limit (5 min)")),
         "{warn:?}"
     );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+fn spot(time: f64, call: &str, dial: f64) -> web888_skim::Spot {
+    web888_skim::Spot {
+        time,
+        mode: "FT8",
+        dial_hz: dial,
+        freq_hz: dial + 1234.4,
+        snr_db: -12.3,
+        dt_s: 0.24,
+        message: format!("CQ {call} FN42"),
+        sender: Some(call.into()),
+        grid: Some("FN42".into()),
+        live: false,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn spots_come_recent_first_then_new() {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let bus = web888_skim::SpotBus::new(100);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64();
+    bus.publish(spot(now - 7200.0, "K1OLD", 7_074_000.0));
+    bus.publish(spot(now - 60.0, "K1ABC", 7_074_000.0));
+    bus.publish(spot(now - 45.0, "K2ABC", 14_074_000.0));
+    let mut config = web888_config::Config::default();
+    config.skimmer.push(web888_config::Skimmer {
+        dial: 7_074_000.0,
+        ..Default::default()
+    });
+    let skim = web888_web::session::Skim {
+        bus: bus.clone(),
+        skimmers: None,
+        pskreporter: None,
+        live: false,
+    };
+    let (addr, stop, _) = start_skim(config, Some(skim)).await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    let hello = json(&ws.next().await.unwrap().unwrap()).unwrap();
+    assert!(
+        matches!(hello, ServerMsg::Hello { spots: true, .. }),
+        "{hello:?}"
+    );
+    ws.send(Message::text(r#"{"type":"spots","on":true}"#))
+        .await
+        .unwrap();
+    let mut batches = vec![];
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+    while batches.len() < 2 && tokio::time::Instant::now() < deadline {
+        let m = tokio::time::timeout(Duration::from_secs(5), ws.next())
+            .await
+            .unwrap()
+            .unwrap()
+            .unwrap();
+        if let Some(ServerMsg::Spots { spots }) = json(&m) {
+            if batches.is_empty() {
+                bus.publish(spot(now, "K3NEW", 7_074_000.0));
+            }
+            batches.push(spots);
+        }
+    }
+    let calls = |v: &Vec<proto::SpotMsg>| {
+        v.iter()
+            .map(|s| s.call.clone().unwrap())
+            .collect::<Vec<_>>()
+    };
+    assert_eq!(calls(&batches[0]), ["K1ABC", "K2ABC"], "the last 30 min");
+    assert_eq!(calls(&batches[1]), ["K3NEW"]);
+    let s = &batches[0][0];
+    assert_eq!(
+        (s.band.as_str(), s.hz, s.snr, s.dt),
+        ("40m", 7_075_234.0, -12.0, 0.2)
+    );
+
+    let mut c = tokio::net::TcpStream::connect(addr).await.unwrap();
+    c.write_all(b"GET /api/spots?band=20m HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n")
+        .await
+        .unwrap();
+    let mut r = String::new();
+    c.read_to_string(&mut r).await.unwrap();
+    assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+    assert!(r.contains("K2ABC") && !r.contains("K1ABC"), "{r}");
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }

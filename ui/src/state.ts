@@ -8,8 +8,9 @@ import { Player, type PlayerStats } from "./audio/player.ts";
 import { clamp, formatKhz } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
-import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
-import { FLAG_GAP, FLAG_OVERLOAD } from "./proto.ts";
+import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
+import { FLAG_GAP, FLAG_OVERLOAD, wfSpan } from "./proto.ts";
+import { addSpots } from "./spots.ts";
 
 export const conn = signal<ConnState>("connecting");
 /** The receiver wants its listener password (and we have no login). */
@@ -25,6 +26,13 @@ export const sessionId = signal<number | null>(null);
 export const lease = signal<{ granted: boolean; position: number } | null>(null);
 /** Other users who share their frequency. */
 export const users = signal<UserMark[]>([]);
+/** The server runs skimmers; their spots, oldest first. */
+export const spotsAvail = signal(false);
+export const spots = signal<Spot[]>([]);
+/** The spot list is open (remembered in this browser). */
+export const spotsOpen = signal(load("spotsOpen") === "1");
+/** The next spots message holds the recent spots (after a hello). */
+let spotsFresh = false;
 /** A passing message from the server (e.g. listening along ended). */
 export const notice = signal("");
 export const status = signal<Status | null>(null);
@@ -47,6 +55,22 @@ type LineSink = (l: WfLine) => void;
 const sinks: LineSink[] = [];
 export function onLine(f: LineSink): void {
   sinks.push(f);
+}
+
+/** A per-browser setting, when the browser lets us keep one. */
+function load(key: string): string | null {
+  try {
+    return localStorage.getItem(`web888.${key}`);
+  } catch {
+    return null;
+  }
+}
+function save(key: string, v: string): void {
+  try {
+    localStorage.setItem(`web888.${key}`, v);
+  } catch {
+    // not kept: fine
+  }
 }
 
 let link: Conn | null = null;
@@ -123,7 +147,12 @@ export function connect(): void {
             limits.value = m.limits;
             server.value = m.server;
             sessionId.value = m.session;
+            spotsAvail.value = !!m.spots;
           });
+          if (m.spots) {
+            spotsFresh = true;
+            link?.send({ type: "spots", on: true });
+          }
           break;
         case "state": {
           const { type: _, ...s } = m;
@@ -143,6 +172,10 @@ export function connect(): void {
           break;
         case "users":
           users.value = m.users;
+          break;
+        case "spots":
+          spots.value = spotsFresh ? m.spots : addSpots(spots.value, m.spots);
+          spotsFresh = false;
           break;
         case "busy":
           connNote.value = m.msg;
@@ -236,6 +269,23 @@ export function pickUser(m: UserMark): void {
   } else {
     listenTo(m.id);
   }
+}
+
+export function showSpots(on: boolean): void {
+  spotsOpen.value = on;
+  save("spotsOpen", on ? "1" : "0");
+}
+
+/** A spot was picked: tune to its skimmer's dial (USB) and bring the
+ * signal into view. */
+export function pickSpot(s: Spot): void {
+  if (st.value?.mode !== "usb") setMode("usb");
+  tune(s.dial);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  if (Math.abs(s.hz - v.center_hz) > 0.45 * span) setView({ ...v, center_hz: s.dial + 1500 });
 }
 
 export function setMode(mode: Mode): void {

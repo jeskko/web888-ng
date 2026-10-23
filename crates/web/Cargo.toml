@@ -21,6 +21,7 @@ tokio-rustls = { version = "0.26.6", default-features = false, features = ["ring
 rcgen = { version = "0.14.10", default-features = false, features = ["pem", "ring"] }
 web888-config.workspace = true
 web888-core.workspace = true
+web888-skim.workspace = true
 tower = { version = "0.5.3", features = ["util"] }
 argon2 = "0.6.0"
 getrandom = "0.4.3"

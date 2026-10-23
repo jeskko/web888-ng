@@ -1,15 +1,20 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Spectrum + waterfall pane: canvases, redraw loop, and the pointer
 // interactions: wheel zooms around the cursor, drag pans, click tunes,
-// shift+wheel steps the dial, a click on a user marker picks that user.
+// shift+wheel steps the dial, a click on a user marker picks that user,
+// a click on a spot label tunes to it.
 
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, snapFor, stepFor } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
-import type { UserMark } from "../proto.ts";
-import { lease, limits, onLine, pickUser, radio, range, setView, st, tune, users } from "../state.ts";
+import type { Spot, UserMark } from "../proto.ts";
+import { latest, utcTime } from "../spots.ts";
+import { lease, limits, onLine, pickSpot, pickUser, radio, range, setView, spots, st, tune, users } from "../state.ts";
 import { MARK_PX, noiseFloor, SCALE_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
+
+/** Spots on the scale: those of about the last two FT8 slots. */
+const SPOTS_SHOWN_S = 40;
 
 /** Auto colour range: follows the noise floor of recent lines. */
 const auto = { min: NaN, max: NaN, n: 0 };
@@ -92,6 +97,9 @@ export function Pane() {
     const unsubUsers = users.subscribe(() => {
       dirty = true;
     });
+    const unsubSpots = spots.subscribe(() => {
+      dirty = true;
+    });
 
     let raf = 0;
     const frame = () => {
@@ -104,7 +112,13 @@ export function Pane() {
       const { min, max } = currentRange();
       wf?.draw(v.start, v.span, min, max);
       const marks = users.value.map((u) => ({ hz: u.hz, on: u.id === s.listen }));
-      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr, marks);
+      const shown = latest(spots.value, Date.now() / 1000 - SPOTS_SHOWN_S).map((p) => ({
+        hz: p.hz,
+        text: p.call ?? p.msg,
+        other: p.mode !== "FT8",
+        item: p,
+      }));
+      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr, marks, shown);
     };
     raf = requestAnimationFrame(frame);
     const unsubRange = range.subscribe(() => {
@@ -137,6 +151,15 @@ export function Pane() {
       }
       return best;
     };
+    /** The spot label under a pointer on the spectrum, if any. */
+    const spotAt = (e: PointerEvent): Spot | null => {
+      if (e.currentTarget !== sc) return null;
+      const rect = sc.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * dpr;
+      const py = (e.clientY - rect.top) * dpr;
+      const h = spec.spotHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
+      return h ? (h.item as Spot) : null;
+    };
     const down = (e: PointerEvent) => {
       const s = st.value;
       if (!s || e.button !== 0) return;
@@ -145,17 +168,25 @@ export function Pane() {
         pickUser(m);
         return;
       }
+      const p = spotAt(e);
+      if (p) {
+        pickSpot(p);
+        return;
+      }
       drag = { x: e.clientX, center: s.wf.center_hz, moved: false, id: e.pointerId };
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
       if (!drag) {
         const m = markAt(e);
+        const p = m ? null : spotAt(e);
         const own = lease.value?.granted;
         sc.title = m
           ? `${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
-          : "";
-        sc.style.cursor = m ? "pointer" : "";
+          : p
+            ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
+            : "";
+        sc.style.cursor = m || p ? "pointer" : "";
       }
       const s = st.value;
       const v = view();
@@ -207,6 +238,7 @@ export function Pane() {
       unsub();
       unsubBins();
       unsubUsers();
+      unsubSpots();
       unsubRange();
     };
   }, []);

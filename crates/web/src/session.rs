@@ -48,10 +48,26 @@ pub struct Shared {
     pub users: Users,
     /// Logins, the session registry and the admin's hooks.
     pub admin: crate::admin::Admin,
+    /// The skimmers' spots and status (none: no skimmer service).
+    pub skim: Option<Skim>,
     /// One minute of `limits.session_minutes` / `idle_minutes` (60 s;
     /// tests shorten it).
     pub limit_unit: Duration,
 }
+
+/// What the web side sees of the skimmers (`doc/m4-skimmers.md` §5).
+pub struct Skim {
+    pub bus: Arc<web888_skim::SpotBus>,
+    pub skimmers: Option<Arc<web888_skim::Skimmers>>,
+    pub pskreporter: Option<Arc<Mutex<web888_skim::pskreporter::Status>>>,
+    /// The radio receives live signals (spots can be uploaded).
+    pub live: bool,
+}
+
+/// Recent spots a session gets when it asks: this far back, at most
+/// this many.
+const SPOTS_BACK_S: f64 = 30.0 * 60.0;
+const SPOTS_FIRST: usize = 1000;
 
 /// Close codes of sessions the server ends by its limits.
 pub const CLOSE_TIME_LIMIT: u16 = 4001;
@@ -155,6 +171,7 @@ impl Shared {
                 bins_max: BINS_MAX,
                 fps_max: FPS_MAX,
             },
+            spots: self.skim.is_some() && self.live.borrow().skimmer.iter().any(|s| s.enabled),
         }
     }
 
@@ -372,6 +389,8 @@ struct Session<'a> {
     sink: WfSink,
     /// `st.listen` for the admin (0: none).
     listen_pub: Arc<AtomicU64>,
+    /// New spots, when the client asked for them.
+    spots: Option<tokio::sync::broadcast::Receiver<Arc<web888_skim::Spot>>>,
 }
 
 impl Session<'_> {
@@ -550,6 +569,39 @@ impl Session<'_> {
                 self.stop_listening();
                 vec![st(self)]
             }
+            ClientMsg::Spots { on: false } => {
+                self.spots = None;
+                vec![]
+            }
+            ClientMsg::Spots { on: true } => {
+                let Some(sk) = &self.sh.skim else {
+                    return vec![ServerMsg::Spots { spots: vec![] }];
+                };
+                let now = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .unwrap_or_default()
+                    .as_secs_f64();
+                let (old, rx) = sk.bus.follow(now - SPOTS_BACK_S);
+                self.spots = Some(rx);
+                let skip = old.len().saturating_sub(SPOTS_FIRST);
+                vec![ServerMsg::Spots {
+                    spots: old[skip..].iter().map(|s| (&**s).into()).collect(),
+                }]
+            }
+        }
+    }
+
+    /// Spots that came since the last call.
+    fn new_spots(&mut self) -> Vec<proto::SpotMsg> {
+        use tokio::sync::broadcast::error::TryRecvError;
+        let mut v = vec![];
+        let Some(rx) = &mut self.spots else { return v };
+        loop {
+            match rx.try_recv() {
+                Ok(s) => v.push((&*s).into()),
+                Err(TryRecvError::Lagged(_)) => {}
+                Err(_) => return v,
+            }
         }
     }
 }
@@ -677,6 +729,7 @@ pub async fn run(
         audio: audio_cmd,
         sink,
         listen_pub,
+        spots: None,
     };
     s.route();
 
@@ -783,6 +836,10 @@ pub async fn run(
                 if users_sent.as_ref() != Some(&users) {
                     users_sent = Some(users.clone());
                     r.push(ServerMsg::Users { users });
+                }
+                let spots = s.new_spots();
+                if !spots.is_empty() {
+                    r.push(ServerMsg::Spots { spots });
                 }
                 r
             }

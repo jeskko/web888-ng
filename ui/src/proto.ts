@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // WebSocket protocol v2, mirroring crates/web/src/proto.rs
-// (doc/m2-web-ui.md §4; M3 additions in doc/m3-multi-user.md §8).
+// (doc/m2-web-ui.md §4; M3 additions in doc/m3-multi-user.md §8; spots
+// in doc/m4-skimmers.md §5).
 // Fixtures shared with the Rust tests: crates/web/tests/proto/.
 
 export const PROTO = 2;
@@ -73,6 +74,25 @@ export interface UserMark {
   mode: Mode;
 }
 
+/** A decoded transmission from a skimmer. */
+export interface Spot {
+  /** Slot start, UTC seconds. */
+  t: number;
+  mode: string;
+  /** "40m", or "" outside the amateur bands. */
+  band: string;
+  /** The skimmer's dial (USB). */
+  dial: number;
+  /** RF frequency of the signal (its lowest tone). */
+  hz: number;
+  snr: number;
+  dt: number;
+  msg: string;
+  /** The sender and its locator, when the message says. */
+  call?: string;
+  grid?: string;
+}
+
 export interface Status {
   adc_overloads: number;
   clock_ppm: number;
@@ -92,10 +112,13 @@ export type ServerMsg =
       limits: Limits;
       session: number;
       class: string;
+      /** The server runs skimmers (spots can be asked for). */
+      spots?: boolean;
     }
   | ({ type: "state" } & State)
   | { type: "lease"; granted: boolean; position: number }
   | { type: "users"; users: UserMark[] }
+  | { type: "spots"; spots: Spot[] }
   | ({ type: "status" } & Status)
   | { type: "pong"; t: number }
   | { type: "busy"; msg: string }
@@ -109,7 +132,8 @@ export type ClientMsg =
   | ({ type: "wf" } & WfReq)
   | { type: "ping"; t: number }
   | { type: "share"; on: boolean }
-  | { type: "listen"; user: number | null };
+  | { type: "listen"; user: number | null }
+  | { type: "spots"; on: boolean };
 
 export const KIND_AUDIO = 1;
 export const KIND_WF = 2;
