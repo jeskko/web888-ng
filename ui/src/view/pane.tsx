@@ -13,9 +13,6 @@ import { lease, limits, onLine, pickSpot, pickUser, radio, range, setView, spots
 import { MARK_PX, noiseFloor, SCALE_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
 
-/** Spots on the scale: those of about the last two FT8 slots. */
-const SPOTS_SHOWN_S = 40;
-
 /** Auto colour range: follows the noise floor of recent lines. */
 const auto = { min: NaN, max: NaN, n: 0 };
 
@@ -112,10 +109,11 @@ export function Pane() {
       const { min, max } = currentRange();
       wf?.draw(v.start, v.span, min, max);
       const marks = users.value.map((u) => ({ hz: u.hz, on: u.id === s.listen }));
-      const shown = latest(spots.value, Date.now() / 1000 - SPOTS_SHOWN_S).map((p) => ({
+      const shown = latest(spots.value, Date.now() / 1000).map((p) => ({
         hz: p.hz,
         text: p.call ?? p.msg,
         other: p.mode !== "FT8",
+        wspr: p.mode === "WSPR",
         item: p,
       }));
       spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr, marks, shown);

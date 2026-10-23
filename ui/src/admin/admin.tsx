@@ -341,6 +341,34 @@ function SkimCard({ skim }: { skim: Skimmers }) {
           )}
         </dl>
       )}
+      <h4>WSPRnet</h4>
+      {!skim.wsprnet || !skim.wsprnet.enabled ? (
+        <p class="dim">Not uploading ([report] wsprnet).</p>
+      ) : (
+        <dl>
+          <dt>Sent</dt>
+          <dd>
+            {skim.wsprnet.sent} spots{skim.wsprnet.last_sent ? `, last ${ago(skim.wsprnet.last_sent)} ago` : ""}
+          </dd>
+          <dt>Waiting</dt>
+          <dd>{skim.wsprnet.pending}</dd>
+          {skim.wsprnet.last_reply && (
+            <>
+              <dt>Reply</dt>
+              <dd class="dim">{skim.wsprnet.last_reply}</dd>
+            </>
+          )}
+          {(skim.wsprnet.failed > 0 || skim.wsprnet.last_error) && (
+            <>
+              <dt>Failed</dt>
+              <dd class="warn">
+                {skim.wsprnet.failed}
+                {skim.wsprnet.last_error ? ` (${skim.wsprnet.last_error})` : ""}
+              </dd>
+            </>
+          )}
+        </dl>
+      )}
       {!skim.live && <p class="warn">This radio isn't live (a recording or a simulation): no spots are uploaded.</p>}
     </section>
   );

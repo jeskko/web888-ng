@@ -12,5 +12,6 @@ web888-dsp.workspace = true
 web888-core.workspace = true
 web888-config.workspace = true
 web888-ftx.workspace = true
+web888-wspr.workspace = true
 libc.workspace = true
 tokio = { version = "1.54.1", features = ["sync"] }

@@ -279,6 +279,7 @@ pub enum SkimMode {
     #[default]
     Ft8,
     Ft4,
+    Wspr,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -332,6 +333,11 @@ pub struct Report {
     pub pskreporter: bool,
     /// PSKReporter's address (their test listener: pskreporter.info:14739).
     pub pskreporter_server: String,
+    /// Upload WSPR spots to WSPRnet (needs [station] callsign and locator;
+    /// live signals only).
+    pub wsprnet: bool,
+    /// WSPRnet's spot URL.
+    pub wsprnet_url: String,
 }
 
 impl Default for Report {
@@ -339,6 +345,8 @@ impl Default for Report {
         Report {
             pskreporter: false,
             pskreporter_server: "report.pskreporter.info:4739".into(),
+            wsprnet: false,
+            wsprnet_url: "http://wsprnet.org/post".into(),
         }
     }
 }

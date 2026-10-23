@@ -70,7 +70,9 @@
       "$ref": "#/$defs/Report",
       "default": {
         "pskreporter": false,
-        "pskreporter_server": "report.pskreporter.info:4739"
+        "pskreporter_server": "report.pskreporter.info:4739",
+        "wsprnet": false,
+        "wsprnet_url": "http://wsprnet.org/post"
       }
     },
     "station": {
@@ -424,6 +426,16 @@
           "description": "PSKReporter's address (their test listener: pskreporter.info:14739).",
           "type": "string",
           "default": "report.pskreporter.info:4739"
+        },
+        "wsprnet": {
+          "description": "Upload WSPR spots to WSPRnet (needs [station] callsign and locator;\nlive signals only).",
+          "type": "boolean",
+          "default": false
+        },
+        "wsprnet_url": {
+          "description": "WSPRnet's spot URL.",
+          "type": "string",
+          "default": "http://wsprnet.org/post"
         }
       },
       "additionalProperties": false
@@ -478,7 +490,8 @@
       "type": "string",
       "enum": [
         "ft8",
-        "ft4"
+        "ft4",
+        "wspr"
       ]
     }
   }

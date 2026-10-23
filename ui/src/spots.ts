@@ -47,12 +47,19 @@ export function utcTime(t: number): string {
   return new Date(t * 1000).toISOString().slice(11, 19);
 }
 
-/** The latest spot of each sender (or message, without one) from the
- * slots since `since`: what the scale shows. */
-export function latest(spots: Spot[], since: number): Spot[] {
+/** How long a spot stays on the scale: about two slots of its mode. */
+export function shownFor(mode: string): number {
+  return mode === "WSPR" ? 250 : mode === "FT4" ? 20 : 40;
+}
+
+/** The latest spot of each sender (or message, without one) still shown
+ * at `now` (UTC seconds): what the scale shows. */
+export function latest(spots: Spot[], now: number): Spot[] {
   const by = new Map<string, Spot>();
-  for (let k = spots.length - 1; k >= 0 && spots[k].t >= since; k--) {
+  const oldest = now - shownFor("WSPR");
+  for (let k = spots.length - 1; k >= 0 && spots[k].t >= oldest; k--) {
     const s = spots[k];
+    if (s.t < now - shownFor(s.mode)) continue;
     const key = `${s.mode} ${s.call ?? s.msg}`;
     if (!by.has(key)) by.set(key, s);
   }

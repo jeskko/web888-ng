@@ -51,7 +51,7 @@ test("utc time", () => {
 });
 
 test("latest spot per sender", () => {
-  const l = latest(list, 10);
+  const l = latest(list, 50);
   assert.deepEqual(
     l.map((s) => [s.call, s.t]),
     [

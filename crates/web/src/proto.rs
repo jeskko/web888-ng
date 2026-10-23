@@ -190,6 +190,11 @@ pub struct SpotMsg {
     pub call: Option<String>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub grid: Option<String>,
+    /// WSPR: drift (Hz) and transmitter power (dBm).
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub drift: Option<f32>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub dbm: Option<i32>,
 }
 
 impl From<&web888_skim::Spot> for SpotMsg {
@@ -205,6 +210,8 @@ impl From<&web888_skim::Spot> for SpotMsg {
             msg: s.message.clone(),
             call: s.sender.clone(),
             grid: s.grid.clone(),
+            drift: s.drift,
+            dbm: s.dbm,
         }
     }
 }

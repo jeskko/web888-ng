@@ -292,6 +292,15 @@ which takes a 6-character locator from the fix.
   73 s for a busy 40 m slot (46 s at 1000 cycles, same 12 decodes).
   `decode_until` takes a deadline.
 
+* Step 8, WSPR runtime and WSPRnet (2026-10-24): `mode = "wspr"` bands
+  use 2-minute slots (114 s collected). Spots carry drift and dBm.
+  PSKReporter skips WSPR. `wsprnet.rs` sends one HTTP GET per spot to
+  `wsprnet.org/post` with the stock firmware's fields: rqrg is dial +
+  1500 Hz, the call goes without brackets, type 2 has an empty grid, and
+  `<...>` is skipped. Three tries 30 s apart. `[report] wsprnet` turns it
+  on, and it is live only. The admin card and metrics show it. Live from
+  the HackRF: WSPRnet answered "1 out of 1 spot(s) added".
+
 ## 8. Open
 
 * Board CPU: how many FT8 bands fit next to 12 users. Measured on the

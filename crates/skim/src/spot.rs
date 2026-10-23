@@ -19,6 +19,10 @@ pub struct Spot {
     /// The transmitting station, when the message says.
     pub sender: Option<String>,
     pub grid: Option<String>,
+    /// WSPR: frequency drift over the transmission (Hz) and the
+    /// transmitter's power (dBm).
+    pub drift: Option<f32>,
+    pub dbm: Option<i32>,
     /// Received live (not from a recording or simulation).
     pub live: bool,
 }
@@ -112,6 +116,8 @@ mod tests {
             message: "CQ K1ABC FN42".into(),
             sender: Some("K1ABC".into()),
             grid: Some("FN42".into()),
+            drift: None,
+            dbm: None,
             live: true,
         }
     }

@@ -91,6 +91,9 @@ export interface Spot {
   /** The sender and its locator, when the message says. */
   call?: string;
   grid?: string;
+  /** WSPR: drift (Hz) and transmitter power (dBm). */
+  drift?: number;
+  dbm?: number;
 }
 
 export interface Status {

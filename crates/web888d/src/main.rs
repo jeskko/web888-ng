@@ -516,6 +516,17 @@ fn start_skimmers(
             env!("CARGO_PKG_VERSION"),
         )?
     };
+    let wsprnet = {
+        let live = live.clone();
+        web888_skim::wsprnet::spawn(
+            sk.bus.clone(),
+            move || {
+                let c = live.borrow().clone();
+                (c.station.clone(), c.report.clone())
+            },
+            env!("CARGO_PKG_VERSION"),
+        )?
+    };
     let mut spots = sk.bus.subscribe();
     std::thread::Builder::new()
         .name("skim-log".into())
@@ -546,6 +557,7 @@ fn start_skimmers(
         bus: sk.bus.clone(),
         skimmers: Some(sk),
         pskreporter: Some(psk),
+        wsprnet: Some(wsprnet),
         live: radio_live,
     })
 }

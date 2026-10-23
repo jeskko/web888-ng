@@ -456,6 +456,8 @@ fn spot(time: f64, call: &str, dial: f64) -> web888_skim::Spot {
         message: format!("CQ {call} FN42"),
         sender: Some(call.into()),
         grid: Some("FN42".into()),
+        drift: None,
+        dbm: None,
         live: false,
     }
 }
@@ -480,6 +482,7 @@ async fn spots_come_recent_first_then_new() {
         bus: bus.clone(),
         skimmers: None,
         pskreporter: None,
+        wsprnet: None,
         live: false,
     };
     let (addr, stop, _) = start_skim(config, Some(skim)).await;

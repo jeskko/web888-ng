@@ -26,8 +26,9 @@ export interface Marker {
 export interface SpotLabel<T = unknown> {
   hz: number;
   text: string;
-  /** Not FT8: drawn in another colour. */
+  /** Not FT8: drawn in another colour (WSPR in a third). */
   other: boolean;
+  wspr?: boolean;
   item: T;
 }
 
@@ -177,7 +178,7 @@ export class Spectrum {
       const items = spots.map((s) => ({ item: s, x: x(s.hz), width: ctx.measureText(s.text).width })).filter((s) => s.x >= 0 && s.x <= w);
       for (const p of placeLabels(items, SPOT_ROWS, 4 * dpr)) {
         const s = p.item;
-        const colour = s.other ? "#c89bff" : "#7fd1ff";
+        const colour = s.wspr ? "#ffb37f" : s.other ? "#c89bff" : "#7fd1ff";
         ctx.fillStyle = colour;
         ctx.fillRect(Math.round(p.x), ph - 3 * dpr, dpr, 3 * dpr);
         if (p.row < 0) continue;

@@ -647,9 +647,23 @@ async fn skimmers(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
             "last_error": p.last_error,
         })
     });
+    let wsprnet = sk.wsprnet.as_ref().map(|w| {
+        let w = w.lock().unwrap().clone();
+        json!({
+            "enabled": w.enabled,
+            "pending": w.pending,
+            "sent": w.sent,
+            "failed": w.failed,
+            "skipped_not_live": w.skipped_not_live,
+            "last_sent": w.last_sent,
+            "last_reply": w.last_reply,
+            "last_error": w.last_error,
+        })
+    });
     Json(json!({
         "available": true,
         "live": sk.live,
+        "wsprnet": wsprnet,
         "callsign": cfg.station.callsign,
         "locator": cfg.station.locator,
         "bands": bands,
@@ -820,6 +834,15 @@ async fn metrics(State(sh): State<Arc<Shared>>) -> Response {
             "counter",
             "Spots sent to PSKReporter.",
             &one(p.reports as f64),
+        );
+    }
+    if let Some(w) = sh.skim.as_ref().and_then(|k| k.wsprnet.as_ref()) {
+        let w = w.lock().unwrap().clone();
+        put(
+            "wsprnet_spots_total",
+            "counter",
+            "WSPR spots sent to WSPRnet.",
+            &one(w.sent as f64),
         );
     }
     let hz = clock_ticks();

@@ -113,6 +113,16 @@ export interface Skimmers {
     last_sent: number | null;
     last_error: string | null;
   } | null;
+  wsprnet?: {
+    enabled: boolean;
+    pending: number;
+    sent: number;
+    failed: number;
+    skipped_not_live: number;
+    last_sent: number | null;
+    last_reply: string | null;
+    last_error: string | null;
+  } | null;
 }
 
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };

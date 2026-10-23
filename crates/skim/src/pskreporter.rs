@@ -256,6 +256,10 @@ impl Uploader {
 
     /// Queue a spot (if it should be reported).
     pub fn add(&mut self, s: &Spot) {
+        // WSPR goes to WSPRnet
+        if s.mode == "WSPR" {
+            return;
+        }
         if !s.live {
             self.status.skipped_not_live += 1;
             return;
@@ -470,6 +474,8 @@ mod tests {
             message: format!("CQ {call} FN42"),
             sender: Some(call.into()),
             grid: Some("FN42".into()),
+            drift: None,
+            dbm: None,
             live,
         }
     }

@@ -13,6 +13,7 @@ pub mod pskreporter;
 pub mod slots;
 pub mod spot;
 pub mod usb;
+pub mod wsprnet;
 
 pub use spot::{Spot, SpotBus};
 
@@ -49,6 +50,13 @@ fn timing(mode: SkimMode) -> Timing {
             period: 7.5,
             collect: 6.6,
             done_by: 7.5 + 6.3,
+        },
+        // WSPR starts 1 s after the even minute and lasts 110.6 s; wsprd
+        // reads 114 s.
+        SkimMode::Wspr => Timing {
+            period: 120.0,
+            collect: 114.0,
+            done_by: 120.0 + 112.0,
         },
     }
 }
@@ -209,6 +217,7 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
     idle_priority();
     let mut ft8 = web888_ftx::ft8::Decoder::new(Default::default());
     let mut ft4 = web888_ftx::ft4::Decoder::new(Default::default());
+    let mut wspr = web888_wspr::Decoder::new(Default::default());
     let mut hashes = web888_ftx::msg::CallHashes::default();
     loop {
         let (w, waiting) = {
@@ -228,22 +237,57 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         let share = left / (1.0 + waiting as f64 / threads as f64);
         let deadline = Instant::now() + Duration::from_secs_f64(share);
         let cpu0 = thread_cpu();
-        let cut0 = ft8.stats.cut_short + ft4.stats.cut_short;
-        let (mode, ds) = match w.band.cfg.mode {
-            SkimMode::Ft8 => (
+        let cut0 = ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short;
+        let dial = w.band.cfg.dial;
+        let spot = |mode, freq: f64, snr, dt, message: String, sender, grid| Spot {
+            time: w.start,
+            mode,
+            dial_hz: dial,
+            freq_hz: dial + freq,
+            snr_db: snr,
+            dt_s: dt,
+            message,
+            sender,
+            grid,
+            drift: None,
+            dbm: None,
+            live: w.live,
+        };
+        let ftx = |mode, ds: Vec<web888_ftx::ft8::Decode>| -> Vec<Spot> {
+            ds.into_iter()
+                .map(|d| {
+                    let m = d.message;
+                    spot(mode, d.freq as f64, d.snr, d.dt, m.text, m.sender, m.grid)
+                })
+                .collect()
+        };
+        let ds: Vec<Spot> = match w.band.cfg.mode {
+            SkimMode::Ft8 => ftx(
                 "FT8",
                 ft8.decode_until(&w.audio, &mut hashes, Some(deadline)),
             ),
-            SkimMode::Ft4 => (
+            SkimMode::Ft4 => ftx(
                 "FT4",
                 ft4.decode_until(&w.audio, &mut hashes, Some(deadline)),
             ),
+            SkimMode::Wspr => wspr
+                .decode_until(&w.audio, Some(deadline))
+                .into_iter()
+                .map(|d| {
+                    let m = d.message;
+                    Spot {
+                        drift: Some(d.drift),
+                        dbm: Some(m.dbm),
+                        ..spot("WSPR", d.freq, d.snr, d.dt, m.text, m.call, m.grid)
+                    }
+                })
+                .collect(),
         };
         st.cpu_us
             .fetch_add((thread_cpu() - cpu0).as_micros() as u64, Ordering::Relaxed);
         st.slots.fetch_add(1, Ordering::Relaxed);
         st.cut_short.fetch_add(
-            ft8.stats.cut_short + ft4.stats.cut_short - cut0,
+            ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short - cut0,
             Ordering::Relaxed,
         );
         st.last_slot.store(w.start as u64, Ordering::Relaxed);
@@ -259,18 +303,7 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
             );
         }
         for d in ds {
-            bus.publish(Spot {
-                time: w.start,
-                mode,
-                dial_hz: w.band.cfg.dial,
-                freq_hz: w.band.cfg.dial + d.freq as f64,
-                snr_db: d.snr,
-                dt_s: d.dt,
-                sender: d.message.sender.clone(),
-                grid: d.message.grid.clone(),
-                message: d.message.text,
-                live: w.live,
-            });
+            bus.publish(d);
         }
     }
 }

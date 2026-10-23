@@ -27,7 +27,9 @@
     {"type": "spots", "spots": [{"t": 1792789740, "mode": "FT8", "band": "40m", "dial": 7074000, "hz": 7075234,
       "snr": -12, "dt": 0.5, "msg": "CQ K1ABC FN42", "call": "K1ABC", "grid": "FN42"},
       {"t": 1792789740, "mode": "FT8", "band": "40m", "dial": 7074000, "hz": 7074811, "snr": 3, "dt": -0.25,
-       "msg": "<...> K1ABC RR73"}]},
+       "msg": "<...> K1ABC RR73"},
+      {"t": 1792789920, "mode": "WSPR", "band": "40m", "dial": 7038600, "hz": 7040012, "snr": -12, "dt": 0.5,
+       "msg": "DL1STF JN58 37", "call": "DL1STF", "grid": "JN58", "drift": -1, "dbm": 37}]},
     {"type": "pong", "t": 1234.5},
     {"type": "busy", "msg": "too many sessions from your address (at most 4)"},
     {"type": "error", "msg": "bad message"}

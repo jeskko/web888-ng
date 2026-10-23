@@ -60,6 +60,7 @@ pub struct Skim {
     pub bus: Arc<web888_skim::SpotBus>,
     pub skimmers: Option<Arc<web888_skim::Skimmers>>,
     pub pskreporter: Option<Arc<Mutex<web888_skim::pskreporter::Status>>>,
+    pub wsprnet: Option<Arc<Mutex<web888_skim::wsprnet::Status>>>,
     /// The radio receives live signals (spots can be uploaded).
     pub live: bool,
 }
