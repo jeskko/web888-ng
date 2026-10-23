@@ -9,8 +9,10 @@ use web888_ftx::{ft8, msg::CallHashes, wav};
 
 fn main() {
     let trace = std::env::var("FTX_TRACE").ok().and_then(|v| v.parse().ok());
+    let residual = std::env::var("FTX_RESIDUAL").ok();
     let mut cfg = ft8::Config {
         trace,
+        keep_residual: residual.is_some(),
         ..Default::default()
     };
     // Tuning knobs: FTX_SET="llr_scale=4,sync_min=1.3,..."
@@ -27,16 +29,28 @@ fn main() {
             "max_candidates" => cfg.max_candidates = f as usize,
             "passes" => cfg.passes = f as usize,
             "osd_order2" => {
-                cfg.osd = Some(web888_ftx::osd::Depth {
-                    order1: 91,
-                    order2: f as usize,
-                })
+                cfg.osd
+                    .get_or_insert(web888_ftx::osd::Depth {
+                        order1: 91,
+                        order2: 0,
+                        order3: 0,
+                    })
+                    .order2 = f as usize
+            }
+            "osd_order3" => {
+                cfg.osd
+                    .get_or_insert(web888_ftx::osd::Depth {
+                        order1: 91,
+                        order2: 0,
+                        order3: 0,
+                    })
+                    .order3 = f as usize
             }
             "osd_off" => cfg.osd = None,
             "osd_max_distance" => cfg.osd_max_distance = f,
             "osd_max_hard_errors" => cfg.osd_max_hard_errors = f as usize,
-            "osd_max_distance_unknown" => cfg.osd_max_distance_unknown = f,
-            "osd_max_hard_errors_unknown" => cfg.osd_max_hard_errors_unknown = f as usize,
+            "osd_max_ratio" => cfg.osd_max_ratio = f,
+            "osd_max_ratio_known" => cfg.osd_max_ratio_known = f,
             _ => panic!("unknown knob {k}"),
         }
     }
@@ -54,10 +68,13 @@ fn main() {
         let t = Instant::now();
         let ds = dec.decode(&x, &mut hashes);
         secs += t.elapsed().as_secs_f64();
+        if let Some(r) = &residual {
+            wav::write(r.as_ref(), dec.residual(), 12_000).unwrap();
+        }
         total += ds.len();
         for d in ds {
             println!(
-                "{hhmmss} {:3.0} {:4.1} {:4.0} ~  {:<37} {:2} {} {:.1} {:.1} {}",
+                "{hhmmss} {:3.0} {:4.1} {:4.0} ~  {:<37} {:2} {} {:.1} {:.1} {} {:.1}",
                 d.snr,
                 d.dt,
                 d.freq,
@@ -66,7 +83,8 @@ fn main() {
                 d.pass,
                 d.sync,
                 d.osd_distance,
-                d.hard_errors
+                d.hard_errors,
+                d.osd_second
             );
         }
     }

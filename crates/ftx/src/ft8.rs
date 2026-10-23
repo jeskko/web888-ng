@@ -40,6 +40,13 @@ const DS_RATE: f32 = 200.0;
 const NFFT2: usize = 3200;
 const DS_NSPS: usize = 32;
 
+/// Frequency offsets tried in the fine sync, Hz.
+const FINE_DF: [f32; 11] = [-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5];
+
+/// Band subtracted around tone 0 of a decoded signal, Hz.
+const SUB_BELOW: f32 = 50.0;
+const SUB_ABOVE: f32 = 94.0;
+
 const SPEC_STEP: usize = NSPS / 4;
 const SPEC_NFFT: usize = 2 * NSPS;
 const SPEC_DF: f32 = RATE / SPEC_NFFT as f32;
@@ -60,13 +67,16 @@ pub struct Config {
     pub osd_max_hard_errors: usize,
     /// ... or whose soft distance is above this.
     pub osd_max_distance: f32,
-    /// The same limits when no callsign in the message has been heard.
-    pub osd_max_hard_errors_unknown: usize,
-    pub osd_max_distance_unknown: f32,
+    /// Largest distance ratio of an OSD result to the runner-up codeword,
+    /// when no callsign in it has been heard and when one has.
+    pub osd_max_ratio: f32,
+    pub osd_max_ratio_known: f32,
     /// Bit LLRs are the soft metrics at unit standard deviation times this.
     pub llr_scale: f32,
     /// Log what happens to candidates within 5 Hz of this frequency.
     pub trace: Option<f32>,
+    /// Keep the audio left after subtracting the decodes (`residual`).
+    pub keep_residual: bool,
 }
 
 impl Default for Config {
@@ -80,14 +90,16 @@ impl Default for Config {
             bp_iterations: 30,
             osd: Some(osd::Depth {
                 order1: 91,
-                order2: 60,
+                order2: 91,
+                order3: 91,
             }),
-            osd_max_hard_errors: 44,
-            osd_max_distance: 70.0,
-            osd_max_hard_errors_unknown: 32,
-            osd_max_distance_unknown: 45.0,
+            osd_max_hard_errors: 52,
+            osd_max_distance: 90.0,
+            osd_max_ratio: 0.65,
+            osd_max_ratio_known: 0.75,
             llr_scale: 5.5,
             trace: None,
+            keep_residual: false,
         }
     }
 }
@@ -107,9 +119,11 @@ pub struct Decode {
     /// How it was decoded: 1-3 = symbols per soft-bit group; +10 if OSD.
     pub how: u8,
     pub pass: u8,
-    /// For OSD decodes: soft distance and contradicted hard decisions.
+    /// For OSD decodes: soft distance, contradicted hard decisions, and
+    /// the distance of the runner-up codeword.
     pub osd_distance: f32,
     pub hard_errors: usize,
+    pub osd_second: f32,
 }
 
 /// Where the time went, accumulated over calls (CPU accounting, tuning).
@@ -155,13 +169,18 @@ struct Candidate {
 pub struct Decoder {
     cfg: Config,
     fft1: Arc<dyn Fft<f32>>,
+    ifft1: Arc<dyn Fft<f32>>,
+    fft2: Arc<dyn Fft<f32>>,
     ifft2: Arc<dyn Fft<f32>>,
     spec_fft: Arc<dyn Fft<f32>>,
     fft32: Arc<dyn Fft<f32>>,
     bp: Bp,
     /// Costas reference waveforms per tone at 200 S/s.
     tone_ref: [[C32; DS_NSPS]; 8],
+    /// exp(-j 2 pi df n / 200) for each fine frequency offset.
+    fine_tw: [[C32; DS_NSPS]; FINE_DF.len()],
     pub stats: Stats,
+    residual: Vec<f32>,
 }
 
 impl Decoder {
@@ -176,17 +195,31 @@ impl Decoder {
         Decoder {
             cfg,
             fft1: p.plan_fft_forward(NFFT1),
+            ifft1: p.plan_fft_inverse(NFFT1),
+            fft2: p.plan_fft_forward(NFFT2),
             ifft2: p.plan_fft_inverse(NFFT2),
             spec_fft: p.plan_fft_forward(SPEC_NFFT),
             fft32: p.plan_fft_forward(DS_NSPS),
             bp: Bp::default(),
             tone_ref,
+            fine_tw: std::array::from_fn(|k| {
+                std::array::from_fn(|n| {
+                    let ph = -2.0 * std::f32::consts::PI * FINE_DF[k] * n as f32 / DS_RATE;
+                    C32::new(ph.cos(), ph.sin())
+                })
+            }),
             stats: Stats::default(),
+            residual: vec![],
         }
     }
 
     pub fn config(&self) -> &Config {
         &self.cfg
+    }
+
+    /// The last slot's audio without its decodes (with `keep_residual`).
+    pub fn residual(&self) -> &[f32] {
+        &self.residual
     }
 
     /// Decode a slot: `audio` starts at the slot boundary (up to 15 s;
@@ -197,24 +230,30 @@ impl Decoder {
         x[..n].copy_from_slice(&audio[..n]);
         let mut found: Vec<Decode> = vec![];
         self.stats.slots += 1;
+        let mut spectrum = self.spectrum(&x);
         for pass in 1..=self.cfg.passes {
+            if pass > 1 {
+                // The audio without what earlier passes decoded.
+                let t = Instant::now();
+                x = self.audio(&spectrum);
+                self.stats.subtract += t.elapsed();
+            }
             let t = Instant::now();
             let cands = self.candidates(&x);
-            let spectrum = self.spectrum(&x);
             self.stats.search += t.elapsed();
             self.stats.candidates += cands.len() as u64;
-            let mut new = vec![];
+            let mut new: Vec<Decode> = vec![];
             for c in cands {
                 let traced = self.cfg.trace.is_some_and(|f| (f - c.freq).abs() < 5.0);
                 if traced {
                     eprintln!("pass {pass} candidate {c:?}");
                 }
-                // Skip candidates sitting on a signal decoded in this pass;
-                // those of earlier passes are subtracted, and what is left
-                // there may be another signal.
+                // Skip candidates sitting on a signal decoded in this pass:
+                // the same signal (now subtracted) seen again. Those of
+                // earlier passes may hide another signal at the same place.
                 if new
                     .iter()
-                    .any(|d: &Decode| (d.freq - c.freq).abs() < 4.0 && (d.dt - c.dt).abs() < 0.08)
+                    .any(|d| (d.freq - c.freq).abs() < 4.0 && (d.dt - c.dt).abs() < 0.08)
                 {
                     if traced {
                         eprintln!("  on a decoded signal");
@@ -222,29 +261,25 @@ impl Decoder {
                     continue;
                 }
                 if let Some(mut d) = self.decode_candidate(&spectrum, c, hashes) {
-                    if found
-                        .iter()
-                        .chain(new.iter())
-                        .any(|e: &Decode| e.bits == d.bits)
-                    {
+                    if found.iter().chain(new.iter()).any(|e| e.bits == d.bits) {
                         continue;
                     }
                     d.pass = pass as u8;
+                    // Subtract right away, so the candidates after it see
+                    // the band without it.
+                    let t = Instant::now();
+                    self.subtract(&mut spectrum, &d);
+                    self.stats.subtract += t.elapsed();
                     new.push(d);
                 }
             }
             if new.is_empty() {
                 break;
             }
-            let t = Instant::now();
-            for d in &new {
-                subtract(&mut x, d);
-            }
-            self.stats.subtract += t.elapsed();
             found.extend(new);
         }
-        if let Ok(path) = std::env::var("FTX_RESIDUAL") {
-            let _ = crate::wav::write(path.as_ref(), &x, RATE as u32);
+        if self.cfg.keep_residual {
+            self.residual = self.audio(&spectrum);
         }
         found
     }
@@ -287,6 +322,58 @@ impl Decoder {
             dt,
             nsync,
             metrics: [1, 2, 3].map(|nsym| soft_bits(&cs, nsym, self.cfg.llr_scale)),
+        }
+    }
+
+    /// Real audio back from the positive half of a slot spectrum.
+    fn audio(&self, spectrum: &[C32]) -> Vec<f32> {
+        let mut buf = vec![C32::default(); NFFT1];
+        buf[..NFFT1 / 2].copy_from_slice(spectrum);
+        for k in 1..NFFT1 / 2 {
+            buf[NFFT1 - k] = spectrum[k].conj();
+        }
+        self.ifft1.process(&mut buf);
+        buf[..SLOT].iter().map(|v| v.re / NFFT1 as f32).collect()
+    }
+
+    /// Remove a decoded signal from the slot spectrum: rebuild it at
+    /// 200 S/s, take its slowly varying complex amplitude from the
+    /// received samples, and subtract its spectrum.
+    fn subtract(&self, spectrum: &mut [C32], d: &Decode) {
+        let t = (d.dt + T0) * DS_RATE;
+        let i0 = t.floor();
+        let frac = (t - i0) / DS_RATE;
+        let i0 = i0 as i64;
+        let cd = self.downsample_shifted(spectrum, d.freq, frac);
+        let reference =
+            tones::synth_complex(&tones::ft8(d.bits), BAUD as f64, 2.0, 0.0, DS_RATE as f64);
+        let at = |n: usize| (i0 + n as i64).rem_euclid(NFFT2 as i64) as usize;
+        let camp: Vec<C32> = reference
+            .iter()
+            .enumerate()
+            .map(|(n, r)| cd[at(n)] * r.conj())
+            .collect();
+        // Two 33-sample moving averages: a triangle 1/3 s wide.
+        let amp = boxcar(&boxcar(&camp, 33), 33);
+        let mut s = vec![C32::default(); NFFT2];
+        for (n, (a, r)) in amp.iter().zip(&reference).enumerate() {
+            s[at(n)] = a * r;
+        }
+        self.fft2.process(&mut s);
+        // Back to the unshifted time base, and to the spectrum's scale
+        // (downsampling scaled by 1 / sqrt(NFFT1 NFFT2)).
+        let scale = ((NFFT1 * NFFT2) as f32).sqrt() / NFFT2 as f32;
+        // The model covers -100..100 Hz around tone 0 at 200 S/s; take
+        // the GFSK sidelobes too (about 1 % of the power is outside the
+        // band the amplitude was measured in).
+        let ib0 = (d.freq / DF1).round() as i64;
+        let ib = (ib0 - (SUB_BELOW / DF1) as i64).max(1);
+        let it = (ib0 + (SUB_ABOVE / DF1) as i64).min(spectrum.len() as i64 - 1);
+        for bin in ib..=it {
+            let k = bin - ib0;
+            let ph = -2.0 * std::f32::consts::PI * k as f32 * DF1 * frac;
+            let v = s[k.rem_euclid(NFFT2 as i64) as usize] * C32::new(ph.cos(), ph.sin()) * scale;
+            spectrum[bin as usize] -= v;
         }
     }
 
@@ -436,24 +523,43 @@ impl Decoder {
         c
     }
 
-    /// Coherent Costas correlation at start sample `i0` (200 S/s), with
-    /// the frequency offset `df` Hz removed.
-    fn sync_fine(&self, cd: &[C32], i0: i64, df: f32) -> f32 {
-        let w = -2.0 * std::f32::consts::PI * df / DS_RATE;
-        let mut sum = 0.0;
+    /// Coherent Costas correlation at start sample `i0` (200 S/s): the
+    /// power of each sync symbol's correlation with its tone, summed.
+    fn sync_fine(&self, cd: &[C32], i0: i64) -> f32 {
+        self.sync_fine_df(cd, i0, None)[0]
+    }
+
+    /// The same for each of the frequency offsets in `FINE_DF` (`Some`),
+    /// or just for none (`None`). An offset only rotates the products
+    /// within a symbol (a common phase per symbol doesn't change the
+    /// power), so a table of 32 rotations per offset does it.
+    fn sync_fine_df(
+        &self,
+        cd: &[C32],
+        i0: i64,
+        offsets: Option<&[[C32; DS_NSPS]; FINE_DF.len()]>,
+    ) -> [f32; FINE_DF.len()] {
+        let mut sum = [0f32; FINE_DF.len()];
+        let mut p = [C32::default(); DS_NSPS];
         for a in 0..3 {
             for (k, &tone) in FT8_COSTAS.iter().enumerate() {
                 let start = i0 + (DS_NSPS * (36 * a + k)) as i64;
-                let mut z = C32::default();
-                for (n, r) in self.tone_ref[tone as usize].iter().enumerate() {
+                for (n, (pn, r)) in p.iter_mut().zip(&self.tone_ref[tone as usize]).enumerate() {
                     let idx = start + n as i64;
-                    if idx < 0 || idx as usize >= cd.len() {
-                        continue;
-                    }
-                    let ph = w * idx as f32;
-                    z += cd[idx as usize] * r.conj() * C32::new(ph.cos(), ph.sin());
+                    *pn = if idx >= 0 && (idx as usize) < cd.len() {
+                        cd[idx as usize] * r.conj()
+                    } else {
+                        C32::default()
+                    };
                 }
-                sum += z.norm_sqr();
+                match offsets {
+                    None => sum[0] += p.iter().sum::<C32>().norm_sqr(),
+                    Some(tw) => {
+                        for (s, t) in sum.iter_mut().zip(tw) {
+                            *s += p.iter().zip(t).map(|(a, b)| a * b).sum::<C32>().norm_sqr();
+                        }
+                    }
+                }
             }
         }
         sum
@@ -505,16 +611,14 @@ impl Decoder {
         let mut i0 = nominal;
         let mut best = 0.0;
         for di in -10..=10 {
-            let s = self.sync_fine(&cd, nominal + di, 0.0);
+            let s = self.sync_fine(&cd, nominal + di);
             if s > best {
                 best = s;
                 i0 = nominal + di;
             }
         }
         // Frequency in 0.5 Hz steps, then a parabola through the peak.
-        let fs: Vec<f32> = (-5..=5)
-            .map(|k| self.sync_fine(&cd, i0, k as f32 * 0.5))
-            .collect();
+        let fs = self.sync_fine_df(&cd, i0, Some(&self.fine_tw));
         let kb = (0..fs.len())
             .max_by(|&a, &b| fs[a].total_cmp(&fs[b]))
             .unwrap();
@@ -528,7 +632,7 @@ impl Decoder {
             let start = i0;
             best = 0.0;
             for di in -4..=4 {
-                let s = self.sync_fine(&cd, start + di, 0.0);
+                let s = self.sync_fine(&cd, start + di);
                 if s > best {
                     best = s;
                     i0 = start + di;
@@ -537,9 +641,9 @@ impl Decoder {
         }
         // Time to a fraction of a sample.
         let p = parabola_peak(
-            self.sync_fine(&cd, i0 - 1, 0.0),
+            self.sync_fine(&cd, i0 - 1),
             best,
-            self.sync_fine(&cd, i0 + 1, 0.0),
+            self.sync_fine(&cd, i0 + 1),
         );
         let frac = p.clamp(-0.5, 0.5);
         if frac.abs() > 0.05 {
@@ -632,6 +736,7 @@ impl Decoder {
                             .map(|mut d| {
                                 d.osd_distance = f.distance;
                                 d.hard_errors = f.hard_errors;
+                                d.osd_second = f.second;
                                 d
                             });
                         if result.is_some() {
@@ -659,13 +764,28 @@ impl Decoder {
         if f.hard_errors > self.cfg.osd_max_hard_errors || f.distance > self.cfg.osd_max_distance {
             return false;
         }
-        if m.i3 != 1 || !m.calls.iter().all(|c| msg::plausible_call(c)) {
+        if m.i3 != 1
+            || !m
+                .calls
+                .iter()
+                .all(|c| msg::plausible_call(c) && !c.ends_with("/R"))
+        {
             return false;
         }
+        // A real signal's codeword is much closer than the chance ones
+        // that pass the CRC; a false decode is just the best of those.
+        let ratio = if f.second.is_finite() {
+            f.distance / f.second
+        } else {
+            0.0
+        };
         let known = m.calls.iter().any(|c| hashes.knows(c));
-        known
-            || (f.distance <= self.cfg.osd_max_distance_unknown
-                && f.hard_errors <= self.cfg.osd_max_hard_errors_unknown)
+        ratio
+            <= if known {
+                self.cfg.osd_max_ratio_known
+            } else {
+                self.cfg.osd_max_ratio
+            }
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -714,6 +834,7 @@ impl Decoder {
             pass: 0,
             osd_distance: 0.0,
             hard_errors: 0,
+            osd_second: 0.0,
         })
     }
 }
@@ -773,30 +894,6 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32) -> [f32; N] {
 
 /// Subtract a decoded signal from the audio: rebuild its waveform,
 /// estimate the slowly varying complex amplitude, remove it.
-fn subtract(x: &mut [f32], d: &Decode) {
-    let tones = tones::ft8(d.bits);
-    let start = ((d.dt + T0) * RATE).round() as i64;
-    let reference = reference_wave(&tones, d.freq);
-    // camp = x * conj(ref) holds the amplitude at 0 Hz (and an image at
-    // twice the signal frequency, which the smoothing removes).
-    let n = reference.len();
-    let mut camp = vec![C32::default(); n];
-    for (i, r) in reference.iter().enumerate() {
-        let k = start + i as i64;
-        if k >= 0 && (k as usize) < x.len() {
-            camp[i] = r.conj() * x[k as usize];
-        }
-    }
-    // Two 2000-sample moving averages: a triangle 1/3 s wide.
-    let filt = boxcar(&boxcar(&camp, 2000), 2000);
-    for (i, r) in reference.iter().enumerate() {
-        let k = start + i as i64;
-        if k >= 0 && (k as usize) < x.len() {
-            x[k as usize] -= 2.0 * (filt[i] * r).re;
-        }
-    }
-}
-
 /// Centred moving average of width `w`, averaging only over the samples
 /// that exist near the ends.
 fn boxcar(v: &[C32], w: usize) -> Vec<C32> {
@@ -815,11 +912,6 @@ fn boxcar(v: &[C32], w: usize) -> Vec<C32> {
             (acc[hi] - acc[lo]) / (hi - lo) as f32
         })
         .collect()
-}
-
-/// Complex GFSK waveform of the tones at 12 kS/s, unit amplitude.
-fn reference_wave(t: &[u8], f0: f32) -> Vec<C32> {
-    tones::synth_complex(t, BAUD as f64, 2.0, f0 as f64, RATE as f64)
 }
 
 #[cfg(test)]
@@ -885,6 +977,42 @@ mod tests {
         assert!((cq.freq - 1000.0).abs() < 1.0, "{cq:?}");
         assert!(cq.dt.abs() < 0.05, "{cq:?}");
         assert!((cq.snr + 10.0).abs() < 3.0, "{cq:?}");
+    }
+
+    /// A decoded signal subtracts away: noise-free, odd frequency and a
+    /// start between samples.
+    #[test]
+    fn subtraction_removes_a_signal() {
+        for (f0, dt) in [
+            (1000.0f32, 0.0f32),
+            (1000.3, 0.137),
+            (1733.7, -0.4123),
+            (612.1, 1.9017),
+        ] {
+            let mut x = vec![0f32; SLOT];
+            add_signal(&mut x, "K1ABC W9XYZ -07", f0, dt, 10.0);
+            let before: f32 = x.iter().map(|v| v * v).sum();
+            let dec = Decoder::new(Config::default());
+            let mut spectrum = dec.spectrum(&x);
+            let bits = msg::pack("K1ABC W9XYZ -07").unwrap();
+            let d = Decode {
+                message: msg::unpack(bits, &mut CallHashes::default()).unwrap(),
+                bits,
+                freq: f0,
+                dt,
+                snr: 0.0,
+                sync: 0.0,
+                how: 1,
+                pass: 1,
+                osd_distance: 0.0,
+                hard_errors: 0,
+                osd_second: 0.0,
+            };
+            dec.subtract(&mut spectrum, &d);
+            let after: f32 = dec.audio(&spectrum).iter().map(|v| v * v).sum();
+            let db = 10.0 * (before / after).log10();
+            assert!(db > 30.0, "f0 {f0} dt {dt}: only {db:.1} dB");
+        }
     }
 
     #[test]

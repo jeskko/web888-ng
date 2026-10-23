@@ -3,6 +3,8 @@
 //! for subtracting decoded signals.
 
 use crate::{crc, ldpc};
+use std::cell::RefCell;
+use std::rc::Rc;
 
 pub const FT8_COSTAS: [u8; 7] = [3, 1, 4, 0, 6, 5, 2];
 pub const FT8_GRAY: [u8; 8] = [0, 1, 3, 2, 5, 6, 4, 7];
@@ -94,48 +96,97 @@ fn erf(x: f64) -> f64 {
     }
 }
 
-/// Phase-continuous GFSK: per-sample phase (radians) and envelope of
-/// `tones` at `rate`, tone spacing and symbol rate `baud`, lowest tone at
-/// `f0` Hz, first and last symbol ramped over 1/8 symbol.
-fn gfsk(tones: &[u8], baud: f64, bt: f64, f0: f64, rate: f64) -> (Vec<f64>, Vec<f64>) {
+/// The GFSK frequency pulse over 3 symbols, `nsps` samples each; built
+/// once per shape and thread.
+fn pulse_table(bt: f64, nsps: usize) -> Rc<Vec<f32>> {
+    /// (bt as bits, nsps, table)
+    type Entry = (u64, usize, Rc<Vec<f32>>);
+    thread_local! {
+        static CACHE: RefCell<Vec<Entry>> = const { RefCell::new(Vec::new()) };
+    }
+    CACHE.with(|c| {
+        let mut c = c.borrow_mut();
+        if let Some((_, _, t)) = c.iter().find(|(b, n, _)| *b == bt.to_bits() && *n == nsps) {
+            return t.clone();
+        }
+        let t: Rc<Vec<f32>> = Rc::new(
+            (0..3 * nsps)
+                .map(|i| gfsk_pulse(bt, (i as f64 - 1.5 * nsps as f64) / nsps as f64) as f32)
+                .collect(),
+        );
+        c.push((bt.to_bits(), nsps, t.clone()));
+        t
+    })
+}
+
+/// cos and sin of 2 pi x for x in cycles, from a table (error ~1e-6).
+fn cis_cycles(x: f64) -> (f32, f32) {
+    const N: usize = 4096;
+    static TABLE: std::sync::OnceLock<Vec<(f32, f32)>> = std::sync::OnceLock::new();
+    let t = TABLE.get_or_init(|| {
+        (0..=N)
+            .map(|i| {
+                let a = 2.0 * std::f64::consts::PI * i as f64 / N as f64;
+                (a.cos() as f32, a.sin() as f32)
+            })
+            .collect()
+    });
+    let f = (x - x.floor()) * N as f64;
+    let i = f as usize;
+    let w = (f - i as f64) as f32;
+    let (c0, s0) = t[i];
+    let (c1, s1) = t[i + 1];
+    (c0 + (c1 - c0) * w, s0 + (s1 - s0) * w)
+}
+
+/// Phase-continuous GFSK: calls `out(i, cos, sin)` with the envelope
+/// applied, for each sample of `tones` at `rate`: tone spacing and
+/// symbol rate `baud`, lowest tone at `f0` Hz, first and last symbol
+/// ramped over 1/8 symbol.
+fn gfsk(
+    tones: &[u8],
+    baud: f64,
+    bt: f64,
+    f0: f64,
+    rate: f64,
+    mut out: impl FnMut(usize, f32, f32),
+) {
     let nsps = (rate / baud).round() as usize;
+    let pulse = pulse_table(bt, nsps);
     let n = tones.len();
-    // Frequency deviation per sample in tone units, with a guard symbol
-    // on each side.
-    let pulse: Vec<f64> = (0..3 * nsps)
-        .map(|i| gfsk_pulse(bt, (i as f64 - 1.5 * nsps as f64) / nsps as f64))
-        .collect();
-    let mut dev = vec![0f64; (n + 2) * nsps];
-    for (j, &tone) in tones.iter().enumerate() {
-        for (i, p) in pulse.iter().enumerate() {
-            dev[j * nsps + i] += tone as f64 * p;
-        }
-    }
-    // The first and last tones continue into the guard symbols.
-    for i in 0..2 * nsps {
-        dev[i] += tones[0] as f64 * pulse[i + nsps];
-        // (the pulse's tail before its table starts is negligible)
-        if i >= nsps {
-            dev[n * nsps + i] += tones[n - 1] as f64 * pulse[i - nsps];
-        }
-    }
     let total = n * nsps;
     let r = nsps / 8;
-    let mut phase = Vec::with_capacity(total);
-    let mut env = Vec::with_capacity(total);
-    let mut ph = 0f64;
+    // Tones of the symbols before, at and after each sample; the first
+    // and last tones continue into a guard symbol on each side.
+    let tone = |j: isize| tones[j.clamp(0, n as isize - 1) as usize] as f32;
+    // The pulse of symbol j covers its samples from nsps before to nsps
+    // after; sample i (of symbol i / nsps) is at offset i % nsps + nsps.
+    let freq = |i: usize| {
+        let j = (i / nsps) as isize;
+        let k = i % nsps;
+        let dev =
+            tone(j - 1) * pulse[k + 2 * nsps] + tone(j) * pulse[k + nsps] + tone(j + 1) * pulse[k];
+        f0 + baud * dev as f64
+    };
+    let mut cycles = 0f64;
+    let mut f_here = freq(0);
     for i in 0..total {
-        phase.push(ph);
-        ph += 2.0 * std::f64::consts::PI * (f0 + baud * dev[i + nsps]) / rate;
-        env.push(if i < r {
-            0.5 * (1.0 - (std::f64::consts::PI * i as f64 / r as f64).cos())
+        let env = if i < r {
+            0.5 * (1.0 - (std::f32::consts::PI * i as f32 / r as f32).cos())
         } else if i >= total - r {
-            0.5 * (1.0 - (std::f64::consts::PI * (total - i) as f64 / r as f64).cos())
+            0.5 * (1.0 - (std::f32::consts::PI * (total - i) as f32 / r as f32).cos())
         } else {
             1.0
-        });
+        };
+        let (c, s) = cis_cycles(cycles);
+        out(i, env * c, env * s);
+        // Trapezoidal phase: at a few samples per symbol (200 S/s), the
+        // frequency at the sample's start alone leaves a phase error of
+        // half a sample's worth of the tone.
+        let f_next = if i + 1 < total { freq(i + 1) } else { f_here };
+        cycles += (f_here + f_next) / (2.0 * rate);
+        f_here = f_next;
     }
-    (phase, env)
 }
 
 /// The tones as a real signal of `len` samples, starting at `start`.
@@ -150,13 +201,12 @@ pub fn synth(
     len: usize,
     amp: f32,
 ) -> Vec<f32> {
-    let (phase, env) = gfsk(tones, baud, bt, f0, rate);
     let mut out = vec![0f32; len];
-    for (i, (p, e)) in phase.iter().zip(&env).enumerate() {
+    gfsk(tones, baud, bt, f0, rate, |i, _, s| {
         if let Some(o) = out.get_mut(start + i) {
-            *o = amp * (e * p.sin()) as f32;
+            *o = amp * s;
         }
-    }
+    });
     out
 }
 
@@ -168,12 +218,12 @@ pub fn synth_complex(
     f0: f64,
     rate: f64,
 ) -> Vec<num_complex::Complex32> {
-    let (phase, env) = gfsk(tones, baud, bt, f0, rate);
-    phase
-        .iter()
-        .zip(&env)
-        .map(|(p, e)| num_complex::Complex32::new((e * p.cos()) as f32, (e * p.sin()) as f32))
-        .collect()
+    let nsps = (rate / baud).round() as usize;
+    let mut out = vec![num_complex::Complex32::default(); tones.len() * nsps];
+    gfsk(tones, baud, bt, f0, rate, |i, c, s| {
+        out[i] = num_complex::Complex32::new(c, s)
+    });
+    out
 }
 
 #[cfg(test)]

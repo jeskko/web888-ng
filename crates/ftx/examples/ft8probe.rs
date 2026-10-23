@@ -112,20 +112,30 @@ fn main() {
             .collect();
         println!("  bp by scale {}", scales.join(" "));
         let mut res = vec![];
-        for (o1, o2) in [(91, 0), (91, 20), (91, 40), (91, 91)] {
+        for (o1, o2, o3) in [
+            (91, 0, 0),
+            (91, 40, 0),
+            (91, 91, 0),
+            (91, 91, 40),
+            (91, 91, 91),
+        ] {
             let f = osd::decode(
                 llr,
                 osd::Depth {
                     order1: o1,
                     order2: o2,
+                    order3: o3,
                 },
             );
             res.push(match f {
                 Some(f) if f.codeword == cw => {
-                    format!("({o1},{o2}) ok d={:.0} h={}", f.distance, f.hard_errors)
+                    format!(
+                        "({o1},{o2},{o3}) ok d={:.0} h={}",
+                        f.distance, f.hard_errors
+                    )
                 }
-                Some(f) => format!("({o1},{o2}) WRONG d={:.0}", f.distance),
-                None => format!("({o1},{o2}) -"),
+                Some(f) => format!("({o1},{o2},{o3}) WRONG d={:.0}", f.distance),
+                None => format!("({o1},{o2},{o3}) -"),
             });
         }
         println!(
