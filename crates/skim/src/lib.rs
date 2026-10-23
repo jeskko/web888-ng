@@ -27,13 +27,31 @@ use web888_core::leases::{Channels, Class, Lease};
 use web888_core::pool::{DspPool, Job};
 use web888_radio::RxBlock;
 
-/// FT8 slot length and how much of it to collect before decoding
-/// (transmissions end 13.1 s in at the nominal start).
-const FT8_PERIOD: f64 = 15.0;
-const FT8_COLLECT: f64 = 14.0;
-/// Decoding of a slot must be done this long after the slot starts (the
-/// next slot is handed out at its 14.0 s).
-const FT8_DONE_BY: f64 = FT8_PERIOD + 13.5;
+/// A mode's slot length, how much of it to collect before decoding, and
+/// when decoding of a slot must be done (after its start: before the
+/// next slot is handed out at its collect time, with a margin).
+struct Timing {
+    period: f64,
+    collect: f64,
+    done_by: f64,
+}
+
+/// FT8 transmissions end 13.1 s in at the nominal start; FT4's 5.5 s.
+/// Both are searched up to about a second late.
+fn timing(mode: SkimMode) -> Timing {
+    match mode {
+        SkimMode::Ft8 => Timing {
+            period: 15.0,
+            collect: 14.0,
+            done_by: 15.0 + 13.5,
+        },
+        SkimMode::Ft4 => Timing {
+            period: 7.5,
+            collect: 6.6,
+            done_by: 7.5 + 6.3,
+        },
+    }
+}
 
 fn unix_now() -> f64 {
     SystemTime::now()
@@ -190,6 +208,7 @@ fn idle_priority() {
 fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
     idle_priority();
     let mut ft8 = web888_ftx::ft8::Decoder::new(Default::default());
+    let mut ft4 = web888_ftx::ft4::Decoder::new(Default::default());
     let mut hashes = web888_ftx::msg::CallHashes::default();
     loop {
         let (w, waiting) = {
@@ -205,19 +224,28 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         let now = unix_now();
         // Share the time left between this slot and those still waiting
         // for this thread.
-        let left = (w.start + FT8_DONE_BY - now).max(0.0);
+        let left = (w.start + timing(w.band.cfg.mode).done_by - now).max(0.0);
         let share = left / (1.0 + waiting as f64 / threads as f64);
         let deadline = Instant::now() + Duration::from_secs_f64(share);
         let cpu0 = thread_cpu();
-        let cut0 = ft8.stats.cut_short;
-        let ds = match w.band.cfg.mode {
-            SkimMode::Ft8 => ft8.decode_until(&w.audio, &mut hashes, Some(deadline)),
+        let cut0 = ft8.stats.cut_short + ft4.stats.cut_short;
+        let (mode, ds) = match w.band.cfg.mode {
+            SkimMode::Ft8 => (
+                "FT8",
+                ft8.decode_until(&w.audio, &mut hashes, Some(deadline)),
+            ),
+            SkimMode::Ft4 => (
+                "FT4",
+                ft4.decode_until(&w.audio, &mut hashes, Some(deadline)),
+            ),
         };
         st.cpu_us
             .fetch_add((thread_cpu() - cpu0).as_micros() as u64, Ordering::Relaxed);
         st.slots.fetch_add(1, Ordering::Relaxed);
-        st.cut_short
-            .fetch_add(ft8.stats.cut_short - cut0, Ordering::Relaxed);
+        st.cut_short.fetch_add(
+            ft8.stats.cut_short + ft4.stats.cut_short - cut0,
+            Ordering::Relaxed,
+        );
         st.last_slot.store(w.start as u64, Ordering::Relaxed);
         st.spots.fetch_add(ds.len() as u64, Ordering::Relaxed);
         if std::env::var_os("WEB888_SKIM_DEBUG").is_some() {
@@ -233,7 +261,7 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         for d in ds {
             bus.publish(Spot {
                 time: w.start,
-                mode: "FT8",
+                mode,
                 dial_hz: w.band.cfg.dial,
                 freq_hz: w.band.cfg.dial + d.freq as f64,
                 snr_db: d.snr,
@@ -328,7 +356,10 @@ impl Skimmers {
                 ch: None,
                 usb: UsbAudio::new(self.rx_rate),
                 clock: FrameClock::new(self.rx_rate),
-                slotter: Slotter::new(FT8_PERIOD, FT8_COLLECT, AUDIO_RATE),
+                slotter: {
+                    let t = timing(w.mode);
+                    Slotter::new(t.period, t.collect, AUDIO_RATE)
+                },
                 rx_rate: self.rx_rate,
                 next_frame: None,
                 audio: vec![],

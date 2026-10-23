@@ -477,7 +477,8 @@
     "SkimMode": {
       "type": "string",
       "enum": [
-        "ft8"
+        "ft8",
+        "ft4"
       ]
     }
   }

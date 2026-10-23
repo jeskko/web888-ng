@@ -278,6 +278,7 @@ pub struct Station {
 pub enum SkimMode {
     #[default]
     Ft8,
+    Ft4,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

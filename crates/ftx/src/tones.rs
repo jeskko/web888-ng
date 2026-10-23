@@ -12,7 +12,8 @@ pub const FT8_SYMBOLS: usize = 79;
 
 pub const FT4_COSTAS: [[u8; 4]; 4] = [[0, 1, 3, 2], [1, 0, 2, 3], [2, 3, 1, 0], [3, 2, 0, 1]];
 pub const FT4_GRAY: [u8; 4] = [0, 1, 3, 2];
-pub const FT4_SYMBOLS: usize = 105;
+/// Channel symbols; the waveform adds a ramp symbol at each end.
+pub const FT4_SYMBOLS: usize = 103;
 /// FT4 scrambles the 77 message bits with this sequence (MSB first).
 pub const FT4_XOR: [u8; 10] = [0x4a, 0x5e, 0x89, 0xb4, 0xb0, 0x8a, 0x79, 0x55, 0xbe, 0x28];
 
@@ -39,23 +40,50 @@ pub fn ft8(m: u128) -> [u8; FT8_SYMBOLS] {
     t
 }
 
-/// The 105 FT4 tones (0..4) of a 77-bit message.
+/// The 103 FT4 tones (0..4) of a 77-bit message.
 pub fn ft4(m: u128) -> [u8; FT4_SYMBOLS] {
     let c = ldpc::encode(crc::with_crc(ft4_scramble(m)));
     let mut t = [0u8; FT4_SYMBOLS];
-    for (k, start) in [1, 34, 67, 100].into_iter().enumerate() {
+    for (k, start) in [0, 33, 66, 99].into_iter().enumerate() {
         t[start..start + 4].copy_from_slice(&FT4_COSTAS[k]);
     }
     for d in 0..87 {
         let v = (0..2).fold(0, |v, k| v << 1 | ldpc::get(&c, 2 * d + k) as usize);
         let pos = match d {
-            0..29 => 5 + d,
-            29..58 => 38 + d - 29,
-            _ => 71 + d - 58,
+            0..29 => 4 + d,
+            29..58 => 37 + d - 29,
+            _ => 70 + d - 58,
         };
         t[pos] = FT4_GRAY[v];
     }
     t
+}
+
+/// The waveform of a mode: its Gaussian filter and how it starts and ends.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub enum Shape {
+    /// BT 2.0; the first and last symbols ramp over 1/8 symbol.
+    Ft8,
+    /// BT 1.0; a ramp symbol before and after, each a half cosine over
+    /// the whole symbol on the first and last tone.
+    Ft4,
+}
+
+impl Shape {
+    fn bt(self) -> f64 {
+        match self {
+            Shape::Ft8 => 2.0,
+            Shape::Ft4 => 1.0,
+        }
+    }
+
+    /// Ramp symbols added at each end.
+    pub fn guard(self) -> usize {
+        match self {
+            Shape::Ft8 => 0,
+            Shape::Ft4 => 1,
+        }
+    }
 }
 
 /// GFSK pulse: a rectangular symbol smoothed by a Gaussian of
@@ -141,24 +169,24 @@ fn cis_cycles(x: f64) -> (f32, f32) {
 
 /// Phase-continuous GFSK: calls `out(i, cos, sin)` with the envelope
 /// applied, for each sample of `tones` at `rate`: tone spacing and
-/// symbol rate `baud`, lowest tone at `f0` Hz, first and last symbol
-/// ramped over 1/8 symbol.
+/// symbol rate `baud`, lowest tone at `f0` Hz, ramped as `shape` says.
 fn gfsk(
     tones: &[u8],
     baud: f64,
-    bt: f64,
+    shape: Shape,
     f0: f64,
     rate: f64,
     mut out: impl FnMut(usize, f32, f32),
 ) {
     let nsps = (rate / baud).round() as usize;
-    let pulse = pulse_table(bt, nsps);
+    let pulse = pulse_table(shape.bt(), nsps);
     let n = tones.len();
-    let total = n * nsps;
-    let r = nsps / 8;
+    let g = shape.guard();
+    let total = (n + 2 * g) * nsps;
+    let r = if g > 0 { nsps } else { nsps / 8 };
     // Tones of the symbols before, at and after each sample; the first
     // and last tones continue into a guard symbol on each side.
-    let tone = |j: isize| tones[j.clamp(0, n as isize - 1) as usize] as f32;
+    let tone = |j: isize| tones[(j - g as isize).clamp(0, n as isize - 1) as usize] as f32;
     // The pulse of symbol j covers its samples from nsps before to nsps
     // after; sample i (of symbol i / nsps) is at offset i % nsps + nsps.
     let freq = |i: usize| {
@@ -194,7 +222,7 @@ fn gfsk(
 pub fn synth(
     tones: &[u8],
     baud: f64,
-    bt: f64,
+    shape: Shape,
     f0: f64,
     rate: f64,
     start: usize,
@@ -202,7 +230,7 @@ pub fn synth(
     amp: f32,
 ) -> Vec<f32> {
     let mut out = vec![0f32; len];
-    gfsk(tones, baud, bt, f0, rate, |i, _, s| {
+    gfsk(tones, baud, shape, f0, rate, |i, _, s| {
         if let Some(o) = out.get_mut(start + i) {
             *o = amp * s;
         }
@@ -210,17 +238,19 @@ pub fn synth(
     out
 }
 
-/// The tones as a complex signal exp(j phase), unit amplitude.
+/// The tones as a complex signal exp(j phase), unit amplitude (with the
+/// ramp symbols of `shape`).
 pub fn synth_complex(
     tones: &[u8],
     baud: f64,
-    bt: f64,
+    shape: Shape,
     f0: f64,
     rate: f64,
 ) -> Vec<num_complex::Complex32> {
     let nsps = (rate / baud).round() as usize;
-    let mut out = vec![num_complex::Complex32::default(); tones.len() * nsps];
-    gfsk(tones, baud, bt, f0, rate, |i, c, s| {
+    let len = (tones.len() + 2 * shape.guard()) * nsps;
+    let mut out = vec![num_complex::Complex32::default(); len];
+    gfsk(tones, baud, shape, f0, rate, |i, c, s| {
         out[i] = num_complex::Complex32::new(c, s)
     });
     out

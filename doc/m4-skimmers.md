@@ -261,6 +261,21 @@ which takes a 6-character locator from the fix.
   up to 3 rows. The admin status page has a skimmer card. Checked live
   from the HackRF with `ui/tools/cdp/spots.mjs`.
 
+* Step 4, FT4 (2026-10-24): `ft4.rs` follows FT8's decoder, with FT4's
+  4-GFSK at 20.8 Bd and BT 1.0, its four 4×4 Costas arrays and the
+  message scrambling. Per-candidate work runs at 666.7 S/s (32 samples
+  per symbol). Soft bits come from 1, 2 and 4 symbols. Subtraction uses
+  a least-squares amplitude, because the full-symbol ramps take the
+  reference to zero. The synthesizer's `Shape::Ft4` adds those ramp
+  symbols. Corpus: 40 m at 7047.5 kHz, 96 slots, jt9 `-5 -d 3` as the
+  reference (`ft4_7047.5k/jt9.txt`; jt9 can't read the `.5` in the slot
+  names, so it runs per file). Score: **89.3 %** (268 of 300). The 11
+  extras look like real traffic (QSOs of calls in neighbouring slots).
+  DT and frequency agree with jt9's, and SNR is within 1 dB.
+  2.7 s of desktop CPU for the 96 slots. The skimmer runs `mode = "ft4"`
+  bands in 7.5 s slots (6.6 s collected); it decoded live from the
+  HackRF.
+
 ## 8. Open
 
 * Board CPU: how many FT8 bands fit next to 12 users. Measured on the

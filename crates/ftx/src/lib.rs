@@ -8,6 +8,7 @@
 //! Protocols", QEX July/August 2020).
 
 pub mod crc;
+pub mod ft4;
 pub mod ft8;
 pub mod ldpc;
 pub mod msg;

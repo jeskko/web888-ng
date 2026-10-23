@@ -21,7 +21,7 @@ use crate::ldpc::{self, Bp, N};
 use crate::msg::{self, CallHashes, Message};
 use crate::osd;
 use crate::realfft::RealFft;
-use crate::tones::{self, FT8_COSTAS, FT8_GRAY};
+use crate::tones::{self, FT8_COSTAS, FT8_GRAY, Shape};
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
 use std::sync::Arc;
@@ -381,8 +381,13 @@ impl Decoder {
         let frac = (t - i0) / DS_RATE;
         let i0 = i0 as i64;
         let cd = self.downsample_shifted(spectrum, d.freq, frac);
-        let reference =
-            tones::synth_complex(&tones::ft8(d.bits), BAUD as f64, 2.0, 0.0, DS_RATE as f64);
+        let reference = tones::synth_complex(
+            &tones::ft8(d.bits),
+            BAUD as f64,
+            Shape::Ft8,
+            0.0,
+            DS_RATE as f64,
+        );
         let at = |n: usize| (i0 + n as i64).rem_euclid(NFFT2 as i64) as usize;
         let camp: Vec<C32> = reference
             .iter()
@@ -815,31 +820,16 @@ impl Decoder {
     /// standard message with plausible callsigns, close to the received
     /// bits. With a callsign heard before, it may be further away.
     fn osd_plausible(&self, m: &Message, f: &osd::Found, hashes: &CallHashes) -> bool {
-        if f.hard_errors > self.cfg.osd_max_hard_errors || f.distance > self.cfg.osd_max_distance {
-            return false;
-        }
-        if m.i3 != 1
-            || !m
-                .calls
-                .iter()
-                .all(|c| msg::plausible_call(c) && !c.ends_with("/R"))
-        {
-            return false;
-        }
-        // A real signal's codeword is much closer than the chance ones
-        // that pass the CRC; a false decode is just the best of those.
-        let ratio = if f.second.is_finite() {
-            f.distance / f.second
-        } else {
-            0.0
-        };
-        let known = m.calls.iter().any(|c| hashes.knows(c));
-        ratio
-            <= if known {
-                self.cfg.osd_max_ratio_known
-            } else {
-                self.cfg.osd_max_ratio
-            }
+        let c = &self.cfg;
+        osd_plausible(
+            m,
+            f,
+            hashes,
+            c.osd_max_hard_errors,
+            c.osd_max_distance,
+            c.osd_max_ratio,
+            c.osd_max_ratio_known,
+        )
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -893,9 +883,41 @@ impl Decoder {
     }
 }
 
+/// See `Decoder::osd_plausible`; shared with FT4.
+pub(crate) fn osd_plausible(
+    m: &Message,
+    f: &osd::Found,
+    hashes: &CallHashes,
+    max_hard_errors: usize,
+    max_distance: f32,
+    max_ratio: f32,
+    max_ratio_known: f32,
+) -> bool {
+    if f.hard_errors > max_hard_errors || f.distance > max_distance {
+        return false;
+    }
+    if m.i3 != 1
+        || !m
+            .calls
+            .iter()
+            .all(|c| msg::plausible_call(c) && !c.ends_with("/R"))
+    {
+        return false;
+    }
+    // A real signal's codeword is much closer than the chance ones that
+    // pass the CRC; a false decode is just the best of those.
+    let ratio = if f.second.is_finite() {
+        f.distance / f.second
+    } else {
+        0.0
+    };
+    let known = m.calls.iter().any(|c| hashes.knows(c));
+    ratio <= if known { max_ratio_known } else { max_ratio }
+}
+
 /// Offset (in steps, -0.5..0.5 when `b` is the largest) of the peak of
 /// a parabola through three equally spaced values.
-fn parabola_peak(a: f32, b: f32, c: f32) -> f32 {
+pub(crate) fn parabola_peak(a: f32, b: f32, c: f32) -> f32 {
     let d = a - 2.0 * b + c;
     if d >= 0.0 { 0.0 } else { 0.5 * (a - c) / d }
 }
@@ -946,11 +968,9 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32) -> [f32; N] {
     out
 }
 
-/// Subtract a decoded signal from the audio: rebuild its waveform,
-/// estimate the slowly varying complex amplitude, remove it.
 /// Centred moving average of width `w`, averaging only over the samples
 /// that exist near the ends.
-fn boxcar(v: &[C32], w: usize) -> Vec<C32> {
+pub(crate) fn boxcar(v: &[C32], w: usize) -> Vec<C32> {
     let mut acc = Vec::with_capacity(v.len() + 1);
     let mut sum = C32::default();
     acc.push(sum);
@@ -999,7 +1019,7 @@ mod tests {
         let s = tones::synth(
             &t,
             BAUD as f64,
-            2.0,
+            Shape::Ft8,
             f0 as f64,
             RATE as f64,
             start,

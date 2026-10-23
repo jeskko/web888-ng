@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Score decodes against a reference (jt9) per slot (doc/m4-skimmers.md §3.3).
 
-Both inputs are jt9-style lines: `HHMMSS snr dt freq ~  message ...`.
+Both inputs are jt9-style lines: `HHMMSS snr dt freq ~  message ...`
+(FT4: `+` in place of `~`, and slots like 183737.5).
 Our lines carry extra columns after the message (37 wide); jt9's may end
 in an AP flag (`a1`..`a7`) or `?`.
 
@@ -15,9 +16,10 @@ from collections import defaultdict
 def parse(path, ours):
     slots = defaultdict(dict)
     for line in open(path):
-        if " ~ " not in line:
+        mark = " ~ " if " ~ " in line else " + " if " + " in line else None
+        if not mark:
             continue
-        head, msg = line.rstrip("\n").split(" ~ ", 1)
+        head, msg = line.rstrip("\n").split(mark, 1)
         f = head.split()
         msg = msg[1:38].strip() if ours else re.sub(r"\s+(a\d|\?)\s*$", "", msg.strip()).strip()
         ap = (not ours) and bool(re.search(r"\s(a\d)\s*$", line))
