@@ -211,6 +211,18 @@ users.
 `[station] locator`, or gpsd (`[station] gpsd = "127.0.0.1:2947"`),
 which takes a 6-character locator from the fix.
 
+### 6.6 Syslog
+
+The user asked for this (2026-10-24). `[syslog] server` (`host[:port]`)
+sends the skimmers' log to a syslog receiver. The log is the band start
+and stop events, the uploaders' results and errors, and each spot
+(`spots = true`, the default). It uses RFC 5424 (default) or RFC 3164,
+over UDP (default) or TCP with RFC 6587 octet counting, and reconnects.
+`facility` defaults to local0 and `hostname` to the system's. MSGID is
+the source (`skim`, `pskreporter`, `wsprnet`, `spot`). Severities:
+spots and counts are info, starts notice, failures warning. Messages
+that can't go are dropped. It applies live.
+
 ## 7. Steps (each ends in a commit)
 
 | # | content | done when |
@@ -300,6 +312,10 @@ which takes a 6-character locator from the fix.
   `<...>` is skipped. Three tries 30 s apart. `[report] wsprnet` turns it
   on, and it is live only. The admin card and metrics show it. Live from
   the HackRF: WSPRnet answered "1 out of 1 spot(s) added".
+
+* Syslog (§6.6, 2026-10-24): `skim::events` takes the skimmers' log
+  lines (stderr as before), and `skim::syslog` sends them and the spots.
+  Checked live against a local UDP listener.
 
 ## 8. Open
 

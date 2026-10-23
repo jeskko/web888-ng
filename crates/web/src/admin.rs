@@ -354,10 +354,11 @@ async fn schema(_: AdminOnly) -> Json<Value> {
 pub fn config_schema() -> Value {
     let mut v = serde_json::to_value(Config::schema()).expect("schema serialises");
     if let Some(p) = v.get_mut("properties").and_then(Value::as_object_mut) {
-        p.remove("auth");
+        // in file order (the admin page shows them so)
+        p.shift_remove("auth");
     }
     if let Some(d) = v.get_mut("$defs").and_then(Value::as_object_mut) {
-        d.remove("Auth");
+        d.shift_remove("Auth");
     }
     v
 }

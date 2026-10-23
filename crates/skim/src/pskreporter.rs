@@ -353,9 +353,13 @@ pub fn spawn(
                 {
                     match Uploader::new(&report.pskreporter_server) {
                         Ok(u) => {
-                            eprintln!(
-                                "pskreporter: uploading as {} {} to {}",
-                                station.callsign, station.locator, report.pskreporter_server
+                            crate::events::emit(
+                                crate::events::Level::Notice,
+                                "pskreporter",
+                                format!(
+                                    "uploading as {} {} to {}",
+                                    station.callsign, station.locator, report.pskreporter_server
+                                ),
                             );
                             up = Some(u);
                         }
@@ -384,15 +388,24 @@ pub fn spawn(
                     let before = u.status.datagrams;
                     u.poll(&rx, Instant::now());
                     if u.status.datagrams != before {
-                        eprintln!(
-                            "pskreporter: sent {} reports in all ({} datagrams){}",
-                            u.status.reports,
-                            u.status.datagrams,
-                            u.status
-                                .last_error
-                                .as_ref()
-                                .map(|e| format!(", error: {e}"))
-                                .unwrap_or_default()
+                        let level = if u.status.last_error.is_some() {
+                            crate::events::Level::Warning
+                        } else {
+                            crate::events::Level::Info
+                        };
+                        crate::events::emit(
+                            level,
+                            "pskreporter",
+                            format!(
+                                "sent {} reports in all ({} datagrams){}",
+                                u.status.reports,
+                                u.status.datagrams,
+                                u.status
+                                    .last_error
+                                    .as_ref()
+                                    .map(|e| format!(", error: {e}"))
+                                    .unwrap_or_default()
+                            ),
                         );
                     }
                     let mut s = u.status.clone();

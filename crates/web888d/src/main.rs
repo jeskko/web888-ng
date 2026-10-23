@@ -488,6 +488,11 @@ fn start_skimmers(
             / 3600
             % 24) as u32
     };
+    // before the bands start, so syslog has their start events
+    {
+        let live = live.clone();
+        web888_skim::syslog::spawn(sk.bus.clone(), move || live.borrow().syslog.clone())?;
+    }
     sk.apply(&cfg.skimmer, hour());
     if !cfg.skimmer.is_empty() && !radio_live {
         eprintln!(
@@ -533,21 +538,7 @@ fn start_skimmers(
         .spawn(move || {
             loop {
                 match spots.blocking_recv() {
-                    Ok(s) => {
-                        let t = s.time as u64 % 86_400;
-                        eprintln!(
-                            "spot: {} {:.1} kHz {:02}{:02}{:02} {:3.0} {:4.1} {:4.0} {}",
-                            s.mode,
-                            s.dial_hz / 1e3,
-                            t / 3600,
-                            t / 60 % 60,
-                            t % 60,
-                            s.snr_db,
-                            s.dt_s,
-                            s.freq_hz - s.dial_hz,
-                            s.message
-                        );
-                    }
+                    Ok(s) => eprintln!("spot: {}", s.log_line()),
                     Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
                     Err(_) => return,
                 }

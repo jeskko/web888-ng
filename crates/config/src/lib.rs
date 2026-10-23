@@ -60,6 +60,56 @@ pub struct Config {
     pub skimmer: Vec<Skimmer>,
     /// Where spots go (apply at once).
     pub report: Report,
+    /// The skimmers' log (spots, band and upload events) to a syslog
+    /// receiver (apply at once).
+    pub syslog: Syslog,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SyslogTransport {
+    #[default]
+    Udp,
+    Tcp,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SyslogFormat {
+    /// RFC 5424 (`<134>1 2026-10-24T21:11:45.000Z host web888d - spot - ...`).
+    #[default]
+    Rfc5424,
+    /// The older BSD format, RFC 3164 (`<134>Oct 24 21:11:45 host web888d: ...`).
+    Rfc3164,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Syslog {
+    /// The receiver, `host` or `host:port` (port 514; IPv6 in brackets,
+    /// `[2001:db8::1]:514`); empty: off.
+    pub server: String,
+    pub transport: SyslogTransport,
+    pub format: SyslogFormat,
+    /// kern, user, daemon, local0 ... local7.
+    pub facility: String,
+    /// Send each spot (else only band and upload events).
+    pub spots: bool,
+    /// The host name in messages; empty: the system's.
+    pub hostname: String,
+}
+
+impl Default for Syslog {
+    fn default() -> Self {
+        Syslog {
+            server: String::new(),
+            transport: SyslogTransport::Udp,
+            format: SyslogFormat::Rfc5424,
+            facility: "local0".into(),
+            spots: true,
+            hostname: String::new(),
+        }
+    }
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -540,6 +590,7 @@ impl Config {
         c.live = self.station != new.station
             || self.skimmer != new.skimmer
             || self.report != new.report
+            || self.syslog != new.syslog
             || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics

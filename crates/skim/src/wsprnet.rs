@@ -43,22 +43,10 @@ pub struct Receiver {
 
 /// UTC date (YYMMDD) and time (HHMM) of `t`.
 fn date_time(t: f64) -> (String, String) {
-    let secs = t.floor() as i64;
-    let days = secs.div_euclid(86_400);
-    let sod = secs.rem_euclid(86_400);
-    // days to civil (Howard Hinnant's algorithm)
-    let z = days + 719_468;
-    let era = z.div_euclid(146_097);
-    let doe = z - era * 146_097;
-    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
-    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
-    let mp = (5 * doy + 2) / 153;
-    let d = doy - (153 * mp + 2) / 5 + 1;
-    let m = if mp < 10 { mp + 3 } else { mp - 9 };
-    let y = yoe + era * 400 + i64::from(m <= 2);
+    let u = crate::utc::utc(t);
     (
-        format!("{:02}{m:02}{d:02}", y % 100),
-        format!("{:02}{:02}", sod / 3600, sod / 60 % 60),
+        format!("{:02}{:02}{:02}", u.year % 100, u.month, u.day),
+        format!("{:02}{:02}", u.hour, u.min),
     )
 }
 
@@ -276,9 +264,13 @@ pub fn spawn(
                     up = None;
                     st.lock().unwrap().enabled = false;
                 } else if up.as_ref().is_none_or(|u| u.url != report.wsprnet_url) {
-                    eprintln!(
-                        "wsprnet: uploading as {} {} to {}",
-                        station.callsign, station.locator, report.wsprnet_url
+                    crate::events::emit(
+                        crate::events::Level::Notice,
+                        "wsprnet",
+                        format!(
+                            "uploading as {} {} to {}",
+                            station.callsign, station.locator, report.wsprnet_url
+                        ),
                     );
                     up = Some(Uploader::new(&report.wsprnet_url));
                 }
@@ -301,13 +293,28 @@ pub fn spawn(
                     }
                 }
                 if let Some(u) = &mut up {
-                    let before = u.status.sent;
+                    let (sent, err) = (u.status.sent, u.status.last_error.clone());
                     u.poll(Instant::now());
-                    if u.status.sent != before {
-                        eprintln!(
-                            "wsprnet: sent {} spots in all; last reply: {}",
-                            u.status.sent,
-                            u.status.last_reply.as_deref().unwrap_or("")
+                    if u.status.sent != sent {
+                        crate::events::emit(
+                            crate::events::Level::Info,
+                            "wsprnet",
+                            format!(
+                                "sent {} spots in all; last reply: {}",
+                                u.status.sent,
+                                u.status.last_reply.as_deref().unwrap_or("")
+                            ),
+                        );
+                    }
+                    if u.status.last_error.is_some() && u.status.last_error != err {
+                        crate::events::emit(
+                            crate::events::Level::Warning,
+                            "wsprnet",
+                            format!(
+                                "upload failed: {} ({} waiting)",
+                                u.status.last_error.as_deref().unwrap_or(""),
+                                u.queue.len()
+                            ),
                         );
                     }
                     let mut s = u.status.clone();

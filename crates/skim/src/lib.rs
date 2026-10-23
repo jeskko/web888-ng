@@ -9,10 +9,13 @@
 //! they decode on the [`SpotBus`]. [`Skimmers`] starts and stops bands as
 //! the config and the hours of the day say.
 
+pub mod events;
 pub mod pskreporter;
 pub mod slots;
 pub mod spot;
+pub mod syslog;
 pub mod usb;
+pub mod utc;
 pub mod wsprnet;
 
 pub use spot::{Spot, SpotBus};
@@ -61,7 +64,7 @@ fn timing(mode: SkimMode) -> Timing {
     }
 }
 
-fn unix_now() -> f64 {
+pub(crate) fn unix_now() -> f64 {
     SystemTime::now()
         .duration_since(SystemTime::UNIX_EPOCH)
         .map(|d| d.as_secs_f64())
@@ -208,7 +211,11 @@ fn idle_priority() {
         let p: libc::sched_param = unsafe { std::mem::zeroed() };
         // SAFETY: plain syscall on the calling thread.
         if unsafe { libc::sched_setscheduler(0, libc::SCHED_IDLE, &p) } != 0 {
-            eprintln!("skim: SCHED_IDLE: {}", std::io::Error::last_os_error());
+            events::emit(
+                events::Level::Warning,
+                "skim",
+                format!("SCHED_IDLE: {}", std::io::Error::last_os_error()),
+            );
         }
     }
 }
@@ -363,7 +370,11 @@ impl Skimmers {
         running.retain(|r| {
             let keep = want.iter().any(|w| **w == r.band.cfg);
             if !keep {
-                eprintln!("skim: stop {}", r.band.label);
+                events::emit(
+                    events::Level::Notice,
+                    "skim",
+                    format!("stop {}", r.band.label),
+                );
                 r.stop.store(true, Ordering::Relaxed);
             }
             keep
@@ -373,7 +384,7 @@ impl Skimmers {
                 continue;
             }
             let label = format!("{:?} {:.1} kHz", w.mode, w.dial / 1e3).to_lowercase();
-            eprintln!("skim: start {label}");
+            events::emit(events::Level::Notice, "skim", format!("start {label}"));
             let band = Arc::new(Band {
                 cfg: w.clone(),
                 label: label.clone(),

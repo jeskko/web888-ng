@@ -27,6 +27,26 @@ pub struct Spot {
     pub live: bool,
 }
 
+impl Spot {
+    /// One line for logs: mode, dial, slot time, SNR, DT, audio
+    /// frequency, message.
+    pub fn log_line(&self) -> String {
+        let t = self.time as u64 % 86_400;
+        format!(
+            "{} {:.1} kHz {:02}{:02}{:02} {:3.0} {:4.1} {:4.0} {}",
+            self.mode,
+            self.dial_hz / 1e3,
+            t / 3600,
+            t / 60 % 60,
+            t % 60,
+            self.snr_db,
+            self.dt_s,
+            self.freq_hz - self.dial_hz,
+            self.message
+        )
+    }
+}
+
 /// The amateur band of a frequency ("40m"), or "" outside them.
 pub fn band_name(hz: f64) -> &'static str {
     const BANDS: &[(f64, f64, &str)] = &[
