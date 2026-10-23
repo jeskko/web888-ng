@@ -1889,6 +1889,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-wspr"
+version = "0.2.1"
+dependencies = [
+ "num-complex",
+ "rustfft",
+ "web888-ftx",
+]
+
+[[package]]
 name = "web888-zynqsdr"
 version = "0.2.1"
 dependencies = [

@@ -1,0 +1,14 @@
+[package]
+name = "web888-wspr"
+description = "WSPR decoder (a port of wsprd) for web888d skimmers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true
+
+[dev-dependencies]
+web888-ftx.workspace = true

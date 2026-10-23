@@ -276,6 +276,22 @@ which takes a 6-character locator from the fix.
   bands in 7.5 s slots (6.6 s collected); it decoded live from the
   HackRF.
 
+* Step 8, WSPR decoder (2026-10-24): crate `web888-wspr`, a port of
+  wsprd (`wsprd.c`, the utilities, Karn's Fano decoder, nhash). Its
+  defaults are wsprd's, without OSD (WSJT-X Fortran, GPLv3 only, and off
+  in wsprd by default). One change: a decode is rebuilt for subtraction
+  from its bits, not from the re-packed text, so an unknown hashed call
+  no longer subtracts the wrong signal. Test vectors come from
+  `wsprsim -cd` and `nhash`, built from the upstream sources in a
+  scratch dir. Corpus: 5 slots each on 40 m and 30 m (`wspr_*/wsprd.txt`
+  from `wsprd -f`). All **64 of wsprd's 64** decodes, the same SNR, DT,
+  frequency and drift (two SNRs 1 dB apart), and one extra (HB9T JN36
+  23). Like wsprd, 91 % of the time goes to Fano on candidates that
+  fail. The default `maxcycles` is 3000 (wsprd: 10000), which keeps 64
+  of 65 for less than half the time. A9 at nice 19 on the loaded unit:
+  73 s for a busy 40 m slot (46 s at 1000 cycles, same 12 decodes).
+  `decode_until` takes a deadline.
+
 ## 8. Open
 
 * Board CPU: how many FT8 bands fit next to 12 users. Measured on the
