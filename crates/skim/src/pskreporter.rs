@@ -436,10 +436,10 @@ mod tests {
     /// input (its template and emit code compiled into a harness).
     #[test]
     fn same_bytes_as_stock() {
-        let stock = "000a00c86adbcdf0000000012468ace00002003c114000078001ffff0000768f800500040000768f800600010000768f800affff0000768f8003ffff0000768f800b00010000768f00960004000300241138000300008002ffff0000768f8004ffff0000768f8008ffff0000768f00001138001c064f483848514c064b5032357262077765622d383838000011400020054b31414243006bf51cf60346543804464e3432016adbcdb40000001140001c05573958595a006bf83cfd0346543800016adbcdc3000000";
+        let stock = "000a00c86adbcdf0000000012468ace00002003c114000078001ffff0000768f800500040000768f800600010000768f800affff0000768f8003ffff0000768f800b00010000768f00960004000300241138000300008002ffff0000768f8004ffff0000768f8008ffff0000768f00001138001c064e3043414c4c06464e34326161077765622d383838000011400020054b31414243006bf51cf60346543804464e3432016adbcdb40000001140001c05573958595a006bf83cfd0346543800016adbcdc3000000";
         let rx = Receiver {
-            callsign: "OH8HQL".into(),
-            locator: "KP25RB".into(),
+            callsign: "N0CALL".into(),
+            locator: "FN42AA".into(),
             software: "web-888".into(),
             antenna: "".into(),
         };
@@ -469,7 +469,7 @@ mod tests {
 
     #[test]
     fn locators() {
-        assert_eq!(locator("KP25RB"), "KP25rb");
+        assert_eq!(locator("FN42AA"), "FN42aa");
         assert_eq!(locator("fn42"), "FN42");
         assert_eq!(locator("R-06"), "");
         assert_eq!(locator("ZZ99"), "");

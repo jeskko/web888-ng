@@ -16,7 +16,7 @@ const RECONNECT: Duration = Duration::from_secs(10);
 /// Reports a new locator must hold for.
 const HOLD: u32 = 5;
 
-/// The 6-character locator ("KP25rb") of a position, or None outside
+/// The 6-character locator ("FN42li") of a position, or None outside
 /// the globe.
 pub fn locator(lat: f64, lon: f64) -> Option<String> {
     if !(-90.0..=90.0).contains(&lat) || !(-180.0..=180.0).contains(&lon) {
