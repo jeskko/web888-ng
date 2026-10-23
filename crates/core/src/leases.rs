@@ -74,6 +74,9 @@ pub struct Policy {
     pub preempt: bool,
     /// Most channels a class may hold (none: no limit).
     pub quota: HashMap<Class, usize>,
+    /// Skimmers are served after everyone else, and any other request
+    /// without a free channel takes a skimmer's (doc/m4-skimmers.md §4).
+    pub skimmers_yield: bool,
 }
 
 impl Policy {
@@ -81,6 +84,7 @@ impl Policy {
         Policy {
             preempt: l.preempt,
             quota: HashMap::from([(Class::Protocol, l.hpsdr_channels)]),
+            skimmers_yield: l.skimmers_yield,
         }
     }
 
@@ -225,7 +229,8 @@ impl Manager {
             .iter()
             .filter(|(_, e)| e.granted.is_none())
             .collect();
-        q.sort_by_key(|(_, e)| (std::cmp::Reverse(e.class), e.requested));
+        let yields = |c: Class| self.policy.skimmers_yield && c == Class::Skimmer;
+        q.sort_by_key(|(_, e)| (yields(e.class), std::cmp::Reverse(e.class), e.requested));
         q.into_iter().map(|(&id, _)| id).collect()
     }
 
@@ -255,6 +260,20 @@ impl Manager {
             .map(|(id, _, _)| id)
     }
 
+    /// A skimmer's channel for a request of `class`, when they yield: the
+    /// most recently granted.
+    fn yielding(&self, class: Class) -> Option<LeaseId> {
+        if !self.policy.skimmers_yield || class == Class::Skimmer {
+            return None;
+        }
+        self.leases
+            .iter()
+            .filter_map(|(&id, e)| Some((id, e.class, e.granted?.1)))
+            .filter(|&(_, c, _)| c == Class::Skimmer)
+            .max_by_key(|&(_, _, t)| t)
+            .map(|(id, _, _)| id)
+    }
+
     /// Serve the queue while channels (or, with pre-emption, victims) last.
     fn schedule(&mut self) -> Vec<Tune> {
         let mut tunes = Vec::new();
@@ -265,6 +284,11 @@ impl Manager {
                     continue; // waits for its own class to free one
                 }
                 if let Some(ch) = self.owner.iter().position(Option::is_none) {
+                    tunes.push(self.grant(id, ch));
+                    continue 'serve;
+                }
+                if let Some(v) = self.yielding(class) {
+                    let (ch, _) = self.leases.get_mut(&v).unwrap().granted.take().unwrap();
                     tunes.push(self.grant(id, ch));
                     continue 'serve;
                 }
@@ -432,7 +456,55 @@ mod tests {
         Policy {
             preempt,
             quota: quotas.iter().copied().collect(),
+            skimmers_yield: false,
         }
+    }
+
+    fn yielding() -> Policy {
+        Policy {
+            skimmers_yield: true,
+            ..policy(false, &[])
+        }
+    }
+
+    #[test]
+    fn skimmers_yield_to_users_and_come_back() {
+        let mut m = Manager::new(2, yielding());
+        let s1 = take(&mut m, Class::Skimmer, 7.074e6);
+        let s2 = take(&mut m, Class::Skimmer, 14.074e6);
+        assert!(m.state(s1).unwrap().channel().is_some());
+        assert!(m.state(s2).unwrap().channel().is_some());
+        // A user takes the newest skimmer's channel (no pre-emption set).
+        let (u, tunes) = m.acquire(Class::Web, "u", 10.1e6);
+        assert_eq!(tunes.len(), 1);
+        assert!(m.state(u).unwrap().channel().is_some());
+        assert!(m.state(s1).unwrap().channel().is_some());
+        assert_eq!(m.state(s2), Some(LeaseState::Waiting { position: 1 }));
+        // Another user waiting comes before the skimmer.
+        let u2 = take(&mut m, Class::Web, 3.5e6);
+        assert!(
+            m.state(u2).unwrap().channel().is_some(),
+            "takes the other skimmer"
+        );
+        assert!(matches!(m.state(s1), Some(LeaseState::Waiting { .. })));
+        let u3 = take(&mut m, Class::Web, 5e6);
+        assert_eq!(m.state(u3), Some(LeaseState::Waiting { position: 1 }));
+        // Channels freed go to the user first, then the skimmers.
+        m.release(u);
+        assert!(m.state(u3).unwrap().channel().is_some());
+        m.release(u2);
+        assert!(
+            m.state(s1).unwrap().channel().is_some() || m.state(s2).unwrap().channel().is_some()
+        );
+    }
+
+    #[test]
+    fn skimmers_dont_take_from_each_other() {
+        let mut m = Manager::new(1, yielding());
+        let s1 = take(&mut m, Class::Skimmer, 7.074e6);
+        let s2 = take(&mut m, Class::Skimmer, 14.074e6);
+        assert!(m.state(s1).unwrap().channel().is_some());
+        assert_eq!(m.state(s2), Some(LeaseState::Waiting { position: 1 }));
     }
 
     fn take(m: &mut Manager, class: Class, hz: f64) -> LeaseId {

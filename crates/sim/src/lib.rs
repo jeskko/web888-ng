@@ -475,6 +475,7 @@ impl Radio for SimRadio {
             signature: 0x5100_0200 | self.rx.len() as u32,
             dna: Some(0x1_2345_6789_abcd),
             build_id: None,
+            live: false,
         }
     }
 }

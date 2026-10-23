@@ -1,0 +1,16 @@
+[package]
+name = "web888-skim"
+description = "Background decoders (skimmers) for web888d: FT8 autoruns and spots"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+web888-radio.workspace = true
+web888-dsp.workspace = true
+web888-core.workspace = true
+web888-config.workspace = true
+web888-ftx.workspace = true
+libc.workspace = true
+tokio = { version = "1.54.1", features = ["sync"] }

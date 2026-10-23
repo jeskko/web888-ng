@@ -349,6 +349,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             signature: self.signature,
             dna: Some(self.dna),
             build_id: self.build_id,
+            live: true,
         }
     }
 }

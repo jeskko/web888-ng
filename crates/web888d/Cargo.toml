@@ -15,6 +15,7 @@ web888-hpsdr.workspace = true
 web888-iq.workspace = true
 web888-hw.workspace = true
 web888-web.workspace = true
+web888-skim.workspace = true
 web888-core.workspace = true
 clap.workspace = true
 num-complex.workspace = true

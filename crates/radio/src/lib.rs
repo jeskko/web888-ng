@@ -104,6 +104,9 @@ pub struct Identity {
     pub dna: Option<u64>,
     /// Open FPGA build id (yyyymmdd as hex digits).
     pub build_id: Option<u32>,
+    /// Signals are received now (an antenna), not replayed or simulated.
+    /// Only live signals may be reported to spot networks.
+    pub live: bool,
 }
 
 /// Health counters of the open driver (and, with the open bitstream, the

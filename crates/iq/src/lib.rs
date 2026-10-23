@@ -118,13 +118,18 @@ pub struct IqRadio {
     t0: Instant,
     pps_emitted: u64,
     stats: HwStats,
+    /// The source is a device (real time), not a recording.
+    live: bool,
 }
 
 impl IqRadio {
     /// Real-time radio on a source thread.
     pub fn new(cfg: IqConfig, src: Box<dyn IqSource>) -> Result<Self> {
+        let live = src.realtime();
         let feed = Feed::spawn(src, cfg.rate_hz);
-        Self::with_input(cfg, Input::Feed(feed))
+        let mut r = Self::with_input(cfg, Input::Feed(feed))?;
+        r.live = live;
+        Ok(r)
     }
 
     /// Radio that reads the source on demand (no pacing).
@@ -172,6 +177,7 @@ impl IqRadio {
             t0: Instant::now(),
             pps_emitted: 0,
             stats: HwStats::default(),
+            live: false,
             cfg,
         };
         r.set_rx_rate(20)?;
@@ -546,6 +552,7 @@ impl Radio for IqRadio {
             signature: 0x1000_0200 | self.rx.len() as u32,
             dna: None,
             build_id: None,
+            live: self.live,
         }
     }
 }

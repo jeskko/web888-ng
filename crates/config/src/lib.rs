@@ -54,6 +54,12 @@ pub struct Config {
     pub limits: Limits,
     /// Password hashes (`web888d passwd`).
     pub auth: Auth,
+    /// The station, as reported with spots (apply at once).
+    pub station: Station,
+    /// Background decoders (`doc/m4-skimmers.md`; apply at once).
+    pub skimmer: Vec<Skimmer>,
+    /// Where spots go (apply at once).
+    pub report: Report,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
@@ -227,6 +233,9 @@ pub struct Limits {
     /// Show users' frequencies to others and allow listen-along, unless
     /// the user opts out.
     pub share_default: bool,
+    /// Skimmers give their channels to users when none is free, and get
+    /// one again when a channel frees.
+    pub skimmers_yield: bool,
 }
 
 impl Default for Limits {
@@ -238,6 +247,7 @@ impl Default for Limits {
             preempt: false,
             hpsdr_channels: 7,
             share_default: true,
+            skimmers_yield: true,
         }
     }
 }
@@ -250,6 +260,86 @@ pub struct Auth {
     pub admin_hash: Option<String>,
     /// argon2 hash of the shared listener password; none = open receiver.
     pub listener_hash: Option<String>,
+}
+
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Station {
+    /// Callsign spots are reported under (needed for uploads).
+    pub callsign: String,
+    /// Maidenhead locator, 4 or 6 characters (needed for uploads).
+    pub locator: String,
+    /// Antenna, as shown on PSKReporter.
+    pub antenna: String,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum SkimMode {
+    #[default]
+    Ft8,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Skimmer {
+    pub mode: SkimMode,
+    /// Dial frequency (Hz, USB), e.g. 7074000.
+    pub dial: f64,
+    /// UTC hours to run, e.g. "18-06" or "0-24"; empty = always.
+    pub hours: String,
+    pub enabled: bool,
+}
+
+impl Default for Skimmer {
+    fn default() -> Self {
+        Skimmer {
+            mode: SkimMode::Ft8,
+            dial: 0.0,
+            hours: String::new(),
+            enabled: true,
+        }
+    }
+}
+
+impl Skimmer {
+    /// Whether it runs at `hour` UTC (0-23).
+    pub fn runs_at(&self, hour: u32) -> bool {
+        let h = self.hours.trim();
+        if h.is_empty() {
+            return true;
+        }
+        let Some((a, b)) = h.split_once('-') else {
+            return true;
+        };
+        let (Ok(a), Ok(b)) = (a.trim().parse::<u32>(), b.trim().parse::<u32>()) else {
+            return true;
+        };
+        if a <= b {
+            hour >= a && hour < b
+        } else {
+            hour >= a || hour < b
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Report {
+    /// Upload spots to PSKReporter (needs [station] callsign and locator;
+    /// live signals only).
+    pub pskreporter: bool,
+    /// PSKReporter's address (their test listener: pskreporter.info:14739).
+    pub pskreporter_server: String,
+}
+
+impl Default for Report {
+    fn default() -> Self {
+        Report {
+            pskreporter: false,
+            pskreporter_server: "report.pskreporter.info:4739".into(),
+        }
+    }
 }
 
 /// Where `path` leads through symlinks (itself if it isn't one).
@@ -438,7 +528,10 @@ impl Config {
         if web_restart {
             c.restart.push("web");
         }
-        c.live = a.default_freq != b.default_freq
+        c.live = self.station != new.station
+            || self.skimmer != new.skimmer
+            || self.report != new.report
+            || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics
             || a.trusted_proxies != b.trusted_proxies
@@ -577,5 +670,28 @@ mod tests {
         b.web.listen = "0.0.0.0:80".into();
         b.radio.backend = Backend::Sim;
         assert_eq!(a.changes(&b).restart, ["radio", "web"]);
+    }
+
+    #[test]
+    fn skimmer_hours() {
+        let s = |h: &str| Skimmer {
+            hours: h.into(),
+            ..Default::default()
+        };
+        assert!(s("").runs_at(3));
+        assert!(s("18-06").runs_at(23) && s("18-06").runs_at(5) && !s("18-06").runs_at(12));
+        assert!(s("6-18").runs_at(12) && !s("6-18").runs_at(18));
+    }
+
+    #[test]
+    fn skimmers_from_toml() {
+        let c: Config = toml::from_str(
+            "[station]\ncallsign = \"N0CALL\"\nlocator = \"FN42\"\n\n[[skimmer]]\ndial = 7074000\n\n[[skimmer]]\nmode = \"ft8\"\ndial = 14074000\nhours = \"6-18\"\n",
+        )
+        .unwrap();
+        assert_eq!(c.skimmer.len(), 2);
+        assert_eq!(c.skimmer[1].dial, 14_074_000.0);
+        assert!(c.skimmer[0].enabled);
+        assert_eq!(c.station.callsign, "N0CALL");
     }
 }

@@ -61,8 +61,34 @@
         "idle_minutes": 0,
         "preempt": false,
         "hpsdr_channels": 7,
-        "share_default": true
+        "share_default": true,
+        "skimmers_yield": true
       }
+    },
+    "report": {
+      "description": "Where spots go (apply at once).",
+      "$ref": "#/$defs/Report",
+      "default": {
+        "pskreporter": false,
+        "pskreporter_server": "report.pskreporter.info:4739"
+      }
+    },
+    "station": {
+      "description": "The station, as reported with spots (apply at once).",
+      "$ref": "#/$defs/Station",
+      "default": {
+        "callsign": "",
+        "locator": "",
+        "antenna": ""
+      }
+    },
+    "skimmer": {
+      "description": "Background decoders (`doc/m4-skimmers.md`; apply at once).",
+      "type": "array",
+      "items": {
+        "$ref": "#/$defs/Skimmer"
+      },
+      "default": []
     }
   },
   "additionalProperties": false,
@@ -377,9 +403,82 @@
           "description": "Show users' frequencies to others and allow listen-along, unless\nthe user opts out.",
           "type": "boolean",
           "default": true
+        },
+        "skimmers_yield": {
+          "description": "Skimmers give their channels to users when none is free, and get\none again when a channel frees.",
+          "type": "boolean",
+          "default": true
         }
       },
       "additionalProperties": false
+    },
+    "Report": {
+      "type": "object",
+      "properties": {
+        "pskreporter": {
+          "description": "Upload spots to PSKReporter (needs [station] callsign and locator;\nlive signals only).",
+          "type": "boolean",
+          "default": false
+        },
+        "pskreporter_server": {
+          "description": "PSKReporter's address (their test listener: pskreporter.info:14739).",
+          "type": "string",
+          "default": "report.pskreporter.info:4739"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Station": {
+      "type": "object",
+      "properties": {
+        "callsign": {
+          "description": "Callsign spots are reported under (needed for uploads).",
+          "type": "string",
+          "default": ""
+        },
+        "locator": {
+          "description": "Maidenhead locator, 4 or 6 characters (needed for uploads).",
+          "type": "string",
+          "default": ""
+        },
+        "antenna": {
+          "description": "Antenna, as shown on PSKReporter.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "Skimmer": {
+      "type": "object",
+      "properties": {
+        "mode": {
+          "$ref": "#/$defs/SkimMode",
+          "default": "ft8"
+        },
+        "dial": {
+          "description": "Dial frequency (Hz, USB), e.g. 7074000.",
+          "type": "number",
+          "format": "double",
+          "default": 0.0
+        },
+        "hours": {
+          "description": "UTC hours to run, e.g. \"18-06\" or \"0-24\"; empty = always.",
+          "type": "string",
+          "default": ""
+        },
+        "enabled": {
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "SkimMode": {
+      "type": "string",
+      "enum": [
+        "ft8"
+      ]
     }
   }
 }

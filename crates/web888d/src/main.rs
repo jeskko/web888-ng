@@ -468,6 +468,83 @@ fn first_password(
     Ok(())
 }
 
+/// Background decoders: bands from the config (and its reloads), run in
+/// their UTC hours; spots are logged.
+fn start_skimmers(
+    cfg: &Config,
+    live: &tokio::sync::watch::Receiver<Arc<Config>>,
+    channels: Arc<Channels>,
+    pool: Arc<web888_core::pool::DspPool>,
+    rx_rate: f64,
+    radio_live: bool,
+) -> AnyResult<Arc<web888_skim::Skimmers>> {
+    let threads = pool.workers();
+    let sk = web888_skim::Skimmers::new(channels, pool, rx_rate, radio_live, threads)?;
+    let hour = || {
+        (std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap_or_default()
+            .as_secs()
+            / 3600
+            % 24) as u32
+    };
+    sk.apply(&cfg.skimmer, hour());
+    if !cfg.skimmer.is_empty() && !radio_live {
+        eprintln!(
+            "skim: this radio isn't live (a recording or simulation): spots won't be uploaded"
+        );
+    }
+    let mut cfg_rx = live.clone();
+    let s = sk.clone();
+    std::thread::Builder::new()
+        .name("skim-cfg".into())
+        .spawn(move || {
+            loop {
+                std::thread::sleep(Duration::from_secs(10));
+                let c = cfg_rx.borrow_and_update().clone();
+                s.apply(&c.skimmer, hour());
+            }
+        })?;
+    {
+        let live = live.clone();
+        web888_skim::pskreporter::spawn(
+            sk.bus.clone(),
+            move || {
+                let c = live.borrow().clone();
+                (c.station.clone(), c.report.clone())
+            },
+            env!("CARGO_PKG_VERSION"),
+        )?;
+    }
+    let mut spots = sk.bus.subscribe();
+    std::thread::Builder::new()
+        .name("skim-log".into())
+        .spawn(move || {
+            loop {
+                match spots.blocking_recv() {
+                    Ok(s) => {
+                        let t = s.time as u64 % 86_400;
+                        eprintln!(
+                            "spot: {} {:.1} kHz {:02}{:02}{:02} {:3.0} {:4.1} {:4.0} {}",
+                            s.mode,
+                            s.dial_hz / 1e3,
+                            t / 3600,
+                            t / 60 % 60,
+                            t % 60,
+                            s.snr_db,
+                            s.dt_s,
+                            s.freq_hz - s.dial_hz,
+                            s.message
+                        );
+                    }
+                    Err(tokio::sync::broadcast::error::RecvError::Lagged(_)) => {}
+                    Err(_) => return,
+                }
+            }
+        })?;
+    Ok(sk)
+}
+
 fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
     match a.backend {
         Backend::Sim => {
@@ -705,6 +782,16 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     }
 
     let mut threads = Vec::new();
+    let pool = Arc::new(web888_core::pool::DspPool::per_cpu(&ctl_tx)?);
+    eprintln!("dsp: {} pool workers", pool.workers());
+    start_skimmers(
+        &cfg,
+        &live_rx,
+        channels.clone(),
+        pool.clone(),
+        rx_rate(caps.adc_hz, r2),
+        id.live,
+    )?;
     if cfg.hpsdr.enabled {
         let h = &cfg.hpsdr;
         let (sub, blk_rx, _drops) = web888_hw::Subscriber::new(64);
@@ -741,8 +828,6 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     if cfg.web.enabled {
         let w = &cfg.web;
         let rf = caps.rf_range.clone();
-        let pool = Arc::new(web888_core::pool::DspPool::per_cpu(&ctl_tx)?);
-        eprintln!("dsp: {} pool workers", pool.workers());
         let shared = Arc::new(web888_web::session::Shared {
             status: status.clone(),
             radio: web888_web::proto::RadioInfo {

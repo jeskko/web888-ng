@@ -225,6 +225,21 @@ which takes a 6-character locator from the fix.
 | 8 | WSPR port, WSPRnet uploader; FST4W | WSPR scored against wsprd; live upload |
 | 9 | MQTT, gpsd, A9 benches, docs, release (with go-ahead) | benches on the production unit (nice 19) |
 
+### Progress
+
+* Steps 1-3 (FT8) done 2026-10-23; FT4 (4) postponed until after the
+  runtime, which got FT8 end to end first.
+* Step 5, first part (2026-10-23): crate `web888-skim`. `[[skimmer]]`
+  bands with UTC hours, a `BandJob` per band on the DSP pool (channel
+  tuned 3 kHz above the dial, 48 -> 12 kS/s USB audio), a frame clock
+  (min-delay host time; median DT 0.2 s live), decoder threads at
+  `SCHED_IDLE` sharing the time to the next slot, the spot bus. Leases:
+  `[limits] skimmers_yield` (default on). Live from the HackRF: ~45-135 ms
+  of desktop CPU per busy 40 m slot.
+* Step 7, first part: PSKReporter uploader (templates from their
+  developer page, 5-minute batches, once an hour per call and band,
+  live spots only), `[station]`, `[report]`.
+
 ## 8. Open
 
 * Board CPU: how many FT8 bands fit next to 12 users. Measured on the

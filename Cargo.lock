@@ -1846,6 +1846,19 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-skim"
+version = "0.2.1"
+dependencies = [
+ "libc",
+ "tokio",
+ "web888-config",
+ "web888-core",
+ "web888-dsp",
+ "web888-ftx",
+ "web888-radio",
+]
+
+[[package]]
 name = "web888-web"
 version = "0.2.1"
 dependencies = [
@@ -1899,6 +1912,7 @@ dependencies = [
  "web888-iq",
  "web888-radio",
  "web888-sim",
+ "web888-skim",
  "web888-web",
  "web888-zynqsdr",
 ]
