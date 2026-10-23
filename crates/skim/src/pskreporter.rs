@@ -2,6 +2,16 @@
 //! Spots to PSKReporter (`doc/m4-skimmers.md` §6.1): IPFIX over UDP as in
 //! https://pskreporter.info/pskdev.html.
 //!
+//! The layout is the stock Web-888 server's (`extensions/FT8/
+//! PSKReporter.cpp`), which the server is known to accept: an options
+//! template without scope fields for the receiver, a 7-field sender
+//! template (no iMD), one data set per sender record, and the sequence
+//! number counting datagrams. Our first layout, the developer page's
+//! templates with all records in one set, was silently dropped
+//! (2026-10-23). Their test listener can't check either: the bare
+//! pskreporter.info domain is behind a web proxy now, and nothing sent
+//! to port 14739 shows on the analysis page.
+//!
 //! One datagram at most every five minutes (from start-up, with jitter,
 //! not on the clock), unless it is full. The record templates go in the
 //! first three datagrams and then hourly. A callsign is reported once an
@@ -13,32 +23,89 @@ use std::collections::HashMap;
 use std::net::UdpSocket;
 use std::time::{Duration, Instant};
 
-/// Receiver: callsign, locator, decoding software, antenna.
-const RECEIVER_TEMPLATE: [u8; 44] = [
-    0x00, 0x03, 0x00, 0x2C, 0x99, 0x92, 0x00, 0x04, 0x00, 0x01, //
-    0x80, 0x02, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x04, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x08, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x09, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x00, 0x00,
-];
+const LINK_RX: u16 = 0x1138;
+const LINK_RX_ANT: u16 = 0x1139;
+const LINK_TX: u16 = 0x1140;
+const ENTERPRISE: [u8; 4] = [0x00, 0x00, 0x76, 0x8F];
 
-/// Sender: callsign, frequency, SNR, IMD, mode, information source,
-/// locator, flowStartSeconds.
-const SENDER_TEMPLATE: [u8; 68] = [
-    0x00, 0x02, 0x00, 0x44, 0x99, 0x93, 0x00, 0x08, //
-    0x80, 0x01, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x05, 0x00, 0x04, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x06, 0x00, 0x01, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x07, 0x00, 0x01, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x0A, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x0B, 0x00, 0x01, 0x00, 0x00, 0x76, 0x8F, //
-    0x80, 0x03, 0xFF, 0xFF, 0x00, 0x00, 0x76, 0x8F, //
-    0x00, 0x96, 0x00, 0x04,
-];
+/// Template field: enterprise element `id`, length (0xFFFF = string).
+fn field(b: &mut Vec<u8>, id: u16, len: u16) {
+    b.extend_from_slice(&(0x8000 | id).to_be_bytes());
+    b.extend_from_slice(&len.to_be_bytes());
+    b.extend_from_slice(&ENTERPRISE);
+}
 
-/// Records per datagram (about 16 bytes each, ~1400 bytes in all).
-pub const MAX_RECORDS: usize = 70;
+const STRING: u16 = 0xFFFF;
+
+/// The sender template: callsign, frequency, SNR, mode, locator,
+/// information source, flowStartSeconds.
+fn sender_template(b: &mut Vec<u8>) {
+    let start = b.len();
+    b.extend_from_slice(&[0x00, 0x02, 0, 0]);
+    b.extend_from_slice(&LINK_TX.to_be_bytes());
+    b.extend_from_slice(&7u16.to_be_bytes());
+    field(b, 1, STRING);
+    field(b, 5, 4);
+    field(b, 6, 1);
+    field(b, 10, STRING);
+    field(b, 3, STRING);
+    field(b, 11, 1);
+    b.extend_from_slice(&[0x00, 0x96, 0x00, 0x04]);
+    let len = (b.len() - start) as u16;
+    b[start + 2..start + 4].copy_from_slice(&len.to_be_bytes());
+}
+
+/// The receiver template (options, no scope fields): callsign, locator,
+/// [antenna,] decoding software.
+fn receiver_template(b: &mut Vec<u8>, antenna: bool) {
+    let start = b.len();
+    b.extend_from_slice(&[0x00, 0x03, 0, 0]);
+    b.extend_from_slice(&if antenna { LINK_RX_ANT } else { LINK_RX }.to_be_bytes());
+    b.extend_from_slice(&if antenna { 4u16 } else { 3 }.to_be_bytes());
+    b.extend_from_slice(&[0, 0]); // scope fields
+    field(b, 2, STRING);
+    field(b, 4, STRING);
+    if antenna {
+        field(b, 9, STRING);
+    }
+    field(b, 8, STRING);
+    pad4(b, start);
+    let len = (b.len() - start) as u16;
+    b[start + 2..start + 4].copy_from_slice(&len.to_be_bytes());
+}
+
+/// A Maidenhead locator in its usual case (FN42hn); empty if it isn't
+/// one.
+pub fn locator(s: &str) -> String {
+    let b = s.trim().as_bytes();
+    let ok = matches!(b.len(), 4 | 6 | 8)
+        && b[0].to_ascii_uppercase().is_ascii_uppercase()
+        && b[0].to_ascii_uppercase() <= b'R'
+        && b[1].to_ascii_uppercase() <= b'R'
+        && b[1].is_ascii_alphabetic()
+        && b[2].is_ascii_digit()
+        && b[3].is_ascii_digit()
+        && (b.len() < 6
+            || (b[4].is_ascii_alphabetic()
+                && b[4].to_ascii_lowercase() <= b'x'
+                && b[5].is_ascii_alphabetic()
+                && b[5].to_ascii_lowercase() <= b'x'))
+        && (b.len() < 8 || (b[6].is_ascii_digit() && b[7].is_ascii_digit()));
+    if !ok {
+        return String::new();
+    }
+    let mut out: String = s.trim()[..4].to_ascii_uppercase();
+    if b.len() >= 6 {
+        out.push_str(&s.trim()[4..6].to_ascii_lowercase());
+    }
+    if b.len() == 8 {
+        out.push_str(&s.trim()[6..8]);
+    }
+    out
+}
+
+/// Records per datagram (about 28 bytes each with their set header).
+pub const MAX_RECORDS: usize = 50;
 const INTERVAL: Duration = Duration::from_secs(300);
 const TEMPLATES_EVERY: Duration = Duration::from_secs(3600);
 const REPORT_AGAIN: f64 = 3600.0;
@@ -74,7 +141,8 @@ fn pad4(b: &mut Vec<u8>, from: usize) {
     }
 }
 
-/// Encode a datagram.
+/// Encode a datagram: header, the templates if asked, the receiver
+/// record, then one set per report. `seq` counts datagrams, as stock does.
 pub fn datagram(
     now: u32,
     seq: u32,
@@ -83,41 +151,41 @@ pub fn datagram(
     rx: &Receiver,
     reports: &[Report],
 ) -> Vec<u8> {
+    let antenna = !rx.antenna.is_empty();
     let mut b = vec![0x00, 0x0A, 0, 0];
     b.extend_from_slice(&now.to_be_bytes());
     b.extend_from_slice(&seq.to_be_bytes());
     b.extend_from_slice(&domain.to_be_bytes());
     if templates {
-        b.extend_from_slice(&RECEIVER_TEMPLATE);
-        b.extend_from_slice(&SENDER_TEMPLATE);
+        sender_template(&mut b);
+        receiver_template(&mut b, antenna);
     }
-    let set = |b: &mut Vec<u8>, id: [u8; 2], body: &dyn Fn(&mut Vec<u8>)| {
+    let set = |b: &mut Vec<u8>, id: u16, body: &dyn Fn(&mut Vec<u8>)| {
         let start = b.len();
-        b.extend_from_slice(&id);
+        b.extend_from_slice(&id.to_be_bytes());
         b.extend_from_slice(&[0, 0]);
         body(b);
         pad4(b, start);
         let len = (b.len() - start) as u16;
         b[start + 2..start + 4].copy_from_slice(&len.to_be_bytes());
     };
-    set(&mut b, [0x99, 0x92], &|b| {
+    set(&mut b, if antenna { LINK_RX_ANT } else { LINK_RX }, &|b| {
         put_str(b, &rx.callsign);
-        put_str(b, &rx.locator);
+        put_str(b, &locator(&rx.locator));
+        if antenna {
+            put_str(b, &rx.antenna);
+        }
         put_str(b, &rx.software);
-        put_str(b, &rx.antenna);
     });
-    if !reports.is_empty() {
-        set(&mut b, [0x99, 0x93], &|b| {
-            for r in reports {
-                put_str(b, &r.call);
-                b.extend_from_slice(&r.freq_hz.to_be_bytes());
-                b.push(r.snr as u8);
-                b.push(0); // IMD
-                put_str(b, &r.mode);
-                b.push(1); // automatically extracted
-                put_str(b, &r.locator);
-                b.extend_from_slice(&r.time.to_be_bytes());
-            }
+    for r in reports {
+        set(&mut b, LINK_TX, &|b| {
+            put_str(b, &r.call);
+            b.extend_from_slice(&r.freq_hz.to_be_bytes());
+            b.push(r.snr as u8);
+            put_str(b, &r.mode);
+            put_str(b, &locator(&r.locator));
+            b.push(1); // automatically extracted
+            b.extend_from_slice(&r.time.to_be_bytes());
         });
     }
     let len = b.len() as u16;
@@ -232,7 +300,7 @@ impl Uploader {
                 }
                 Err(e) => self.status.last_error = Some(e.to_string()),
             }
-            self.seq = self.seq.wrapping_add(batch.len() as u32);
+            self.seq = self.seq.wrapping_add(1);
             self.sent += 1;
             if templates {
                 self.templates_at = Some(now);
@@ -336,40 +404,48 @@ mod tests {
         }
     }
 
+    /// Byte for byte what the stock server's code builds for the same
+    /// input (its template and emit code compiled into a harness).
     #[test]
-    fn datagram_layout() {
-        let r = Report {
-            call: "K1ABC".into(),
-            freq_hz: 7_075_123,
-            snr: -12,
-            mode: "FT8".into(),
-            locator: "FN42".into(),
-            time: 1_700_000_000,
+    fn same_bytes_as_stock() {
+        let stock = "000a00c86adbcdf0000000012468ace00002003c114000078001ffff0000768f800500040000768f800600010000768f800affff0000768f8003ffff0000768f800b00010000768f00960004000300241138000300008002ffff0000768f8004ffff0000768f8008ffff0000768f00001138001c064f483848514c064b5032357262077765622d383838000011400020054b31414243006bf51cf60346543804464e3432016adbcdb40000001140001c05573958595a006bf83cfd0346543800016adbcdc3000000";
+        let rx = Receiver {
+            callsign: "OH8HQL".into(),
+            locator: "KP25RB".into(),
+            software: "web-888".into(),
+            antenna: "".into(),
         };
-        let d = datagram(1_700_000_100, 5, 0x1234_5678, true, &rx(), &[r]);
-        assert_eq!(&d[..2], &[0x00, 0x0A]);
-        assert_eq!(u16::from_be_bytes([d[2], d[3]]) as usize, d.len());
-        assert_eq!(&d[12..16], &0x1234_5678u32.to_be_bytes());
-        assert_eq!(&d[16..60], &RECEIVER_TEMPLATE);
-        assert_eq!(&d[60..128], &SENDER_TEMPLATE);
-        // Receiver set: 99 92, length, then N0CALL FN42AA ... padded.
-        assert_eq!(&d[128..130], &[0x99, 0x92]);
-        let rl = u16::from_be_bytes([d[130], d[131]]) as usize;
-        assert_eq!(rl % 4, 0);
-        assert_eq!(&d[132..139], b"\x06N0CALL");
-        // Sender set.
-        let s = 128 + rl;
-        assert_eq!(&d[s..s + 2], &[0x99, 0x93]);
-        let sl = u16::from_be_bytes([d[s + 2], d[s + 3]]) as usize;
-        assert_eq!(s + sl, d.len());
-        let rec = &d[s + 4..];
-        assert_eq!(&rec[..6], b"\x05K1ABC");
-        assert_eq!(&rec[6..10], &7_075_123u32.to_be_bytes());
-        assert_eq!(rec[10] as i8, -12);
-        assert_eq!(&rec[12..16], b"\x03FT8");
-        assert_eq!(rec[16], 1);
-        assert_eq!(&rec[17..22], b"\x04FN42");
-        assert_eq!(&rec[22..26], &1_700_000_000u32.to_be_bytes());
+        let now = 1_792_790_000;
+        let reports = [
+            Report {
+                call: "K1ABC".into(),
+                freq_hz: 7_075_100,
+                snr: -10,
+                mode: "FT8".into(),
+                locator: "FN42".into(),
+                time: now - 60,
+            },
+            Report {
+                call: "W9XYZ".into(),
+                freq_hz: 7_075_900,
+                snr: -3,
+                mode: "FT8".into(),
+                locator: "".into(),
+                time: now - 45,
+            },
+        ];
+        let d = datagram(now, 1, 0x2468_ace0, true, &rx, &reports);
+        let hex: String = d.iter().map(|b| format!("{b:02x}")).collect();
+        assert_eq!(hex, stock);
+    }
+
+    #[test]
+    fn locators() {
+        assert_eq!(locator("KP25RB"), "KP25rb");
+        assert_eq!(locator("fn42"), "FN42");
+        assert_eq!(locator("R-06"), "");
+        assert_eq!(locator("ZZ99"), "");
+        assert_eq!(locator("JN58td25"), "JN58td25");
     }
 
     fn spot(call: &str, t: f64, live: bool) -> Spot {
