@@ -7,6 +7,7 @@
 #
 #   scripts/cross-armv7.sh OUTDIR -p web888-dsp --example bench
 #
+# RUSTFLAGS is passed through (e.g. -C target-feature=+neon).
 # The binary lands in OUTDIR/target/armv7-unknown-linux-musleabihf/release/
 # (examples/ for examples); the target dir is kept for incremental builds.
 set -eu
@@ -18,6 +19,7 @@ engine=$(command -v podman || command -v docker)
 exec "$engine" run --rm -v "$src:/src:ro" -v "$out:/out" \
     -e CARGO_TARGET_DIR=/out/target \
     -e CARGO_TARGET_ARMV7_UNKNOWN_LINUX_MUSLEABIHF_LINKER=rust-lld \
+    -e RUSTFLAGS="${RUSTFLAGS:-}" \
     docker.io/library/rust:1-slim sh -c '
         rustup target add armv7-unknown-linux-musleabihf >/dev/null 2>&1
         cd /src && cargo build --release --target armv7-unknown-linux-musleabihf "$@"' sh "$@"

@@ -10,6 +10,10 @@ use web888_ftx::{ft8, msg::CallHashes, wav};
 fn main() {
     let trace = std::env::var("FTX_TRACE").ok().and_then(|v| v.parse().ok());
     let residual = std::env::var("FTX_RESIDUAL").ok();
+    // Seconds of decoding per slot (the skimmer's budget).
+    let budget: Option<f64> = std::env::var("FTX_BUDGET")
+        .ok()
+        .map(|v| v.parse().expect("seconds"));
     let mut cfg = ft8::Config {
         trace,
         keep_residual: residual.is_some(),
@@ -66,7 +70,8 @@ fn main() {
         let stem = path.file_stem().unwrap().to_string_lossy();
         let hhmmss = stem.rsplit('_').next().unwrap_or("000000");
         let t = Instant::now();
-        let ds = dec.decode(&x, &mut hashes);
+        let deadline = budget.map(|b| t + std::time::Duration::from_secs_f64(b));
+        let ds = dec.decode_until(&x, &mut hashes, deadline);
         secs += t.elapsed().as_secs_f64();
         if let Some(r) = &residual {
             wav::write(r.as_ref(), dec.residual(), 12_000).unwrap();

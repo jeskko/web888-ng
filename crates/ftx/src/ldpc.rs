@@ -155,22 +155,23 @@ impl Bp {
                 for i in 0..w as usize {
                     let (n, k) = self.nm[m][i];
                     let t = zn[n as usize] - self.tov[n as usize][k as usize];
-                    self.toc[m][i] = (-t / 2.0).tanh();
+                    self.toc[m][i] = fast_tanh(-t / 2.0);
                 }
             }
             // Checks to bits: the product of the others' tanh terms.
             for (m, &w) in NUM_ROWS.iter().enumerate() {
                 let w = w as usize;
                 let row = &self.toc[m];
+                // Products of all but one, from prefix and suffix products.
+                let mut fwd = [1.0f32; 8];
                 for i in 0..w {
-                    let mut p = 1.0f32;
-                    for (j, &x) in row[..w].iter().enumerate() {
-                        if j != i {
-                            p *= x;
-                        }
-                    }
+                    fwd[i + 1] = fwd[i] * row[i];
+                }
+                let mut bwd = 1.0f32;
+                for i in (0..w).rev() {
                     let (n, k) = self.nm[m][i];
-                    self.tov[n as usize][k as usize] = -2.0 * atanh_clamped(p);
+                    self.tov[n as usize][k as usize] = -2.0 * atanh_clamped(fwd[i] * bwd);
+                    bwd *= row[i];
                 }
             }
             for n in 0..N {
@@ -181,9 +182,24 @@ impl Bp {
     }
 }
 
+/// tanh by a Padé approximant (error < 2e-2, exact at 0 and in the
+/// limits), as in ft8_lib: libm's is slow on the Cortex-A9.
+fn fast_tanh(x: f32) -> f32 {
+    if x < -4.97 {
+        return -1.0;
+    }
+    if x > 4.97 {
+        return 1.0;
+    }
+    let x2 = x * x;
+    x * (27.0 + x2) / (27.0 + 9.0 * x2)
+}
+
+/// atanh by a Padé approximant, with the ends clamped.
 fn atanh_clamped(x: f32) -> f32 {
-    let x = x.clamp(-0.999_999, 0.999_999);
-    0.5 * ((1.0 + x) / (1.0 - x)).ln()
+    let x = x.clamp(-0.999_9, 0.999_9);
+    let x2 = x * x;
+    x * (945.0 - 735.0 * x2 + 64.0 * x2 * x2) / (945.0 - 1050.0 * x2 + 225.0 * x2 * x2)
 }
 
 #[cfg(test)]

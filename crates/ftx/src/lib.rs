@@ -12,6 +12,7 @@ pub mod ft8;
 pub mod ldpc;
 pub mod msg;
 pub mod osd;
+mod realfft;
 mod tables;
 pub mod tones;
 pub mod wav;

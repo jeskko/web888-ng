@@ -82,7 +82,18 @@ ft8_lib. Our decoder does more work per candidate, so it gets a budget:
 * CPU per decoder and per band on the admin page and in `/metrics`
 
 The board numbers come when the test unit is here; benches run on the
-production unit's A9 meanwhile (nice 19, as in M3).
+production unit's A9 meanwhile (nice 19, as in M3; the stock server keeps
+it busy, so these are upper bounds).
+
+* 2026-10-23, first decoder: ~20 s of CPU per busy 40 m slot (desktop
+  0.56 s). After the work in §3.3: **4.9 s** (desktop 0.14 s, ~35x).
+  NEON auto-vectorisation (`+neon`) changes nothing.
+* Cutting candidates or passes costs sensitivity quickly (passes 3 -> 2:
+  -1.8 points for -18 % time), so instead each band gets a time budget
+  per slot (`Decoder::decode_until`): strongest candidates first, later
+  passes only if time is left. On the desktop 0.1 s keeps 88.5 % of
+  jt9, 0.2 s the full 91.3 % (A9: roughly 3.5 s and 7 s). The skimmer
+  divides the idle CPU between the bands.
 
 ## 3. Test corpus and scoring
 

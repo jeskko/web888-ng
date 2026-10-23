@@ -20,6 +20,7 @@
 use crate::ldpc::{self, Bp, N};
 use crate::msg::{self, CallHashes, Message};
 use crate::osd;
+use crate::realfft::RealFft;
 use crate::tones::{self, FT8_COSTAS, FT8_GRAY};
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
@@ -42,6 +43,11 @@ const DS_NSPS: usize = 32;
 
 /// Frequency offsets tried in the fine sync, Hz.
 const FINE_DF: [f32; 11] = [-2.5, -2.0, -1.5, -1.0, -0.5, 0.0, 0.5, 1.0, 1.5, 2.0, 2.5];
+
+/// Raised-cosine edges of the band taken for downsampling, 101 bins.
+static TAPER: std::sync::LazyLock<[f32; 101]> = std::sync::LazyLock::new(|| {
+    std::array::from_fn(|k| 0.5 * (1.0 - (std::f32::consts::PI * k as f32 / 101.0).cos()))
+});
 
 /// Band subtracted around tone 0 of a decoded signal, Hz.
 const SUB_BELOW: f32 = 50.0;
@@ -130,6 +136,8 @@ pub struct Decode {
 #[derive(Clone, Debug, Default)]
 pub struct Stats {
     pub slots: u64,
+    /// Slots whose decoding the deadline stopped.
+    pub cut_short: u64,
     pub candidates: u64,
     pub search: std::time::Duration,
     pub sync: std::time::Duration,
@@ -168,8 +176,7 @@ struct Candidate {
 
 pub struct Decoder {
     cfg: Config,
-    fft1: Arc<dyn Fft<f32>>,
-    ifft1: Arc<dyn Fft<f32>>,
+    fft1: RealFft,
     fft2: Arc<dyn Fft<f32>>,
     ifft2: Arc<dyn Fft<f32>>,
     spec_fft: Arc<dyn Fft<f32>>,
@@ -194,8 +201,7 @@ impl Decoder {
         });
         Decoder {
             cfg,
-            fft1: p.plan_fft_forward(NFFT1),
-            ifft1: p.plan_fft_inverse(NFFT1),
+            fft1: RealFft::new(NFFT1),
             fft2: p.plan_fft_forward(NFFT2),
             ifft2: p.plan_fft_inverse(NFFT2),
             spec_fft: p.plan_fft_forward(SPEC_NFFT),
@@ -225,13 +231,27 @@ impl Decoder {
     /// Decode a slot: `audio` starts at the slot boundary (up to 15 s;
     /// shorter is zero-padded).
     pub fn decode(&mut self, audio: &[f32], hashes: &mut CallHashes) -> Vec<Decode> {
+        self.decode_until(audio, hashes, None)
+    }
+
+    /// Decode a slot, stopping at `deadline`: candidates go strongest
+    /// first, and later passes only if there is time, so a short budget
+    /// loses the weakest decodes.
+    pub fn decode_until(
+        &mut self,
+        audio: &[f32],
+        hashes: &mut CallHashes,
+        deadline: Option<Instant>,
+    ) -> Vec<Decode> {
         let mut x = vec![0f32; SLOT];
         let n = audio.len().min(SLOT);
         x[..n].copy_from_slice(&audio[..n]);
         let mut found: Vec<Decode> = vec![];
         self.stats.slots += 1;
         let mut spectrum = self.spectrum(&x);
-        for pass in 1..=self.cfg.passes {
+        // Candidates tried so far, (freq, dt).
+        let mut tried: Vec<(f32, f32)> = vec![];
+        'passes: for pass in 1..=self.cfg.passes {
             if pass > 1 {
                 // The audio without what earlier passes decoded.
                 let t = Instant::now();
@@ -244,10 +264,29 @@ impl Decoder {
             self.stats.candidates += cands.len() as u64;
             let mut new: Vec<Decode> = vec![];
             for c in cands {
+                if deadline.is_some_and(|d| Instant::now() >= d) {
+                    self.stats.cut_short += 1;
+                    found.extend(new);
+                    break 'passes;
+                }
                 let traced = self.cfg.trace.is_some_and(|f| (f - c.freq).abs() < 5.0);
                 if traced {
                     eprintln!("pass {pass} candidate {c:?}");
                 }
+                // In later passes only the bands that lost a signal have
+                // changed; a candidate tried before elsewhere fails again.
+                let near_tried = tried.iter().any(|&(f, t): &(f32, f32)| {
+                    (f - c.freq).abs() < 1.6 && (t - c.dt).abs() < 0.05
+                });
+                let near_new = found.iter().any(|d| {
+                    d.pass as usize == pass - 1
+                        && c.freq > d.freq - SUB_BELOW
+                        && c.freq < d.freq + SUB_ABOVE
+                });
+                if near_tried && !near_new {
+                    continue;
+                }
+                tried.push((c.freq, c.dt));
                 // Skip candidates sitting on a signal decoded in this pass:
                 // the same signal (now subtracted) seen again. Those of
                 // earlier passes may hide another signal at the same place.
@@ -327,13 +366,10 @@ impl Decoder {
 
     /// Real audio back from the positive half of a slot spectrum.
     fn audio(&self, spectrum: &[C32]) -> Vec<f32> {
-        let mut buf = vec![C32::default(); NFFT1];
-        buf[..NFFT1 / 2].copy_from_slice(spectrum);
-        for k in 1..NFFT1 / 2 {
-            buf[NFFT1 - k] = spectrum[k].conj();
-        }
-        self.ifft1.process(&mut buf);
-        buf[..SLOT].iter().map(|v| v.re / NFFT1 as f32).collect()
+        let mut x = self.fft1.inverse(spectrum);
+        x.truncate(SLOT);
+        x.iter_mut().for_each(|v| *v /= NFFT1 as f32);
+        x
     }
 
     /// Remove a decoded signal from the slot spectrum: rebuild it at
@@ -378,12 +414,7 @@ impl Decoder {
     }
 
     fn spectrum(&self, x: &[f32]) -> Vec<C32> {
-        let mut buf: Vec<C32> = (0..NFFT1)
-            .map(|i| C32::new(*x.get(i).unwrap_or(&0.0), 0.0))
-            .collect();
-        self.fft1.process(&mut buf);
-        buf.truncate(NFFT1 / 2);
-        buf
+        self.fft1.forward(x)
     }
 
     /// Coarse search on a spectrogram.
@@ -392,58 +423,79 @@ impl Decoder {
         let i_min = (self.cfg.f_min / SPEC_DF) as usize;
         let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(SPEC_NFFT / 2 - 16);
         let nbins = i_max + 16;
+        // Power spectra of symbol-length frames, two real frames per
+        // complex FFT (one as the real part, one as the imaginary).
         let mut s = vec![0f32; nsteps * nbins];
         let mut buf = vec![C32::default(); SPEC_NFFT];
-        for j in 0..nsteps {
+        for j in (0..nsteps).step_by(2) {
+            let j2 = (j + 1).min(nsteps - 1);
             for (k, b) in buf.iter_mut().enumerate() {
                 *b = if k < NSPS {
-                    C32::new(x[j * SPEC_STEP + k], 0.0)
+                    C32::new(x[j * SPEC_STEP + k], x[j2 * SPEC_STEP + k])
                 } else {
                     C32::default()
                 };
             }
             self.spec_fft.process(&mut buf);
             for i in 0..nbins {
-                s[j * nbins + i] = buf[i].norm_sqr();
+                let z = buf[i];
+                let zc = buf[(SPEC_NFFT - i) % SPEC_NFFT].conj();
+                s[j * nbins + i] = (z + zc).norm_sqr() * 0.25;
+                if j2 != j {
+                    s[j2 * nbins + i] = (z - zc).norm_sqr() * 0.25;
+                }
             }
         }
-        // Lags in steps from the nominal start: 0.04 s each, ±2.5 s.
+        // Sum of the 7 tones from each bin (the sync score's reference).
+        let mut tsum = vec![0f32; nsteps * nbins];
+        for j in 0..nsteps {
+            let row = &s[j * nbins..(j + 1) * nbins];
+            for i in 0..nbins - 14 {
+                tsum[j * nbins + i] = (0..7).map(|t| row[i + 2 * t]).sum();
+            }
+        }
+        // Lags in steps from the nominal start: 0.04 s each, ±2.5 s. For
+        // each lag, the three Costas arrays' power and reference sums go
+        // into per-bin accumulators.
         let j0 = (T0 / (SPEC_STEP as f32 / RATE)).round() as i32;
-        let lags = -62..=62i32;
-        let at = |j: i32, i: usize| -> Option<f32> {
-            (j >= 0 && (j as usize) < nsteps).then(|| s[j as usize * nbins + i])
-        };
-        let mut best: Vec<(f32, i32, f32, i32)> = Vec::with_capacity(i_max - i_min); // (sync, lag, sync near, lag near)
-        for i in i_min..i_max {
-            let mut b = (0f32, 0i32);
-            let mut bn = (0f32, 0i32);
-            for lag in lags.clone() {
-                let mut ta = [0f32; 3];
-                let mut t0 = [0f32; 3];
-                for a in 0..3 {
-                    for (k, &tone) in FT8_COSTAS.iter().enumerate() {
-                        let j = j0 + lag + 4 * (36 * a as i32 + k as i32);
-                        let Some(v) = at(j, i + 2 * tone as usize) else {
-                            continue;
-                        };
+        let ni = i_max - i_min;
+        let mut best = vec![(0f32, 0i32, 0f32, 0i32); ni]; // (sync, lag, sync near, lag near)
+        let mut ta = vec![[0f32; 3]; ni];
+        let mut t0 = vec![[0f32; 3]; ni];
+        for lag in -62..=62i32 {
+            ta.iter_mut().for_each(|v| *v = [0.0; 3]);
+            t0.iter_mut().for_each(|v| *v = [0.0; 3]);
+            for a in 0..3 {
+                for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+                    let j = j0 + lag + 4 * (36 * a as i32 + k as i32);
+                    if j < 0 || j as usize >= nsteps {
+                        continue;
+                    }
+                    let base = j as usize * nbins + i_min;
+                    let row = &s[base + 2 * tone as usize..][..ni];
+                    let trow = &tsum[base..][..ni];
+                    for ((ta, t0), (&v, &tv)) in
+                        ta.iter_mut().zip(t0.iter_mut()).zip(row.iter().zip(trow))
+                    {
                         ta[a] += v;
-                        for t in 0..7 {
-                            t0[a] += at(j, i + 2 * t).unwrap_or(0.0);
-                        }
+                        t0[a] += tv;
                     }
                 }
+            }
+            for ((b, ta), t0) in best.iter_mut().zip(&ta).zip(&t0) {
                 let score = |ta: f32, t0: f32| if t0 > ta { ta / ((t0 - ta) / 6.0) } else { 0.0 };
-                let abc = score(ta.iter().sum(), t0.iter().sum());
+                let abc = score(ta[0] + ta[1] + ta[2], t0[0] + t0[1] + t0[2]);
                 let bc = score(ta[1] + ta[2], t0[1] + t0[2]);
                 let sync = abc.max(bc);
                 if sync > b.0 {
-                    b = (sync, lag);
+                    b.0 = sync;
+                    b.1 = lag;
                 }
-                if lag.abs() <= 10 && sync > bn.0 {
-                    bn = (sync, lag);
+                if lag.abs() <= 10 && sync > b.2 {
+                    b.2 = sync;
+                    b.3 = lag;
                 }
             }
-            best.push((b.0, b.1, bn.0, bn.1));
         }
         // Normalise by the 40th percentile of the best scores.
         let mut sorted: Vec<f32> = best.iter().map(|b| b.0).collect();
@@ -497,20 +549,22 @@ impl Decoder {
         let it = (i0 + (8.5 * BAUD / DF1) as i64).min(spectrum.len() as i64 - 1);
         let mut c = vec![C32::default(); NFFT2];
         let nb = (it - ib + 1) as usize;
-        let taper = 101.min(nb / 2);
+        let taper = TAPER.len().min(nb / 2);
+        // The time shift is a phase ramp over the bins: a rotating phasor.
+        let ramp = 2.0 * std::f32::consts::PI * DF1 * shift;
+        let step = C32::new(ramp.cos(), ramp.sin());
+        let ph0 = ramp * (ib - i0) as f32;
+        let mut rot = C32::new(ph0.cos(), ph0.sin());
         for k in 0..nb {
             let mut v = spectrum[(ib + k as i64) as usize];
-            let w = if k < taper {
-                0.5 * (1.0 - (std::f32::consts::PI * k as f32 / taper as f32).cos())
+            if k < taper {
+                v *= TAPER[k * TAPER.len() / taper];
             } else if k >= nb - taper {
-                0.5 * (1.0 - (std::f32::consts::PI * (nb - 1 - k) as f32 / taper as f32).cos())
-            } else {
-                1.0
-            };
-            v *= w;
+                v *= TAPER[(nb - 1 - k) * TAPER.len() / taper];
+            }
             if shift != 0.0 {
-                let ph = 2.0 * std::f32::consts::PI * (ib + k as i64 - i0) as f32 * DF1 * shift;
-                v *= C32::new(ph.cos(), ph.sin());
+                v *= rot;
+                rot *= step;
             }
             let dst = ((ib + k as i64 - i0).rem_euclid(NFFT2 as i64)) as usize;
             c[dst] = v;
@@ -1013,6 +1067,17 @@ mod tests {
             let db = 10.0 * (before / after).log10();
             assert!(db > 30.0, "f0 {f0} dt {dt}: only {db:.1} dB");
         }
+    }
+
+    #[test]
+    fn deadline_stops_decoding() {
+        let mut x = noise(SLOT, 3, 1.0);
+        add_signal(&mut x, "K1ABC W9XYZ -07", 1500.0, 0.0, -5.0);
+        let mut d = Decoder::new(Config::default());
+        let got = d.decode_until(&x, &mut CallHashes::default(), Some(Instant::now()));
+        assert!(got.is_empty());
+        assert_eq!(d.stats.cut_short, 1);
+        assert_eq!(d.decode(&x, &mut CallHashes::default()).len(), 1);
     }
 
     #[test]
