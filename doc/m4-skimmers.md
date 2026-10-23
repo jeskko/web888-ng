@@ -366,6 +366,16 @@ that can't go are dropped. It applies live.
 
 ## 8. Open
 
+* State after session 7 (2026-10-24): steps 1-8 are done, apart from
+  FST4W. Left: step 9 (docs, A9 benches with all modes running together,
+  release with the user's go-ahead).
+* The zynqsdr backend has not yet run against the real stock driver.
+  Its first hardware run comes after an emulator run (`hw/emu`); on the
+  production unit the watchdog is armed for it (STATUS has the details).
+* The WSPR decoder ties up a decoder thread for a minute or more per
+  slot on the A9, while FT8 slots share the other thread. Measure this
+  in the step 9 benches.
+
 * Board CPU: how many FT8 bands fit next to 12 users. Measured on the
   test unit. Until then the decoder budget is configurable.
 * CW/RTTY skimmers (S2) come after M4 (feature-gap §5, question 8).
