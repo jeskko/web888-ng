@@ -236,9 +236,15 @@ which takes a 6-character locator from the fix.
   `SCHED_IDLE` sharing the time to the next slot, the spot bus. Leases:
   `[limits] skimmers_yield` (default on). Live from the HackRF: ~45-135 ms
   of desktop CPU per busy 40 m slot.
-* Step 7, first part: PSKReporter uploader (templates from their
-  developer page, 5-minute batches, once an hour per call and band,
-  live spots only), `[station]`, `[report]`.
+* Step 7, first part: PSKReporter uploader (5-minute batches, once an
+  hour per call and band, live spots only), `[station]`, `[report]`.
+  The developer page's layout (scope field in the receiver template, all
+  records in one set) was silently dropped; the stock Web-888 layout,
+  byte for byte (tested against a harness of the stock code and a capture
+  from a stock unit), works: live reports as the development receiver
+  showed on PSKReporter on 2026-10-23 21:11 UTC. Their test listener can't
+  check anything (the bare domain is behind a web proxy, and nothing sent
+  to port 14739 shows on the analysis page).
 
 ## 8. Open
 

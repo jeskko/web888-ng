@@ -356,7 +356,12 @@ async fn admin_api() {
     );
     let sc = me("GET", "/api/admin/schema", None).await.json();
     let keys: Vec<&String> = sc["properties"].as_object().unwrap().keys().collect();
-    assert_eq!(keys, ["radio", "hpsdr", "web", "limits", "report", "station", "skimmer"]);
+    assert_eq!(
+        keys,
+        [
+            "radio", "hpsdr", "web", "limits", "report", "station", "skimmer"
+        ]
+    );
     assert!(sc["$defs"].get("Auth").is_none());
 
     // config: no hashes out, none in; validation; saving applies it
