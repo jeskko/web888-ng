@@ -1798,6 +1798,14 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-ftx"
+version = "0.2.1"
+dependencies = [
+ "num-complex",
+ "rustfft",
+]
+
+[[package]]
 name = "web888-hpsdr"
 version = "0.2.1"
 dependencies = [

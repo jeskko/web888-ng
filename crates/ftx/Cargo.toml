@@ -1,0 +1,11 @@
+[package]
+name = "web888-ftx"
+description = "FT8/FT4 decoder and encoder for web888d skimmers"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true

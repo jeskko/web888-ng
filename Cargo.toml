@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d"]
+members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx"]
 
 [workspace.package]
 version = "0.2.1"
@@ -19,6 +19,7 @@ web888-hw = { path = "crates/hw" }
 web888-config = { path = "crates/config" }
 web888-core = { path = "crates/core" }
 web888-web = { path = "crates/web" }
+web888-ftx = { path = "crates/ftx" }
 libc = "0.2.190"
 num-complex = "0.4.6"
 rustfft = "6.4.1"
