@@ -62,7 +62,7 @@ Constraints that shape the design:
 ## 3. Process architecture
 
 ```mermaid
-flowchart LR
+flowchart TD
     dev["/dev/zynqsdr<br/>(or open driver, simulator, iq source)"]
 
     subgraph web888d
