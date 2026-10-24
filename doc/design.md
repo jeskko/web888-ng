@@ -61,18 +61,38 @@ Constraints that shape the design:
 
 ## 3. Process architecture
 
-```
-                       ┌──────────────────────── web888d ───────────────────────────┐
- /dev/zynqsdr ──▶ [hw thread] ─RX frames─▶ [rx fan-out] ─▶ per-channel SPSC rings ─┐ │
-   (or UIO /       │  PPS, GPIO, att        13 × IQ                                 │ │
-    simulator)     └─WF blocks─▶ [wf scheduler] ─▶ wf rings                         │ │
-                                                                                    ▼ │
-                       [dsp pool: 2 threads, pinned] ── demod/AGC/filters/FFT ──▶ out rings
-                                                                                    │ │
- tokio runtime:  HTTP/WS (UI, API) · HPSDR P1 (UDP) · IQ/rtl_tcp (TCP) · Kiwi (opt) ◀┘ │
-                 skimmers ──▶ decoder threads (FT8/FT4/WSPR, SCHED_IDLE) · spot sinks  │
-                 clock discipline · gpsd client · config/admin · metrics               │
-                       └──────────────────────────────────────────────────────────────┘
+```mermaid
+flowchart LR
+    dev["/dev/zynqsdr<br/>(or open driver, simulator, iq source)"]
+
+    subgraph web888d
+        hw["hw thread<br/>(real-time priority)<br/>PPS, GPIO, attenuator"]
+        fan["RX fan-out<br/>13 × IQ"]
+        wfs["WF scheduler"]
+        pool["DSP pool<br/>(one thread per core)<br/>demod, AGC, filters, FFT"]
+        skim["skimmer decoder threads<br/>(FT8/FT4/WSPR, SCHED_IDLE)"]
+        bus(["spot bus"])
+
+        subgraph tokio["tokio runtime"]
+            net["HTTP/WS (UI, API)<br/>HPSDR P1 (UDP)<br/>IQ/rtl_tcp (TCP), Kiwi (opt)"]
+            ops["clock discipline, gpsd client<br/>config/admin, metrics"]
+        end
+
+        sinks["uploaders and log sinks<br/>PSKReporter, WSPRnet, syslog, MQTT"]
+    end
+
+    dev -- "RX frames" --> hw
+    dev -- "WF blocks" --> hw
+    hw --> fan
+    hw --> wfs
+    fan -- "per-channel rings" --> pool
+    wfs -- "wf rings" --> pool
+    pool -- "audio, waterfall lines" --> net
+    pool -- "band audio slots" --> skim
+    skim --> bus
+    bus --> net
+    bus --> sinks
+    ops -- "control commands" --> hw
 ```
 
 * **hw thread** (1, real-time priority): owns the `Radio` backend; polls/reads
