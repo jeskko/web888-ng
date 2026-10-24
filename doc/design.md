@@ -1,6 +1,6 @@
 # web888d — design
 
-Status: draft v0.1 (2026-10-16). Project **web888-ng**, daemon `web888d`; licence **GPL-3.0-or-later** (2026-10-16; was MIT).
+Status: draft v0.2 (2026-10-16, progress updated 2026-10-24; milestones in §11). Project **web888-ng**, daemon `web888d`; licence **GPL-3.0-or-later** (2026-10-16; was MIT).
 
 A new server for the Web-888 SDR (Zynq-7010, 2× Cortex-A9, LTC2208, open or
 stock FPGA). It is **not** a port of the existing KiwiSDR-derived server: it
@@ -70,7 +70,7 @@ Constraints that shape the design:
                        [dsp pool: 2 threads, pinned] ── demod/AGC/filters/FFT ──▶ out rings
                                                                                     │ │
  tokio runtime:  HTTP/WS (UI, API) · HPSDR P1 (UDP) · IQ/rtl_tcp (TCP) · Kiwi (opt) ◀┘ │
-                 decoder supervisor ──▶ child processes (wsprd, dumphfdl, …)          │
+                 skimmers ──▶ decoder threads (FT8/FT4/WSPR, SCHED_IDLE) · spot sinks  │
                  clock discipline · gpsd client · config/admin · metrics               │
                        └──────────────────────────────────────────────────────────────┘
 ```
@@ -83,6 +83,10 @@ Constraints that shape the design:
   are small (≈ 5–20 ms of samples) so both cores load-balance.
 * **async runtime** (tokio, few threads, lower priority): all sockets,
   timers, child processes, config.
+* **skimmers** (M4, `crates/skim`): each band is a job on the dsp pool that
+  cuts its channel into USB audio slots. Decoder threads at `SCHED_IDLE`
+  decode them with a deadline. Spots go out on a broadcast bus to the UI,
+  the uploaders and the log sinks.
 * Inter-thread data: lock-free SPSC/MPMC rings of fixed-size blocks
   (`rtrb`/`crossbeam`); control: bounded channels of commands. Slow
   consumers lose blocks (counted), they never stall producers.
@@ -200,8 +204,10 @@ decoders: the DSP chain stops after the channel filter (or is bypassed).
   timeouts, and optional per-IP/time limits.
 * The **channel manager** grants, revokes and rebalances leases, and is the
   only place that retunes hardware NCOs.
-* Skimmers (FT8 etc.) are configured permanent leases that can be
-  pre-empted by schedule (e.g. "FT8 on 40 m 18–06 UTC").
+* Skimmers (FT8 etc.) are configured leases that run in their UTC hours
+  (e.g. "FT8 on 40 m 18–06 UTC"). As built (M4), they **yield to users**
+  by default (`[limits] skimmers_yield`). A user who finds no free channel
+  takes the newest skimmer's, and the skimmer waits for one to come free.
 
 ## 7. Network interfaces
 
@@ -229,22 +235,26 @@ Opus) negotiated per client. The UI is a new design, not a reskin of an existing
   sample counter. PPS edges give counter→UTC mapping, so IQ streams can carry
   GPS time (TDoA-capable). With the stock FPGA, timestamps are estimated from
   arrival time.
-* gpsd client for fix/time/position.
+* gpsd client: the station locator from the fix (M4, `[station] gpsd`).
+  Time from gpsd is not used yet.
 
 ## 9. Decoders
 
 | decoder | library | integration | licence note |
 |---|---|---|---|
-| FT8/FT4 | ft8_lib (MIT) or own | in-process | compatible |
-| WSPR | wsprd (WSJT-X) | child process, audio/IQ via pipe | GPL-3 compatible |
+| FT8/FT4 | own Rust (`crates/ftx`), from ft8_lib (MIT) and the QEX protocol paper | in-process threads | compatible; WSJT-X's Fortran (GPLv3-only) is used only to compare against |
+| WSPR | Rust port of wsprd (`crates/wspr`) | in-process threads | wsprd's C is GPL-3.0-or-later |
 | HFDL | dumphfdl | child process, IQ via pipe | GPL-3 compatible |
 | ACARS / AIS | acarsdec / AIS decoder | child process | check per project |
 | DRM AAC | FDK-AAC | **must** stay a separate process | Fraunhofer licence, not GPL-compatible |
 
-Since web888d is GPL-3.0+, GPL decoders could be linked in. Running them as
-separate programs over pipes/sockets is still the default, because a crashing
-decoder then can't take the server down. FDK-AAC must never be linked.
-Results go to a common spot bus (UI, PSKReporter, WSPRnet, local log).
+Since web888d is GPL-3.0+, GPL decoders could be linked in. For C decoders,
+separate programs over pipes or sockets are still the default, because a
+crashing decoder then can't take the server down. The FT8/FT4/WSPR
+decoders were written or ported in Rust instead (M4): memory-safe, bounded
+by a deadline, at idle priority. FDK-AAC must never be linked. Results go
+to a common spot bus: the UI, PSKReporter, WSPRnet, syslog and MQTT
+(`doc/m4-skimmers.md`).
 
 ## 10. Configuration, security, operations
 
@@ -252,8 +262,11 @@ Results go to a common spot bus (UI, PSKReporter, WSPRnet, local log).
   the API write the same file.
 * Auth: admin password (argon2), optional user passwords, per-IP limits,
   time limits; TLS via configured certs or behind a reverse proxy.
-* Logs: `tracing` with JSON option. Metrics: queue depths, drops, ADC
-  overload, CPU per thread, lease counts.
+* Logs: stderr for now (`tracing` with a JSON option is still the plan).
+  The skimmers' log (spots, band and upload events) can also go to syslog
+  and MQTT; each sink chooses its events (M4). Metrics: queue depths,
+  drops, ADC overload, CPU per thread, lease counts, skimmer slots and
+  spots, uploads.
 * Deployment: static `armv7-unknown-linux-musleabihf` binary + UI assets;
   OpenRC service on the stock Alpine image, replacing the stock server
   (single owner of `/dev/zynqsdr`). Bitstream loading + Si5351 init
@@ -267,7 +280,7 @@ Results go to a common spot bus (UI, PSKReporter, WSPRnet, local log).
 | M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested), PPS loop ✅, HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programming opt-in `--si5351-adc`, test unit only); open: test on a unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
 | M2 ✅ | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio (`doc/m2-web-ui.md`, v0.1.0) | usable in a browser |
 | M3 ✅ | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth (`doc/m3-multi-user.md`, v0.2.0/v0.2.1); board benches wait for the test unit | 13 users + time-shared waterfalls |
-| M4 | decoder supervisor, FT8/WSPR skimmers, spot reporting | spots uploaded |
+| M4 🚧 | skimmers and spot reporting (`doc/m4-skimmers.md`): FT8/FT4/WSPR decoders ✅ (91–92 % / 89 % of jt9, 64/64 of wsprd on the corpus), runtime with yielding leases ✅, PSKReporter and WSPRnet uploads ✅ (accepted live from the HackRF), spots in the UI ✅, syslog/MQTT/gpsd ✅; open: A9 benches with all modes, docs, release | spots uploaded |
 | M5 | Kiwi protocol (feature `kiwi`) ported from upstream | kiwirecorder/SuperSDR work |
 | M6 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver); proposed core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`) | GPS-timestamped IQ |
 
@@ -285,6 +298,11 @@ KiwiSDR and OpenWebRX+: `doc/feature-gap.md` (proposal).
   later", all compatible with GPL-3.0+. Keep the original copyright and
   licence notices on anything copied or closely ported, and record the
   source path in the commit (`Ported-from: RaspSDR/server@<commit>:<path>`).
+* Decoders (M4): FT8/FT4 are written from ft8_lib (MIT, notice kept) and
+  the published protocol description; WSJT-X's Fortran is GPLv3 without
+  "or later", so it is used only to compare behaviour, never translated.
+  wsprd (C, GPL-3.0-or-later, including Phil Karn's Fano decoder) was
+  ported directly, with its notices.
 * **Do not copy**:
   * `pkgs/mongoose` (GPL-2.0-*only*: incompatible with GPLv3; we don't
     need it anyway).
