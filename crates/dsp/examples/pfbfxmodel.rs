@@ -6,7 +6,7 @@
 //! signal near full scale.
 //!   cargo run --release -p web888-dsp --example pfbfxmodel [--all] [--coef N]
 use web888_dsp::pfb::{Pfb, PfbSpec};
-use web888_dsp::pfbfx::{FixedSpec, PfbFixed};
+use web888_dsp::pfbfx::{FftArch, FixedSpec, PfbFixed};
 
 const FS: f64 = 122.88e6;
 
@@ -60,6 +60,24 @@ fn main() {
     let many: Vec<(f64, f64)> = (0..8).map(|k| (3.5e6 + 2.31e6 * k as f64, -19.0)).collect();
     let x8 = adc(n, &many, 2);
     let stages = 11;
+    // the chosen widths in both FFT arithmetics
+    for arch in [FftArch::Radix2, FftArch::Radix22] {
+        let fx = FixedSpec {
+            arch,
+            ..FixedSpec::recommended(&spec)
+        };
+        let (e1, s1) = run(spec, fx, &x1, &one);
+        let (e8, s8) = run(spec, fx, &x8, &many);
+        println!(
+            "recommended widths, {arch:?}: {e1:.1} dB below noise ({s1} sat), 8 tones {e8:.1} dB ({s8} sat)"
+        );
+    }
+    // --arch r22: sweep the radix-2² arithmetic (default radix-2)
+    let arch = if std::env::args().any(|a| a == "r22") {
+        FftArch::Radix22
+    } else {
+        FftArch::Radix2
+    };
     println!(
         "data twid  halvings          tone -1 dBFS: err below noise, sat   8 tones: below, sat"
     );
@@ -96,6 +114,7 @@ fn main() {
                         data_bits: data,
                         twiddle_bits: tw,
                         stage_shifts: mask,
+                        arch,
                         ..FixedSpec::default_for(&spec)
                     };
                     let (e1, s1) = run(spec, fx, &x1, &one);
