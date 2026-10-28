@@ -1,6 +1,10 @@
 # M3 multi-user: implementation plan
 
-Status: **agreed** (2026-10-22; decisions in §10). Scope from `design.md` §11 M3:
+Status: **done** (2026-10-23, released in v0.2.0 and v0.2.1; decisions
+in §10), apart from step 9's load test with 12 users on a board: the
+test unit was reordered, and so far web888d has run on the production
+unit with a few web users and skimmers (2026-10-28). Scope from
+`design.md` §11 M3:
 multi-user leases, waterfall scheduler, AGC/NB/NR, admin API, auth.
 Done when (design.md): 13 users at once with time-shared waterfalls.
 Builds on M2 (`m2-web-ui.md`); decisions there stand.
@@ -20,16 +24,18 @@ Concretely, done when:
 
 ## 1. What changes, in one picture
 
-```
-            ┌──────────────── channel manager (leases) ───────────────┐
- sessions ─▶│ RX channel pool (12/13)   WF scheduler (2 hw slots)      │──HwCmd──▶ hw thread
- (web, HPSDR│ priorities, limits         shared views, time-sharing    │
-  later     └──────────────────────────────────────────────────────────┘
-  decoders)          │ grants/revokes                │ WF blocks
-                     ▼                               ▼
-              DSP pool (N = cores) ── per-session audio jobs, per-view WF jobs
-                     │
-              tokio: WS sessions, admin API, /metrics, auth
+```mermaid
+flowchart TD
+  sess["sessions: web, HPSDR,<br/>skimmers (since M4)"] --> pool
+  sess --> wfs
+  subgraph cm["channel manager (leases)"]
+    pool["RX channel pool (12 / 13)<br/>priorities, limits"]
+    wfs["WF scheduler (2 hw slots)<br/>shared views, time-sharing"]
+  end
+  cm -- "HwCmd" --> hw["hw thread"]
+  pool -- "grants / revokes" --> dsp["DSP pool (N = cores)<br/>per-session audio jobs, per-view WF jobs"]
+  wfs -- "WF blocks" --> dsp
+  dsp --> tok["tokio: WS sessions, admin API,<br/>/metrics, auth"]
 ```
 
 M2 has one fixed channel and one exclusive WF slot for one user, two
