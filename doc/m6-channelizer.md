@@ -1,6 +1,7 @@
 # M6 channelizer: server side
 
-Status: **step 1 in progress** (2026-10-29). The bitstream side is
+Status: **step 1 done, step 2 half** (2026-10-29: the iq backend runs the
+bank behind `BinRadio`; the hw thread's fan-out is next). The bitstream side is
 `hw/docs/channelizer.md` in web888-ng-hw (datapath and outputs
 bit-exact in simulation, timing met). Scope: the server running on
 **bins** instead of tuned RX channels and waterfall slots, first against
@@ -85,7 +86,7 @@ the input's band instead of 0–61 MHz.
 | # | content | done when |
 |---|---|---|
 | 1 | the bin-source trait; the iq backend's bank behind it | unit tests: a tone in the right bin at the right level, selection switching by gen, the power line equal to the bins' summed power |
-| 2 | the iq backend in bins mode (`--backend iq --bins`): the hw thread reads frames and fans them out | a bench: frames per second, CPU, on a recording |
+| 2 | the iq backend in bins mode (`--backend iq --bins`): the hw thread reads frames and fans them out | a bench: frames per second, CPU, on a recording. **Bank side done**: `IqConfig::bins`, `BinRadio for IqRadio`; `examples/binsbench`: 4.0x real time at 7.68 MS/s on the workstation (0 bins), 3.2x with 64 selected and power lines (one core; the bank's branch sums dominate) |
 | 3 | bin leases; users and skimmers on `PfbChannel` | the M3 load test (13 sessions) on bins; skimmer decodes on a recording as many as on RX channels |
 | 4 | waterfall from the power line and per-bin zoom | browser check; zoomed view seamless across bin edges |
 | 5 | HPSDR at 48 kS/s from bins | `p1probe` against the server |

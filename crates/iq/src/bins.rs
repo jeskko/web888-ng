@@ -100,6 +100,11 @@ impl IqBins {
         self.sum.iter_mut().for_each(|s| *s = 0.0);
     }
 
+    /// Frames made so far (selected bins or not).
+    pub fn frame(&self) -> u64 {
+        self.frame
+    }
+
     /// Frames the reader lost by falling behind.
     pub fn dropped(&self) -> u64 {
         self.dropped

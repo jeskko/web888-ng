@@ -31,6 +31,7 @@ use num_complex::{Complex32, Complex64};
 use source::{Feed, IqSource};
 use std::collections::VecDeque;
 use std::time::Instant;
+use web888_radio::bins as bins_api;
 use web888_radio::*;
 
 /// RX ring of the stock driver (bytes).
@@ -48,6 +49,8 @@ pub struct IqConfig {
     pub rx_channels: usize,
     /// Remove the input's DC offset (SDR LO leakage).
     pub dc_block: bool,
+    /// Also run the channelizer (`bins::IqBins`, `BinRadio`).
+    pub bins: bool,
 }
 
 impl IqConfig {
@@ -58,6 +61,7 @@ impl IqConfig {
             rate_hz,
             rx_channels: 12,
             dc_block: true,
+            bins: false,
         }
     }
 
@@ -121,6 +125,9 @@ pub struct IqRadio {
     stats: HwStats,
     /// The source is a device (real time), not a recording.
     live: bool,
+    bins: Option<bins::IqBins>,
+    /// scratch: the channelizer's input
+    bins_in: Vec<Complex32>,
 }
 
 impl IqRadio {
@@ -179,6 +186,10 @@ impl IqRadio {
             pps_emitted: 0,
             stats: HwStats::default(),
             live: false,
+            bins: cfg
+                .bins
+                .then(|| bins::IqBins::new(cfg.center_hz, cfg.rate_hz)),
+            bins_in: Vec::new(),
             cfg,
         };
         r.set_rx_rate(20)?;
@@ -262,6 +273,14 @@ impl IqRadio {
             });
         }
         let mut out = std::mem::take(&mut self.out);
+
+        // the channelizer, at the front end's gain
+        if let Some(b) = &mut self.bins {
+            let g = self.gain as f32;
+            self.bins_in.clear();
+            self.bins_in.extend(x.iter().map(|z| z * g));
+            b.push(&self.bins_in);
+        }
 
         // RX: frames completed in this chunk, zeros for idle channels
         let dmod = self.rx_decimation();
@@ -555,5 +574,50 @@ impl Radio for IqRadio {
             build_id: None,
             live: self.live,
         }
+    }
+}
+
+/// The channelizer (`IqConfig::bins`); without it every call fails.
+impl bins_api::BinRadio for IqRadio {
+    fn bin_caps(&self) -> bins_api::BinCaps {
+        self.bins
+            .as_ref()
+            .map(|b| b.caps())
+            .unwrap_or(bins_api::BinCaps {
+                bin_hz: bins::BIN_HZ,
+                frame_rate: 2.0 * bins::BIN_HZ,
+                bins: 0,
+                first_hz: self.cfg.center_hz,
+                wraps: true,
+                max_selected: 0,
+            })
+    }
+
+    fn set_bins(&mut self, sel: &[usize]) -> Result<u8> {
+        Ok(self.bins_mut()?.set_bins(sel))
+    }
+
+    fn read_bins(&mut self, out: &mut Vec<bins_api::BinFrame>) -> Result<usize> {
+        // a direct input reads until the bank made a frame
+        let f0 = self.bins_mut()?.frame();
+        self.pump(|r| r.bins.as_ref().is_some_and(|b| b.frame() > f0))?;
+        Ok(self.bins_mut()?.read_bins(out))
+    }
+
+    fn set_power(&mut self, frames: u16) -> Result<()> {
+        self.bins_mut()?.set_power(frames);
+        Ok(())
+    }
+
+    fn read_power(&mut self, line: &mut Vec<f32>) -> Result<Option<u32>> {
+        Ok(self.bins_mut()?.read_power(line))
+    }
+}
+
+impl IqRadio {
+    fn bins_mut(&mut self) -> Result<&mut bins::IqBins> {
+        self.bins.as_mut().ok_or(Error::InvalidParam(
+            "the iq backend runs without bins (IqConfig::bins)",
+        ))
     }
 }
