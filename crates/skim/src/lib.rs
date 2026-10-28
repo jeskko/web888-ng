@@ -211,8 +211,19 @@ fn idle_priority() {
         // zeroed: 32-bit musl's sched_param has more fields (SCHED_SPORADIC)
         // SAFETY: an all-zero sched_param is valid.
         let p: libc::sched_param = unsafe { std::mem::zeroed() };
-        // SAFETY: plain syscall on the calling thread.
-        if unsafe { libc::sched_setscheduler(0, libc::SCHED_IDLE, &p) } != 0 {
+        // The system call itself: musl's sched_setscheduler() is a stub
+        // that always fails with ENOSYS (seen on the board's kernel in the
+        // emulator). Pid 0 is the calling thread.
+        // SAFETY: plain syscall on the calling thread, `p` outlives it.
+        let r = unsafe {
+            libc::syscall(
+                libc::SYS_sched_setscheduler,
+                0,
+                libc::SCHED_IDLE,
+                &p as *const libc::sched_param,
+            )
+        };
+        if r != 0 {
             events::emit(
                 events::Level::Warning,
                 "skim",
