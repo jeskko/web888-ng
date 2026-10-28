@@ -22,6 +22,7 @@
 //! output waits in a ring of the stock size; a reader that falls behind
 //! loses the oldest frames (counted as overruns, like the open driver).
 
+pub mod bins;
 pub mod ddc;
 pub mod source;
 

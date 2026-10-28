@@ -9,6 +9,7 @@
 
 use std::fmt;
 
+pub mod bins;
 pub mod block;
 pub mod chan;
 pub mod clock;
