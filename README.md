@@ -100,8 +100,13 @@ tools without a local toolchain: `scripts/cross-armv7.sh`.
 
 Waterfall: wheel zooms around the cursor, drag pans, click tunes,
 shift+wheel steps the dial; arrows step, `u`/`l`/`c`/`a` pick the mode.
-The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`).
-The protocol is in `doc/m2-web-ui.md` §4.
+The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`). The scale
+shows other users' frequencies (click to listen along) and each
+skimmer's range. **Stereo** (USB, LSB, CW; headphones) places signals
+left or right of the passband's middle, as on the waterfall
+(`doc/stereo-cw.md`).
+The protocol is version 2: `doc/m3-multi-user.md` §8 (version 1, M2's,
+in `doc/m2-web-ui.md` §4).
 
 ### Passwords, admin API, metrics
 
