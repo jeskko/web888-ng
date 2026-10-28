@@ -21,6 +21,7 @@ signal in the passband has a place, not just "low" or "high".
   the pitch) is in the centre. One below it is to the left, one above it
   to the right, as on the screen. Tuning a signal into the centre of the
   head is then also a way to zero-beat it.
+* A choice of how the position is made (§3): level, phase, or both.
 * A **width** setting: how far from the pitch a signal has to be to sit
   fully at one side. Its default is the passband's half-width, so the
   passband's edges land at the two ears (±250 Hz for the default CW
@@ -47,45 +48,79 @@ carries two channels on the same read position and trim, so L and R
 can't drift apart. Two independent `Resampler`s fed the same input would
 stay in step too, but one with a channel count is cleaner.
 
-## 3. The filters
+## 3. Three ways to place a signal
 
-The pan position of audio frequency `f` (Hz) is
+The pan position of audio frequency `f` (Hz) is the same for all three:
 
     p(f) = clamp((f - pitch) / width, -1, 1)        -1 = left, +1 = right
 
-with a constant-power pan law, so a signal is equally loud wherever it
-sits:
+What differs is how a position becomes a difference between the ears.
+
+**(1) Level** (ILD, the analogue circuit's way). A constant-power pan
+law, so a signal is equally loud wherever it sits:
 
     θ(f) = (p(f) + 1) · π/4,   L(f) = cos θ(f),   R(f) = sin θ(f)
 
-A pair of linear-phase FIR filters realises `L(f)` and `R(f)`. They are
-designed by frequency sampling: sample the two gain curves, inverse-FFT,
-and apply a window (Kaiser). They are rebuilt when the pitch, the width
-or the passband changes, which takes well under a millisecond.
+At the sides one ear gets nearly nothing.
 
-* **Length: 255 taps** at 12 kS/s. The resolution is then about 50 Hz,
-  enough to resolve a ±250 Hz ramp. The latency is 127 samples, 10.6 ms.
-  The cost is 2 × 255 multiply-adds per sample, about 6 M/s: fine in
-  JavaScript, even on a phone. If not, use FFT convolution.
-* Both filters are linear-phase with the same delay, so L and R stay
-  time-aligned. The image is then only level differences, like the
-  analogue circuit.
-* `p` is clamped: outside ±width the sound stays at the ear, and outside
-  the passband there's nothing left anyway (the server has filtered it).
-* Possibly a `max pan` below 1 (say 0.85, so the far ear still hears a
-  little). Hard-panned sound gets tiring over a long session.
+**(2) Phase or time** (IPD/ITD). Both ears get the same level, and only
+the phase between them changes with `p`. There are two flavours:
 
-### 3.1 Option: time differences too
+* **Time delay:** `τ(f) = p(f) · τmax` with τmax ≈ 0.3–0.5 ms (a real
+  head is up to about 0.65 ms). The phase difference grows with
+  frequency (2πfτ). A delay also shifts the keying envelope, so the
+  onsets arrive at different times too, which the ear uses as well.
+* **Constant phase:** `φ(f) = p(f) · φmax` with φmax up to 90°: the
+  classic binaural receiver's trick, a 90° phasing network (I to one
+  ear, Q to the other). A signal above zero beat leads in one ear, one
+  below leads in the other. The keying envelope isn't shifted.
 
 Below about 1.5 kHz, where CW lives, the ear judges direction mostly by
-the **time difference** between the ears, not the level difference. A
-level-only image is weaker than a real one. The same frequency-sampling
-design can add a per-frequency delay: `H_L(f) = L(f)·e^{-j2πf(D - τ(f))}`
-and `H_R(f) = R(f)·e^{-j2πf(D + τ(f))}`, with `τ(f) = p(f)·τmax` and
-τmax ≈ 0.3–0.5 ms (a real head is up to about 0.65 ms). Above roughly
-1 kHz, a tone's phase difference gets ambiguous, so τmax stays small.
-This is worth a listening test before deciding. It costs nothing extra
-at run time, since only the filter design changes.
+this phase or time difference, not by level, so (2) may give the stronger
+image. It is also easier on the ears: no ear ever goes quiet. But a
+phase difference above 180° is ambiguous (with a time delay that starts
+at f > 1/(2τmax), about 1 kHz for 0.5 ms), so the range stays small.
+On mono speakers, the two ears' signals partly cancel.
+
+**(3) Both:** a gentler level pan (say ±6 dB at the sides instead of
+silence) plus a phase or time difference. A real source off to one side
+gives both cues, so this is the most natural, and possibly the best,
+image.
+
+Note: none of these gives the full **binaural masking level difference**
+(BMLD, up to ~15 dB detection gain for a tone in noise at ~500 Hz). That
+needs the noise *at the signal's own frequency* to differ between the
+ears from the signal, and a linear filter treats the two alike. What the
+filters do is put signals at *different* frequencies in different
+places. That is the QRM case, and it's what the analogue circuit does.
+
+### 3.1 One filter pair for all three
+
+All three are a pair of FIR filters with complex responses
+
+    H_L(f) = gL(f) · e^{-j(2πfD - ψ(f)/2)}
+    H_R(f) = gR(f) · e^{-j(2πfD + ψ(f)/2)}
+
+where `gL`, `gR` are the levels and `ψ(f)` is the phase difference
+(2πf·τ(f) or φ(f)), with D the common delay. They are designed by
+frequency sampling: sample the responses, inverse-FFT, and apply a
+Kaiser window. The run-time cost is the same for every option, so the
+choice is a **user setting** (Stereo: off / level / phase / both), and a
+listening test picks the default. The filters are rebuilt when the
+pitch, the width, the passband or the option changes, in well under a
+millisecond.
+
+* **Length: 255 taps** at 12 kS/s. The resolution is then about 50 Hz,
+  enough for a ±250 Hz ramp. The latency is D = 127 samples, 10.6 ms.
+  The cost is 2 × 255 multiply-adds per sample, about 6 M/s: fine in
+  JavaScript, even on a phone. If not, use FFT convolution.
+* Level only (ψ = 0): both filters are linear-phase with the same
+  delay, so L and R stay time-aligned.
+* `p` is clamped: outside ±width the sound stays at the side, and
+  outside the passband there's nothing left anyway (the server has
+  filtered it).
+* Possibly a `max pan` below 1 for (1): hard-panned sound gets tiring
+  over a long session.
 
 ## 4. Modes and sidebands
 
@@ -117,13 +152,14 @@ the screen.
 1. `ui/src/audio/stereo.ts`: the filter design and the FIR pair, pure
    and unit-tested:
    * at `pitch`, L = R;
-   * at `pitch ± width`, one channel is close to zero;
+   * at `pitch ± width`, (1) has one channel close to zero, and (2) has
+     the full τmax or φmax between the channels at equal levels;
    * `|L|² + |R|²` is about 1 across the passband;
-   * the impulse responses are symmetric (linear phase).
+   * for level only, the impulse responses are symmetric (linear phase).
 2. A `Resampler` with a channel count, and its tests.
 3. The worklet takes `{stereo: {pitch, width, lo, hi}}` (or null) and
    runs the pair before the resampler.
 4. The UI: a toggle and width next to the pitch, in CW mode, remembered
    per viewer.
-5. A listening test with real QRM, level only and level plus time (§3.1),
-   to choose the defaults.
+5. A listening test with real QRM, of level, time, constant phase and
+   both (§3), to choose the default option, width, τmax and φmax.
