@@ -32,7 +32,7 @@ const MAX_CORRECTION_DB: f64 = 20.0;
 pub struct WfSpec {
     /// Sample rate (= span).
     pub fs: f64,
-    /// Display bins per line (power of two, <= 4096).
+    /// Display bins per line (power of two, <= 8192).
     pub bins: usize,
     /// Most FFTs per line.
     pub budget: usize,
@@ -40,11 +40,14 @@ pub struct WfSpec {
     pub fps: f64,
     /// The chain's CIC response to correct.
     pub droop: Droop,
+    /// FFT bins per display bin, at least (2; 1 where the bins are already
+    /// a crop of a wider capture, so the FFT isn't twice as big).
+    pub fft_per_bin: usize,
 }
 
-/// FFT size for `bins` display bins: at least two FFT bins per display bin.
-pub fn fft_size(bins: usize) -> usize {
-    (2 * bins).next_power_of_two().clamp(1024, 8192)
+/// FFT size for `bins` display bins, `per` FFT bins per display bin.
+pub fn fft_size(bins: usize, per: usize) -> usize {
+    (per.max(1) * bins).next_power_of_two().clamp(1024, 8192)
 }
 
 #[derive(Clone, Debug, PartialEq)]
@@ -90,9 +93,9 @@ pub struct WfEngine {
 
 impl WfEngine {
     pub fn new(spec: WfSpec) -> Self {
-        assert!(spec.bins.is_power_of_two() && spec.bins <= 4096);
+        assert!(spec.bins.is_power_of_two() && spec.bins <= 8192);
         assert!(spec.budget >= 1);
-        let n = fft_size(spec.bins);
+        let n = fft_size(spec.bins, spec.fft_per_bin);
         let fft = FftPlanner::new().plan_fft_forward(n);
         // 4-term Blackman-Harris
         let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);
@@ -331,6 +334,7 @@ mod tests {
             budget,
             fps: 20.0,
             droop: Droop::None,
+            fft_per_bin: 2,
         }
     }
 

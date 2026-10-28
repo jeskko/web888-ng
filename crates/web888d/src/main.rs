@@ -577,6 +577,18 @@ fn start_skimmers(
     })
 }
 
+/// The widest waterfall span the UI may ask for (as a decimation): a view
+/// is captured at half its decimation (`web888_web::wfsvc`), and no span
+/// is wider than the tunable range.
+fn wf_span_decim_min(caps: &Caps) -> u16 {
+    let width = caps.rf_range.end() - caps.rf_range.start();
+    let mut d = (2 * caps.wf_decim_min).max(2);
+    while d < caps.wf_decim_max && caps.adc_hz / (d as f64) > width {
+        d *= 2;
+    }
+    d
+}
+
 fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
     match a.backend {
         Backend::Sim => {
@@ -869,7 +881,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 rx_rate: rx_rate(caps.adc_hz, r2),
                 rf_lo: *rf.start(),
                 rf_hi: *rf.end(),
-                wf_decim_min: caps.wf_decim_min,
+                wf_decim_min: wf_span_decim_min(&caps),
                 wf_decim_max: caps.wf_decim_max,
             },
             channels: channels.clone(),

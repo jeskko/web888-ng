@@ -66,6 +66,7 @@ fn waterfall(bins: usize, fps: f64, budget: usize, fs: f64, secs: f64) {
         budget,
         fps,
         droop: Droop::None,
+        fft_per_bin: 2,
     });
     let mut n = Noise(2);
     let per_line = (fs / fps) as usize;

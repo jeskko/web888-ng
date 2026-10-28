@@ -219,6 +219,7 @@ impl AudioJob {
                 budget: v.budget.max(1),
                 fps: v.fps,
                 droop: self.droop,
+                fft_per_bin: 2,
             }),
             next: Instant::now() + period(v.fps),
             new_gen: true,
@@ -346,8 +347,9 @@ pub enum ViewCmd {
     Remove(SessionId),
 }
 
-/// One hardware view shared by its sessions. Ends when the service drops
-/// its command sender (the view is gone).
+/// One hardware view shared by its sessions, captured at twice its span
+/// (`decim` is the capture's) and showing the middle half. Ends when the
+/// service drops its command sender (the view is gone).
 pub struct ViewJob {
     generation: u64,
     center_hz: f64,
@@ -398,19 +400,22 @@ impl ViewJob {
         if self
             .engine
             .as_ref()
-            .is_some_and(|e| e.spec().bins == bins && e.spec().fps == fps)
+            .is_some_and(|e| e.spec().bins == 2 * bins && e.spec().fps == fps)
         {
             return;
         }
         self.engine = Some(WfEngine::new(WfSpec {
             fs: self.adc_hz / self.decim as f64,
-            bins,
+            // twice the bins, the middle half shown; one FFT bin per
+            // shown bin, so the FFT isn't bigger than without the crop
+            bins: 2 * bins,
             budget: self.budget,
             fps,
             droop: Droop::Wf {
                 adc_hz: self.adc_hz,
                 decim: self.decim,
             },
+            fft_per_bin: 1,
         }));
         self.prev = None;
     }
@@ -445,7 +450,11 @@ impl ViewJob {
     }
 
     fn send(&mut self, line: &WfLine, now: Instant, p: Duration) {
-        let bins = line.db.len();
+        // the middle half of the captured band
+        let lo = line.db.len() / 4;
+        let bins = line.db.len() / 2;
+        let mid = &line.db[lo..lo + bins];
+        let first = line.first_offset_hz + lo as f64 * line.bin_hz;
         let center = self.center_hz;
         self.subs.retain_mut(|x| {
             if now < x.next {
@@ -453,8 +462,8 @@ impl ViewJob {
             }
             x.next = (x.next + p.max(period(x.s.fps))).max(now);
             let g = (bins / x.s.bins.max(1)).max(1);
-            let db = rebin(&line.db, g);
-            let f0 = center + line.first_offset_hz + (g as f64 - 1.0) / 2.0 * line.bin_hz;
+            let db = rebin(mid, g);
+            let f0 = center + first + (g as f64 - 1.0) / 2.0 * line.bin_hz;
             let new_gen = std::mem::take(&mut x.s.new_gen);
             x.s.sink
                 .send(new_gen, line.fresh, f0, line.bin_hz * g as f64, &db)

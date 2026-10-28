@@ -3,6 +3,14 @@
 //! hardware views, the slot plans sent to the hw thread, and a
 //! [`ViewJob`] on the DSP pool per view, which sessions join and leave.
 //! (Views a session draws from its own RX channel are its `AudioJob`'s.)
+//!
+//! A view is captured at twice its span (half its decimation) and shows
+//! the middle half: the WF channel's CIC barely rejects aliases near the
+//! edges of its output band (at the edge an alias is as strong as the
+//! signal), while over the middle half they are 47 dB down or more. The
+//! widest view (decimation 2) is then the undecimated mixer output, whose
+//! middle half is exactly 0..fs/2 of the real ADC signal, free of the
+//! mirror images a decimated complex view of it shows.
 
 use crate::workers::{ViewCmd, ViewJob, ViewSub, WfSink};
 use std::collections::HashMap;
@@ -12,7 +20,12 @@ use web888_core::pool::DspPool;
 use web888_core::wf::{HwReq, SessionId, ViewInfo, WfScheduler};
 use web888_hw::HwCmd;
 
-/// A session's hardware view request.
+/// A view's hardware decimation: twice its span (see the module docs).
+pub fn hw_decim(decim: u16) -> u16 {
+    (decim / 2).max(1)
+}
+
+/// A session's hardware view request (`decim`: the span's, adc / span).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct HwView {
     pub center_hz: f64,
@@ -65,7 +78,7 @@ impl Waterfalls {
             s,
             v.map(|v| HwReq {
                 hz: v.center_hz,
-                decim: v.decim,
+                decim: hw_decim(v.decim),
                 fps: v.fps,
             }),
         );
@@ -89,7 +102,7 @@ impl Waterfalls {
                         n,
                         v.center_hz,
                         self.adc_hz,
-                        v.decim,
+                        hw_decim(v.decim),
                         budget,
                         rx,
                     )));
@@ -128,7 +141,12 @@ impl Waterfalls {
         }
     }
 
+    /// The shared views, with the span's decimation (not the capture's).
     pub fn views(&self) -> Vec<ViewInfo> {
-        self.inner.lock().unwrap().sched.views()
+        let mut v = self.inner.lock().unwrap().sched.views();
+        for i in &mut v {
+            i.decim *= 2;
+        }
+        v
     }
 }

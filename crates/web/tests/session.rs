@@ -536,3 +536,79 @@ async fn spots_come_recent_first_then_new() {
     assert!(r.contains("K2ABC") && !r.contains("K1ABC"), "{r}");
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
+
+/// The next waterfall line of a new view: (f0, df, levels).
+async fn next_view_line<S, E>(ws: &mut S) -> (f64, f64, Vec<u8>)
+where
+    S: futures_util::Stream<Item = std::result::Result<Message, E>> + Unpin,
+    E: std::fmt::Debug,
+{
+    let mut new_gen = false;
+    let mut skip = 2; // let the view's first lines settle
+    loop {
+        let Message::Binary(b) = ws.next().await.unwrap().unwrap() else {
+            continue;
+        };
+        if b[0] != proto::KIND_WF {
+            continue;
+        }
+        new_gen |= b[1] & proto::FLAG_NEW_GEN != 0;
+        if !new_gen {
+            continue;
+        }
+        if skip > 0 {
+            skip -= 1;
+            continue;
+        }
+        let f0 = f64::from_le_bytes(b[8..16].try_into().unwrap());
+        let df = f64::from_le_bytes(b[16..24].try_into().unwrap());
+        return (f0, df, b[proto::WF_HEADER..].to_vec());
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn waterfalls_show_no_images_or_edge_aliases() {
+    let (addr, stop) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    let level = |f0: f64, df: f64, lv: &[u8], f: f64| {
+        let k = ((f - f0) / df).round() as usize;
+        lv[k.saturating_sub(2)..(k + 3).min(lv.len())]
+            .iter()
+            .copied()
+            .max()
+            .unwrap() as f32
+            * (160.0 / 255.0) // dB per level step
+    };
+    let fs = ADC_HZ_HF;
+    // a 35 dB margin: the old decimated full view let the mirror through
+    // about 15 dB down
+    let margin = 35.0;
+
+    // the full view: 0..fs/2, the tone and no mirror at fs/2 - tone
+    let req = r#"{"type":"wf","center_hz":30720000,"decim":2,"bins":1024,"fps":20}"#;
+    ws.send(Message::Text(req.into())).await.unwrap();
+    let (f0, df, lv) = next_view_line(&mut ws).await;
+    assert!(f0.abs() < df, "starts at 0 Hz: {f0}");
+    let tone = level(f0, df, &lv, TONE);
+    let mirror = level(f0, df, &lv, fs / 2.0 - TONE);
+    assert!(tone - mirror > margin, "tone {tone} dB, mirror {mirror} dB");
+
+    // a 30.72 MHz view whose left edge is 1 MHz above the tone: with an
+    // output band no wider than the view, the tone aliased in near the
+    // right edge
+    let c = TONE + fs / 8.0 + 1e6;
+    let req = format!(r#"{{"type":"wf","center_hz":{c},"decim":4,"bins":1024,"fps":20}}"#);
+    ws.send(Message::Text(req.into())).await.unwrap();
+    let (f0, df, lv) = next_view_line(&mut ws).await;
+    let alias = level(f0, df, &lv, c + fs / 8.0 - 1e6);
+    let floor = level(f0, df, &lv, c);
+    assert!(
+        alias - floor < 6.0,
+        "alias {alias} dB over a floor of {floor} dB"
+    );
+    assert!(tone - alias > margin, "tone {tone} dB, alias {alias} dB");
+
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
