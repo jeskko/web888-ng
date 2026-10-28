@@ -8,8 +8,12 @@
 //! Files (`$readmemh` format, one value per line, two's complement; a
 //! complex value is {re, im}, each `bits` wide):
 //! * `meta.txt`: sizes, widths, shifts, the scale, what each file holds
-//! * `coefs.hex`: h[r + t·M] (coef_bits)
-//! * `tw.hex`: W_n^k, k < n; `split_tw.hex`: W_M^k, k <= n (twiddle_bits)
+//! * `coefs.hex`: h[r + t·M] (coef_bits); `pfb_coef_{t}.mem`: the polyphase
+//!   FIR's coefficient ROMs (`fpga/rtl/gen` in web888-ng-hw), {odd, even}
+//!   pairs, one ROM per pair of symmetric taps
+//! * `tw.hex`: W_n^k, k < n; `split_tw.hex`: W_M^k, k <= n (twiddle_bits);
+//!   `pfb_tw_{i}.mem`: stage pair i's W_L^e, e < 3L/4 (L = n / 4^i), and
+//!   `pfb_split_tw.mem`: the ROMs in `fpga/rtl/gen`
 //! * `adc.hex`: the 16-bit input samples
 //! * `packed.hex`, `fft.hex`, `bins.hex`: per frame, the FFT input (n),
 //!   its bit-reversed output (n) and the M/2 + 1 bins (data_bits)
@@ -107,11 +111,40 @@ fn main() -> std::io::Result<()> {
         .map(|&v| hex(v, fx.coef_bits) + "\n")
         .collect();
     std::fs::write(out.join("coefs.hex"), coefs)?;
+    // the polyphase FIR's coefficient ROMs (fpga/rtl/gen): the prototype is
+    // symmetric, h[i] = h[L-1-i], so taps t and T-1-t share ROM t (t <=
+    // (T-1)/2), word k = {h[2k+1 + tM], h[2k + tM]}
+    let h = p.coefs();
+    let l = h.len();
+    assert!(
+        (0..l).all(|i| h[i] == h[l - 1 - i]),
+        "prototype not symmetric"
+    );
+    for t in 0..spec.taps.div_ceil(2) {
+        let rom: String = (0..m / 2)
+            .map(|k| {
+                let (even, odd) = (h[2 * k + t * m], h[2 * k + 1 + t * m]);
+                cx((odd, even), fx.coef_bits) + "\n"
+            })
+            .collect();
+        std::fs::write(out.join(format!("pfb_coef_{t}.mem")), rom)?;
+    }
     let (tw, stw) = p.twiddles();
     let f =
         |v: &[(i64, i64)]| -> String { v.iter().map(|&c| cx(c, fx.twiddle_bits) + "\n").collect() };
     std::fs::write(out.join("tw.hex"), f(&tw))?;
     std::fs::write(out.join("split_tw.hex"), f(&stw))?;
+    // the FFT's per-stage twiddle ROMs (fpga/rtl/gen): stage pair i, blocks
+    // of L = n / 4^i, needs W_L^e = W_n^(e·n/L) for e < 3L/4; and the split's
+    let mut l = n;
+    let mut i = 0;
+    while l >= 8 {
+        let rom: Vec<(i64, i64)> = (0..3 * l / 4).map(|e| tw[e * (n / l)]).collect();
+        std::fs::write(out.join(format!("pfb_tw_{i}.mem")), f(&rom))?;
+        l /= 4;
+        i += 1;
+    }
+    std::fs::write(out.join("pfb_split_tw.mem"), f(&stw))?;
     let meta = format!(
         "branches M = {m}\ntaps T = {}\nfft points n = {n}\nframes = {frames}\n\
          adc samples = {}\ncoef_bits = {}\ncoef_shift = {}\ndata_bits = {}\n\
