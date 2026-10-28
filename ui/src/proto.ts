@@ -74,6 +74,16 @@ export interface UserMark {
   mode: Mode;
 }
 
+/** A skimmer (background decoder): the audio range it decodes, absolute Hz. */
+export interface SkimMark {
+  mode: string;
+  dial: number;
+  lo: number;
+  hi: number;
+  /** It has a channel (else it waits for one). */
+  on: boolean;
+}
+
 /** A decoded transmission from a skimmer. */
 export interface Spot {
   /** Slot start, UTC seconds. */
@@ -121,6 +131,7 @@ export type ServerMsg =
   | ({ type: "state" } & State)
   | { type: "lease"; granted: boolean; position: number }
   | { type: "users"; users: UserMark[] }
+  | { type: "skimmers"; skimmers: SkimMark[] }
   | { type: "spots"; spots: Spot[] }
   | ({ type: "status" } & Status)
   | { type: "pong"; t: number }

@@ -7,10 +7,10 @@
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, snapFor, stepFor } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
-import type { Spot, UserMark } from "../proto.ts";
+import type { SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { lease, limits, onLine, pickSpot, pickUser, radio, range, setView, spots, st, tune, users } from "../state.ts";
-import { MARK_PX, noiseFloor, SCALE_PX, Spectrum } from "./spectrum.ts";
+import { lease, limits, onLine, pickSkimmer, pickSpot, pickUser, radio, range, setView, skimmers, spots, st, tune, users } from "../state.ts";
+import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
 
 /** Auto colour range: follows the noise floor of recent lines. */
@@ -97,6 +97,9 @@ export function Pane() {
     const unsubSpots = spots.subscribe(() => {
       dirty = true;
     });
+    const unsubSkims = skimmers.subscribe(() => {
+      dirty = true;
+    });
 
     let raf = 0;
     const frame = () => {
@@ -116,7 +119,8 @@ export function Pane() {
         wspr: p.mode === "WSPR",
         item: p,
       }));
-      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr, marks, shown);
+      const bars = skimmers.value.map((k) => ({ lo: k.lo, hi: k.hi, colour: modeColour(k.mode), waiting: !k.on }));
+      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi }, dpr, marks, shown, bars);
     };
     raf = requestAnimationFrame(frame);
     const unsubRange = range.subscribe(() => {
@@ -149,6 +153,24 @@ export function Pane() {
       }
       return best;
     };
+    /** The skimmer bar under a pointer on the scale's bottom edge, if any. */
+    const skimAt = (e: PointerEvent): SkimMark | null => {
+      if (e.currentTarget !== sc) return null;
+      const rect = sc.getBoundingClientRect();
+      const v = view();
+      if (!v || e.clientY - rect.top < rect.height - SKIM_PX - 6) return null;
+      const px = e.clientX - rect.left;
+      const at = (f: number) => ((f - v.start) / v.span) * rect.width;
+      // narrow bars (wide spans) are hit within MARK_PX / 2 of their middle
+      return (
+        skimmers.value.find((k) => {
+          const x0 = at(k.lo);
+          const x1 = at(k.hi);
+          const pad = Math.max(0, (MARK_PX - (x1 - x0)) / 2);
+          return px >= x0 - pad && px <= x1 + pad;
+        }) ?? null
+      );
+    };
     /** The spot label under a pointer on the spectrum, if any. */
     const spotAt = (e: PointerEvent): Spot | null => {
       if (e.currentTarget !== sc) return null;
@@ -161,6 +183,11 @@ export function Pane() {
     const down = (e: PointerEvent) => {
       const s = st.value;
       if (!s || e.button !== 0) return;
+      const k = skimAt(e);
+      if (k) {
+        pickSkimmer(k);
+        return;
+      }
       const m = markAt(e);
       if (m) {
         pickUser(m);
@@ -176,15 +203,18 @@ export function Pane() {
     };
     const move = (e: PointerEvent) => {
       if (!drag) {
-        const m = markAt(e);
-        const p = m ? null : spotAt(e);
+        const k = skimAt(e);
+        const m = k ? null : markAt(e);
+        const p = k || m ? null : spotAt(e);
         const own = lease.value?.granted;
-        sc.title = m
-          ? `${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
-          : p
-            ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
-            : "";
-        sc.style.cursor = m || p ? "pointer" : "";
+        sc.title = k
+          ? `${k.mode} skimmer, dial ${formatKhz(k.dial)} kHz${k.on ? "" : " (waiting for a channel)"}: click to tune there`
+          : m
+            ? `${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
+            : p
+              ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
+              : "";
+        sc.style.cursor = k || m || p ? "pointer" : "";
       }
       const s = st.value;
       const v = view();
@@ -237,6 +267,7 @@ export function Pane() {
       unsubBins();
       unsubUsers();
       unsubSpots();
+      unsubSkims();
       unsubRange();
     };
   }, []);

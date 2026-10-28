@@ -305,6 +305,7 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   | `state` | S→C | adds `share` (bool), `listen` (user id or null) |
   | `lease` | S→C | `granted` (bool), `position` (queue place, 1 = next; 0 if granted) |
   | `users` | S→C | `users`: [{`id`, `hz`, `mode`}], others who share and have a receiver; sent when it changes (checked 1/s) |
+  | `skimmers` | S→C | `skimmers`: [{`mode` ("FT8", "FT4", "WSPR"), `dial`, `lo`, `hi` (the range it decodes, Hz), `on` (has a channel)}], the background decoders running; sent when it changes (checked 1/s). Added in M4, drawn as bars on the scale's bottom edge in their spots' colours |
   | `share` | C→S | `on` (bool) |
   | `listen` | C→S | `user` (id or null). Refused with an `error` if the session has a receiver of its own, or the user doesn't share / has none |
   | WF frame | S→C | flags bit2 `stale`: no new samples since the previous line |

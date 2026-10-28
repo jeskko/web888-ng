@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Spectrum (Canvas 2D) above the waterfall: the newest line (peak of the
 // bins under each pixel), a slow average, dB grid, the frequency scale,
-// the receiver's passband and dial marker, other users' markers, and the
-// skimmers' latest spots as labels above the scale.
+// the receiver's passband and dial marker, other users' markers, the
+// skimmers' ranges, and their latest spots as labels above the scale.
 
 import { FLAG_NEW_GEN, type WfLine } from "../proto.ts";
 import { tickLabel, tickStep } from "../fmt.ts";
@@ -21,6 +21,23 @@ export interface Marker {
   hz: number;
   on: boolean;
 }
+
+/** A skimmer on the scale: the range it decodes. */
+export interface SkimBar {
+  lo: number;
+  hi: number;
+  colour: string;
+  /** Waiting for a channel: drawn dimmed. */
+  waiting: boolean;
+}
+
+/** Spot label colours by mode; skimmer bars use the same. */
+export function modeColour(mode: string): string {
+  return mode === "WSPR" ? "#ffb37f" : mode === "FT8" ? "#7fd1ff" : "#c89bff";
+}
+
+/** Height of the skimmer bars on the scale's bottom edge (CSS px). */
+export const SKIM_PX = 4;
 
 /** A spot on the scale: its signal's frequency and label. */
 export interface SpotLabel<T = unknown> {
@@ -95,6 +112,7 @@ export class Spectrum {
     dpr: number,
     marks: Marker[] = [],
     spots: SpotLabel[] = [],
+    skims: SkimBar[] = [],
   ): void {
     const { ctx, canvas } = this;
     const w = canvas.width;
@@ -178,7 +196,7 @@ export class Spectrum {
       const items = spots.map((s) => ({ item: s, x: x(s.hz), width: ctx.measureText(s.text).width })).filter((s) => s.x >= 0 && s.x <= w);
       for (const p of placeLabels(items, SPOT_ROWS, 4 * dpr)) {
         const s = p.item;
-        const colour = s.wspr ? "#ffb37f" : s.other ? "#c89bff" : "#7fd1ff";
+        const colour = s.wspr ? modeColour("WSPR") : s.other ? modeColour("FT4") : modeColour("FT8");
         ctx.fillStyle = colour;
         ctx.fillRect(Math.round(p.x), ph - 3 * dpr, dpr, 3 * dpr);
         if (p.row < 0) continue;
@@ -222,6 +240,19 @@ export class Spectrum {
       ctx.fillText(tickLabel(f, step), xx, ph + sh / 2 + 2 * dpr);
     }
     ctx.textAlign = "start";
+
+    // skimmers: bars on the scale's bottom edge, at least 3 px wide
+    const kb = SKIM_PX * dpr;
+    for (const k of skims) {
+      const x0 = x(k.lo);
+      const x1 = x(k.hi);
+      if (x1 < 0 || x0 > w) continue;
+      const wd = Math.max(3 * dpr, x1 - x0);
+      ctx.globalAlpha = k.waiting ? 0.35 : 0.9;
+      ctx.fillStyle = k.colour;
+      ctx.fillRect((x0 + x1) / 2 - wd / 2, h - kb, wd, kb);
+    }
+    ctx.globalAlpha = 1;
 
     // other users: triangles on the scale's top edge
     const m = MARK_PX * dpr;

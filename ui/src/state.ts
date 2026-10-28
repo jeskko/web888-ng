@@ -8,7 +8,7 @@ import { Player, type PlayerStats } from "./audio/player.ts";
 import { clamp, formatKhz } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
-import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
+import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { FLAG_GAP, FLAG_OVERLOAD, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
 
@@ -26,6 +26,8 @@ export const sessionId = signal<number | null>(null);
 export const lease = signal<{ granted: boolean; position: number } | null>(null);
 /** Other users who share their frequency. */
 export const users = signal<UserMark[]>([]);
+/** The server's skimmers (background decoders). */
+export const skimmers = signal<SkimMark[]>([]);
 /** The server runs skimmers; their spots, oldest first. */
 export const spotsAvail = signal(false);
 export const spots = signal<Spot[]>([]);
@@ -173,6 +175,9 @@ export function connect(): void {
         case "users":
           users.value = m.users;
           break;
+        case "skimmers":
+          skimmers.value = m.skimmers;
+          break;
         case "spots":
           spots.value = spotsFresh ? m.spots : addSpots(spots.value, m.spots);
           spotsFresh = false;
@@ -286,6 +291,19 @@ export function pickSpot(s: Spot): void {
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
   if (Math.abs(s.hz - v.center_hz) > 0.45 * span) setView({ ...v, center_hz: s.dial + 1500 });
+}
+
+/** A skimmer was picked: tune to its dial (USB) and bring its range
+ * into view. */
+export function pickSkimmer(k: SkimMark): void {
+  if (st.value?.mode !== "usb") setMode("usb");
+  tune(k.dial);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  const mid = (k.lo + k.hi) / 2;
+  if (Math.abs(mid - v.center_hz) > span / 2 - (k.hi - k.lo) / 2) setView({ ...v, center_hz: mid });
 }
 
 export function setMode(mode: Mode): void {

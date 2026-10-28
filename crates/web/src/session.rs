@@ -730,6 +730,7 @@ pub async fn run(
 
     let mut tick = tokio::time::interval(Duration::from_secs(1));
     let mut users_sent: Option<Vec<UserMark>> = None;
+    let mut skims_sent: Option<Vec<proto::SkimMark>> = None;
     let started = std::time::Instant::now();
     let mut last_input = started;
     let mut timeouts = Timeouts::default();
@@ -824,6 +825,16 @@ pub async fn run(
                 if users_sent.as_ref() != Some(&users) {
                     users_sent = Some(users.clone());
                     r.push(ServerMsg::Users { users });
+                }
+                let skimmers: Vec<proto::SkimMark> = sh
+                    .skim
+                    .as_ref()
+                    .and_then(|k| k.skimmers.as_ref())
+                    .map(|k| k.bands().iter().map(|b| b.as_ref().into()).collect())
+                    .unwrap_or_default();
+                if skims_sent.as_ref() != Some(&skimmers) {
+                    skims_sent = Some(skimmers.clone());
+                    r.push(ServerMsg::Skimmers { skimmers });
                 }
                 let spots = s.new_spots();
                 if !spots.is_empty() {

@@ -170,6 +170,38 @@ pub struct UserMark {
     pub mode: Mode,
 }
 
+/// A skimmer (background decoder) on the scale: the audio range it
+/// decodes, absolute Hz.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
+pub struct SkimMark {
+    /// "FT8", "FT4", "WSPR".
+    pub mode: String,
+    pub dial: f64,
+    pub lo: f64,
+    pub hi: f64,
+    /// It has a channel (else it waits for one).
+    pub on: bool,
+}
+
+impl From<&web888_skim::Band> for SkimMark {
+    fn from(b: &web888_skim::Band) -> Self {
+        use web888_config::SkimMode;
+        // the decoders' search ranges above the dial
+        let (mode, lo, hi) = match b.cfg.mode {
+            SkimMode::Ft8 => ("FT8", 200.0, 3000.0),
+            SkimMode::Ft4 => ("FT4", 200.0, 3000.0),
+            SkimMode::Wspr => ("WSPR", 1390.0, 1610.0),
+        };
+        SkimMark {
+            mode: mode.into(),
+            dial: b.cfg.dial,
+            lo: b.cfg.dial + lo,
+            hi: b.cfg.dial + hi,
+            on: b.status.granted.load(std::sync::atomic::Ordering::Relaxed),
+        }
+    }
+}
+
 /// A decoded transmission from a skimmer.
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct SpotMsg {
@@ -244,6 +276,10 @@ pub enum ServerMsg {
     /// Other users who share their frequency (changes only).
     Users {
         users: Vec<UserMark>,
+    },
+    /// The skimmers running (changes only).
+    Skimmers {
+        skimmers: Vec<SkimMark>,
     },
     /// Spots, oldest first: the recent ones after a `spots` request, then
     /// each new batch.
@@ -327,6 +363,33 @@ pub fn wf_frame(
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn skimmer_marks() {
+        let band = |mode, dial| web888_skim::Band {
+            cfg: web888_config::Skimmer {
+                mode,
+                dial,
+                ..Default::default()
+            },
+            label: String::new(),
+            status: Default::default(),
+        };
+        let ft8 = band(web888_config::SkimMode::Ft8, 7_074_000.0);
+        ft8.status
+            .granted
+            .store(true, std::sync::atomic::Ordering::Relaxed);
+        let m = ServerMsg::Skimmers {
+            skimmers: vec![
+                (&ft8).into(),
+                (&band(web888_config::SkimMode::Wspr, 10_138_700.0)).into(),
+            ],
+        };
+        assert_eq!(
+            serde_json::to_string(&m).unwrap(),
+            r#"{"type":"skimmers","skimmers":[{"mode":"FT8","dial":7074000.0,"lo":7074200.0,"hi":7077000.0,"on":true},{"mode":"WSPR","dial":10138700.0,"lo":10140090.0,"hi":10140310.0,"on":false}]}"#
+        );
+    }
 
     #[test]
     fn client_messages_parse() {
