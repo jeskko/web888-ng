@@ -22,19 +22,14 @@ Concretely, done when:
 
 ## 1. Picture
 
-```
- hw thread ─RX blocks─▶ DSP pool: SkimJob per band (Skimmer lease)
-                          │ channel IQ 48 kS/s → USB audio 12 kS/s
-                          │ slot buffer aligned to UTC (frame clock)
-                          ▼
-                    decoder thread(s), low priority, deadline per slot
-                     ftx: FT8 / FT4 / FST4W     wspr: WSPR-2
-                          │ Spot
-                          ▼
-                     spot bus (tokio broadcast)
-          ┌───────────┬──────────┬──────────┬───────────┐
-       PSKReporter  WSPRnet    MQTT     /api/spots   admin page
-       (IPFIX/UDP)  (HTTP)              + WS to UI
+```mermaid
+flowchart TD
+  hw["hw thread"] -- "RX blocks" --> job["DSP pool: a BandJob per band (Skimmer lease)<br/>channel IQ 48 kS/s → USB audio 12 kS/s<br/>slot buffer aligned to UTC (frame clock)"]
+  job --> dec["decoder threads at SCHED_IDLE, a deadline per slot<br/>ftx: FT8, FT4 · wspr: WSPR-2 (FST4W not done)"]
+  dec -- "Spot" --> bus["spot bus (tokio broadcast)"]
+  bus --> up["uploads: PSKReporter (IPFIX over UDP),<br/>WSPRnet (HTTP); live signals only"]
+  bus --> sinks["log sinks: syslog, MQTT"]
+  bus --> ui["/api/spots, the UI over WebSocket,<br/>the admin page"]
 ```
 
 ## 2. Decoders, in process
@@ -44,7 +39,7 @@ own threads, so a slow decode can't stall the DSP pool, and Rust safety
 covers what the child-process design (`design.md` §9) was for. Child
 processes stay the plan for HFDL and DRM (milestone D).
 
-### 2.1 `crates/ftx`: FT8, FT4, FST4W
+### 2.1 `crates/ftx`: FT8, FT4 (FST4W planned)
 
 * Base: a Rust port of ft8_lib (MIT, Kārlis Goba; RaspSDR's fork with OSD,
   subtraction and FST4/FST4W, `upstream/server/extensions/FT8/ft8_lib`).
@@ -68,8 +63,8 @@ processes stay the plan for HFDL and DRM (milestone D).
 * A port of WSJT-X's `lib/wsprd` (C, GPL-3.0-or-later; Franke/Taylor,
   Karn's Fano decoder, Jenkins' nhash). rustfft replaces FFTW.
 * Checked against the local `wsprd` on the same WAVs.
-* FST4W-120 (and longer periods) come from `ftx`, on the same 2-minute
-  schedule.
+* FST4W-120 (and longer periods) are to come from `ftx`, on the same
+  2-minute schedule (not done yet, §8).
 
 ### 2.3 Load
 
