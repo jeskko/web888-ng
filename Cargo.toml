@@ -3,7 +3,7 @@ resolver = "3"
 members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr"]
 
 [workspace.package]
-version = "0.2.1"
+version = "0.3.0"
 edition = "2024"
 license = "GPL-3.0-or-later"
 repository = "https://github.com/jeskko/web888-ng"

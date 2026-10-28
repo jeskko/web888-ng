@@ -1,6 +1,6 @@
 # M4 skimmers: implementation plan
 
-Status: **in progress** (2026-10-23; step 3). Decisions so far are in §9. Scope:
+Status: **done** (2026-10-28, v0.3.0; FST4W left for later). Decisions so far are in §9. Scope:
 `design.md` §11 M4 and `feature-gap.md` §3 S: a decoder supervisor, FT8/FT4,
 WSPR and FST4W autoruns, and spot reporting.
 Done when (design.md): spots uploaded.
@@ -364,20 +364,30 @@ that can't go are dropped. It applies live.
   (Alpine in podman, NMEA served over TCP): web888d logged `gpsd:
   locator KP25ra` for a fix in Oulu.
 
+* Step 9, on the production unit (2026-10-28): web888d with the open
+  bitstream (hw v0.2.0), decoder threads at SCHED_IDLE, nobody on the
+  web UI. CPU per thread from `/proc`, slots from `/metrics`:
+
+  | bands | web888d CPU (of 200 %) | system busy | slots dropped |
+  |---|---|---|---|
+  | FT8 on 8 bands (160–6 m), 75 s | 167 % (decoders 111, DSP 36, hw 17) | 84 % | none |
+  | FT8 ×5, FT4 ×2, WSPR ×3, 8 min | 183 % (decoders 124, DSP 39, hw 18) | 92 % | FT8 4–5 of 32 (13 %), FT4 9–10 of 64 (15 %), WSPR none |
+
+  Decoder CPU per slot (A9, one core): FT8 1.6–3.8 s, FT4 0.7–1.2 s,
+  WSPR 9–29 s (40 m busiest). A WSPR decode holds a decoder thread for up
+  to half a minute, and FT8/FT4 slots queued behind it miss their
+  deadline. So the A9's budget is FT8 on about 8 bands, or fewer FT8
+  bands with WSPR; the full mix above is over it. The channelizer (M6)
+  frees channels, not decoder CPU.
+
 ## 8. Open
 
-* State after session 7 (2026-10-24): steps 1-8 are done, apart from
-  FST4W. Left: step 9 (docs, A9 benches with all modes running together,
-  release with the user's go-ahead).
-* The zynqsdr backend has not yet run against the real stock driver.
-  Its first hardware run comes after an emulator run (`hw/emu`); on the
-  production unit the watchdog is armed for it (STATUS has the details).
-* The WSPR decoder ties up a decoder thread for a minute or more per
-  slot on the A9, while FT8 slots share the other thread. Measure this
-  in the step 9 benches.
-
-* Board CPU: how many FT8 bands fit next to 12 users. Measured on the
-  test unit. Until then the decoder budget is configurable.
+* FST4W (step 8) is left for later.
+* Decoder scheduling: WSPR could run on a thread of its own, or FT8/FT4
+  slots could pre-empt it, so a WSPR decode doesn't cost FT8 slots
+  (step 9 bench).
+* Board CPU next to users: how many FT8 bands fit next to 12 users
+  (measured without users so far).
 * CW/RTTY skimmers (S2) come after M4 (feature-gap §5, question 8).
 
 ## 9. Decisions

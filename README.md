@@ -5,7 +5,7 @@ protocols (HPSDR, rtl_tcp, IQ), decoders, and KiwiSDR protocol
 compatibility. It runs on the stock firmware (stock or open bitstream) and
 later on the open driver from [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR Protocol 1 work against the simulator and a fake driver, not yet tested on a unit. **M2** web UI in progress (`doc/m2-web-ui.md`): waterfall, SSB/CW/AM audio and tuning work against the simulator and real signals (HackRF/recordings).
+Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR, **M2** web UI, **M3** multi-user and **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet, syslog, MQTT) are done. The stock-driver backend has run on a production unit, with the stock and with the open bitstream (2026-10-28). Next: a channelizer bitstream (M6, `hw/docs/channelizer.md` in web888-ng-hw).
 
 | crate | content |
 |---|---|
@@ -17,6 +17,9 @@ Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR Protoco
 | `crates/hw` | the hardware thread: owns the radio, fans RX/WF blocks out to HPSDR and web sessions, time-shares WF slots |
 | `crates/core` | what clients share: RX channel leases, the DSP pool, the waterfall scheduler |
 | `crates/web` | web UI server: HTTPS/HTTP on one port, WebSocket sessions (audio + waterfall) |
+| `crates/ftx` | FT8 and FT4 decoders |
+| `crates/wspr` | WSPR-2 decoder (a port of wsprd) |
+| `crates/skim` | skimmers: band jobs, decoder threads, the spot bus, PSKReporter, WSPRnet, syslog, MQTT, gpsd |
 | `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet) |
 | `crates/iq` | backend fed by real signals: wideband IQ from an SDR (SoapySDR, e.g. HackRF) or a recording, channelized like the FPGA |
 | `crates/web888d` | the daemon: `serve` (radio + HPSDR + web UI), `sim` (one channel to stdout) |
@@ -123,6 +126,45 @@ change would need), `/api/admin/password`, `/api/admin/stats` (CPU per
 thread, DSP pool, waterfall views) and `POST /api/admin/restart` (exits
 75; the service restarts it). `[web] metrics = true` serves Prometheus
 metrics at `/metrics` (no login). Details: `doc/m3-multi-user.md` §7.
+
+### Skimmers
+
+Background decoders on RX channels of their own, in UTC slots, low
+priority. Their spots show in the UI (a list, labels on the scale, each
+skimmer's range as a bar under the scale) and at `/api/spots`:
+
+```toml
+[[skimmer]]
+mode = "ft8"           # ft8 | ft4 | wspr
+dial = 7074000.0       # USB dial, Hz
+hours = "18-06"        # UTC; empty: always
+
+[station]
+callsign = "N0CALL"
+locator = "FN42aa"     # or from gpsd:
+gpsd = "127.0.0.1"
+
+[report]
+pskreporter = true     # FT8/FT4, 5-minute batches
+wsprnet = true         # WSPR
+
+[syslog]
+server = "192.0.2.10:514"
+events = ["spot", "band", "upload"]   # what goes there
+modes = []                            # spots of these modes only; empty: all
+
+[mqtt]
+server = "192.0.2.10:1883"
+topic = "web888"
+```
+
+Only spots from live signals are uploaded: the iq backend on a
+recording and the sim backend never upload. Skimmers give their channel
+to web users when channels run out (`[limits] skimmers_yield`) and take
+one again later. On the A9, FT8 on eight bands keeps the two cores about
+84 % busy; adding FT4 and WSPR on top of five FT8 bands makes the
+decoders drop slots (`doc/m4-skimmers.md` §7). Plan and scores against
+jt9 and wsprd: `doc/m4-skimmers.md`.
 
 ### Real signals without a Web-888 (HackRF, IQ recordings)
 
