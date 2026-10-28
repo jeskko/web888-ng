@@ -30,6 +30,7 @@ kill $P
 | `login.mjs` | listener-password form, wrong then right | `web888d passwd --listener`; `LISTENER_PW` |
 | `admin.mjs` | admin pages, config form, phone layout | an admin password; `ADMIN_PW` |
 | `idle.mjs` | idle limit ends the session, no auto-reconnect | `[limits] idle_minutes = 1` |
+| `features.mjs` | name, users list, hover preview, tuning step, AM/SAM/SAL/SAR/SAS cycle, CPU/temperature | — (the iq backend on a recording shows AM stations) |
 | `spots.mjs` | spot list, band filter, row click tunes, labels on the scale | `[[skimmer]]` bands with spots (live, or the iq backend on a recording) |
 
 Set passwords in the throwaway config with
