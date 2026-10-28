@@ -1,6 +1,10 @@
 # M2 web UI: implementation plan
 
-Status: **agreed** (2026-10-22; decisions in §10). Scope from `design.md` §11 M2:
+Status: **done** (2026-10-22, released in v0.1.0; decisions in §10). M3
+then replaced this plan's per-session audio and waterfall threads with a
+shared DSP worker pool, and protocol version 1 (§4) with version 2
+(`m3-multi-user.md` §4, §8); what follows is the M2 design as built.
+Scope from `design.md` §11 M2:
 web UI MVP in a browser for one user, with an exclusive waterfall,
 SSB/AM/CW audio and tuning. Design decisions already made in `design.md` §7
 (axum, separate `ui/` package in TypeScript, JSON control plus binary
@@ -16,16 +20,21 @@ binary and UI run in the image in the emulator (sim/model signals).
 
 ## 1. Process and threads
 
+```mermaid
+flowchart LR
+  radio["Radio"] --> hw["hw thread"]
+  hpsdr["hpsdr thread"] -- "HwCmd (mpsc)<br/>from its Control" --> hw
+  sess["web session (tokio)"] -- "HwCmd (mpsc)" --> hw
+  hw -- "Arc#lt;RxBlock#gt;<br/>bounded, try_send" --> hpsdr
+  hw -- "Arc#lt;RxBlock#gt;" --> audio["audio thread"]
+  hw -- "Arc#lt;WfBlock#gt;" --> wf["wf thread"]
+  audio -- "AudioFrame" --> ws["ws task"]
+  wf -- "WfFrame" --> ws
 ```
-                       ┌─ HwCmd (mpsc) ◀── hpsdr thread (Control → HwCmd)
-                       │               ◀── web session (tokio)
- Radio ──▶ [hw thread] ┤
-                       ├─ Arc<RxBlock> ─▶ hpsdr thread           (bounded, try_send)
-                       ├─ Arc<RxBlock> ─▶ [audio thread] ─ AudioFrame ─▶ ws task
-                       └─ Arc<WfBlock> ─▶ [wf thread]    ─ WfFrame    ─▶ ws task
-                                                    (tokio mpsc, try_send; drops counted)
- tokio runtime (2 workers): axum HTTP(S), static files, /ws session, /api/status
-```
+
+The frames go over tokio mpsc channels with `try_send`; drops are
+counted. The tokio runtime (2 workers) runs axum HTTP(S), the static
+files, the `/ws` sessions and `/api/status`.
 
 * **hw thread** (existing `hw.rs`, extended). It stays the only owner of
   the `Radio`. Changes:
@@ -76,11 +85,13 @@ feature (it needs auth).
 
 ### 3.1 Audio chain (48 kS/s → 12 kS/s)
 
-```
-RxBlock ─▶ pick channel ─▶ rx_to_c32 ─▶ decimate ×4 (FIR, flat to ±5.5 kHz)
-  ─▶ channel filter @ 12k (OLS, design() with Droop::Rx, per mode)
-  ─▶ CW: shift +pitch ─▶ demod (ssb: re / Am) ─▶ AGC ─▶ volume ─▶ i16
-  ─▶ 20 ms frames (240 samples) + RSSI
+```mermaid
+flowchart TD
+  rx["RxBlock: pick the channel,<br/>rx_to_c32"] --> dec["decimate ×4<br/>FIR, flat to ±5.5 kHz"]
+  dec --> filt["channel filter at 12 kS/s<br/>OLS, design() with Droop::Rx,<br/>per mode"]
+  filt --> dem["CW: shift by +pitch<br/>demod: SSB real part / AM"]
+  dem --> agc["AGC, volume, to i16"]
+  agc --> out["20 ms frames<br/>(240 samples) + RSSI"]
 ```
 
 * The pre-decimation filter comes first: the sharp channel filter at 12 k
