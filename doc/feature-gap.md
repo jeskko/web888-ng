@@ -1,6 +1,10 @@
 # Feature gap: web888-ng vs the stock Web-888 server and KiwiSDR
 
-Status: **proposal** (2026-10-22). Order and omissions are open (§5).
+Status: **proposal** (2026-10-22), partly decided: S (skimmers) came
+first and is done as M4 (v0.3.0, 2026-10-28; FST4W left). The ng column
+below shows the state then. Milestone numbers here are this proposal's;
+`design.md` §11 has the current ones (M5 Kiwi protocol, M6 open-FPGA and
+the channelizer). The rest of the order and the omissions are open (§5).
 
 Compared:
 
@@ -84,8 +88,8 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 
 | decoder | stock | Kiwi | OWRX+ | ng | plan |
 |---|---|---|---|---|---|
-| FT8/FT4/FST4W autorun → PSKReporter, MQTT | ✓ | ✓ | ✓ | ✗ | **S** |
-| WSPR autorun → WSPRnet, MQTT | ✓ | ✓ | ✓ | ✗ | **S** |
+| FT8/FT4/FST4W autorun → PSKReporter, MQTT | ✓ | ✓ | ✓ | ✓ FT8/FT4 (M4; FST4W not yet) | **S** |
+| WSPR autorun → WSPRnet, MQTT | ✓ | ✓ | ✓ | ✓ (M4) | **S** |
 | Autorun pre-empted by users, resumes after | ~ (stock #55: doesn't resume) | ✓ | – | lease class exists | **S** |
 | CW decoder (single) | ✓ | ✓ | ✓ | ✗ | **B** |
 | CW skimmer (multi-signal; RBN?) | ✓ | ✓ exp. | ✗ | ✗ | later |
@@ -106,7 +110,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | `/status`-style listing data, `/snr`, `/users` | ✓ | ✓ | `/api/status`, metrics | **K** |
 | HPSDR P1 | ✗ (not built) | ✗ | ✓ | – |
 | IQ stream / rtl_tcp / SpyServer | ✗ (dormant) | ✗ | ✗ | later (design §7) |
-| MQTT (spots, start/stop, temperature) | ✓ | ✗ | ~ | **S** |
+| MQTT (spots, start/stop, temperature) | ✓ | ✗ | ✓ spots, band start/stop, uploads (M4; no temperature) | **S** |
 | Public listing (rx-888.com / rx.kiwisdr.com) | ✓ rx-888.com | ✓ | ✗ | open question |
 | Vendor reverse proxy (frpc), DUC/no-ip, UPnP | ✓ | ✓ | ✗ | omit (document a reverse proxy) |
 | ACME certificates | ✓ | ✗ | ✗ (self-signed/files) | later |
@@ -138,7 +142,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | VHF airband by undersampling (98.304 / 110.592 MHz clocks, RF switch) | ✓ | ✗ (Si5351 plan exists, test unit only) | **V** |
 | External 10 MHz reference, GPSDO output on CLK2 | ✓ | ✗ | **V** |
 | ADC dither, PGA, DC-offset trim | ✓ | ✗ | with **V** (bitstream/driver) |
-| GPS: position via gpsd, PPS clock correction | ✓ | PPS loop ✓, gpsd ✗ | **S** (grid for spots) |
+| GPS: position via gpsd, PPS clock correction | ✓ | PPS loop ✓, gpsd ✓ (M4) | **S** (grid for spots) |
 
 ## 3. Proposed order
 
@@ -149,6 +153,8 @@ Each step is a milestone like M3 (plan, steps, tests).
    * Trusted reverse proxies (`[web] trusted_proxies`) are honoured.
 2. **S — skimmers (M4)**:
    * A decoder supervisor (child processes, restart, CPU accounting).
+     As built (M4): the decoders run in process, in their own threads at
+     `SCHED_IDLE` with a deadline per slot; CPU per band in `/metrics`.
    * FT8/FT4/FST4W and WSPR autoruns on Skimmer-class leases, pre-empted
      by users and resumed after (stock's open bug).
    * Uploads to PSKReporter, WSPRnet and MQTT.
@@ -226,7 +232,7 @@ Each step is a milestone like M3 (plan, steps, tests).
 
 | idea | what it is in OWRX+ | here | plan |
 |---|---|---|---|
-| Decoder scheduler: static, or daylight/greyline profiles | Background services follow a schedule when nobody listens | Skimmer leases by schedule (design §6), e.g. FT8 bands by daylight and greyline | **S** |
+| Decoder scheduler: static, or daylight/greyline profiles | Background services follow a schedule when nobody listens | Skimmer leases by UTC hours (M4, `[[skimmer]] hours`); daylight/greyline profiles not yet | **S** |
 | CW and RTTY skimmers to PSKReporter | csdr-skimmer: every signal in a 96 kHz slice, callsigns spotted | One 48 kHz channel per band segment. Kiwi's CW skimmer is interactive only and spots nothing | **S2** (after FT8/WSPR; A9 CPU to measure) |
 | MQTT event stream: spots, connects, channel use; federation between servers | Per-mode topics, JSON | MQTT is in S already; events cost little | **S** (federation later) |
 | Map | Locators with QSO/call lines, APRS, aircraft from HFDL/VDL2/ACARS, ships, other web SDRs with user counts, EiBi transmitters on air (click to tune) | Spots from S, HFDL aircraft from D, EiBi from R; Leaflet in the browser, server sends JSON | **M** (new, after S) |
@@ -246,8 +252,7 @@ Each step is a milestone like M3 (plan, steps, tests).
 
 ## 5. Open questions
 
-1. Is S (skimmers) first? It is in the original plan (design §11, M4)
-   and the most-used stock feature.
+1. ~~Is S (skimmers) first?~~ Yes: done as M4 (2026-10-28).
 2. R before K? K first gives automation users (kiwirecorder, wsprdaemon)
    their tools sooner. R first makes the page itself a full receiver.
 3. Interactive decoders in the browser (B) rather than on the unit?

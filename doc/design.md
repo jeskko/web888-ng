@@ -1,6 +1,6 @@
 # web888d — design
 
-Status: draft v0.2 (2026-10-16, progress updated 2026-10-24; milestones in §11). Project **web888-ng**, daemon `web888d`; licence **GPL-3.0-or-later** (2026-10-16; was MIT).
+Status: draft v0.2 (2026-10-16, progress updated 2026-10-28; milestones in §11). Project **web888-ng**, daemon `web888d`; licence **GPL-3.0-or-later** (2026-10-16; was MIT).
 
 A new server for the Web-888 SDR (Zynq-7010, 2× Cortex-A9, LTC2208, open or
 stock FPGA). It is **not** a port of the existing KiwiSDR-derived server: it
@@ -180,7 +180,13 @@ IQ @ Fs_hw (12..48 k) → CIC droop EQ + channel FIR (overlap-save FFT, per mode
   * narrow spans inside an audio channel's band can be served from that
     channel's IQ (software FFT) without a hardware slot.
 * Processing: window → 8192-pt FFT → |X|² → average (frame rate) → log →
-  resample to client width (1024–4096 bins, max-hold per bin) → u8 dB.
+  resample to client width (1024–4096 bins, averaging power) → u8 dB.
+* **A view is captured at twice its span** (half the decimation) and
+  shows the middle half (2026-10-28): the WF channel's CIC barely rejects
+  aliases near the edges of its output band, and the widest view
+  (decimation 2) would otherwise show strong HF mirrored at 45–61 MHz.
+  The FFT stays the size it was (one FFT bin per shown bin). No view is
+  wider than the tunable range.
 * **Full-interval averaging (goal, improves on stock).** Each line should
   average the power of all samples in its frame interval (Welch: 50 %
   overlapping windowed FFTs, mean of |X|² before the log), not one
@@ -297,12 +303,12 @@ to a common spot bus: the UI, PSKReporter, WSPRnet, syslog and MQTT
 | M | content | done when |
 |---|---|---|
 | M0 ✅ | workspace, `Radio` trait, `Sim` backend, DSP crate with tests, CI (x86 + armv7 cross build) | IQ from Sim through channel filter verified in tests (`crates/dsp/tests/dsp.rs`) |
-| M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested), PPS loop ✅, HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programming opt-in `--si5351-adc`, test unit only); open: test on a unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
+| M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested; on a production unit 2026-10-28 with the stock and the open bitstream: RX at 48 kS/s, web UI, skimmers), PPS loop ✅ (on the unit: no GPS antenna yet), HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programming opt-in `--si5351-adc`, test unit only); open: HPSDR from a real unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
 | M2 ✅ | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio (`doc/m2-web-ui.md`, v0.1.0) | usable in a browser |
-| M3 ✅ | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth (`doc/m3-multi-user.md`, v0.2.0/v0.2.1); board benches wait for the test unit | 13 users + time-shared waterfalls |
-| M4 🚧 | skimmers and spot reporting (`doc/m4-skimmers.md`): FT8/FT4/WSPR decoders ✅ (91–92 % / 89 % of jt9, 64/64 of wsprd on the corpus), runtime with yielding leases ✅, PSKReporter and WSPRnet uploads ✅ (accepted live from the HackRF), spots in the UI ✅, syslog/MQTT/gpsd ✅; open: A9 benches with all modes, docs, release | spots uploaded |
+| M3 ✅ | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth (`doc/m3-multi-user.md`, v0.2.0/v0.2.1); the 12-user load test on a board is left | 13 users + time-shared waterfalls |
+| M4 ✅ | skimmers and spot reporting (`doc/m4-skimmers.md`, v0.3.0): FT8/FT4/WSPR decoders (91–92 % / 89 % of jt9, 64/64 of wsprd on the corpus), runtime with yielding leases, PSKReporter and WSPRnet uploads (accepted live), spots and skimmer ranges in the UI, syslog/MQTT/gpsd; A9: FT8 on 8 bands at 84 % busy (FST4W left) | spots uploaded |
 | M5 | Kiwi protocol (feature `kiwi`) ported from upstream | kiwirecorder/SuperSDR work |
-| M6 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver); proposed core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`) | GPS-timestamped IQ |
+| M6 🚧 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver); core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`): model and Verilog datapath bit-exact in simulation, synthesis for timing in progress (2026-10-28) | GPS-timestamped IQ |
 
 The order after M3 is being revisited against the stock firmware,
 KiwiSDR and OpenWebRX+: `doc/feature-gap.md` (proposal).
