@@ -1,12 +1,12 @@
 # Pseudo-stereo CW: draft
 
-Status: **draft** (2026-10-28), not started. The idea comes from SM0VPO's
+Status: **first version built** (2026-10-28): option (3), both cues
+(±6 dB level, ±0.4 ms time at the sides), a Stereo button in USB, LSB
+and CW. `ui/src/audio/stereo.ts`, run in the audio worklet. A listening
+test is next (§7 step 5). The idea comes from SM0VPO's
 analogue circuit ("Enhance weak QRP CW with stereo"): a buffer feeds a
 low-pass to the left ear and a high-pass to the right, crossing near
-800 Hz. A signal at the pitch sits in the middle of the head, and QRM
-above or below it moves off to the sides. The ear separates sources by
-direction much better than by pitch alone, so a weak signal next to a
-strong one gets easier to copy.
+800 Hz.
 
 In software we can do better than two RC filters. Each audio frequency
 gets its own position, a smooth ramp from left to right, so every

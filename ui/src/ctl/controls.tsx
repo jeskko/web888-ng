@@ -27,10 +27,12 @@ import {
   setAudio,
   setMode,
   setPassband,
+  setStereo,
   setView,
   setVolume,
   st,
   status,
+  stereo,
   tune,
   volume,
 } from "../state.ts";
@@ -141,6 +143,15 @@ export function AudioCtl() {
         />
         <span class="num">{s.gain_db.toFixed(0)} dB</span>
       </label>
+      {s.mode !== "am" && (
+        <button
+          class={stereo.value ? "on" : ""}
+          onClick={() => setStereo(!stereo.value)}
+          title="Pseudo-stereo (headphones): signals below the passband's middle to the left, above it to the right, as on the waterfall"
+        >
+          Stereo
+        </button>
+      )}
       <button class={muted.value ? "on" : ""} onClick={() => setVolume(volume.value, !muted.value)} title="Mute">
         {muted.value ? "Muted" : "Vol"}
       </button>

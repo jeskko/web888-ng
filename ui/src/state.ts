@@ -3,7 +3,7 @@
 // `state` message is authoritative; actions update the local copy at once
 // (optimistic) and send the request.
 
-import { batch, signal } from "@preact/signals";
+import { batch, effect, signal } from "@preact/signals";
 import { Player, type PlayerStats } from "./audio/player.ts";
 import { clamp, formatKhz } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
@@ -11,6 +11,7 @@ import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { FLAG_GAP, FLAG_OVERLOAD, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
+import { design, stereoSpec } from "./audio/stereo.ts";
 
 export const conn = signal<ConnState>("connecting");
 /** The receiver wants its listener password (and we have no login). */
@@ -49,6 +50,9 @@ export const audioStats = signal<PlayerStats | null>(null);
 export const audioError = signal("");
 export const volume = signal(0.7);
 export const muted = signal(false);
+/** Pseudo-stereo in USB, LSB and CW (remembered in this browser). */
+export const stereo = signal(load("stereo") === "1");
+let audioRate = 12000;
 /** Waterfall colour range (dB); `auto` follows the noise floor. */
 export const range = signal({ min: -130, max: -60, auto: true });
 
@@ -151,6 +155,7 @@ export function connect(): void {
             sessionId.value = m.session;
             spotsAvail.value = !!m.spots;
           });
+          audioRate = m.audio_rate;
           if (m.spots) {
             spotsFresh = true;
             link?.send({ type: "spots", on: true });
@@ -275,6 +280,23 @@ export function pickUser(m: UserMark): void {
     listenTo(m.id);
   }
 }
+
+export function setStereo(on: boolean): void {
+  stereo.value = on;
+  save("stereo", on ? "1" : "0");
+}
+
+// the stereo filters follow the mode and passband (redesigned only when
+// they change: a design takes a few ms)
+let stereoKey = "";
+effect(() => {
+  const s = st.value;
+  const spec = s && stereo.value ? stereoSpec(s.mode, s.lo, s.hi, s.pitch, audioRate) : null;
+  const key = spec ? JSON.stringify(spec) : "";
+  if (key === stereoKey) return;
+  stereoKey = key;
+  player.setStereo(spec ? design(spec) : null);
+});
 
 export function showSpots(on: boolean): void {
   spotsOpen.value = on;

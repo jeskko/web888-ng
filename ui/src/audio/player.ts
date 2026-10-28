@@ -13,6 +13,7 @@ export class Player {
   private node: AudioWorkletNode | null = null;
   private gain: GainNode | null = null;
   private rate = 0;
+  private stereo: { left: Float32Array; right: Float32Array } | null = null;
   onStats: (s: PlayerStats) => void = () => {};
 
   get running(): boolean {
@@ -37,6 +38,7 @@ export class Player {
     this.node = node;
     this.gain = gain;
     if (this.rate) node.port.postMessage({ rate: this.rate });
+    node.port.postMessage({ stereo: this.stereo });
     await ctx.resume();
   }
 
@@ -47,6 +49,12 @@ export class Player {
       this.node.port.postMessage({ rate });
     }
     this.node.port.postMessage(pcm, [pcm.buffer]);
+  }
+
+  /** The pseudo-stereo filters (`stereo.ts`), or null for mono. */
+  setStereo(taps: { left: Float32Array; right: Float32Array } | null): void {
+    this.stereo = taps;
+    this.node?.port.postMessage({ stereo: taps });
   }
 
   /** Linear volume 0..1 (smoothed to avoid clicks). */
