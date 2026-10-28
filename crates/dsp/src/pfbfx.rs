@@ -88,6 +88,22 @@ struct Cx {
     im: i64,
 }
 
+/// A power sum as the hardware sends it (`pfb_power.v`): IEEE float32
+/// bits, the mantissa truncated (not rounded).
+pub fn power_f32(v: u64) -> u32 {
+    if v == 0 {
+        return 0;
+    }
+    let lz = v.leading_zeros();
+    let x = v << lz;
+    ((190 - lz) << 23) | ((x >> 40) as u32 & 0x7f_ffff)
+}
+
+/// A bin's |X|^2, exact.
+pub fn bin_power(v: CxInt) -> u64 {
+    (v.0 * v.0 + v.1 * v.1) as u64
+}
+
 fn round_shift(v: i64, s: u32) -> i64 {
     if s == 0 { v } else { (v + (1 << (s - 1))) >> s }
 }
@@ -537,6 +553,25 @@ impl PfbFixed {
 
 #[cfg(test)]
 mod tests {
+
+    #[test]
+    fn power_floats_are_truncated() {
+        assert_eq!(power_f32(0), 0);
+        let mut x = 0x9e37_79b9_7f4a_7c15u64;
+        for _ in 0..10_000 {
+            x ^= x << 13;
+            x ^= x >> 7;
+            x ^= x << 17;
+            let v = (x >> (x % 64)).max(1);
+            let f = f32::from_bits(power_f32(v)) as f64;
+            let v64 = v as f64;
+            assert!(f <= v64 && f > v64 * (1.0 - 2f64.powi(-23)), "{v} -> {f}");
+            if v < 1 << 24 {
+                assert_eq!(f, v64);
+            }
+        }
+    }
+
     use super::*;
     use crate::pfb::Pfb;
 

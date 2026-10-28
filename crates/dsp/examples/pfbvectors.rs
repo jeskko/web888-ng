@@ -17,6 +17,8 @@
 //! * `adc.hex`: the 16-bit input samples
 //! * `packed.hex`, `fft.hex`, `bins.hex`: per frame, the FFT input (n),
 //!   its bit-reversed output (n) and the M/2 + 1 bins (data_bits)
+//! * `power.hex`: bins 0..n of one power line over all the frames, as the
+//!   hardware sends them (`pfbfx::power_f32`, 32-bit)
 //!
 //! The input: ADC noise of 3 LSB rms, a tone at -1 dBFS and seven weaker
 //! ones, so every stage sees large and small values.
@@ -24,7 +26,7 @@
 use std::fmt::Write as _;
 use std::path::PathBuf;
 use web888_dsp::pfb::PfbSpec;
-use web888_dsp::pfbfx::{FixedSpec, PfbFixed};
+use web888_dsp::pfbfx::{FixedSpec, PfbFixed, bin_power, power_f32};
 
 fn hex(v: i64, bits: u32) -> String {
     let mask = (1u128 << bits) - 1;
@@ -80,6 +82,7 @@ fn main() -> std::io::Result<()> {
     let x = adc(m * spec.taps + (frames - 1) * n, 1);
 
     let (mut packed, mut fft, mut bins) = (String::new(), String::new(), String::new());
+    let mut power = vec![0u64; n];
     // n samples at a time: at most one frame per push
     for chunk in x.chunks(n) {
         let mut got = false;
@@ -97,12 +100,20 @@ fn main() -> std::io::Result<()> {
         for v in &t.bins {
             writeln!(bins, "{}", cx(*v, fx.data_bits)).unwrap();
         }
+        for (p, v) in power.iter_mut().zip(&t.bins) {
+            *p += bin_power(*v);
+        }
     }
     let lines = |s: &str| s.lines().count();
     assert_eq!(lines(&bins), frames * spec.bins(), "frames written");
     std::fs::write(out.join("packed.hex"), packed)?;
     std::fs::write(out.join("fft.hex"), fft)?;
     std::fs::write(out.join("bins.hex"), bins)?;
+    let power_hex: String = power
+        .iter()
+        .map(|&p| format!("{:08x}\n", power_f32(p)))
+        .collect();
+    std::fs::write(out.join("power.hex"), power_hex)?;
     let adc_hex: String = x.iter().map(|&v| hex(v as i64, 16) + "\n").collect();
     std::fs::write(out.join("adc.hex"), adc_hex)?;
     let coefs: String = p
