@@ -309,6 +309,14 @@ export function setAudio(p: AudioReq): void {
   link?.send({ type: "audio", ...p });
 }
 
+/** Keep the view inside the tunable range: its edges, not just its
+ * centre (a span wider than the range sits in the middle). */
+function clampCenter(center: number, decim: number, r: RadioInfo): number {
+  const half = wfSpan(r.adc_hz, clamp(decim, r.wf_decim_min, r.wf_decim_max)) / 2;
+  if (2 * half >= r.rf_hi - r.rf_lo) return (r.rf_lo + r.rf_hi) / 2;
+  return clamp(center, r.rf_lo + half, r.rf_hi - half);
+}
+
 /** Throttled: dragging sends at most every 100 ms, and always the last. */
 let viewTimer: number | undefined;
 let viewPending: WfReq | null = null;
@@ -318,7 +326,7 @@ export function setView(w: WfReq): void {
     w = {
       ...w,
       decim: clamp(w.decim, r.wf_decim_min, r.wf_decim_max),
-      center_hz: clamp(w.center_hz, r.rf_lo, r.rf_hi),
+      center_hz: clampCenter(w.center_hz, w.decim, r),
     };
   }
   update({ wf: w });

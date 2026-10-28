@@ -200,21 +200,7 @@ impl Shared {
     }
 
     fn clamp_wf(&self, w: WfReq) -> WfReq {
-        let r = &self.radio;
-        let mut decim = r.wf_decim_min;
-        while decim < r.wf_decim_max && decim < w.decim {
-            decim *= 2;
-        }
-        WfReq {
-            center_hz: w.center_hz.clamp(r.rf_lo, r.rf_hi),
-            decim,
-            bins: w.bins.clamp(256, BINS_MAX).next_power_of_two(),
-            fps: if w.fps.is_finite() {
-                w.fps.clamp(1.0, FPS_MAX)
-            } else {
-                20.0
-            },
-        }
+        clamp_view(&self.radio, w)
     }
 
     fn clamp_hz(&self, hz: f64) -> f64 {
@@ -856,9 +842,61 @@ pub async fn run(
     // takes the session off its waterfall view and the users list
 }
 
+/// A waterfall request the receiver can do, its view inside the range.
+fn clamp_view(r: &RadioInfo, w: WfReq) -> WfReq {
+    let mut decim = r.wf_decim_min;
+    while decim < r.wf_decim_max && decim < w.decim {
+        decim *= 2;
+    }
+    // the view's edges stay inside the range, not just its centre
+    let half = r.adc_hz / (decim as f64) / 2.0;
+    let center_hz = if 2.0 * half >= r.rf_hi - r.rf_lo {
+        (r.rf_lo + r.rf_hi) / 2.0
+    } else {
+        w.center_hz.clamp(r.rf_lo + half, r.rf_hi - half)
+    };
+    WfReq {
+        center_hz,
+        decim,
+        bins: w.bins.clamp(256, BINS_MAX).next_power_of_two(),
+        fps: if w.fps.is_finite() {
+            w.fps.clamp(1.0, FPS_MAX)
+        } else {
+            20.0
+        },
+    }
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn views_stay_inside_the_range() {
+        let r = RadioInfo {
+            backend: "zynqsdr".into(),
+            variant: "hf".into(),
+            adc_hz: 122_880_000.0,
+            rx_rate: 12_000.0,
+            rf_lo: 0.0,
+            rf_hi: 61_440_000.0,
+            wf_decim_min: 2,
+            wf_decim_max: 8192,
+        };
+        let w = |center_hz, decim| WfReq {
+            center_hz,
+            decim,
+            bins: 1024,
+            fps: 20.0,
+        };
+        // 480 kHz span: its edges, not its centre, stop at 0 and 61.44 MHz
+        assert_eq!(clamp_view(&r, w(100_000.0, 256)).center_hz, 240_000.0);
+        assert_eq!(clamp_view(&r, w(-5e6, 256)).center_hz, 240_000.0);
+        assert_eq!(clamp_view(&r, w(61.4e6, 256)).center_hz, 61_200_000.0);
+        assert_eq!(clamp_view(&r, w(7.1e6, 256)).center_hz, 7_100_000.0);
+        // the full span sits in the middle
+        assert_eq!(clamp_view(&r, w(1e6, 2)).center_hz, 30_720_000.0);
+    }
 
     #[test]
     fn limits_warn_a_minute_ahead_then_end() {
