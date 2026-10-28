@@ -3,11 +3,21 @@
 // volume, zoom, waterfall contrast, S-meter and the status bar.
 
 import { useSignal } from "@preact/signals";
-import { bandwidths, formatKhz, parseFreq } from "../fmt.ts";
-import { MODES, wfSpan, type AgcSpeed } from "../proto.ts";
+import { useEffect, useRef } from "preact/hooks";
+import { bandwidths, formatKhz, parseFreq, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
+import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
+  cycleAm,
+  followable,
   lease,
+  myName,
+  pickSkimmer,
+  pickUser,
+  sessionId,
+  setName,
+  skimmers,
+  usersOpen,
   listenTo,
   notice,
   setShare,
@@ -28,12 +38,15 @@ import {
   setMode,
   setPassband,
   setStereo,
+  setTuneStep,
   setView,
   setVolume,
   st,
   status,
+  stepOf,
   stereo,
   tune,
+  tuneStep,
   volume,
 } from "../state.ts";
 
@@ -88,15 +101,52 @@ export function FreqDisplay() {
   );
 }
 
+/** Tuning step: the arrows here, the arrow keys and shift+wheel step by
+ * it (to its grid), and a click on the waterfall lands on it. */
+export function StepCtl() {
+  const s = st.value;
+  if (!s) return null;
+  const step = stepOf(s.mode);
+  return (
+    <div class="group" title="Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it">
+      <button onClick={() => tune(stepTo(s.hz, step, -1))}>◀</button>
+      <select value={tuneStep.value} onChange={(e) => setTuneStep(Number(e.currentTarget.value))}>
+        {STEPS.map((v) => (
+          <option key={v} value={v}>
+            {v === 0 ? `auto (${stepLabel(stepFor(s.mode))})` : stepLabel(v)}
+          </option>
+        ))}
+      </select>
+      <button onClick={() => tune(stepTo(s.hz, step, 1))}>▶</button>
+    </div>
+  );
+}
+
+const AM_TITLES: Record<string, string> = {
+  am: "AM, envelope detector",
+  sam: "Synchronous AM: locked to the carrier, both sidebands (less distortion in fading)",
+  sal: "Synchronous AM, lower sideband only (away from interference above)",
+  sar: "Synchronous AM, upper sideband only (away from interference below)",
+  sas: "Synchronous AM stereo: lower sideband left, upper right",
+};
+
 export function ModeBar() {
   const s = st.value;
+  const am = s && isAm(s.mode) ? s.mode : null;
   return (
     <div class="group">
-      {MODES.map((m) => (
+      {(["usb", "lsb", "cw"] as Mode[]).map((m) => (
         <button key={m} class={s?.mode === m ? "on" : ""} onClick={() => setMode(m)} title={`${m.toUpperCase()} (key ${m[0]})`}>
           {m.toUpperCase()}
         </button>
       ))}
+      <button
+        class={am ? "on am" : "am"}
+        onClick={cycleAm}
+        title={`${AM_TITLES[am ?? "am"]}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn.`}
+      >
+        {(am ?? "am").toUpperCase()}
+      </button>
     </div>
   );
 }
@@ -123,7 +173,7 @@ export function AudioCtl() {
       <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control (AM: follows the carrier)">
         AGC
       </button>
-      {s.agc && s.mode !== "am" && (
+      {s.agc && !isAm(s.mode) && (
         <span class="seg" title="AGC recovery: fast, medium, slow">
           {(["fast", "medium", "slow"] as AgcSpeed[]).map((v) => (
             <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
@@ -143,7 +193,7 @@ export function AudioCtl() {
         />
         <span class="num">{s.gain_db.toFixed(0)} dB</span>
       </label>
-      {s.mode !== "am" && (
+      {!isAm(s.mode) && (
         <button
           class={stereo.value ? "on" : ""}
           onClick={() => setStereo(!stereo.value)}
@@ -275,6 +325,111 @@ export function ZoomCtl() {
   );
 }
 
+/** The user's callsign or nickname, and the button for the list of
+ * users and skimmers. */
+export function UsersCtl() {
+  const s = st.value;
+  const open = usersOpen.value;
+  const box = useRef<HTMLDivElement>(null);
+  // a click elsewhere closes the list
+  useEffect(() => {
+    if (!open) return;
+    const away = (e: PointerEvent) => {
+      if (!box.current?.contains(e.target as Node)) usersOpen.value = false;
+    };
+    document.addEventListener("pointerdown", away);
+    return () => document.removeEventListener("pointerdown", away);
+  }, [open]);
+  if (!s) return null;
+  const others = users.value;
+  return (
+    <div class="group users-ctl" ref={box}>
+      <input
+        type="text"
+        class="name"
+        maxLength={NAME_MAX}
+        placeholder="callsign"
+        value={myName.value}
+        onChange={(e) => setName(e.currentTarget.value)}
+        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
+        title={`Your callsign or nickname (at most ${NAME_MAX} characters), shown to others`}
+      />
+      <button class={open ? "on" : ""} onClick={() => (usersOpen.value = !open)} title="Users and background decoders">
+        Users {others.length + 1}
+      </button>
+      {open && <UserList />}
+    </div>
+  );
+}
+
+function UserList() {
+  const s = st.value!;
+  const own = lease.value?.granted;
+  const pick = (f: () => void) => () => {
+    f();
+    usersOpen.value = false;
+  };
+  return (
+    <div class="users-pop">
+      <table>
+        <thead>
+          <tr>
+            <th>user</th>
+            <th class="r">kHz</th>
+            <th>mode</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr class="me">
+            <td>{myName.value || `user ${sessionId.value ?? "?"}`} (you)</td>
+            <td class="r">{formatKhz(s.hz)}</td>
+            <td>
+              {s.mode.toUpperCase()}
+              {!s.share && <span class="dim"> · private</span>}
+            </td>
+          </tr>
+          {users.value.map((u) => {
+            const f = followable(u);
+            return (
+              <tr
+                key={u.id}
+                class={f ? "pick" : "dim"}
+                onClick={f ? pick(() => pickUser(u)) : undefined}
+                title={f ? `Click to ${own ? "tune there" : "listen along"}` : u.hz === undefined ? "Their frequency is private" : "Waiting for a receiver"}
+              >
+                <td>{u.name || `user ${u.id}`}</td>
+                <td class="r">{u.hz === undefined ? "private" : formatKhz(u.hz)}</td>
+                <td>
+                  {u.mode?.toUpperCase() ?? ""}
+                  {!u.rx && " · waiting"}
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+        {skimmers.value.length > 0 && (
+          <>
+            <thead>
+              <tr>
+                <th colSpan={3}>background decoders</th>
+              </tr>
+            </thead>
+            <tbody>
+              {skimmers.value.map((k) => (
+                <tr key={`${k.mode}${k.dial}`} class={k.on ? "pick" : "pick dim"} onClick={pick(() => pickSkimmer(k))} title="Click to tune there">
+                  <td>{k.mode}</td>
+                  <td class="r">{formatKhz(k.dial)}</td>
+                  <td>USB{!k.on && " · waiting"}</td>
+                </tr>
+              ))}
+            </tbody>
+          </>
+        )}
+      </table>
+    </div>
+  );
+}
+
 /** Whether others see this user's frequency and may listen along. */
 export function ShareCtl() {
   const s = st.value;
@@ -321,7 +476,7 @@ export function LeaseBanner() {
     body = (
       <span>
         All receivers are in use: you are #{l.position} in the queue, waterfall only until then.
-        {users.value.length > 0 && " Click a green marker on the scale to listen along with another user."}
+        {users.value.some(followable) && " Click a green marker on the scale to listen along with another user."}
       </span>
     );
   }
@@ -417,6 +572,13 @@ export function StatusBar() {
       )}
       {s && !s.hw_rate_ok && <span class="warn">hardware falling behind</span>}
       {s && s.clock_ppm !== 0 && <span>clock {s.clock_ppm.toFixed(3)} ppm</span>}
+      {s && (s.cpu !== undefined || s.temp_c !== undefined) && (
+        <span title="The receiver's CPU load (all cores) and temperature">
+          {s.cpu !== undefined && <span class={s.cpu >= 90 ? "warn" : ""}>cpu {s.cpu.toFixed(0)} %</span>}
+          {s.cpu !== undefined && s.temp_c !== undefined && " · "}
+          {s.temp_c !== undefined && <span class={s.temp_c >= 85 ? "warn" : ""}>{s.temp_c.toFixed(0)} °C</span>}
+        </span>
+      )}
       <span class="right">
         {server.value} · <a href="#/admin">admin</a>
       </span>

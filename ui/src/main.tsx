@@ -14,15 +14,18 @@ import {
   ModeBar,
   ShareCtl,
   SMeter,
+  StepCtl,
   StatusBar,
+  UsersCtl,
   ZoomCtl,
 } from "./ctl/controls.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
-import { stepFor } from "./fmt.ts";
+import { stepTo } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
 import {
   audioError,
   audioOn,
+  cycleAm,
   conn,
   connNote,
   login,
@@ -33,12 +36,13 @@ import {
   start,
   startAudio,
   st,
+  stepOf,
   tune,
 } from "./state.ts";
 import { AdminApp } from "./admin/admin.tsx";
 import { Pane } from "./view/pane.tsx";
 
-const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", a: "am" };
+const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw" };
 
 function useKeys() {
   useEffect(() => {
@@ -47,10 +51,11 @@ function useKeys() {
       if (t.tagName === "INPUT" || t.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
       const s = st.value;
       if (!s) return;
-      const step = stepFor(s.mode) * (e.shiftKey ? 10 : 1);
-      if (e.key === "ArrowRight") tune(s.hz + step);
-      else if (e.key === "ArrowLeft") tune(s.hz - step);
+      const step = stepOf(s.mode) * (e.shiftKey ? 10 : 1);
+      if (e.key === "ArrowRight") tune(stepTo(s.hz, step, 1));
+      else if (e.key === "ArrowLeft") tune(stepTo(s.hz, step, -1));
       else if (KEY_MODES[e.key]) setMode(KEY_MODES[e.key]);
+      else if (e.key === "a") cycleAm();
       else return;
       e.preventDefault();
     };
@@ -121,8 +126,10 @@ function App() {
     <>
       <header>
         <FreqDisplay />
+        <StepCtl />
         <ModeBar />
         <Bandwidth />
+        <UsersCtl />
         <SMeter />
       </header>
       <LeaseBanner />

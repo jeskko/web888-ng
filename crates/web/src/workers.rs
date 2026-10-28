@@ -9,7 +9,7 @@
 //! They hand encoded frames to the sessions' WebSocket tasks; a full queue
 //! drops the frame (counted), it never blocks.
 
-use crate::proto::{self, FLAG_GAP, FLAG_NEW_GEN, FLAG_OVERLOAD, FLAG_STALE};
+use crate::proto::{self, FLAG_GAP, FLAG_NEW_GEN, FLAG_OVERLOAD, FLAG_STALE, FLAG_STEREO};
 use crossbeam_channel::{Receiver as CbReceiver, TryRecvError};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -231,7 +231,14 @@ impl AudioJob {
     fn commands(&mut self) -> bool {
         loop {
             match self.cmd.try_recv() {
-                Ok(AudioCmd::Spec(s)) => self.chain.set_spec(s),
+                Ok(AudioCmd::Spec(s)) => {
+                    let ch = self.chain.channels();
+                    self.chain.set_spec(s);
+                    if self.chain.channels() != ch {
+                        // mono and stereo samples don't mix
+                        self.pcm.clear();
+                    }
+                }
                 Ok(AudioCmd::Channel(c)) if c != self.ch => {
                     // another channel's history: start over
                     self.ch = c;
@@ -273,23 +280,27 @@ impl Job for AudioJob {
             w.contiguous = true;
         }
         self.chain.process(b.channel(ch), &mut self.pcm);
+        // frames of AUDIO_FRAME sample times, of every channel
+        let chans = self.chain.channels();
+        let len = AUDIO_FRAME * chans;
+        let stereo = if chans == 2 { FLAG_STEREO } else { 0 };
         let mut used = 0;
-        while self.pcm.len() - used >= AUDIO_FRAME {
+        while self.pcm.len() - used >= len {
             // a block may finish several frames: they share its reading
             self.rssi = self.chain.take_power_db().unwrap_or(self.rssi);
             let f = proto::audio_frame(
-                self.flags,
+                self.flags | stereo,
                 self.seq,
                 AUDIO_RATE as u32,
                 self.rssi,
-                &self.pcm[used..used + AUDIO_FRAME],
+                &self.pcm[used..used + len],
             );
             if !self.out.send(f) {
                 return false;
             }
             self.flags = 0;
             self.seq = self.seq.wrapping_add(1);
-            used += AUDIO_FRAME;
+            used += len;
         }
         self.pcm.drain(..used);
         true

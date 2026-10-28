@@ -6,9 +6,16 @@
 
 export const PROTO = 2;
 
-export type Mode = "usb" | "lsb" | "cw" | "am";
+export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas";
 export type AgcSpeed = "fast" | "medium" | "slow";
-export const MODES: Mode[] = ["usb", "lsb", "cw", "am"];
+export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas"];
+/** The AM family, in the order the AM button cycles through: envelope,
+ * then synchronous (both sidebands, lower, upper, stereo). */
+export const AM_MODES: Mode[] = ["am", "sam", "sal", "sar", "sas"];
+
+export function isAm(m: Mode): boolean {
+  return AM_MODES.includes(m);
+}
 
 export interface WfReq {
   center_hz: number;
@@ -54,6 +61,8 @@ export interface State {
   share: boolean;
   /** The user listened along to (the dial follows theirs). */
   listen: number | null;
+  /** Callsign or nickname, as others see it. */
+  name: string;
 }
 
 /** Audio settings to change (the others stay). */
@@ -67,12 +76,21 @@ export interface AudioReq {
   squelch_db?: number;
 }
 
-/** Another user's receiver: a marker on the scale. */
+/** Another user: in the user list, and (sharing, with a receiver) a
+ * marker on the scale. */
 export interface UserMark {
   id: number;
-  hz: number;
-  mode: Mode;
+  /** Callsign or nickname (absent: none given). */
+  name?: string;
+  /** Dial and mode, when they share them. */
+  hz?: number;
+  mode?: Mode;
+  /** They have a receiver (else they wait for one). */
+  rx: boolean;
 }
+
+/** Longest user name (characters). */
+export const NAME_MAX = 8;
 
 /** A skimmer (background decoder): the audio range it decodes, absolute Hz. */
 export interface SkimMark {
@@ -112,6 +130,9 @@ export interface Status {
   audio_drops: number;
   wf_drops: number;
   hw_rate_ok: boolean;
+  /** The device's CPU load (percent of all cores) and temperature. */
+  cpu?: number;
+  temp_c?: number;
 }
 
 export type ServerMsg =
@@ -147,13 +168,16 @@ export type ClientMsg =
   | { type: "ping"; t: number }
   | { type: "share"; on: boolean }
   | { type: "listen"; user: number | null }
-  | { type: "spots"; on: boolean };
+  | { type: "spots"; on: boolean }
+  | { type: "name"; name: string };
 
 export const KIND_AUDIO = 1;
 export const KIND_WF = 2;
 export const FLAG_OVERLOAD = 1;
 /** Audio: samples were lost before this frame. */
 export const FLAG_GAP = 2;
+/** Audio: two channels, interleaved (left first). */
+export const FLAG_STEREO = 4;
 /** Waterfall: first line of a new tuning/zoom. */
 export const FLAG_NEW_GEN = 2;
 /** Waterfall: no new samples since the previous line (a repeat). */
@@ -168,7 +192,9 @@ export interface AudioFrame {
   rate: number;
   /** Channel power before AGC, dBFS. */
   rssi: number;
+  /** Mono, or (`stereo`) left and right interleaved. */
   pcm: Float32Array;
+  stereo: boolean;
 }
 
 export interface WfLine {
@@ -205,6 +231,7 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | null {
       rate: v.getUint32(8, true),
       rssi: v.getFloat32(12, true),
       pcm,
+      stereo: (flags & FLAG_STEREO) !== 0,
     };
   }
   if (kind === KIND_WF) {

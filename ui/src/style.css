@@ -36,6 +36,14 @@ label { display: flex; align-items: center; gap: 4px; color: var(--dim); }
 input[type="range"] { width: 90px; accent-color: var(--accent); }
 .num { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 4ch; }
 
+.group button.am { min-width: 5ch; }
+.users-ctl { position: relative; }
+.users-ctl input.name { width: 10ch; }
+.users-pop { position: absolute; top: calc(100% + 6px); left: 0; z-index: 10; max-height: 60vh; overflow: auto; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-size: 13px; }
+.users-pop thead th { padding-top: 6px; }
+.users-pop tr.pick { cursor: pointer; }
+.users-pop tr.pick:hover td { background: var(--accent-bg); }
+.users-pop tr.me td { color: #ff8a8a; }
 .smeter { display: flex; align-items: center; gap: 8px; margin-left: auto; }
 .smeter .bar { position: relative; width: 140px; height: 10px; background: #0a0d14; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
 .smeter .sql { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--warn); }
@@ -51,6 +59,9 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .pane canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
 .pane .spectrum { flex: 0 0 30%; }
 .pane .waterfall { flex: 1; min-height: 0; }
+.pane .ghost { position: absolute; top: 0; bottom: 0; pointer-events: none; background: rgba(255, 255, 255, 0.07); border: 1px dashed rgba(255, 255, 255, 0.35); border-width: 0 1px; }
+.pane .ghost span { position: absolute; top: 2px; left: 100%; margin-left: 4px; padding: 0 4px; border-radius: 3px; background: rgba(11, 14, 22, 0.8); color: var(--text); font: 12px ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
+.pane .ghost span.left { left: auto; right: 100%; margin: 0 4px 0 0; }
 .pane-error { position: absolute; top: 40%; width: 100%; text-align: center; color: var(--warn); pointer-events: none; }
 
 .overlay { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 12px; background: rgba(5, 8, 14, 0.75); }

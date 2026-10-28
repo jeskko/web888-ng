@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatKhz, parseFreq, tickStep, snap, bandwidths } from "../src/fmt.ts";
+import { formatKhz, parseFreq, tickStep, snap, bandwidths, stepTo } from "../src/fmt.ts";
 import { formatHash, parseHash } from "../src/hash.ts";
+import { MODES } from "../src/proto.ts";
 
 test("format", () => {
   assert.equal(formatKhz(7_074_000), "7 074.000");
@@ -24,7 +25,7 @@ test("ticks and snapping", () => {
   assert.equal(tickStep(61.44e6, 10), 1e7);
   assert.equal(tickStep(480e3, 10), 5e4);
   assert.equal(snap(7_074_004, 10), 7_074_000);
-  for (const m of ["usb", "lsb", "cw", "am"] as const)
+  for (const m of MODES)
     for (const b of bandwidths(m)) assert.ok(b.lo < b.hi && Math.abs(b.lo) <= 5000 && Math.abs(b.hi) <= 5000, `${m} ${b.label}`);
 });
 
@@ -33,4 +34,13 @@ test("hash round trip", () => {
   assert.equal(formatHash(s), "#f=7074&m=usb&z=256&c=7100");
   assert.deepEqual(parseHash(formatHash(s)), s);
   assert.deepEqual(parseHash("#f=x&m=fm&z=3"), { hz: undefined, mode: undefined, decim: undefined, centerHz: undefined });
+});
+
+test("steps land on the grid", () => {
+  assert.equal(stepTo(7_074_000, 1000, 1), 7_075_000);
+  assert.equal(stepTo(7_074_000, 1000, -1), 7_073_000);
+  assert.equal(stepTo(7_074_350, 1000, 1), 7_075_000);
+  assert.equal(stepTo(7_074_350, 1000, -1), 7_074_000);
+  assert.equal(stepTo(990_000, 9000, 1), 999_000);
+  assert.equal(stepTo(7_074_000, 10, 1), 7_074_010);
 });

@@ -98,13 +98,22 @@ UI checks in headless Chromium (muted): `ui/tools/cdp/` (receiver,
 login, admin pages, idle limit, layout). armv7 builds of benches and
 tools without a local toolchain: `scripts/cross-armv7.sh`.
 
-Waterfall: wheel zooms around the cursor, drag pans, click tunes,
-shift+wheel steps the dial; arrows step, `u`/`l`/`c`/`a` pick the mode.
+Waterfall: wheel zooms around the cursor, drag pans, click tunes
+(hovering shows the frequency and the passband a click would give),
+shift+wheel steps the dial; arrows step, `u`/`l`/`c` pick the mode and
+`a` (or the AM button, again and again) cycles AM, SAM, SAL, SAR, SAS:
+synchronous AM, both sidebands, the lower or upper alone (the channel
+filter removes the other), or stereo with the lower sideband left. The
+tuning step (auto per mode, or 1 Hz to 10 kHz; 9 kHz for MW) applies to
+the arrows, the wheel and click-tuning, all to its grid.
 The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`). The scale
 shows other users' frequencies (click to listen along) and each
-skimmer's range. **Stereo** (USB, LSB, CW; headphones) places signals
-left or right of the passband's middle, as on the waterfall
-(`doc/stereo-cw.md`).
+skimmer's range. A callsign or nickname (8 characters, kept in the
+browser) shows by the dial marker and to others; the Users button lists
+everyone (frequencies of those who share) and the skimmers. The status
+bar shows the device's CPU load and temperature. **Stereo** (USB, LSB,
+CW; headphones) places signals left or right of the passband's middle,
+as on the waterfall (`doc/stereo-cw.md`).
 The protocol is version 2: `doc/m3-multi-user.md` §8 (version 1, M2's,
 in `doc/m2-web-ui.md` §4).
 

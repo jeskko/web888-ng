@@ -8,6 +8,7 @@ pub mod admin;
 pub mod auth;
 pub mod proto;
 pub mod session;
+pub mod sysstat;
 pub mod tls;
 pub mod users;
 pub mod wfsvc;

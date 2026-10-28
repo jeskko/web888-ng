@@ -230,18 +230,21 @@ async fn the_thirteenth_listens_along_then_gets_a_receiver() {
     );
     last.send(format!(r#"{{"type":"tune","hz":{}}}"#, dial(12)))
         .await;
-    // markers: the others who share (not user 3, not itself)
+    // the others (not itself), the ones who share with their frequency
+    // (not user 3)
     let marks: Vec<UserMark> = loop {
         if let ServerMsg::Users { users: u } =
             last.until(|m| matches!(m, ServerMsg::Users { .. })).await
-            && u.len() == 11
+            && u.len() == 12
         {
             break u;
         }
     };
-    assert!(marks.iter().all(|m| m.id != users[3].id && m.id != last.id));
+    assert!(marks.iter().all(|m| m.id != last.id));
+    let m3 = marks.iter().find(|m| m.id == users[3].id).unwrap();
+    assert_eq!((m3.hz, m3.mode, m3.rx), (None, None, true));
     let m5 = marks.iter().find(|m| m.id == users[5].id).unwrap();
-    assert_eq!(m5.hz, dial(5));
+    assert_eq!(m5.hz, Some(dial(5)));
     assert!(last.audio_for(Duration::from_millis(500)).await.is_empty());
 
     // an opted-out user can't be followed

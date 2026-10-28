@@ -310,9 +310,13 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   | `hello` | S→C | adds `session` (id), `class` (`"web"`) |
   | `state` | S→C | adds `share` (bool), `listen` (user id or null) |
   | `lease` | S→C | `granted` (bool), `position` (queue place, 1 = next; 0 if granted) |
-  | `users` | S→C | `users`: [{`id`, `hz`, `mode`}], others who share and have a receiver; sent when it changes (checked 1/s) |
+  | `users` | S→C | `users`: [{`id`, `name`?, `hz`?, `mode`?, `rx`}], every other user; `hz` and `mode` only for those who share, `rx` whether they have a receiver (markers: sharing, with one). Sent when it changes (checked 1/s). Names and private users added 2026-10-28 (before: sharing users with a receiver only) |
   | `skimmers` | S→C | `skimmers`: [{`mode` ("FT8", "FT4", "WSPR"), `dial`, `lo`, `hi` (the range it decodes, Hz), `on` (has a channel)}], the background decoders running; sent when it changes (checked 1/s). Added in M4, drawn as bars on the scale's bottom edge in their spots' colours |
   | `share` | C→S | `on` (bool) |
+  | `name` | C→S | `name`: the user's callsign or nickname, shown to others; trimmed, control characters dropped, at most 8 characters (`state.name` echoes what was kept). Added 2026-10-28 |
+  | `mode` | C→S | adds `sam`, `sal`, `sar`, `sas` (synchronous AM: both sidebands, lower, upper, stereo). Added 2026-10-28 |
+  | `status` | S→C | adds `cpu` (the device's load, % of all cores) and `temp_c` (SoC temperature), when known. Added 2026-10-28 |
+  | audio frame | S→C | flags bit2 `stereo`: left and right interleaved, `n` counting both (SAS). Added 2026-10-28 |
   | `listen` | C→S | `user` (id or null). Refused with an `error` if the session has a receiver of its own, or the user doesn't share / has none |
   | WF frame | S→C | flags bit2 `stale`: no new samples since the previous line |
 

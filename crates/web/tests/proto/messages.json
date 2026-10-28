@@ -11,7 +11,9 @@
     {"type": "share", "on": false},
     {"type": "listen", "user": 7},
     {"type": "listen", "user": null},
-    {"type": "spots", "on": true}
+    {"type": "spots", "on": true},
+    {"type": "name", "name": "N0CALL"},
+    {"type": "mode", "mode": "sas"}
   ],
   "server": [
     {"type": "hello", "proto": 2, "server": "web888d 0.1.0", "codec": "pcm16", "audio_rate": 12000,
@@ -20,10 +22,13 @@
      "limits": {"bins_max": 4096, "fps_max": 30}, "session": 12, "class": "web", "spots": true},
     {"type": "state", "hz": 7074000, "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700, "agc": true, "gain_db": 100,
      "agc_speed": "medium", "nb": 0, "nr": 0, "squelch": false, "squelch_db": -100,
-     "wf": {"center_hz": 30720000, "decim": 2, "bins": 1024, "fps": 20}, "share": true, "listen": null},
+     "wf": {"center_hz": 30720000, "decim": 2, "bins": 1024, "fps": 20}, "share": true, "listen": null, "name": "N0CALL"},
     {"type": "lease", "granted": false, "position": 2},
-    {"type": "users", "users": [{"id": 3, "hz": 7074000, "mode": "usb"}, {"id": 5, "hz": 3573000, "mode": "lsb"}]},
+    {"type": "users", "users": [{"id": 3, "name": "N0CALL", "hz": 7074000, "mode": "usb", "rx": true},
+     {"id": 5, "hz": 3573000, "mode": "lsb", "rx": true}, {"id": 6, "rx": false}]},
     {"type": "status", "adc_overloads": 3, "clock_ppm": -1.25, "audio_drops": 0, "wf_drops": 2, "hw_rate_ok": true},
+    {"type": "status", "adc_overloads": 0, "clock_ppm": 0, "audio_drops": 0, "wf_drops": 0, "hw_rate_ok": true,
+     "cpu": 37, "temp_c": 56.1},
     {"type": "spots", "spots": [{"t": 1792789740, "mode": "FT8", "band": "40m", "dial": 7074000, "hz": 7075234,
       "snr": -12, "dt": 0.5, "msg": "CQ K1ABC FN42", "call": "K1ABC", "grid": "FN42"},
       {"t": 1792789740, "mode": "FT8", "band": "40m", "dial": 7074000, "hz": 7074811, "snr": 3, "dt": -0.25,

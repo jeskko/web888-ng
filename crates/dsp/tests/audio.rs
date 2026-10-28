@@ -238,3 +238,44 @@ fn spec_changes_take_effect() {
     assert_eq!((chain.spec().lo_hz, chain.spec().hi_hz), (-5000.0, 5000.0));
     assert!(chain.gain_db() > 90.0, "AGC starts at max gain");
 }
+
+/// A carrier at F0 with a tone 1500 Hz above and one 1000 Hz below.
+fn two_sidebands() -> Scene {
+    Scene::new()
+        .tone(F0, -40.0)
+        .tone(F0 + 1500.0, -50.0)
+        .tone(F0 - 1000.0, -50.0)
+}
+
+#[test]
+fn sar_and_sal_keep_one_sideband() {
+    let (u, _) = run(two_sidebands(), AudioSpec::new(Mode::Sar), 2.0);
+    let (l, _) = run(two_sidebands(), AudioSpec::new(Mode::Sal), 2.0);
+    let (u, l) = (&u[6000..], &l[6000..]);
+    // the tones are 10 dB under the carrier: 0.316 of it, doubled, x 0.3
+    assert!(
+        (amp(u, 1500.0) / 0.19 - 1.0).abs() < 0.05,
+        "{}",
+        amp(u, 1500.0)
+    );
+    assert!(
+        (amp(l, 1000.0) / 0.19 - 1.0).abs() < 0.05,
+        "{}",
+        amp(l, 1000.0)
+    );
+    assert!(db(amp(u, 1000.0)) < -70.0, "{:.1}", db(amp(u, 1000.0)));
+    assert!(db(amp(l, 1500.0)) < -70.0, "{:.1}", db(amp(l, 1500.0)));
+}
+
+#[test]
+fn sas_is_stereo_lower_left() {
+    let mut chain = AudioChain::new(AudioSpec::new(Mode::Sas), 48_000.0, Droop::None);
+    assert_eq!(chain.channels(), 2);
+    let (a, _) = run(two_sidebands(), AudioSpec::new(Mode::Sas), 2.0);
+    let (l, r): (Vec<f32>, Vec<f32>) = a[12_000..].chunks(2).map(|f| (f[0], f[1])).unzip();
+    assert!(db(amp(&l, 1000.0)) - db(amp(&l, 1500.0)) > 40.0);
+    assert!(db(amp(&r, 1500.0)) - db(amp(&r, 1000.0)) > 40.0);
+    // a mono mode again: one channel
+    chain.set_spec(AudioSpec::new(Mode::Sam));
+    assert_eq!(chain.channels(), 1);
+}

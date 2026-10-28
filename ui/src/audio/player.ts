@@ -42,13 +42,25 @@ export class Player {
     await ctx.resume();
   }
 
-  push(pcm: Float32Array, rate: number): void {
+  /** Mono samples, or (`stereo`) left and right interleaved. */
+  push(pcm: Float32Array, rate: number, stereo = false): void {
     if (!this.node) return;
     if (rate !== this.rate) {
       this.rate = rate;
       this.node.port.postMessage({ rate });
     }
-    this.node.port.postMessage(pcm, [pcm.buffer]);
+    if (!stereo) {
+      this.node.port.postMessage(pcm, [pcm.buffer]);
+      return;
+    }
+    const n = pcm.length >> 1;
+    const left = new Float32Array(n);
+    const right = new Float32Array(n);
+    for (let k = 0; k < n; k++) {
+      left[k] = pcm[2 * k];
+      right[k] = pcm[2 * k + 1];
+    }
+    this.node.port.postMessage({ left, right }, [left.buffer, right.buffer]);
   }
 
   /** The pseudo-stereo filters (`stereo.ts`), or null for mono. */

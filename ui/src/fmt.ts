@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Frequency formatting, entry and stepping (pure, unit-tested).
 
-import type { Mode } from "./proto.ts";
+import { isAm, type Mode } from "./proto.ts";
 
 /** "7 074.000" style: kHz with grouped thousands and 3 decimals (Hz). */
 export function formatKhz(hz: number): string {
@@ -45,16 +45,32 @@ export function parseFreq(s: string): number | null {
 
 /** Click-tune snap per mode. */
 export function snapFor(mode: Mode): number {
-  return mode === "am" ? 1000 : 10;
+  return isAm(mode) ? 1000 : 10;
 }
 
 /** Arrow-key tuning step per mode. */
 export function stepFor(mode: Mode): number {
-  return mode === "am" ? 1000 : mode === "cw" ? 10 : 100;
+  return isAm(mode) ? 1000 : mode === "cw" ? 10 : 100;
 }
 
 export function snap(hz: number, step: number): number {
   return Math.round(hz / step) * step;
+}
+
+/** Tuning step choices (Hz); 0: the mode's own (`stepFor`, `snapFor`). */
+export const STEPS = [0, 1, 10, 50, 100, 500, 1000, 5000, 9000, 10000];
+
+export function stepLabel(step: number): string {
+  return step === 0 ? "auto" : step >= 1000 ? `${step / 1000}k` : `${step}`;
+}
+
+/** The next multiple of `step` from `hz` in direction `dir` (+1 / -1):
+ * off the grid, the nearest one that way; on it, one step. */
+export function stepTo(hz: number, step: number, dir: number): number {
+  const k = hz / step;
+  const r = Math.round(k);
+  const on = Math.abs(k - r) < 1e-6;
+  return (on ? r + dir : dir > 0 ? Math.ceil(k) : Math.floor(k)) * step;
 }
 
 export function clamp(x: number, lo: number, hi: number): number {
@@ -71,6 +87,13 @@ export function bandwidths(mode: Mode): { label: string; lo: number; hi: number 
     case "cw":
       return [200, 500, 1000].map((w) => ({ label: `${w}`, lo: -w / 2, hi: w / 2 }));
     case "am":
+    case "sam":
+    case "sas":
       return [6, 8, 10].map((k) => ({ label: `${k}k`, lo: (-k * 1000) / 2, hi: (k * 1000) / 2 }));
+    // one sideband and the carrier (50 Hz inside the edge)
+    case "sal":
+      return [3, 4, 5].map((k) => ({ label: `${k}k`, lo: -k * 1000, hi: 50 }));
+    case "sar":
+      return [3, 4, 5].map((k) => ({ label: `${k}k`, lo: -50, hi: k * 1000 }));
   }
 }

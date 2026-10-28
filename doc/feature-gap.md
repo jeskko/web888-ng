@@ -39,7 +39,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | feature | stock | Kiwi | ng | plan |
 |---|---|---|---|---|
 | USB/LSB/CW/AM, passband presets | ✓ | ✓ | ✓ | – |
-| SAM (+ SAU/SAL/SAS, PLL speed, fade leveler) | ✓ | ✓ | ✗ | **R** |
+| SAM (+ SAU/SAL/SAS, PLL speed, fade leveler) | ✓ | ✓ | ✓ SAM/SAL/SAR/SAS, one PLL speed, carrier AGC | – (PLL speed choice later) |
 | NBFM/NNFM + de-emphasis, noise squelch | ✓ | ✓ | ✗ | **R** |
 | IQ mode (stereo IQ to the browser / recorder) | ✓ | ✓ | ✗ | **R** |
 | C-QUAM AM stereo | ✓ | ✓ | ✗ | omit |
@@ -77,7 +77,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Frequency memories, VFO A/B | ✓ | ✓ | ✓ | ✗ | **R** |
 | Audio recording (WAV), squelch-triggered | ✓ | ✓ | MP3 | ✗ | **R** (client side) |
 | Queue / camp on a user's channel | ✓ | ✓ | ✗ | ✓ (listen-along) | – |
-| Users on the scale | list | list | ✗ | ✓ markers | – |
+| Users on the scale | list | list | ✗ | ✓ markers, names, list | – |
 | Chat | ✗ | ✗ | ✓ | ✗ | omit |
 | Mobile layout, keyboard shortcuts, URL state | ✓ | ✓ | ✓ | ~ | **R** (fill gaps) |
 | Themes | ✓ | ~ | ✓ | ✗ (dark) | later |

@@ -49,9 +49,15 @@ impl Squelch {
     /// Gate `audio` by the channel power of the matching samples (`power`,
     /// |z|^2 per sample).
     pub fn process(&mut self, power: &[f32], audio: &mut [f32]) {
+        self.process_frames(power, audio, 1);
+    }
+
+    /// As `process`, for `channels` interleaved channels (a power value
+    /// per frame).
+    pub fn process_frames(&mut self, power: &[f32], audio: &mut [f32], channels: usize) {
         let open_at = 10f32.powf(self.threshold_db / 10.0);
         let close_at = 10f32.powf((self.threshold_db - HYST_DB) / 10.0);
-        for (p, a) in power.iter().zip(audio) {
+        for (p, a) in power.iter().zip(audio.chunks_mut(channels)) {
             self.power += self.alpha * (p - self.power);
             if self.power >= open_at {
                 self.open = true;
@@ -65,7 +71,7 @@ impl Squelch {
             }
             let want = if self.open { 1.0 } else { 0.0 };
             self.gain += (want - self.gain).clamp(-self.step, self.step);
-            *a *= self.gain;
+            a.iter_mut().for_each(|x| *x *= self.gain);
         }
     }
 }

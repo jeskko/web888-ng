@@ -11,11 +11,15 @@
 //! The hardware NCO sits on the dial frequency (the carrier); the passband
 //! `lo..hi` is relative to it (USB 300..2700, LSB -2700..-300, CW -250..250
 //! around the carrier, AM -5000..5000).
+//!
+//! Synchronous AM (`demod::Sync`): SAM both sidebands; SAL and SAR one,
+//! the channel filter (-5000..50, -50..5000) taking out the other; SAS
+//! stereo (lower sideband left, upper right), interleaved, two channels.
 
 use crate::agc::{Agc, AgcSpec};
 use crate::chan::{ChannelSpec, Droop, design};
 use crate::decim::Decimator;
-use crate::demod::{Am, ssb};
+use crate::demod::{Am, Sync, SyncOut, ssb};
 use crate::nb::NoiseBlanker;
 use crate::nco::Shifter;
 use crate::nr::NoiseReduction;
@@ -35,6 +39,26 @@ pub enum Mode {
     Lsb,
     Cw,
     Am,
+    /// Synchronous AM: both sidebands, lower, upper, stereo.
+    Sam,
+    Sal,
+    Sar,
+    Sas,
+}
+
+impl Mode {
+    /// AM, envelope or synchronous (a carrier, carrier-referenced AGC).
+    pub fn is_am(self) -> bool {
+        matches!(
+            self,
+            Mode::Am | Mode::Sam | Mode::Sal | Mode::Sar | Mode::Sas
+        )
+    }
+
+    /// Audio channels (interleaved).
+    pub fn channels(self) -> usize {
+        if self == Mode::Sas { 2 } else { 1 }
+    }
 }
 
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -62,7 +86,10 @@ impl AudioSpec {
             Mode::Usb => (300.0, 2700.0, AgcSpec::ssb()),
             Mode::Lsb => (-2700.0, -300.0, AgcSpec::ssb()),
             Mode::Cw => (-250.0, 250.0, AgcSpec::ssb()),
-            Mode::Am => (-5000.0, 5000.0, AgcSpec::am()),
+            Mode::Am | Mode::Sam | Mode::Sas => (-5000.0, 5000.0, AgcSpec::am()),
+            // the carrier stays inside, 50 Hz from the edge
+            Mode::Sal => (-5000.0, 50.0, AgcSpec::am()),
+            Mode::Sar => (-50.0, 5000.0, AgcSpec::am()),
         };
         AudioSpec {
             mode,
@@ -98,7 +125,13 @@ impl AudioSpec {
         ChannelSpec {
             lo_hz: self.lo_hz,
             hi_hz: self.hi_hz,
-            transition_hz: if self.mode == Mode::Am { 500.0 } else { 200.0 },
+            // AM's wider transitions are shorter filters; one sideband
+            // needs a sharp edge by the carrier
+            transition_hz: if matches!(self.mode, Mode::Am | Mode::Sam | Mode::Sas) {
+                500.0
+            } else {
+                200.0
+            },
             atten_db: 80.0,
         }
     }
@@ -111,16 +144,21 @@ pub struct AudioChain {
     filter: OverlapSave,
     shift: Shifter,
     am: Am,
+    sync: Sync,
     agc: Option<Agc>,
     gain: f32,
     nb: Option<NoiseBlanker>,
     nr: Option<NoiseReduction>,
+    /// SAS: the right channel's.
+    nr_r: Option<NoiseReduction>,
     squelch: Option<Squelch>,
     // scratch
     x: Vec<C32>,
     y: Vec<C32>,
     z: Vec<C32>,
     pw: Vec<f32>,
+    l: Vec<f32>,
+    r: Vec<f32>,
     // channel power since the last `take_power`
     pow_sum: f64,
     pow_n: usize,
@@ -143,15 +181,19 @@ impl AudioChain {
             filter: Self::filter(&spec, droop),
             shift: Shifter::new(spec.pitch_hz, AUDIO_RATE),
             am: Am::new(AUDIO_RATE),
+            sync: Sync::new(AUDIO_RATE),
             agc: spec.agc.map(|a| Agc::new(a, AUDIO_RATE)),
             gain: Self::gain(&spec),
             nb: spec.nb.map(NoiseBlanker::new),
             nr: (spec.nr > 0.0).then(|| NoiseReduction::new(spec.nr)),
+            nr_r: (spec.nr > 0.0).then(|| NoiseReduction::new(spec.nr)),
             squelch: spec.squelch_db.map(|d| Squelch::new(d, AUDIO_RATE)),
             x: Vec::new(),
             y: Vec::new(),
             z: Vec::new(),
             pw: Vec::new(),
+            l: Vec::new(),
+            r: Vec::new(),
             pow_sum: 0.0,
             pow_n: 0,
         }
@@ -186,6 +228,10 @@ impl AudioChain {
         if spec.mode != old.mode || spec.agc != old.agc {
             self.agc = spec.agc.map(|a| Agc::new(a, AUDIO_RATE));
             self.am = Am::new(AUDIO_RATE);
+            if !(spec.mode.is_am() && old.mode.is_am()) {
+                // between AM modes the loop stays locked
+                self.sync = Sync::new(AUDIO_RATE);
+            }
         }
         self.gain = Self::gain(&spec);
         match (spec.nb, &mut self.nb) {
@@ -193,10 +239,12 @@ impl AudioChain {
             (Some(k), Some(nb)) => nb.set_threshold(k),
             (Some(k), None) => self.nb = Some(NoiseBlanker::new(k)),
         }
-        match (spec.nr > 0.0, &mut self.nr) {
-            (false, _) => self.nr = None,
-            (true, Some(nr)) => nr.set_strength(spec.nr),
-            (true, None) => self.nr = Some(NoiseReduction::new(spec.nr)),
+        for nr in [&mut self.nr, &mut self.nr_r] {
+            match (spec.nr > 0.0, nr.as_mut()) {
+                (false, _) => *nr = None,
+                (true, Some(n)) => n.set_strength(spec.nr),
+                (true, None) => *nr = Some(NoiseReduction::new(spec.nr)),
+            }
         }
         match (spec.squelch_db, &mut self.squelch) {
             (None, _) => self.squelch = None,
@@ -231,7 +279,23 @@ impl AudioChain {
         }
     }
 
-    /// Process RX samples of this channel, appending audio to `out`.
+    /// Audio channels the chain outputs (interleaved).
+    pub fn channels(&self) -> usize {
+        self.spec.mode.channels()
+    }
+
+    /// SAM modes: the carrier's offset from the dial (Hz) the loop
+    /// follows.
+    pub fn carrier_offset_hz(&self) -> Option<f64> {
+        matches!(
+            self.spec.mode,
+            Mode::Sam | Mode::Sal | Mode::Sar | Mode::Sas
+        )
+        .then(|| self.sync.offset_hz(AUDIO_RATE))
+    }
+
+    /// Process RX samples of this channel, appending audio to `out`
+    /// (`channels()` interleaved).
     pub fn process(&mut self, rx: impl IntoIterator<Item = Iq32>, out: &mut Vec<f32>) {
         self.process_c32(rx.into_iter().map(rx_to_c32), out);
     }
@@ -253,7 +317,11 @@ impl AudioChain {
         self.pow_sum += self.pw.iter().map(|&p| p as f64).sum::<f64>();
         self.pow_n += self.z.len();
         let start = out.len();
-        let carrier_agc = self.spec.mode == Mode::Am && self.agc.is_some();
+        let carrier_agc = self.spec.mode.is_am() && self.agc.is_some();
+        let agc = self
+            .spec
+            .agc
+            .map(|a| (a.target, 10f32.powf(-a.max_gain_db / 20.0)));
         match self.spec.mode {
             Mode::Usb | Mode::Lsb => ssb(&self.z, out),
             Mode::Cw => {
@@ -268,9 +336,32 @@ impl AudioChain {
                 }
                 None => self.am.process(&self.z, out),
             },
+            Mode::Sam | Mode::Sal | Mode::Sar | Mode::Sas => {
+                let kind = match self.spec.mode {
+                    Mode::Sam => SyncOut::Both,
+                    Mode::Sas => SyncOut::Stereo,
+                    _ => SyncOut::Single,
+                };
+                self.sync.process(&self.z, kind, agc, out);
+            }
         }
         let a = &mut out[start..];
-        if let Some(nr) = &mut self.nr {
+        if self.channels() == 2 {
+            if let (Some(nl), Some(nr)) = (&mut self.nr, &mut self.nr_r) {
+                self.l.clear();
+                self.r.clear();
+                for f in a.chunks(2) {
+                    self.l.push(f[0]);
+                    self.r.push(f[1]);
+                }
+                nl.process(&mut self.l);
+                nr.process(&mut self.r);
+                for ((f, l), r) in a.chunks_mut(2).zip(&self.l).zip(&self.r) {
+                    f[0] = *l;
+                    f[1] = *r;
+                }
+            }
+        } else if let Some(nr) = &mut self.nr {
             nr.process(a);
         }
         match &mut self.agc {
@@ -281,7 +372,7 @@ impl AudioChain {
                 .for_each(|x| *x = (*x * self.gain).clamp(-1.0, 1.0)),
         }
         if let Some(sq) = &mut self.squelch {
-            sq.process(&self.pw, a);
+            sq.process_frames(&self.pw, a, self.spec.mode.channels());
         }
     }
 }

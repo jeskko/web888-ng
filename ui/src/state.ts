@@ -5,11 +5,11 @@
 
 import { batch, effect, signal } from "@preact/signals";
 import { Player, type PlayerStats } from "./audio/player.ts";
-import { clamp, formatKhz } from "./fmt.ts";
+import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
-import { FLAG_GAP, FLAG_OVERLOAD, wfSpan } from "./proto.ts";
+import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 
@@ -25,8 +25,12 @@ export const st = signal<State | null>(null);
 export const sessionId = signal<number | null>(null);
 /** The session's receiver: granted, or waiting at `position` in the queue. */
 export const lease = signal<{ granted: boolean; position: number } | null>(null);
-/** Other users who share their frequency. */
+/** The other users (the sharing ones with their frequency). */
 export const users = signal<UserMark[]>([]);
+/** This user's callsign or nickname (remembered in this browser). */
+export const myName = signal(load("name") ?? "");
+/** The user list is open. */
+export const usersOpen = signal(false);
 /** The server's skimmers (background decoders). */
 export const skimmers = signal<SkimMark[]>([]);
 /** The server runs skimmers; their spots, oldest first. */
@@ -52,6 +56,8 @@ export const volume = signal(0.7);
 export const muted = signal(false);
 /** Pseudo-stereo in USB, LSB and CW (remembered in this browser). */
 export const stereo = signal(load("stereo") === "1");
+/** Tuning step (Hz; 0: the mode's own), remembered in this browser. */
+export const tuneStep = signal(Number(load("step")) || 0);
 let audioRate = 12000;
 /** Waterfall colour range (dB); `auto` follows the noise floor. */
 export const range = signal({ min: -130, max: -60, auto: true });
@@ -156,6 +162,7 @@ export function connect(): void {
             spotsAvail.value = !!m.spots;
           });
           audioRate = m.audio_rate;
+          if (myName.value) link?.send({ type: "name", name: myName.value });
           if (m.spots) {
             spotsFresh = true;
             link?.send({ type: "spots", on: true });
@@ -200,7 +207,7 @@ export function connect(): void {
       rssi.value = f.rssi;
       if (f.flags & FLAG_OVERLOAD) overloadAt.value = performance.now();
       if (f.flags & FLAG_GAP) audioGaps.value++;
-      player.push(f.pcm, f.rate);
+      player.push(f.pcm, f.rate, f.stereo);
     },
     onWf(l) {
       for (const s of sinks) s(l);
@@ -270,15 +277,48 @@ export function listenTo(user: number | null): void {
   link?.send({ type: "listen", user });
 }
 
-/** A user marker was clicked: listen along while we have no receiver,
- * else tune to their frequency and mode. */
+/** A user with a marker: sharing, with a receiver (can be followed). */
+export function followable(m: UserMark): m is UserMark & { hz: number; mode: Mode } {
+  return m.hz !== undefined && m.mode !== undefined && m.rx;
+}
+
+/** A user (marker or list entry) was clicked: listen along while we have
+ * no receiver, else tune to their frequency and mode. */
 export function pickUser(m: UserMark): void {
+  if (!followable(m)) return;
   if (lease.value?.granted) {
     if (st.value?.mode !== m.mode) setMode(m.mode);
     tune(m.hz);
   } else {
     listenTo(m.id);
   }
+}
+
+/** Trimmed, inner whitespace collapsed, at most NAME_MAX characters (as
+ * the server keeps it). */
+export function cleanName(s: string): string {
+  return [...s.trim().replace(/\s+/g, " ").replace(/\p{Cc}/gu, "")].slice(0, NAME_MAX).join("");
+}
+
+export function setName(name: string): void {
+  name = cleanName(name);
+  myName.value = name;
+  save("name", name);
+  update({ name });
+  link?.send({ type: "name", name });
+}
+
+export function setTuneStep(step: number): void {
+  tuneStep.value = step;
+  save("step", String(step));
+}
+
+/** The keys' and wheel's step, and where a click lands, for `mode`. */
+export function stepOf(mode: Mode): number {
+  return tuneStep.value || stepFor(mode);
+}
+export function snapOf(mode: Mode): number {
+  return tuneStep.value || snapFor(mode);
 }
 
 export function setStereo(on: boolean): void {
@@ -330,6 +370,14 @@ export function pickSkimmer(k: SkimMark): void {
 
 export function setMode(mode: Mode): void {
   link?.send({ type: "mode", mode });
+}
+
+/** The AM button (and key): AM from another mode, else the next of the
+ * AM family. */
+export function cycleAm(): void {
+  const m = st.value?.mode;
+  const i = m ? AM_MODES.indexOf(m) : -1;
+  setMode(i < 0 ? "am" : AM_MODES[(i + 1) % AM_MODES.length]);
 }
 
 export function setPassband(lo: number, hi: number): void {

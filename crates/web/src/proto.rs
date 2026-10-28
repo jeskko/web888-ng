@@ -18,6 +18,18 @@ pub enum Mode {
     Lsb,
     Cw,
     Am,
+    /// Synchronous AM: both sidebands, lower, upper, stereo (lower left).
+    Sam,
+    Sal,
+    Sar,
+    Sas,
+}
+
+impl Mode {
+    /// AM, envelope or synchronous.
+    pub fn is_am(self) -> bool {
+        web888_dsp::audio::Mode::from(self).is_am()
+    }
 }
 
 impl From<Mode> for web888_dsp::audio::Mode {
@@ -28,6 +40,10 @@ impl From<Mode> for web888_dsp::audio::Mode {
             Mode::Lsb => M::Lsb,
             Mode::Cw => M::Cw,
             Mode::Am => M::Am,
+            Mode::Sam => M::Sam,
+            Mode::Sal => M::Sal,
+            Mode::Sar => M::Sar,
+            Mode::Sas => M::Sas,
         }
     }
 }
@@ -88,6 +104,11 @@ pub enum ClientMsg {
     /// come (or stop).
     Spots {
         on: bool,
+    },
+    /// The user's callsign or nickname, shown to others (at most 8
+    /// characters; "" for none).
+    Name {
+        name: String,
     },
 }
 
@@ -160,14 +181,31 @@ pub struct State {
     pub share: bool,
     /// The user listened along to (the dial follows theirs).
     pub listen: Option<u64>,
+    /// Callsign or nickname, as others see it.
+    #[serde(default)]
+    pub name: String,
 }
 
-/// Another user's receiver, for markers on the scale.
-#[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
+/// Another user: in the user list, and (sharing, with a receiver) a
+/// marker on the scale.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
 pub struct UserMark {
     pub id: u64,
-    pub hz: f64,
-    pub mode: Mode,
+    /// Callsign or nickname ("": none given).
+    #[serde(default, skip_serializing_if = "String::is_empty")]
+    pub name: String,
+    /// Dial and mode, when they share them.
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub hz: Option<f64>,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub mode: Option<Mode>,
+    /// They have a receiver (else they wait for one).
+    #[serde(default = "yes")]
+    pub rx: bool,
+}
+
+fn yes() -> bool {
+    true
 }
 
 /// A skimmer (background decoder) on the scale: the audio range it
@@ -292,6 +330,11 @@ pub enum ServerMsg {
         audio_drops: u64,
         wf_drops: u64,
         hw_rate_ok: bool,
+        /// The device's CPU load (percent of all cores) and temperature.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        cpu: Option<f64>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        temp_c: Option<f64>,
     },
     Pong {
         t: f64,
@@ -309,6 +352,9 @@ pub const KIND_WF: u8 = 2;
 pub const FLAG_OVERLOAD: u8 = 1;
 /// Audio: samples were lost before this frame.
 pub const FLAG_GAP: u8 = 2;
+/// Audio: two channels, interleaved (left first; the count is of samples,
+/// both channels').
+pub const FLAG_STEREO: u8 = 4;
 /// Waterfall: first line of a new tuning/zoom.
 pub const FLAG_NEW_GEN: u8 = 2;
 /// Waterfall: no new samples since the previous line (it repeats the
@@ -318,7 +364,7 @@ pub const FLAG_STALE: u8 = 4;
 pub const AUDIO_HEADER: usize = 16;
 pub const WF_HEADER: usize = 40;
 
-/// Audio frame: header + PCM16 mono.
+/// Audio frame: header + PCM16, mono or (`FLAG_STEREO`) interleaved.
 pub fn audio_frame(flags: u8, seq: u32, rate: u32, rssi_db: f32, pcm: &[f32]) -> Vec<u8> {
     let mut b = Vec::with_capacity(AUDIO_HEADER + 2 * pcm.len());
     b.push(KIND_AUDIO);

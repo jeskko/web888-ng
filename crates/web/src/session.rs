@@ -4,7 +4,7 @@
 //! the view lies inside it, else a (shared) hardware view.
 
 use crate::proto::{self, ClientMsg, Limits, Mode, RadioInfo, ServerMsg, State, UserMark, WfReq};
-use crate::users::{UserPub, Users};
+use crate::users::{Name, UserPub, Users};
 use crate::wfsvc::{HwView, Waterfalls};
 use crate::workers::{AudioCmd, AudioJob, ChanView, Out, WfSink};
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
@@ -222,7 +222,7 @@ fn audio_spec(s: &State) -> AudioSpec {
     a.nr = s.nr;
     a.squelch_db = s.squelch.then_some(s.squelch_db);
     a.agc = if s.agc {
-        let base = if s.mode == Mode::Am {
+        let base = if s.mode.is_am() {
             AgcSpec::am()
         } else {
             AgcSpec::ssb_at(s.agc_speed.into())
@@ -397,6 +397,7 @@ impl Session<'_> {
 
     fn publish(&self) {
         let p = UserPub {
+            name: Name::new(&self.st.name),
             hz: self.own_hz,
             mode: self.st.mode,
             channel: self.lease.channel(),
@@ -557,6 +558,11 @@ impl Session<'_> {
                 self.stop_listening();
                 vec![st(self)]
             }
+            ClientMsg::Name { name } => {
+                self.st.name = Name::new(&name).as_str().into();
+                self.publish();
+                vec![st(self)]
+            }
             ClientMsg::Spots { on: false } => {
                 self.spots = None;
                 vec![]
@@ -646,6 +652,7 @@ pub async fn run(
         wf: sh.full_view(hz),
         share: sh.live.borrow().limits.share_default,
         listen: None,
+        name: String::new(),
     };
     let spec = audio_spec(&st);
     sync_state(&mut st, &spec);
@@ -685,6 +692,7 @@ pub async fn run(
     let me = sh.users.join(
         id,
         UserPub {
+            name: Name::default(),
             hz: st.hz,
             mode: st.mode,
             channel: lease.channel(),
@@ -813,6 +821,7 @@ pub async fn run(
             }
             _ = tick.tick() => {
                 let hw = &sh.status;
+                let sys = crate::sysstat::current();
                 let mut r = vec![ServerMsg::Status {
                     adc_overloads: hw.overload_blocks.load(Ordering::Relaxed),
                     clock_ppm: hw.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
@@ -820,6 +829,8 @@ pub async fn run(
                         + placed.rx_dropped.load(Ordering::Relaxed).saturating_sub(rx_lost0),
                     wf_drops: wf_drops.load(Ordering::Relaxed),
                     hw_rate_ok: hw.rx_rate_ok.load(Ordering::Relaxed),
+                    cpu: sys.cpu.map(|c| f64::from(c).round()),
+                    temp_c: sys.temp_c.map(|t| (f64::from(t) * 10.0).round() / 10.0),
                 }];
                 let users = sh.users.marks(id);
                 if users_sent.as_ref() != Some(&users) {

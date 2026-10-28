@@ -14,12 +14,15 @@ export interface Passband {
   dial: number;
   lo: number;
   hi: number;
+  /** The user's name, drawn by the dial marker. */
+  name?: string;
 }
 
 /** Another user on the scale; `on`: the one listened along to. */
 export interface Marker {
   hz: number;
   on: boolean;
+  name?: string;
 }
 
 /** A skimmer on the scale: the range it decodes. */
@@ -101,6 +104,22 @@ export class Spectrum {
       for (let k = 0; k < l.levels.length; k++) this.avg![k] += 0.15 * (l.db0 + l.levels[k] * l.dbStep - this.avg![k]);
     }
     this.last = l;
+  }
+
+  /** A small label on a dark box with its top at `y`: starting at `x`,
+   * ending there (`left`), or centred on it. */
+  private tag(text: string, x: number, y: number, colour: string, dpr: number, left = false, centre = false): void {
+    const { ctx } = this;
+    ctx.font = `${11 * dpr}px system-ui, sans-serif`;
+    ctx.textBaseline = "top";
+    const tw = ctx.measureText(text).width;
+    const x0 = centre ? x - tw / 2 : left ? x - tw - 6 * dpr : x;
+    ctx.fillStyle = "rgba(11, 14, 22, 0.75)";
+    ctx.fillRect(x0 - 2 * dpr, y, tw + 4 * dpr, 14 * dpr);
+    ctx.fillStyle = colour;
+    ctx.fillText(text, x0, y + 2 * dpr);
+    ctx.textBaseline = "middle";
+    ctx.font = `${10 * dpr}px system-ui, sans-serif`;
   }
 
   draw(
@@ -212,7 +231,7 @@ export class Spectrum {
       ctx.textBaseline = "middle";
     }
 
-    // dial marker
+    // dial marker, the user's name beside it
     if (pb) {
       const xd = Math.round(x(pb.dial)) + 0.5;
       ctx.strokeStyle = "#ff5a5a";
@@ -221,6 +240,13 @@ export class Spectrum {
       ctx.moveTo(xd, 0);
       ctx.lineTo(xd, ph);
       ctx.stroke();
+      if (pb.name) this.tag(pb.name, xd + 3 * dpr, 2 * dpr, "#ff8a8a", dpr, xd > w - 80 * dpr);
+    }
+
+    // other users' names over their markers
+    for (const u of marks) {
+      const xx = x(u.hz);
+      if (u.name && xx >= 0 && xx <= w) this.tag(u.name, xx, 2 * dpr, u.on ? "#ffd25a" : "#5ad17a", dpr, false, true);
     }
 
     // frequency scale

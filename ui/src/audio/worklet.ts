@@ -2,7 +2,8 @@
 // AudioWorklet: plays the server's PCM through the pseudo-stereo filters
 // and the jitter buffer and resampler (one per ear, in lockstep: the same
 // pushes and pulls keep them identical). Messages in: {rate} once, then
-// Float32Array chunks; {stereo: taps or null} at any time.
+// Float32Array chunks (mono) or {left, right} (stereo from the server, past
+// the filters); {stereo: taps or null} at any time.
 // Messages out (5 Hz): ResamplerStats + playing.
 
 import { Resampler } from "./resampler.ts";
@@ -31,6 +32,10 @@ class PcmPlayer extends AudioWorkletProcessor {
         const [l, r] = this.fir.process(d);
         this.rs.push(l);
         this.rsR.push(r);
+      } else if (d?.left instanceof Float32Array) {
+        if (!this.rs || !this.rsR) return;
+        this.rs.push(d.left);
+        this.rsR.push(d.right);
       } else if (d && "stereo" in d) {
         this.fir.setTaps(d.stereo);
       } else if (typeof d?.rate === "number" && this.rs?.inRate !== d.rate) {
