@@ -1829,6 +1829,7 @@ name = "web888-iq"
 version = "0.3.1"
 dependencies = [
  "num-complex",
+ "rustfft",
  "soapysdr",
  "web888-dsp",
  "web888-radio",
