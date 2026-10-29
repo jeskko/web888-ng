@@ -170,7 +170,9 @@ one at a time at least 30 s apart, never the last. When the pressure has
 stayed below 0.1 for 2 minutes the last band shed resumes, then the next
 after another 2 minutes; a band shed again within 5 minutes of a resume
 doubles that hold (up to 30 minutes). Events `shed BAND`/`resume BAND`;
-metrics `skim_shed`, `skim_slots_shed_total`, `skim_slots_cut_total`.
+metrics `skim_shed`, `skim_slots_shed_total`, `skim_slots_cut_total`. On the unit (a5f872d, 16 clients on
+240 kHz views, 3 minutes) it shed 21, 24.9, 28, 18.1 and 14 MHz in that
+order, the bands with next to no decodes at night.
 
 ## 5. Spots
 

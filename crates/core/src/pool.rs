@@ -12,12 +12,13 @@
 //! (its session is gone); jobs aren't migrated when others leave, so new
 //! ones fill the lighter worker first.
 //!
-//! Load shedding: a worker using more than [`SHED_ABOVE`] of a second of
-//! CPU raises its shed level (jobs see it in [`Ctx`]; waterfalls halve
-//! their FFT budget per level, then their rate), and lowers it again below
-//! [`SHED_BELOW`]. Audio is never shed. CPU time, not wall time: with
-//! more busy threads than cores (hw, web, workers) a worker is preempted
-//! inside its rounds, and wall time would count that as its load.
+//! Load shedding: a worker busy more than [`SHED_ABOVE`] of a second
+//! raises its shed level (jobs see it in [`Ctx`]; waterfalls halve their
+//! FFT budget per level, then their rate), and lowers it again below
+//! [`SHED_BELOW`]. Audio is never shed. Busy is wall time, preemption
+//! included, on purpose: it is the contention that makes audio late. (By
+//! the workers' CPU time the views kept their rate with 16 clients on the
+//! unit, the box saturated and every client's audio broke up.)
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -54,7 +55,7 @@ const DEPTH: usize = 64;
 const WF_DEPTH: usize = 256;
 /// Longest time between ticks.
 pub const TICK: Duration = Duration::from_millis(10);
-/// CPU share of a second above which a worker sheds load, and below
+/// Busy share of a second above which a worker sheds load, and below
 /// which it stops.
 pub const SHED_ABOVE: f64 = 0.7;
 pub const SHED_BELOW: f64 = 0.4;
@@ -191,7 +192,7 @@ fn run(
     let mut jobs: Vec<Box<dyn Job>> = Vec::new();
     let mut ctx = Ctx::default();
     let mut window = Instant::now();
-    let mut cpu0 = thread_cpu();
+    let mut busy = Duration::ZERO;
     loop {
         loop {
             match new.try_recv() {
@@ -215,6 +216,7 @@ fn run(
         let now = Instant::now();
         jobs.retain_mut(|j| j.tick(now, ctx));
         let spent = t.elapsed();
+        busy += spent;
         load.busy_ns
             .fetch_add(spent.as_nanos() as u64, Ordering::Relaxed);
         if jobs.len() != before {
@@ -223,8 +225,7 @@ fn run(
         // shedding, judged once a second
         let span = now.duration_since(window);
         if span >= Duration::from_secs(1) {
-            let cpu = thread_cpu();
-            let f = (cpu - cpu0).as_secs_f64() / span.as_secs_f64();
+            let f = busy.as_secs_f64() / span.as_secs_f64();
             if f > SHED_ABOVE && ctx.shed < MAX_SHED {
                 ctx.shed += 1;
             } else if f < SHED_BELOW && ctx.shed > 0 {
@@ -232,7 +233,7 @@ fn run(
             }
             load.shed.store(ctx.shed, Ordering::Relaxed);
             window = now;
-            cpu0 = cpu;
+            busy = Duration::ZERO;
         }
     }
 }
