@@ -183,10 +183,10 @@ power line averaged.
   at most ~22 % of one core at 30 zoomed sessions, and the device has no
   room left for them (LUT 87.5 %, BRAM 56.5/60): not pursued. The web
   threads (43 % at 30 sessions) are the larger share. HPSDR from the tuner
-  is 12 kS/s resampled to 48 (±6 kHz of content). The bitstream meets
-  timing against the real clock (+0.22 ns) but not with the build's 0.4
-  ns guardband (WNS −0.316 ns, a FIR bank → DSP path): not releasable
-  yet.
+  is 12 kS/s resampled to 48 (±6 kHz of content). The bitstream run met
+  timing only against the real clock (+0.22 ns); since hw c9401b0 it
+  meets the build's 0.4 ns guardband too (WNS +0.058 ns, as the stock
+  HF build), not yet run on the unit.
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
