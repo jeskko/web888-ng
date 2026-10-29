@@ -582,22 +582,46 @@ impl Decoder {
         c
     }
 
-    /// Coherent Costas correlation at start sample `i0` (200 S/s): the
-    /// power of each sync symbol's correlation with its tone, summed.
-    fn sync_fine(&self, cd: &[C32], i0: i64) -> f32 {
-        self.sync_fine_df(cd, i0, None)[0]
+    /// Coherent Costas correlation (200 S/s): the power of each sync
+    /// symbol's correlation with its tone, summed, at `n` consecutive
+    /// start samples from `first`. Each
+    /// Costas symbol's correlation is one DFT bin of a 32-sample window,
+    /// so a step of the window updates it with a sliding DFT:
+    /// X(s + 1) = (X(s) - x(s) + x(s + 32)) e^(j 2 pi tone / 32).
+    fn sync_lags(&self, cd: &[C32], first: i64, n: usize) -> Vec<f32> {
+        let at = |i: i64| {
+            if i >= 0 && (i as usize) < cd.len() {
+                cd[i as usize]
+            } else {
+                C32::default()
+            }
+        };
+        let mut sum = vec![0f32; n];
+        for a in 0..3 {
+            for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+                let r = &self.tone_ref[tone as usize];
+                let step = r[1];
+                let start = first + (DS_NSPS * (36 * a + k)) as i64;
+                let mut x: C32 = (0..DS_NSPS)
+                    .map(|j| at(start + j as i64) * r[j].conj())
+                    .sum();
+                for (lag, s) in sum.iter_mut().enumerate() {
+                    if lag > 0 {
+                        let s0 = start + lag as i64 - 1;
+                        x = (x - at(s0) + at(s0 + DS_NSPS as i64)) * step;
+                    }
+                    *s += x.norm_sqr();
+                }
+            }
+        }
+        sum
     }
 
-    /// The same for each of the frequency offsets in `FINE_DF` (`Some`),
-    /// or just for none (`None`). An offset only rotates the products
-    /// within a symbol (a common phase per symbol doesn't change the
-    /// power), so a table of 32 rotations per offset does it.
-    fn sync_fine_df(
-        &self,
-        cd: &[C32],
-        i0: i64,
-        offsets: Option<&[[C32; DS_NSPS]; FINE_DF.len()]>,
-    ) -> [f32; FINE_DF.len()] {
+    /// The same at start sample `i0` for each of the frequency offsets in
+    /// `FINE_DF`. An offset only rotates the products within a symbol (a
+    /// common phase per symbol doesn't change the power), so a table of
+    /// 32 rotations per offset does it.
+    fn sync_fine_df(&self, cd: &[C32], i0: i64) -> [f32; FINE_DF.len()] {
         let mut sum = [0f32; FINE_DF.len()];
         let mut p = [C32::default(); DS_NSPS];
         for a in 0..3 {
@@ -611,13 +635,8 @@ impl Decoder {
                         C32::default()
                     };
                 }
-                match offsets {
-                    None => sum[0] += p.iter().sum::<C32>().norm_sqr(),
-                    Some(tw) => {
-                        for (s, t) in sum.iter_mut().zip(tw) {
-                            *s += p.iter().zip(t).map(|(a, b)| a * b).sum::<C32>().norm_sqr();
-                        }
-                    }
+                for (s, t) in sum.iter_mut().zip(&self.fine_tw) {
+                    *s += p.iter().zip(t).map(|(a, b)| a * b).sum::<C32>().norm_sqr();
                 }
             }
         }
@@ -667,17 +686,21 @@ impl Decoder {
         let mut f0 = c.freq;
         let mut cd = self.downsample(spectrum, f0);
         let nominal = ((c.dt + T0) * DS_RATE).round() as i64;
-        let mut i0 = nominal;
-        let mut best = 0.0;
-        for di in -10..=10 {
-            let s = self.sync_fine(&cd, nominal + di);
-            if s > best {
-                best = s;
-                i0 = nominal + di;
+        // The peak of sync over start samples first..first + len (the
+        // first of equal ones), and the values around it.
+        let peak = |v: &[f32], first: i64| {
+            let mut best = (first, 0f32);
+            for (k, &s) in v.iter().enumerate() {
+                if s > best.1 {
+                    best = (first + k as i64, s);
+                }
             }
-        }
+            best
+        };
+        let mut lags = (nominal - 11, self.sync_lags(&cd, nominal - 11, 23));
+        let (mut i0, mut best) = peak(&lags.1[1..22], nominal - 10);
         // Frequency in 0.5 Hz steps, then a parabola through the peak.
-        let fs = self.sync_fine_df(&cd, i0, Some(&self.fine_tw));
+        let fs = self.sync_fine_df(&cd, i0);
         let kb = (0..fs.len())
             .max_by(|&a, &b| fs[a].total_cmp(&fs[b]))
             .unwrap();
@@ -687,26 +710,19 @@ impl Decoder {
         }
         if df.abs() > 0.05 {
             f0 += df;
-            cd = self.downsample(spectrum, f0);
+            // A shift this small (under 3 Hz of a 62 Hz band) is a phase
+            // rotation of the samples: on the A9 an inverse FFT less.
+            rotate(&mut cd, -df / DS_RATE);
             let start = i0;
-            best = 0.0;
-            for di in -4..=4 {
-                let s = self.sync_fine(&cd, start + di);
-                if s > best {
-                    best = s;
-                    i0 = start + di;
-                }
-            }
+            lags = (start - 5, self.sync_lags(&cd, start - 5, 11));
+            (i0, best) = peak(&lags.1[1..10], start - 4);
         }
-        // Time to a fraction of a sample.
-        let p = parabola_peak(
-            self.sync_fine(&cd, i0 - 1),
-            best,
-            self.sync_fine(&cd, i0 + 1),
-        );
+        // Time to a fraction of a sample (the neighbours are in `lags`).
+        let near = |i: i64| lags.1[(i - lags.0) as usize];
+        let p = parabola_peak(near(i0 - 1), best, near(i0 + 1));
         let frac = p.clamp(-0.5, 0.5);
         if frac.abs() > 0.05 {
-            cd = self.downsample_shifted(spectrum, f0, frac / DS_RATE);
+            cd = delay(&cd, frac);
         }
 
         self.stats.sync += t.elapsed();
@@ -931,28 +947,40 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32) -> [f32; N] {
         while ks < 29 {
             let ns = nsym.min(29 - ks);
             let nt = 1usize << (3 * ns);
-            let mut s2 = vec![0f32; nt];
-            for (i, v) in s2.iter_mut().enumerate() {
-                let mut z = C32::default();
-                for j in 0..ns {
-                    let tone_bits = (i >> (3 * (ns - 1 - j))) & 7;
-                    z += cs[base + ks + j][FT8_GRAY[tone_bits] as usize];
+            // Squared magnitudes: the maxima are the same, and only the
+            // winners need a square root (512 of them for 3 symbols).
+            // The sums over the group's symbols for every tone sequence,
+            // the first symbol's tone in the top bits: built a symbol at a
+            // time, sharing the partial sums.
+            let mut z = [C32::default(); 512];
+            let mut len = 1;
+            for j in 0..ns {
+                let row = &cs[base + ks + j];
+                for i in (0..len).rev() {
+                    let p = z[i];
+                    for (t, &g) in FT8_GRAY.iter().enumerate() {
+                        z[i * 8 + t] = p + row[g as usize];
+                    }
                 }
-                *v = z.norm();
+                len *= 8;
+            }
+            let mut s2 = [0f32; 512];
+            for (v, z) in s2[..nt].iter_mut().zip(&z) {
+                *v = z.norm_sqr();
             }
             let nbits = 3 * ns;
             for ib in 0..nbits {
                 let mask = 1 << (nbits - 1 - ib);
-                let mut one = f32::MIN;
-                let mut zero = f32::MIN;
-                for (i, &v) in s2.iter().enumerate() {
+                let mut one = 0f32;
+                let mut zero = 0f32;
+                for (i, &v) in s2[..nt].iter().enumerate() {
                     if i & mask != 0 {
                         one = one.max(v);
                     } else {
                         zero = zero.max(v);
                     }
                 }
-                out[(29 * half + ks) * 3 + ib] = one - zero;
+                out[(29 * half + ks) * 3 + ib] = one.sqrt() - zero.sqrt();
             }
             ks += ns;
         }
@@ -966,6 +994,49 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32) -> [f32; N] {
         *v *= scale / sd;
     }
     out
+}
+
+/// Turn `v` by `cycles` per sample (a frequency shift).
+fn rotate(v: &mut [C32], cycles: f32) {
+    let step = 2.0 * std::f32::consts::PI * cycles;
+    let rot = C32::new(step.cos(), step.sin());
+    let mut ph = C32::new(1.0, 0.0);
+    for x in v.iter_mut() {
+        *x *= ph;
+        ph *= rot;
+    }
+}
+
+/// Samples at n + `frac` (|frac| <= 0.5) by an 8-tap windowed sinc. The
+/// signal is within a quarter of the sample rate (0..53 Hz at 200 S/s),
+/// where its error is far below the noise of a decodable signal.
+fn delay(v: &[C32], frac: f32) -> Vec<C32> {
+    use std::f32::consts::PI;
+    // taps for samples n - 3 ..= n + 4
+    let h: [f32; 8] = std::array::from_fn(|k| {
+        let t = frac - (k as f32 - 3.0);
+        let sinc = if t.abs() < 1e-6 {
+            1.0
+        } else {
+            (PI * t).sin() / (PI * t)
+        };
+        // Blackman over ±4 samples
+        let x = (t + 4.0) / 8.0;
+        let w = 0.42 - 0.5 * (2.0 * PI * x).cos() + 0.08 * (4.0 * PI * x).cos();
+        sinc * w
+    });
+    (0..v.len())
+        .map(|n| {
+            let mut acc = C32::default();
+            for (k, &hk) in h.iter().enumerate() {
+                let i = n as i64 + k as i64 - 3;
+                if i >= 0 && (i as usize) < v.len() {
+                    acc += v[i as usize] * hk;
+                }
+            }
+            acc
+        })
+        .collect()
 }
 
 /// Centred moving average of width `w`, averaging only over the samples
@@ -1087,6 +1158,25 @@ mod tests {
             let db = 10.0 * (before / after).log10();
             assert!(db > 30.0, "f0 {f0} dt {dt}: only {db:.1} dB");
         }
+    }
+
+    /// The fractional delay matches a tone's true samples, and the
+    /// rotation shifts it.
+    #[test]
+    fn delay_and_rotate_a_tone() {
+        let f = 40.0 / DS_RATE; // the top of the band, cycles per sample
+        let tone = |t: f32| C32::from_polar(1.0, 2.0 * std::f32::consts::PI * f * t);
+        let v: Vec<C32> = (0..200).map(|n| tone(n as f32)).collect();
+        for frac in [-0.5f32, -0.23, 0.31, 0.5] {
+            let d = delay(&v, frac);
+            for (n, &x) in d.iter().enumerate().take(190).skip(10) {
+                let e = (x - tone(n as f32 + frac)).norm();
+                assert!(e < 4e-3, "frac {frac} n {n}: error {e}");
+            }
+        }
+        let mut r = v.clone();
+        rotate(&mut r, -f);
+        assert!(r.iter().all(|x| (x - C32::new(1.0, 0.0)).norm() < 1e-3));
     }
 
     #[test]

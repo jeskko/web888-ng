@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The (174,91) LDPC code of FT8/FT4: systematic encoder and a
-//! sum-product (belief propagation) decoder.
+//! belief propagation decoder (normalised min-sum).
 //!
 //! Codeword bit 0 is the first bit sent. Bits 0..91 are the message and
 //! CRC (bit 90 of the `u128` word is codeword bit 0), bits 91..174 the
@@ -82,13 +82,17 @@ pub fn check(c: &Bits) -> usize {
         .count()
 }
 
+/// Scale of the min-sum check messages. Min-sum overstates them; 0.8
+/// decodes the corpus as sum-product did (doc/m4-skimmers.md §3.3) at
+/// half the A9's time (no tanh, atanh or divisions).
+const ALPHA: f32 = 0.8;
+
 /// Belief propagation decoder state; reusable between candidates.
 pub struct Bp {
     /// Each check's bits (0-based) and, for each, which of the bit's
     /// three checks it is.
     nm: [[(u8, u8); 7]; M],
     tov: [[f32; 3]; N],
-    toc: [[f32; 7]; M],
 }
 
 impl Default for Bp {
@@ -104,7 +108,6 @@ impl Default for Bp {
         Bp {
             nm,
             tov: [[0.0; 3]; N],
-            toc: [[0.0; 7]; M],
         }
     }
 }
@@ -119,7 +122,9 @@ pub struct Decoded {
 
 impl Bp {
     /// Decode `llr` with up to `max_iter` iterations. The result is a
-    /// codeword when `errors == 0`.
+    /// codeword when `errors == 0`. As in WSJT-X, it gives up when the
+    /// failed checks haven't decreased for 5 iterations, after 10 and
+    /// with more than 15 failing: such a candidate rarely converges.
     pub fn decode(&mut self, llr: &[f32; N], max_iter: usize) -> Decoded {
         for t in self.tov.iter_mut() {
             *t = [0.0; 3];
@@ -130,12 +135,15 @@ impl Bp {
             iterations: 0,
         };
         let mut zn = *llr;
+        let (mut last, mut stalled) = (M, 0);
         for iter in 0..=max_iter {
             let mut c = [0u64; 3];
             for (n, &z) in zn.iter().enumerate() {
                 set(&mut c, n, z > 0.0);
             }
             let errors = check(&c);
+            stalled = if errors < last { 0 } else { stalled + 1 };
+            last = errors;
             if errors < best.errors {
                 best = Decoded {
                     codeword: c,
@@ -146,32 +154,39 @@ impl Bp {
                     break;
                 }
             }
-            if iter == max_iter {
+            if iter == max_iter || (stalled >= 5 && iter >= 10 && errors > 15) {
                 break;
             }
-            // Bits to checks: everything the bit knows except what this
-            // check told it.
-            for (m, &w) in NUM_ROWS.iter().enumerate() {
-                for i in 0..w as usize {
-                    let (n, k) = self.nm[m][i];
-                    let t = zn[n as usize] - self.tov[n as usize][k as usize];
-                    self.toc[m][i] = fast_tanh(-t / 2.0);
-                }
-            }
-            // Checks to bits: the product of the others' tanh terms.
+            // Each check tells each of its bits what the others say: the
+            // smallest of their magnitudes, and the sign that makes the
+            // check hold. LLRs are ln(P1 / P0), so an even number of ones
+            // is the product of the others' signs times (-1)^(w - 1).
             for (m, &w) in NUM_ROWS.iter().enumerate() {
                 let w = w as usize;
-                let row = &self.toc[m];
-                // Products of all but one, from prefix and suffix products.
-                let mut fwd = [1.0f32; 8];
-                for i in 0..w {
-                    fwd[i + 1] = fwd[i] * row[i];
-                }
-                let mut bwd = 1.0f32;
-                for i in (0..w).rev() {
+                // Bits to the check: everything a bit knows except what
+                // this check told it.
+                let mut v = [0f32; 7];
+                let mut sign = if w % 2 == 1 { -1.0f32 } else { 1.0 };
+                let (mut min1, mut min2, mut imin) = (f32::MAX, f32::MAX, 0);
+                for (i, vi) in v[..w].iter_mut().enumerate() {
                     let (n, k) = self.nm[m][i];
-                    self.tov[n as usize][k as usize] = -2.0 * atanh_clamped(fwd[i] * bwd);
-                    bwd *= row[i];
+                    let t = zn[n as usize] - self.tov[n as usize][k as usize];
+                    *vi = t;
+                    if t < 0.0 {
+                        sign = -sign;
+                    }
+                    let a = t.abs();
+                    if a < min1 {
+                        (min2, min1, imin) = (min1, a, i);
+                    } else if a < min2 {
+                        min2 = a;
+                    }
+                }
+                for (i, &t) in v[..w].iter().enumerate() {
+                    let (n, k) = self.nm[m][i];
+                    let mag = if i == imin { min2 } else { min1 };
+                    let s = if t < 0.0 { -sign } else { sign };
+                    self.tov[n as usize][k as usize] = ALPHA * s * mag;
                 }
             }
             for n in 0..N {
@@ -180,26 +195,6 @@ impl Bp {
         }
         best
     }
-}
-
-/// tanh by a Padé approximant (error < 2e-2, exact at 0 and in the
-/// limits), as in ft8_lib: libm's is slow on the Cortex-A9.
-fn fast_tanh(x: f32) -> f32 {
-    if x < -4.97 {
-        return -1.0;
-    }
-    if x > 4.97 {
-        return 1.0;
-    }
-    let x2 = x * x;
-    x * (27.0 + x2) / (27.0 + 9.0 * x2)
-}
-
-/// atanh by a Padé approximant, with the ends clamped.
-fn atanh_clamped(x: f32) -> f32 {
-    let x = x.clamp(-0.999_9, 0.999_9);
-    let x2 = x * x;
-    x * (945.0 - 735.0 * x2 + 64.0 * x2 * x2) / (945.0 - 1050.0 * x2 + 225.0 * x2 * x2)
 }
 
 #[cfg(test)]

@@ -123,6 +123,7 @@ The scores go in this doc at each improvement step.
 | 2026-10-23 | first decoder (30 slots of 40 m, tuning set) | 77.7 % | – | 0.56 |
 | 2026-10-23 | subtracted positions retried, LLR scale 5.5, sub-sample timing, OSD order 2 (60) with a plausibility filter | 86.8 %, 30 extra | 90.1 %, 12 extra | 0.7 |
 | 2026-10-23 | OSD by CRC syndromes (orders 2 and 3 over all 91 bits), acceptance by distance ratio to the runner-up; subtraction in the frequency domain | 91.3 %, 54 extra | 92.3 %, 17 extra | 0.25 |
+| 2026-10-29 | for the A9's time: soft bits from squared magnitudes and shared partial sums, the fine time search by a sliding DFT, the frequency step as a rotation and the sub-sample step as an 8-tap fractional delay (one inverse FFT per candidate, not three), min-sum BP (0.8) with WSJT-X's early stop | 91.1 %, 56 extra (FT4 unchanged: 89.3 %) | – | 0.10; A9 3.4 s/slot (5.0 before) |
 
 OSD at that depth meets about 8 chance CRC-valid codewords per call. A
 real decode is much closer to the received bits than the runner-up (median
