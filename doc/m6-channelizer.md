@@ -191,6 +191,17 @@ then, and steady audio at 17 sessions. From 12 sessions the pool sheds
 the views' rate (16: 11-14 lines/s) and the audio stays whole. The cost
 is the skimmers' (SCHED_IDLE): 60-130 FT8 decodes a slot before, 20-104
 during the runs and six of about 25 slots with none.
+
+Again with the skimmers shedding bands (fd24d3b, `doc/m4-skimmers.md`
+§4), 16 clients for 3 minutes: audio 11 980-12 021 S/s, 10-14 gaps a
+client, views 10-11 lines/s; the decoders shed 14, 18, 21 and 24.9 MHz
+and kept the six busy bands (about 65 % of a core). (The pool shedding
+by its workers' CPU time instead of wall time, tried in a5f872d: views
+at 20 lines/s, the box saturated, 35-120 gaps a client: reverted.)
+32 clients for a minute: 31 got a receiver (the skimmers yielded theirs,
+`skimmers_yield`), audio 11 600-11 750 S/s with 13-21 gaps, views
+1.8-4.6 lines/s, the CPU 152 % of 200 % (web thread 45 %): the service
+stayed up.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed
