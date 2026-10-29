@@ -242,6 +242,11 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         if self.pfb.is_some() && r2 != TUNER_R2 {
             return Err(Error::Unsupported("the bins tuner runs at 12 kS/s (r2 40)"));
         }
+        if self.pfb.is_some() && r2 == self.r2 {
+            // running at its one rate already: a restart could split a
+            // frame (the tuner's ring has no headers to realign on)
+            return Ok(());
+        }
         if !(5..=40).contains(&r2) {
             return Err(Error::InvalidParam("r2 out of range"));
         }

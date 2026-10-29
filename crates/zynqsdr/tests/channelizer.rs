@@ -188,8 +188,11 @@ fn the_tuner_is_the_rx() {
     let mut r = ZynqsdrRadio::new(dev, ZynqConfig::default()).unwrap();
     let c = r.caps();
     assert_eq!((c.rx_channels, c.rx_r2.clone()), (32, 40..=40));
-    // started at 12 kS/s; other rates refused
-    assert!(r.device().sets.contains(&(RX_START, 40)));
+    // started at 12 kS/s once (a restart could split a frame); other rates
+    // refused
+    r.set_rx_rate(40).unwrap();
+    let starts = r.device().sets.iter().filter(|s| s.0 == RX_START).count();
+    assert_eq!(starts, 1);
     assert!(matches!(r.set_rx_rate(10), Err(Error::Unsupported(_))));
     r.tune_rx(5, 7.074e6).unwrap();
     let w = r.device().rx_params[0];
