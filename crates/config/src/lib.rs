@@ -178,6 +178,11 @@ pub struct Radio {
     pub bitstream: String,
     /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock (Hz).
     pub si5351_adc: Option<f64>,
+    /// RX channels from a channelizer's bins (`doc/m6-channelizer.md`):
+    /// how many. Backend iq: runs its software bank; zynqsdr: needs the
+    /// channelizer bitstream (`bitstream = "/usr/share/web888/websdr_pfb.bit"`)
+    /// and uses 32 when not set. The waterfall stays the backend's.
+    pub bins: Option<usize>,
     /// Backend sim: the simulated scene.
     pub sim: Sim,
     /// Backend iq: the wideband IQ input.
@@ -190,6 +195,7 @@ impl Default for Radio {
             backend: Backend::default(),
             bitstream: "auto".into(),
             si5351_adc: None,
+            bins: None,
             sim: Sim::default(),
             iq: Iq::default(),
         }

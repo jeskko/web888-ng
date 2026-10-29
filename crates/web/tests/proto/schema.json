@@ -10,6 +10,7 @@
         "backend": "zynqsdr",
         "bitstream": "auto",
         "si5351_adc": null,
+        "bins": null,
         "sim": {
           "tones": [],
           "noise": false
@@ -150,6 +151,16 @@
             "null"
           ],
           "format": "double",
+          "default": null
+        },
+        "bins": {
+          "description": "RX channels from a channelizer's bins (`doc/m6-channelizer.md`):\nhow many. Backend iq: runs its software bank; zynqsdr: needs the\nchannelizer bitstream (`bitstream = \"/usr/share/web888/websdr_pfb.bit\"`)\nand uses 32 when not set. The waterfall stays the backend's.",
+          "type": [
+            "integer",
+            "null"
+          ],
+          "format": "uint",
+          "minimum": 0,
           "default": null
         },
         "sim": {

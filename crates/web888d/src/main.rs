@@ -92,6 +92,10 @@ struct ServeArgs {
     /// frequency before loading the bitstream. Default: keep the FSBL setting.
     #[arg(long)]
     si5351_adc: Option<f64>,
+    /// RX channels from the channelizer's bins: how many (backend iq: its
+    /// software bank; zynqsdr: the channelizer bitstream, 32 by default).
+    #[arg(long)]
+    bins: Option<usize>,
     /// HPSDR Protocol 1 listen address [0.0.0.0:1024].
     #[arg(long)]
     hpsdr: Option<String>,
@@ -177,6 +181,9 @@ impl ServeArgs {
         set(&mut r.bitstream, &self.bitstream);
         if self.si5351_adc.is_some() {
             r.si5351_adc = self.si5351_adc;
+        }
+        if self.bins.is_some() {
+            r.bins = self.bins;
         }
         if !self.tones.is_empty() {
             r.sim.tones = self.tones.iter().map(|&(f, l)| [f, l]).collect();
@@ -283,7 +290,7 @@ fn parse_gain(s: &str) -> std::result::Result<(String, f64), String> {
     Ok((n.to_string(), g.parse().map_err(|e| format!("{e}"))?))
 }
 
-fn open_iq(a: &web888_config::Iq) -> AnyResult<Box<dyn Radio>> {
+fn open_iq(a: &web888_config::Iq, bins: Option<usize>) -> AnyResult<Box<dyn Radio>> {
     use web888_iq::source::{FileSource, Format, IqSource};
     use web888_iq::{IqConfig, IqRadio};
     let spec = a
@@ -293,7 +300,8 @@ fn open_iq(a: &web888_config::Iq) -> AnyResult<Box<dyn Radio>> {
     let fc = a
         .freq
         .ok_or("backend iq needs --iq-freq, the input centre frequency ([radio.iq] freq)")?;
-    let cfg = IqConfig::new(fc, a.rate);
+    let mut cfg = IqConfig::new(fc, a.rate);
+    cfg.bins = bins.is_some();
     let src: Box<dyn IqSource> = if let Some(p) = spec.strip_prefix("file:") {
         let path = std::path::Path::new(p);
         let fmt = Format::from_path(path).ok_or("IQ file: use extension .cs8, .cs16 or .cf32")?;
@@ -310,7 +318,14 @@ fn open_iq(a: &web888_config::Iq) -> AnyResult<Box<dyn Radio>> {
         (fc - 0.45 * a.rate) / 1e6,
         (fc + 0.45 * a.rate) / 1e6
     );
-    Ok(Box::new(IqRadio::new(cfg, src)?))
+    let radio = IqRadio::new(cfg, src)?;
+    match bins {
+        Some(n) => {
+            eprintln!("bins: {n} RX channels from the software bank's 30 kHz bins");
+            Ok(Box::new(web888_dsp::binrx::BinRx::new(radio, n)?))
+        }
+        None => Ok(Box::new(radio)),
+    }
 }
 
 #[cfg(feature = "soapy")]
@@ -604,7 +619,7 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
                 Pacing::RealTime,
             ))))
         }
-        Backend::Iq => open_iq(&a.iq),
+        Backend::Iq => open_iq(&a.iq, a.bins),
         Backend::Zynqsdr => {
             use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev, si5351};
             let mut cfg = ZynqConfig::default();
@@ -650,7 +665,17 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
             }
             let dev = ZynqsdrDev::open(ZynqsdrDev::PATH)
                 .map_err(|e| format!("{}: {e} (is the stock server running?)", ZynqsdrDev::PATH))?;
-            Ok(Box::new(ZynqsdrRadio::new(dev, cfg)?))
+            let radio = ZynqsdrRadio::new(dev, cfg)?;
+            let sig = radio.identity().signature;
+            if web888_zynqsdr::is_channelizer(sig) {
+                let n = a.bins.unwrap_or(32);
+                eprintln!("bins: {n} RX channels from the channelizer bitstream");
+                Ok(Box::new(web888_dsp::binrx::BinRx::new(radio, n)?))
+            } else if a.bins.is_some() {
+                Err(format!("bins: needs the channelizer bitstream (signature 0x{sig:08x})").into())
+            } else {
+                Ok(Box::new(radio))
+            }
         }
     }
 }

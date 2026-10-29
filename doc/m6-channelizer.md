@@ -56,6 +56,21 @@ the input's band instead of 0–61 MHz.
 
 ## 3. Users, skimmers, HPSDR on bins
 
+**First step taken (2026-10-29): bins behind the `Radio` trait.**
+`web888_dsp::binrx::BinRx` wraps any `BinRadio` as a radio with N
+*virtual* RX channels (`[radio] bins = N`, `--bins N`; automatic with the
+channelizer bitstream, 32 then). A tuned channel takes the bin its
+frequency falls in (refcounted: the selection is the bins in use), is
+shifted from the bin centre to 0 Hz and resampled from 60 kS/s to the RX
+rate (8/r2: 4/5 at r2 10, polyphase, 70 dB, one phase schedule for all
+channels so RX frames stay whole). The hw thread, the lease manager, the
+web sessions, the skimmers and HPSDR run unchanged; the channel count is
+a setting, not the bitstream's. Against an RX channel on the same
+recording (`crates/iq/examples/binscompare.rs`): coherence 1.00000, the
+residual −74.5 dB within ±3 kHz (−66 dB within ±12 kHz), the level
+within 0.15 dB. The plan below (each user's `AudioChain` straight at
+60 kS/s, no resampler) remains the way to save the resampler's CPU.
+
 * **Leases**: a receiver is a dial and a passband; it needs the bin its
   passband sits in (the nearest centre: the channel is within ±15 kHz of
   it, flat to ±21 kHz). Bins are refcounted; the selection is the bins
@@ -87,7 +102,7 @@ the input's band instead of 0–61 MHz.
 |---|---|---|
 | 1 | the bin-source trait; the iq backend's bank behind it | unit tests: a tone in the right bin at the right level, selection switching by gen, the power line equal to the bins' summed power |
 | 2 | the iq backend in bins mode (`--backend iq --bins`): the hw thread reads frames and fans them out | a bench: frames per second, CPU, on a recording. **Bank side done**: `IqConfig::bins`, `BinRadio for IqRadio`; `examples/binsbench`: 4.0x real time at 7.68 MS/s on the workstation (0 bins), 3.2x with 64 selected and power lines (one core; the bank's branch sums dominate) |
-| 3 | bin leases; users and skimmers on `PfbChannel` | the M3 load test (13 sessions) on bins; skimmer decodes on a recording as many as on RX channels |
+| 3 | bin leases; users and skimmers on `PfbChannel` | the M3 load test (13 sessions) on bins; skimmer decodes on a recording as many as on RX channels. **First form done** (§3: `BinRx`, virtual RX channels from bins; the bins channel equals the RX channel to −74.5 dB within ±3 kHz). The load test is next |
 | 4 | waterfall from the power line and per-bin zoom | browser check; zoomed view seamless across bin edges |
 | 5 | HPSDR at 48 kS/s from bins | `p1probe` against the server |
 | 6 | the channelizer bitstream's driver (`/dev/mem` + a reserved DMA window, or a small kernel module) | on the test unit (`hw/docs/channelizer.md` §5). **Driver side done** (2026-10-29): the open `web888-sdr` driver's `ZSDR_PFB_*` ioctls (the units now run it under web888-ng-os, so the driver allocates the rings itself), `BinRadio` for `ZynqsdrRadio` with the channelizer signature (`crates/zynqsdr/src/pfb.rs`: the ring parsers; tests against a fake driver). Not yet on hardware |

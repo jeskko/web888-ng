@@ -4,6 +4,7 @@
 
 pub mod agc;
 pub mod audio;
+pub mod binrx;
 pub mod chan;
 pub mod decim;
 pub mod demod;

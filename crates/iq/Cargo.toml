@@ -15,3 +15,6 @@ web888-radio.workspace = true
 web888-dsp.workspace = true
 num-complex.workspace = true
 soapysdr = { version = "0.5.1", optional = true }
+
+[dev-dependencies]
+rustfft.workspace = true
