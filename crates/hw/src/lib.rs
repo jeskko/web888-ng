@@ -383,6 +383,11 @@ impl HwLoop {
         let mut frames = 0u64;
         let mut last_report = Instant::now();
         let mut fe = FrontEnd::default();
+        // the board as `fe` says from the start (attenuator, RF path, ADC
+        // clock source): GPIOs left by another program stay otherwise (on
+        // the external clock input without a reference, the ADC runs at
+        // ~188 MHz)
+        self.radio.front_end(fe)?;
         let mut rate = RateMonitor::new(Duration::from_secs(10));
         let mut last_stats = self.radio.hw_stats()?;
         self.status.rx_rate_ok.store(true, Ordering::Relaxed);
