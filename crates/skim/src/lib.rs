@@ -10,13 +10,17 @@
 //! first, and of those due together the band that cost least last time.
 //! When the slots waiting need more time than the decoders have before
 //! the deadline, each gets a share of it in proportion to what its band
-//! cost last time, so the busy bands keep more of their decodes. [`Skimmers`] starts and stops bands as
-//! the config and the hours of the day say.
+//! cost last time, so the busy bands keep more of their decodes. When
+//! they keep running out of time anyway (the CPU goes to listeners), the
+//! bands with the fewest recent decodes are shed one by one ([`shed`]).
+//! [`Skimmers`] starts and stops bands as the config and the hours of the
+//! day say.
 
 pub mod events;
 pub mod gpsd;
 pub mod mqtt;
 pub mod pskreporter;
+pub mod shed;
 pub mod slots;
 pub mod spot;
 pub mod syslog;
@@ -34,7 +38,7 @@ use std::time::{Duration, Instant, SystemTime};
 use usb::{AUDIO_RATE, OFFSET_HZ, UsbAudio};
 use web888_config::{SkimMode, Skimmer};
 use web888_core::leases::{Channels, Class, Lease};
-use web888_core::pool::{DspPool, Job};
+use web888_core::pool::{DspPool, Job, thread_cpu};
 use web888_radio::RxBlock;
 
 /// A mode's slot length, how much of it to collect before decoding, and
@@ -95,7 +99,26 @@ pub struct BandStatus {
     pub last_slot: AtomicU64,
     /// Channel granted (0 = waiting).
     pub granted: AtomicBool,
+    /// Not decoded for now (load shedding), and the slots it skipped.
+    pub shed: AtomicBool,
+    pub shed_slots: AtomicU64,
+    /// Decodes a minute, recently (f64 bits; an average over the last
+    /// few slots).
+    recent: AtomicU64,
 }
+
+impl BandStatus {
+    pub fn recent(&self) -> f64 {
+        f64::from_bits(self.recent.load(Ordering::Relaxed))
+    }
+
+    pub fn set_recent(&self, v: f64) {
+        self.recent.store(v.to_bits(), Ordering::Relaxed);
+    }
+}
+
+/// Weight of a slot in a band's recent decode rate.
+const RECENT_ALPHA: f64 = 0.25;
 
 /// A band: its config and status.
 pub struct Band {
@@ -119,11 +142,25 @@ impl Work {
     }
 }
 
-/// Slots waiting for a decoder thread.
+/// Slots waiting for a decoder thread, and the load shedding.
 #[derive(Default)]
 struct Queue {
     work: Mutex<VecDeque<Work>>,
     ready: Condvar,
+    shedder: Mutex<shed::Shedder>,
+}
+
+impl Queue {
+    /// A slot decoded (`cut`: short of time) or dropped.
+    fn observe(&self, cut: bool) {
+        let change = self.shedder.lock().unwrap().observe(cut, Instant::now());
+        let msg = match change {
+            Some(shed::Change::Shed(b)) => format!("shed {b}: the decoders are short of time"),
+            Some(shed::Change::Resumed(b)) => format!("resume {b}"),
+            None => return,
+        };
+        events::emit(events::Level::Notice, "skim", msg);
+    }
 }
 
 /// How long the first slot of a boundary waits for the other bands'.
@@ -222,9 +259,15 @@ impl Job for BandJob {
             |t| clock.frame(t).map(|f| (f - base) / r),
         );
         for s in slots {
+            if self.band.status.shed.load(Ordering::Relaxed) {
+                self.band.status.shed_slots.fetch_add(1, Ordering::Relaxed);
+                continue;
+            }
             let mut q = self.queue.work.lock().unwrap();
             if q.len() >= MAX_QUEUED || q.iter().any(|w| Arc::ptr_eq(&w.band, &self.band)) {
                 self.band.status.dropped.fetch_add(1, Ordering::Relaxed);
+                drop(q);
+                self.queue.observe(true);
                 continue;
             }
             q.push_back(Work {
@@ -242,16 +285,6 @@ impl Job for BandJob {
     fn tick(&mut self, _now: Instant, _ctx: web888_core::pool::Ctx) -> bool {
         !self.stop.load(Ordering::Relaxed)
     }
-}
-
-fn thread_cpu() -> Duration {
-    let mut t = libc::timespec {
-        tv_sec: 0,
-        tv_nsec: 0,
-    };
-    // SAFETY: plain syscall writing into `t`.
-    unsafe { libc::clock_gettime(libc::CLOCK_THREAD_CPUTIME_ID, &mut t) };
-    Duration::new(t.tv_sec as u64, t.tv_nsec as u32)
 }
 
 /// Run this thread only when nothing else wants the CPU.
@@ -373,6 +406,14 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         st.last_cut.store(cut > 0, Ordering::Relaxed);
         st.last_slot.store(w.start as u64, Ordering::Relaxed);
         st.spots.fetch_add(ds.len() as u64, Ordering::Relaxed);
+        let rate = ds.len() as f64 * 60.0 / timing(w.band.cfg.mode).period;
+        let r = if st.slots.load(Ordering::Relaxed) == 1 {
+            rate
+        } else {
+            st.recent() + RECENT_ALPHA * (rate - st.recent())
+        };
+        st.set_recent(r);
+        queue.observe(cut > 0);
         if std::env::var_os("WEB888_SKIM_DEBUG").is_some() {
             eprintln!(
                 "skim: {} slot {}: {} decodes, {:.0} ms CPU, {} queued",
@@ -489,6 +530,7 @@ impl Skimmers {
             }));
             running.push(Running { band, stop });
         }
+        self.queue.shedder.lock().unwrap().bands = running.iter().map(|r| r.band.clone()).collect();
     }
 
     /// The bands running now.

@@ -628,6 +628,9 @@ async fn skimmers(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
                 v["spots"] = json!(n(&st.spots));
                 v["cut_short"] = json!(n(&st.cut_short));
                 v["dropped"] = json!(n(&st.dropped));
+                v["shed"] = json!(st.shed.load(Ordering::Relaxed));
+                v["shed_slots"] = json!(n(&st.shed_slots));
+                v["recent_per_min"] = json!(st.recent());
                 v["cpu_s"] = json!(n(&st.cpu_us) as f64 / 1e6);
                 v["cpu_per_slot_s"] = json!(n(&st.cpu_us) as f64 / 1e6 / slots.max(1) as f64);
                 v["last_slot"] = json!(Some(n(&st.last_slot)).filter(|&t| t > 0));
@@ -840,6 +843,24 @@ async fn metrics(State(sh): State<Arc<Shared>>) -> Response {
             "counter",
             "Slots dropped: the decoders were behind.",
             &per(&|s| n(&s.dropped)),
+        );
+        put(
+            "skim_slots_cut_total",
+            "counter",
+            "Slots whose decoding the deadline cut short.",
+            &per(&|s| n(&s.cut_short)),
+        );
+        put(
+            "skim_slots_shed_total",
+            "counter",
+            "Slots not decoded: the band was shed (the decoders short of time).",
+            &per(&|s| n(&s.shed_slots)),
+        );
+        put(
+            "skim_shed",
+            "gauge",
+            "The band is shed for now (1).",
+            &per(&|s| s.shed.load(Ordering::Relaxed) as u8 as f64),
         );
         put(
             "skim_cpu_seconds_total",

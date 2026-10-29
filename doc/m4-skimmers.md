@@ -158,6 +158,20 @@ The rest stays in /data.
   band; a band that hasn't produced a slot in 5 minutes is restarted and
   logged.
 
+**Load shedding (2026-10-30).** The decoder threads run at
+`SCHED_IDLE`, so listeners always come first; with many of them the
+decoders get too little time and every band decodes poorly (on the unit
+with 16 clients on 240 kHz views: 20-104 decodes a slot instead of
+60-130, some slots with none). `skim::shed` makes that tidier: a
+running pressure (each slot decoded cut short, or dropped, counts 1,
+others 0; weight 0.2) above 0.5 sheds the band with the fewest decodes
+a minute recently (its slots aren't decoded; its channel keeps running),
+one at a time at least 30 s apart, never the last. When the pressure has
+stayed below 0.1 for 2 minutes the last band shed resumes, then the next
+after another 2 minutes; a band shed again within 5 minutes of a resume
+doubles that hold (up to 30 minutes). Events `shed BAND`/`resume BAND`;
+metrics `skim_shed`, `skim_slots_shed_total`, `skim_slots_cut_total`.
+
 ## 5. Spots
 
 * `Spot { time, mode, dial_hz, freq_hz, snr_db, dt_s, drift (WSPR),
