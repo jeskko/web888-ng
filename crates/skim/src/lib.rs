@@ -6,7 +6,10 @@
 //! pool, which turns its channel into USB audio and cuts it into UTC
 //! slots. Slots go to decoder threads at idle priority, which share the
 //! time until the next slot between the bands waiting, and publish what
-//! they decode on the [`SpotBus`]. [`Skimmers`] starts and stops bands as
+//! they decode on the [`SpotBus`]. The slots of one boundary are gathered
+//! first; the earliest deadline goes first, and of those due together the
+//! band that cost least last time, so the quiet bands are done quickly
+//! and the busy ones have the time left. [`Skimmers`] starts and stops bands as
 //! the config and the hours of the day say.
 
 pub mod events;
@@ -82,8 +85,9 @@ pub struct BandStatus {
     pub cut_short: AtomicU64,
     /// Slots dropped because the decoders were behind.
     pub dropped: AtomicU64,
-    /// Decoder CPU time, microseconds.
+    /// Decoder CPU time, microseconds: in all, and of the last slot.
     pub cpu_us: AtomicU64,
+    pub last_cpu_us: AtomicU64,
     /// Slot start (UTC seconds) of the last slot decoded.
     pub last_slot: AtomicU64,
     /// Channel granted (0 = waiting).
@@ -103,13 +107,32 @@ struct Work {
     start: f64,
     audio: Vec<f32>,
     live: bool,
+    queued: Instant,
+}
+
+impl Work {
+    fn deadline(&self) -> f64 {
+        self.start + timing(self.band.cfg.mode).done_by
+    }
 }
 
 /// Slots waiting for a decoder thread.
-#[derive(Default)]
 struct Queue {
     work: Mutex<VecDeque<Work>>,
     ready: Condvar,
+    /// Slots allowed to wait.
+    cap: usize,
+}
+
+/// How long the first slot of a boundary waits for the other bands'.
+const GATHER: Duration = Duration::from_millis(250);
+
+/// The slot to decode next, of (deadline, last CPU) keys: the earliest
+/// deadline, then the cheapest band.
+fn pick(keys: impl Iterator<Item = (f64, u64)>) -> Option<usize> {
+    keys.enumerate()
+        .min_by(|(_, a), (_, b)| a.0.total_cmp(&b.0).then(a.1.cmp(&b.1)))
+        .map(|(k, _)| k)
 }
 
 /// The pool job of one band.
@@ -174,7 +197,7 @@ impl Job for BandJob {
         );
         for s in slots {
             let mut q = self.queue.work.lock().unwrap();
-            if q.len() >= MAX_QUEUED {
+            if q.len() >= self.queue.cap {
                 self.band.status.dropped.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
@@ -183,6 +206,7 @@ impl Job for BandJob {
                 start: s.start,
                 audio: s.audio,
                 live: self.live,
+                queued: Instant::now(),
             });
             self.queue.ready.notify_one();
         }
@@ -243,10 +267,22 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         let (w, waiting) = {
             let mut q = queue.work.lock().unwrap();
             loop {
-                if let Some(w) = q.pop_front() {
-                    break (w, q.len());
+                let Some(first) = q.iter().map(|w| w.queued).min() else {
+                    q = queue.ready.wait(q).unwrap();
+                    continue;
+                };
+                let wait = GATHER.saturating_sub(first.elapsed());
+                if !wait.is_zero() {
+                    q = queue.ready.wait_timeout(q, wait).unwrap().0;
+                    continue;
                 }
-                q = queue.ready.wait(q).unwrap();
+                let keys = q.iter().map(|w| {
+                    let cost = w.band.status.last_cpu_us.load(Ordering::Relaxed);
+                    (w.deadline(), cost)
+                });
+                let k = pick(keys).expect("not empty");
+                let w = q.remove(k).expect("in range");
+                break (w, q.len());
             }
         };
         let st = &w.band.status;
@@ -303,8 +339,9 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
                 })
                 .collect(),
         };
-        st.cpu_us
-            .fetch_add((thread_cpu() - cpu0).as_micros() as u64, Ordering::Relaxed);
+        let cpu = (thread_cpu() - cpu0).as_micros() as u64;
+        st.cpu_us.fetch_add(cpu, Ordering::Relaxed);
+        st.last_cpu_us.store(cpu, Ordering::Relaxed);
         st.slots.fetch_add(1, Ordering::Relaxed);
         st.cut_short.fetch_add(
             ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short - cut0,
@@ -353,7 +390,11 @@ impl Skimmers {
         live: bool,
         threads: usize,
     ) -> std::io::Result<Arc<Self>> {
-        let queue = Arc::new(Queue::default());
+        let queue = Arc::new(Queue {
+            work: Mutex::new(VecDeque::new()),
+            ready: Condvar::new(),
+            cap: MAX_QUEUED * threads.max(1),
+        });
         let bus = SpotBus::new(10_000);
         for k in 0..threads.max(1) {
             let (q, b) = (queue.clone(), bus.clone());
@@ -446,5 +487,19 @@ impl Drop for Skimmers {
         for r in self.running.lock().unwrap().iter() {
             r.stop.store(true, Ordering::Relaxed);
         }
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn earliest_deadline_then_cheapest_band() {
+        // FT8 slots due at 28.5 s, an FT4 one due at 13.8 s
+        let keys = [(28.5, 5_000_000), (28.5, 500_000), (13.8, 900_000)];
+        assert_eq!(pick(keys.into_iter()), Some(2));
+        assert_eq!(pick(keys[..2].iter().copied()), Some(1));
+        assert_eq!(pick(std::iter::empty()), None);
     }
 }
