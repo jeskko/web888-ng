@@ -172,6 +172,25 @@ consumers reading the runs. Two steps:
    33 bins (960 kHz) are, the wider ones draw the power line. Each group
    is read for at least one hw read (300 frames), so a wide view costs
    about 0.1 % of a core a bin on the hw thread.
+
+**Load test on the unit (2026-10-30, 6c3c8fd).** `webload --views
+distinct --zoom 512`: N sessions, each its own USB receiver (dials 25
+kHz apart on 40 m) and its own 240 kHz view, the ten FT8 skimmers
+running, the owner listening as one more session:
+
+| sessions | audio S/s | gaps a session | wf lines/s | hw / pool / web / skim (% of a core) |
+|---|---|---|---|---|
+| 8 | 11 981-12 038 | 0-1 | 20 | 29 / 88 / 26 / 55 |
+| 10 | 12 096-12 154 | 5-8 | 20 | 28 / 90 / 27 / 22 |
+| 12 (60 s) | 11 984-12 044 | 0-8 | 16-19 | 24 / 81 / 32 / 64 |
+| 16 (60 s) | 11 948-12 068 | 7-8 | 11-14 | 22 / 82 / 31 / 66 |
+
+The gaps don't grow with the run (16 sessions: 7-8 in 25 s and in 60 s):
+they come as the sessions connect at once; the owner heard a gap only
+then, and steady audio at 17 sessions. From 12 sessions the pool sheds
+the views' rate (16: 11-14 lines/s) and the audio stays whole. The cost
+is the skimmers' (SCHED_IDLE): 60-130 FT8 decodes a slot before, 20-104
+during the runs and six of about 25 slots with none.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed

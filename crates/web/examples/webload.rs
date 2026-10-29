@@ -7,7 +7,8 @@
 //!
 //!   cargo run --release -p web888-web --example webload -- \
 //!       ws://HOST:8073/ws [--sessions 13] [--secs 10] \
-//!       [--views mixed|same|distinct] [--base 7000000] [--bins 1024]
+//!       [--views mixed|same|distinct] [--base 7000000] [--bins 1024] \
+//!       [--zoom 256]
 //!
 //! Views: `same`: everyone on the default full view (one shared capture);
 //! `distinct`: everyone 480 kHz around their own dial (as many captures
@@ -15,6 +16,7 @@
 //! around the dial (drawn from the RX channel), 480 kHz around the dial,
 //! and a 1.92 MHz view shared by all who have it.
 //! `--bins`: waterfall bins the views ask for (not the default full view).
+//! `--zoom`: the distinct views' decimation (256: 480 kHz, 512: 240 kHz).
 //! The server must allow the sessions from one address (`limits.per_ip`).
 
 use futures_util::{SinkExt, StreamExt};
@@ -49,7 +51,7 @@ struct Stats {
 }
 
 /// Session k's dial and view request (none: the default full view).
-fn plan(k: usize, views: Views, base: f64) -> (f64, Option<(f64, u16)>, &'static str) {
+fn plan(k: usize, views: Views, base: f64, zoom: u16) -> (f64, Option<(f64, u16)>, &'static str) {
     let dial = base + 25_000.0 * k as f64;
     let mode = match views {
         Views::Same => 0,
@@ -59,13 +61,22 @@ fn plan(k: usize, views: Views, base: f64) -> (f64, Option<(f64, u16)>, &'static
     match mode {
         0 => (dial, None, "full"),
         1 => (dial, Some((dial, 4096)), "30k@dial (channel)"),
+        2 if views == Views::Distinct => (dial, Some((dial, zoom)), "own view@dial"),
         2 => (dial, Some((dial, 256)), "480k@dial"),
         _ => (dial, Some((base + 1e6, 64)), "1.92M shared"),
     }
 }
 
-async fn session(url: String, k: usize, views: Views, base: f64, secs: f64, bins: u32) -> Stats {
-    let (dial, view, what) = plan(k, views, base);
+async fn session(
+    url: String,
+    k: usize,
+    views: Views,
+    base: f64,
+    secs: f64,
+    bins: u32,
+    zoom: u16,
+) -> Stats {
+    let (dial, view, what) = plan(k, views, base, zoom);
     let mut st = Stats {
         label: format!("{:>10.3} kHz  {what}", dial / 1e3),
         ..Default::default()
@@ -142,6 +153,7 @@ async fn main() {
     let mut url = None;
     let (mut n, mut secs, mut views, mut base) = (13usize, 10.0f64, Views::Mixed, 7e6f64);
     let mut bins = 1024u32;
+    let mut zoom = 256u16;
     while let Some(a) = args.next() {
         let mut val = || args.next().expect("option value");
         match a.as_str() {
@@ -149,6 +161,7 @@ async fn main() {
             "--secs" => secs = val().parse().expect("--secs S"),
             "--base" => base = val().parse().expect("--base HZ"),
             "--bins" => bins = val().parse().expect("--bins N"),
+            "--zoom" => zoom = val().parse().expect("--zoom DECIM"),
             "--views" => {
                 views = match val().as_str() {
                     "same" => Views::Same,
@@ -163,7 +176,7 @@ async fn main() {
     }
     let url = url.expect("usage: webload ws://HOST:PORT/ws [options]");
     let tasks: Vec<_> = (0..n)
-        .map(|k| tokio::spawn(session(url.clone(), k, views, base, secs, bins)))
+        .map(|k| tokio::spawn(session(url.clone(), k, views, base, secs, bins, zoom)))
         .collect();
     println!(
         "{:>3}  {:<34} {:>9} {:>5} {:>7} {:>9} {:>11} {:>13}",
