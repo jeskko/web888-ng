@@ -101,9 +101,15 @@ impl Slotter {
         let Some(now) = to_utc((self.first + self.buf.len() as u64) as f64) else {
             return out;
         };
-        let start = *self
-            .next_start
-            .get_or_insert_with(|| (now / self.period).ceil() * self.period);
+        let boundary = (now / self.period).ceil() * self.period;
+        let mut start = *self.next_start.get_or_insert(boundary);
+        // More than a slot away: the host clock stepped (NTP on a unit
+        // without an RTC steps it by months after boot). Walking there a
+        // slot per block would take hours; start at the next boundary.
+        if now >= start + self.period + self.collect || start > now + self.period {
+            start = boundary;
+            self.next_start = Some(start);
+        }
         if now >= start + self.collect {
             self.next_start = Some(start + self.period);
             if let Some(i0) = to_index(start) {
@@ -166,5 +172,31 @@ mod tests {
         // Slot audio starts with the sample at its UTC start.
         assert_eq!(slots[1].audio[0], ((1020.0 - 1003.0) * rate) as f32);
         assert_eq!(slots[1].audio.len(), 1400);
+    }
+
+    #[test]
+    fn follows_a_clock_step() {
+        // 5 s after the start, NTP steps the clock ~7.5 months forward
+        // (seen on a unit without an RTC: no slot came for minutes).
+        let rate = 100.0;
+        let base = std::cell::Cell::new(1003.0);
+        let to_utc = |i: f64| Some(base.get() + i / rate);
+        let to_index = |t: f64| Some((t - base.get()) * rate);
+        let mut s = Slotter::new(15.0, 14.0, rate);
+        let mut slots = vec![];
+        let mut i = 0u64;
+        while i < 60 * 100 {
+            if i == 5 * 100 {
+                base.set(2e7 + 3.0);
+            }
+            let block: Vec<f32> = (i..i + 50).map(|k| k as f32).collect();
+            slots.extend(s.push(i, &block, to_utc, to_index));
+            i += 50;
+        }
+        // Sample i is now at 2e7 + 3 + i / rate (2e7 + 8 at the step),
+        // listening until 2e7 + 63: whole slots from the first boundary
+        // after the step (multiples of 15 s: 2e7 + 10, + 25, + 40).
+        let starts: Vec<f64> = slots.iter().map(|s| s.start - 2e7).collect();
+        assert_eq!(starts, [10.0, 25.0, 40.0]);
     }
 }
