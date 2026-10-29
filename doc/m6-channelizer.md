@@ -144,7 +144,20 @@ power line averaged.
 * **The frames' cost per frame**: a `BinFrame` (and a `Vec`) per 60 kHz
   frame on the hw thread; binrxbench's fixed part is ~11-14 % of an A9
   core. A block of frames in one allocation would save most of it.
-* **The unit at more than 16 channels** (`bins = 32`): not run yet.
+* **The unit at `bins = 32` (2026-10-29, 6f1082b): no capacity gain
+  yet.** Idle it works (RX 60k frames/s, FT8 as before, full-band
+  waterfall 0-61 MHz from the power line, zooms seamless), but under
+  load it holds fewer sessions than the 10:11 run (r2 10, no
+  waterfall): 14 mixed-view sessions already starve the hw thread (RX
+  25-52k frames/s); 14 on one shared full view are clean at 0 % idle.
+  Per thread at 14 mixed: hw thread 63 % (30 % idle with 32 channels
+  configured), pool 108 %, web 20 %, 19 % system time. The causes, in
+  likely order: the zoom views' bins fill the selection to 64 (the
+  driver's PFB_READ copy alone was 31 % of a core at 64 bins), the
+  per-frame `BinFrame` allocation and parse, the RX blocks carrying all
+  32 channels at 60 kS/s, and the zooms' FFTs on the pool. Next: cap the
+  views' bins (per view and in total), frames in blocks (one
+  allocation), RX blocks only as wide as needed, then measure again.
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
