@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! `BinRx` speed: N tuned channels (each in its own bin) from a synthetic
-//! bin source at 60k frames/s, RX at 48 kS/s; prints the speed against
-//! real time and the share of a core per channel (from the process's CPU
-//! time where /proc has it: a bench beside a running server is preempted).
+//! bin source at 60k frames/s, RX at 48 kS/s (`R2=8`: 60 kS/s, no
+//! resampler); prints the speed against real time and the share of a core
+//! per channel (from the process's CPU time where /proc has it: a bench
+//! beside a running server is preempted).
 //!   cargo run --release -p web888-dsp --example binrxbench [channels...]
 use std::sync::Arc;
 use std::time::Instant;
@@ -128,18 +129,25 @@ fn main() {
     } else {
         counts
     };
+    let r2: u16 = std::env::var("R2")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+    let rate = 480e3 / r2 as f64;
+    println!("RX at {:.0} S/s (r2 {r2})", rate);
     for n in counts {
         let src = Src {
             sel: Arc::from(Vec::new()),
             frame: 0,
         };
         let mut r = BinRx::new(src, 32).unwrap();
+        r.set_rx_rate(r2).unwrap();
         for c in 0..n {
             r.tune_rx(c, 7.0e6 + 30e3 * c as f64 + 1234.0).unwrap();
         }
         let mut buf = vec![Iq32::default(); 32 * 512];
         let secs = 2.0;
-        let want = (48e3 * secs) as usize;
+        let want = (rate * secs) as usize;
         let t = Instant::now();
         let c0 = cpu_secs();
         let mut got = 0;

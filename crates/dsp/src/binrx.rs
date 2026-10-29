@@ -15,7 +15,7 @@
 //! zeros for it.
 
 use crate::C32;
-use crate::fir::{kaiser_len, lowpass};
+use crate::resample::{History, Rational};
 use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
@@ -23,59 +23,12 @@ use std::sync::{Arc, Mutex};
 use web888_radio::bins::{BinCaps, BinFrame, BinRadio};
 use web888_radio::*;
 
-/// Resampler stopband (dB) and passband edge (fraction of the narrower of
-/// the two rates). The stopband starts at 1 - PASS of it: what folds back
-/// from the transition band lands above the passband edge, not in it, and
-/// the wide transition halves the taps (the cost on the A9).
-const ATTEN_DB: f64 = 70.0;
-const PASS: f64 = 0.375;
-
-/// Rational resampling L/M with one phase schedule for many channels.
-struct Rational {
-    l: usize,
-    m: usize,
-    /// Phase p's taps, L × the prototype (unity gain), oldest sample's
-    /// first: `h[p][j]` weighs the j-th of the history window.
-    h: Vec<Vec<f32>>,
-    acc: usize,
-}
-
-impl Rational {
-    fn new(l: usize, m: usize) -> Self {
-        // rates relative to the input: up L, filter, down M
-        let narrow = (1.0f64).min(l as f64 / m as f64);
-        let fu = l as f64; // the upsampled rate, input = 1
-        let tw = (1.0 - 2.0 * PASS) * narrow / fu;
-        let n = kaiser_len(ATTEN_DB, tw).max(l);
-        let fc = 0.5 * narrow / fu;
-        let proto = lowpass(n, fc, ATTEN_DB);
-        let taps = n.div_ceil(l);
-        let h = (0..l)
-            .map(|p| {
-                (0..taps)
-                    .rev()
-                    .map(|k| proto.get(p + k * l).map_or(0.0, |&x| (x * l as f64) as f32))
-                    .collect()
-            })
-            .collect();
-        Rational { l, m, h, acc: 0 }
-    }
-
-    fn taps(&self) -> usize {
-        self.h[0].len()
-    }
-}
-
 struct Chan {
     /// The bin and the dial's offset from its centre (Hz).
     tuned: Option<(usize, f64)>,
     rot: C32,
     step: C32,
-    /// The resampler's input history, twice in a row so that the last
-    /// `n` samples are one slice, `[pos, pos + n)`, oldest first.
-    re: Vec<f32>,
-    im: Vec<f32>,
-    pos: usize,
+    hist: History,
 }
 
 impl Chan {
@@ -84,49 +37,8 @@ impl Chan {
             tuned: None,
             rot: C32::new(1.0, 0.0),
             step: C32::new(1.0, 0.0),
-            re: vec![0.0; 2 * taps],
-            im: vec![0.0; 2 * taps],
-            pos: 0,
+            hist: History::new(taps),
         }
-    }
-
-    fn push(&mut self, x: C32) {
-        let n = self.re.len() / 2;
-        self.re[self.pos] = x.re;
-        self.re[self.pos + n] = x.re;
-        self.im[self.pos] = x.im;
-        self.im[self.pos + n] = x.im;
-        self.pos = if self.pos + 1 == n { 0 } else { self.pos + 1 };
-    }
-
-    /// The window (oldest first) weighed by `h`.
-    fn dot(&self, h: &[f32]) -> C32 {
-        let n = h.len();
-        let (re, im) = (
-            &self.re[self.pos..self.pos + n],
-            &self.im[self.pos..self.pos + n],
-        );
-        // four partial sums: no dependency chain on one accumulator
-        let (mut r, mut i) = ([0f32; 4], [0f32; 4]);
-        for ((h, re), im) in h
-            .as_chunks::<4>()
-            .0
-            .iter()
-            .zip(re.as_chunks::<4>().0)
-            .zip(im.as_chunks::<4>().0)
-        {
-            for k in 0..4 {
-                r[k] += h[k] * re[k];
-                i[k] += h[k] * im[k];
-            }
-        }
-        let tail = n / 4 * 4;
-        let (mut rt, mut it) = (r.iter().sum::<f32>(), i.iter().sum::<f32>());
-        for k in tail..n {
-            rt += h[k] * re[k];
-            it += h[k] * im[k];
-        }
-        C32::new(rt, it)
     }
 }
 
@@ -271,12 +183,16 @@ impl Drop for TapHandle {
     }
 }
 
+/// A frame's bin list and each channel's index in it.
+type BinIndex = (Arc<[usize]>, Vec<Option<usize>>);
+
 /// RX channels from the bins of `R`.
 pub struct BinRx<R> {
     inner: R,
     bins: BinCaps,
     r2: u16,
-    rs: Rational,
+    /// RX rate / frame rate; none at 1 (the shifted bin is the channel).
+    rs: Option<Rational>,
     ch: Vec<Chan>,
     /// The bins asked for, as last given to `set_bins`.
     selected: Vec<usize>,
@@ -284,10 +200,22 @@ pub struct BinRx<R> {
     /// RX frames made but not read yet (whole frames).
     out: Vec<Iq32>,
     out_pos: usize,
+    /// The frames' bin list last seen and each channel's index in it
+    /// (cleared when a channel's bin changes).
+    map: Option<BinIndex>,
     tap: Option<BinTap>,
     /// Frames per power line (0: none).
     power_frames: u16,
     power: Vec<f32>,
+}
+
+/// `as` saturates; round half away from zero without libm's roundf (a
+/// call per sample on musl).
+fn to_iq32(y: C32) -> Iq32 {
+    Iq32 {
+        i: (y.re + 0.5f32.copysign(y.re)) as i32,
+        q: (y.im + 0.5f32.copysign(y.im)) as i32,
+    }
 }
 
 fn gcd(a: usize, b: usize) -> usize {
@@ -310,12 +238,13 @@ impl<R: Radio + BinRadio> BinRx<R> {
             inner,
             bins,
             r2: 0,
-            rs: Rational::new(1, 1),
+            rs: None,
             ch: Vec::new(),
             selected: Vec::new(),
             frames: Vec::new(),
             out: Vec::new(),
             out_pos: 0,
+            map: None,
             tap: None,
             power_frames: 0,
             power: Vec::new(),
@@ -366,44 +295,59 @@ impl<R: Radio + BinRadio> BinRx<R> {
 
     /// Bin frames to RX frames, appended to `out`.
     fn process(&mut self) {
-        for f in &self.frames {
+        let BinRx {
+            frames,
+            ch,
+            rs,
+            out,
+            map,
+            ..
+        } = self;
+        for f in frames.iter() {
+            // each channel's index in the frame, found once per selection
+            if !map.as_ref().is_some_and(|(b, _)| Arc::ptr_eq(b, &f.bins)) {
+                let idx = ch
+                    .iter()
+                    .map(|c| c.tuned.and_then(|(b, _)| f.bins.binary_search(&b).ok()))
+                    .collect();
+                *map = Some((f.bins.clone(), idx));
+            }
+            let idx = &map.as_ref().expect("set").1;
             // idle channels cost nothing: they read zeros, and a channel
             // starts from a clear history when it is tuned
-            for c in self.ch.iter_mut() {
-                let Some((b, _)) = c.tuned else { continue };
-                let x = f
-                    .bins
-                    .binary_search(&b)
-                    .ok()
-                    .map_or(C32::new(0.0, 0.0), |i| {
-                        let s = f.iq[i];
-                        let v = C32::new(s.i as f32, s.q as f32) * c.rot;
-                        c.rot *= c.step;
-                        v
-                    });
-                c.push(x);
-            }
-            while self.rs.acc < self.rs.l {
-                let h = &self.rs.h[self.rs.acc];
-                for c in &self.ch {
-                    if c.tuned.is_none() {
-                        self.out.push(Iq32::default());
-                        continue;
-                    }
-                    let y = c.dot(h);
-                    // `as` saturates; round half away from zero without
-                    // libm's roundf (a call per sample on musl)
-                    self.out.push(Iq32 {
-                        i: (y.re + 0.5f32.copysign(y.re)) as i32,
-                        q: (y.im + 0.5f32.copysign(y.im)) as i32,
-                    });
+            let shifted = |c: &mut Chan, i: Option<usize>| {
+                c.tuned?;
+                Some(i.map_or(C32::new(0.0, 0.0), |i| {
+                    let s = f.iq[i];
+                    let v = C32::new(s.i as f32, s.q as f32) * c.rot;
+                    c.rot *= c.step;
+                    v
+                }))
+            };
+            let Some(rs) = rs else {
+                // at the frame rate: the shifted sample itself
+                for (c, &i) in ch.iter_mut().zip(idx) {
+                    out.push(shifted(c, i).map_or(Iq32::default(), to_iq32));
                 }
-                self.rs.acc += self.rs.m;
+                continue;
+            };
+            for (c, &i) in ch.iter_mut().zip(idx) {
+                if let Some(x) = shifted(c, i) {
+                    c.hist.push(x);
+                }
             }
-            self.rs.acc -= self.rs.l;
+            rs.step(|h| {
+                out.extend(ch.iter().map(|c| {
+                    if c.tuned.is_none() {
+                        Iq32::default()
+                    } else {
+                        to_iq32(c.hist.dot(h))
+                    }
+                }))
+            });
         }
         // keep the rotators on the unit circle
-        for c in self.ch.iter_mut() {
+        for c in ch.iter_mut() {
             c.rot /= c.rot.norm();
         }
     }
@@ -482,8 +426,8 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
             ));
         }
         let g = gcd(l, m);
-        self.rs = Rational::new(l / g, m / g);
-        let taps = self.rs.taps();
+        self.rs = (l != m).then(|| Rational::new(l / g, m / g));
+        let taps = self.taps();
         for c in self.ch.iter_mut() {
             let tuned = c.tuned;
             *c = Chan::new(taps);
@@ -513,7 +457,7 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
             .bin_of(f_hz)
             .ok_or(Error::InvalidParam("frequency outside the bins"))?;
         if self.ch[ch].tuned.map(|t| t.0) != Some(b) {
-            let taps = self.rs.taps();
+            let taps = self.taps();
             self.ch[ch] = Chan::new(taps);
         }
         self.set_shift(ch, b, off);
@@ -524,8 +468,9 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
         if ch >= self.ch.len() {
             return Err(Error::InvalidChannel(ch));
         }
-        let taps = self.rs.taps();
+        let taps = self.taps();
         self.ch[ch] = Chan::new(taps);
+        self.map = None;
         self.reselect()
     }
 
@@ -588,9 +533,14 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
 }
 
 impl<R: Radio + BinRadio> BinRx<R> {
+    fn taps(&self) -> usize {
+        self.rs.as_ref().map_or(1, Rational::taps)
+    }
+
     /// Channel `ch` from bin `b`, its dial `off` Hz from the bin centre.
     fn set_shift(&mut self, ch: usize, b: usize, off: f64) {
         let w = -2.0 * std::f64::consts::PI * off / self.bins.frame_rate;
+        self.map = None;
         let c = &mut self.ch[ch];
         c.tuned = Some((b, off));
         let s = num_complex::Complex::<f64>::from_polar(1.0, w);

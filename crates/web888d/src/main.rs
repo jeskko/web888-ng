@@ -838,7 +838,12 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         id.backend, id.signature, caps.rx_channels, caps.wf_channels, caps.adc_hz
     );
     // HPSDR P1 is served at 48 kS/s; the web audio chain decimates from it
-    let r2 = r2_for_rate(caps.adc_hz, 48_000.0);
+    // bins mode: RX at the bins' frame rate, no resampler in BinRx (HPSDR
+    // resamples its receivers to 48 kS/s)
+    let r2 = match &bin_tap {
+        Some(t) => r2_for_rate(caps.adc_hz, t.caps().frame_rate),
+        None => r2_for_rate(caps.adc_hz, 48_000.0),
+    };
     radio.set_rx_rate(r2)?;
 
     let stop = Arc::new(AtomicBool::new(false));
@@ -887,6 +892,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 board_id: h.board,
             },
             max_rx,
+            rx_rate: rx_rate(caps.adc_hz, r2),
         };
         let mut srv = server::Server::new(sock, scfg)?;
         eprintln!(

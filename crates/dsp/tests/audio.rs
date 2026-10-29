@@ -279,3 +279,46 @@ fn sas_is_stereo_lower_left() {
     chain.set_spec(AudioSpec::new(Mode::Sam));
     assert_eq!(chain.channels(), 1);
 }
+
+/// `secs` of a complex tone at `f` Hz, amplitude `a`, at `fs`.
+fn ctone(f: f64, a: f64, fs: f64, secs: f64) -> Vec<web888_dsp::C32> {
+    (0..(fs * secs) as usize)
+        .map(|k| {
+            let p =
+                (2.0 * std::f64::consts::PI * f / fs * k as f64).rem_euclid(std::f64::consts::TAU);
+            web888_dsp::C32::from_polar(a as f32, p as f32)
+        })
+        .collect()
+}
+
+#[test]
+fn a_narrow_passband_still_rejects_what_would_fold_into_it() {
+    // at 60 kS/s, USB: the decimator's wide transition for 300..2700 Hz;
+    // 13.5 kHz folds to 1.5 kHz at 12 kS/s
+    let fs = 60_000.0;
+    let level = |f: f64, a: f64| {
+        let mut chain = AudioChain::new(fixed(Mode::Usb), fs, Droop::None);
+        let mut out = Vec::new();
+        chain.process_c32(ctone(f, a, fs, 2.0), &mut out);
+        db(amp(&out[6000..], 1500.0))
+    };
+    let wanted = level(1500.0, 1e-3);
+    let folded = level(13_500.0, 1e-1) - 40.0;
+    assert!(wanted - folded > 75.0, "{wanted:.1} / {folded:.1} dB");
+}
+
+#[test]
+fn a_passband_change_keeps_the_tone() {
+    // AM then USB: the decimator's taps change, its history stays
+    let fs = 60_000.0;
+    let mut chain = AudioChain::new(fixed(Mode::Am), fs, Droop::None);
+    let x = ctone(1500.0, 1e-3, fs, 2.0);
+    let mut am = Vec::new();
+    chain.process_c32(x[..60_000].iter().copied(), &mut am);
+    chain.set_spec(fixed(Mode::Usb));
+    let mut usb = Vec::new();
+    chain.process_c32(x[60_000..].iter().copied(), &mut usb);
+    assert!(usb.len() > 11_000, "{}", usb.len());
+    let a = amp(&usb[usb.len() - 6000..], 1500.0);
+    assert!(a > 0.0 && db(a).is_finite(), "{a}");
+}

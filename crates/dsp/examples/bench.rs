@@ -2,6 +2,7 @@
 //! Per-session DSP cost, as % of one core in real time, plus a few raw
 //! kernels to compare cores (doc/m3-multi-user.md §4).
 //!   cargo run --release -p web888-dsp --example bench [seconds]
+//! (`R2=8`: the audio chain at 60 kS/s, as in bins mode)
 use std::hint::black_box;
 use std::time::Instant;
 use web888_dsp::C32;
@@ -42,7 +43,7 @@ fn report(name: &str, dt: f64, secs: f64) {
 fn audio(name: &str, spec: AudioSpec, fs: f64, rx: &[Iq32], secs: f64) {
     let droop = Droop::Rx {
         adc_hz: ADC_HZ_HF,
-        r2: 10,
+        r2: (ADC_HZ_HF / 256.0 / fs).round() as u16,
     };
     let mut chain = AudioChain::new(spec, fs, droop);
     let mut out = Vec::new();
@@ -130,7 +131,11 @@ fn main() {
         .nth(1)
         .and_then(|s| s.parse().ok())
         .unwrap_or(10.0);
-    let fs = rx_rate(ADC_HZ_HF, 10);
+    let r2: u16 = std::env::var("R2")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(10);
+    let fs = rx_rate(ADC_HZ_HF, r2);
     let rx = rx_input(fs, secs);
     println!("audio chain, {fs:.0} S/s in, {secs} s:");
     audio("usb", AudioSpec::new(Mode::Usb), fs, &rx, secs);

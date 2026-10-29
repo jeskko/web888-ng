@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! End to end over loopback UDP: a Protocol 1 client against the server,
-//! fed by a simulated radio at 48 kS/s.
+//! fed by a simulated radio at 48 kS/s, or at 60 kS/s (resampled).
 
 use std::net::UdpSocket;
 use std::sync::Arc;
@@ -32,8 +32,8 @@ fn tone_amp(z: &[(i32, i32)], f: f64, fs: f64) -> f64 {
 }
 
 /// Expected 24-bit amplitude of a tone at `dbfs`, offset `d` from the NCO.
-fn want(dbfs: f64, d: f64) -> f64 {
-    (1u32 << 22) as f64 * 10f64.powf(dbfs / 20.0) * rx_chain_mag(d, ADC_HZ_HF, 10)
+fn want(dbfs: f64, d: f64, r2: u16) -> f64 {
+    (1u32 << 22) as f64 * 10f64.powf(dbfs / 20.0) * rx_chain_mag(d, ADC_HZ_HF, r2)
 }
 
 fn db(x: f64) -> f64 {
@@ -42,18 +42,27 @@ fn db(x: f64) -> f64 {
 
 #[test]
 fn two_receivers_over_udp() {
+    two_receivers(10);
+}
+
+#[test]
+fn two_receivers_from_60k_blocks() {
+    two_receivers(8);
+}
+
+fn two_receivers(r2: u16) {
     let stop = Arc::new(AtomicBool::new(false));
     let (blk_tx, blk_rx) = mpsc::sync_channel::<Arc<RxBlock>>(32);
     let (ctl_tx, ctl_rx) = mpsc::channel::<Control>();
 
-    // hw thread: simulator at 48 kS/s, applies tune commands
+    // hw thread: simulator at 480 / r2 kS/s, applies tune commands
     let hw_stop = stop.clone();
     let hw = std::thread::spawn(move || {
         let scene = Scene::new()
             .tone(F0 + 1000.0, -20.0)
             .tone(F0 + 9000.0, -30.0);
         let mut r = SimRadio::new(SimConfig::hf(scene, Pacing::Free));
-        r.set_rx_rate(10).unwrap();
+        r.set_rx_rate(r2).unwrap();
         let n = r.caps().rx_channels;
         let mut buf = vec![Iq32::default(); 240 * n];
         let mut first_frame = 0;
@@ -85,6 +94,7 @@ fn two_receivers_over_udp() {
             board_id: 1,
         },
         max_rx: 7,
+        rx_rate: rx_rate(ADC_HZ_HF, r2),
     };
     let mut server = Server::new(sock, cfg).unwrap();
     let addr = server.local_addr().unwrap();
@@ -150,11 +160,11 @@ fn two_receivers_over_udp() {
         (&rx1, -4000.0, -20.0),
         (&rx1, 4000.0, -30.0),
     ] {
-        let err = db(tone_amp(z, f, fs)) - db(want(dbfs, f));
+        let err = db(tone_amp(z, f, fs)) - db(want(dbfs, f, r2));
         assert!(err.abs() < 0.02, "tone at {f}: {err:.3} dB off");
     }
     // nothing where there is no signal
-    assert!(db(tone_amp(&rx0, -1000.0, fs)) < db(want(-20.0, 0.0)) - 90.0);
+    assert!(db(tone_amp(&rx0, -1000.0, fs)) < db(want(-20.0, 0.0, r2)) - 90.0);
 }
 
 /// Maps receiver 0 to channel 3 and receiver 1 to none, and records what
@@ -211,6 +221,7 @@ fn host_maps_receivers_and_a_silent_client_is_stopped() {
             board_id: 1,
         },
         max_rx: 7,
+        rx_rate: 48_000.0,
     };
     let mut server = Server::new(sock, cfg).unwrap();
     let addr = server.local_addr().unwrap();

@@ -15,6 +15,7 @@ pub mod nr;
 pub mod ols;
 pub mod pfb;
 pub mod pfbfx;
+pub mod resample;
 pub mod squelch;
 pub mod wf;
 

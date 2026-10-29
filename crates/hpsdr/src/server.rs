@@ -7,9 +7,10 @@
 //! The host maps receivers to hardware channels (web888d: one lease per
 //! receiver while the client streams); a receiver without a channel sends
 //! zeros. A client that goes silent for [`CLIENT_TIMEOUT`] is stopped, so
-//! it doesn't hold channels. Only 48 kS/s is supported, so the hardware
-//! must run at 48 kS/s (r2 = 10 at 122.88 MHz); other speeds are logged
-//! and served at 48k.
+//! it doesn't hold channels. Only 48 kS/s is supported (other speeds are
+//! logged and served at 48k); RX blocks at another rate
+//! ([`Config::rx_rate`], e.g. 60 kS/s from a channelizer's bins) are
+//! resampled to it.
 
 use crate::proto::*;
 use std::net::{SocketAddr, UdpSocket};
@@ -17,7 +18,12 @@ use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, TryRecvError};
 use std::time::{Duration, Instant};
+use web888_dsp::C32;
+use web888_dsp::resample::Resampler;
 use web888_radio::{Iq32, RxBlock};
+
+/// The one sample rate served.
+pub const RATE: f64 = 48_000.0;
 
 /// A streaming client is stopped after this long without a packet
 /// (clients send EP2 data hundreds of times a second while running).
@@ -59,6 +65,18 @@ pub struct Config {
     pub board: Board,
     /// Receivers offered (<= hardware channels, <= 7).
     pub max_rx: usize,
+    /// The RX blocks' sample rate.
+    pub rx_rate: f64,
+}
+
+/// L/M taking `from` to [`RATE`] (both whole Hz), if not 1.
+fn ratio(from: f64) -> Option<(usize, usize)> {
+    fn gcd(a: usize, b: usize) -> usize {
+        if b == 0 { a } else { gcd(b, a % b) }
+    }
+    let (a, b) = (RATE.round() as usize, from.round() as usize);
+    let g = gcd(a, b);
+    (a != b && b > 0).then(|| (a / g, b / g))
 }
 
 #[derive(Clone, Debug, Default)]
@@ -77,6 +95,10 @@ pub struct Server {
     /// Last `Control::Receivers` reported.
     active: usize,
     ep6: Ep6Builder,
+    /// The receivers' resampler (blocks not at 48 kS/s), its output.
+    rs: Option<Resampler>,
+    rs_in: Vec<C32>,
+    rs_out: Vec<C32>,
     pub stats: Stats,
 }
 
@@ -92,6 +114,9 @@ impl Server {
             streaming: false,
             active: 0,
             ep6: Ep6Builder::new(1),
+            rs: None,
+            rs_in: Vec::new(),
+            rs_out: Vec::new(),
             stats: Stats::default(),
         })
     }
@@ -206,15 +231,48 @@ impl Server {
             .map(|rx| host.channel(rx).filter(|&ch| ch < b.nch))
             .collect();
         let mut out = [Iq32::default(); 8];
+        let Some((l, m)) = ratio(self.cfg.rx_rate) else {
+            for frame in b.iq.chunks_exact(b.nch) {
+                for (o, m) in out.iter_mut().zip(&map) {
+                    *o = m.map_or(Iq32::default(), |ch| frame[ch]);
+                }
+                self.send(&out[..nrx], to);
+            }
+            return;
+        };
+        if self.rs.as_ref().is_none_or(|r| r.channels() != nrx) {
+            self.rs = Some(Resampler::new(l, m, nrx));
+        }
+        let rs = self.rs.as_mut().expect("set");
+        self.rs_out.clear();
         for frame in b.iq.chunks_exact(b.nch) {
-            for (o, m) in out.iter_mut().zip(&map) {
-                *o = m.map_or(Iq32::default(), |ch| frame[ch]);
+            self.rs_in.clear();
+            self.rs_in.extend(map.iter().map(|m| {
+                m.map_or(C32::new(0.0, 0.0), |ch| {
+                    C32::new(frame[ch].i as f32, frame[ch].q as f32)
+                })
+            }));
+            rs.push(&self.rs_in, &mut self.rs_out);
+        }
+        let frames = std::mem::take(&mut self.rs_out);
+        for f in frames.chunks_exact(nrx) {
+            for (o, z) in out.iter_mut().zip(f) {
+                *o = Iq32 {
+                    i: z.re.round() as i32,
+                    q: z.im.round() as i32,
+                };
             }
-            if let Some(p) = self.ep6.push(&out[..nrx])
-                && self.sock.send_to(&p, to).is_ok()
-            {
-                self.stats.packets_sent += 1;
-            }
+            self.send(&out[..nrx], to);
+        }
+        self.rs_out = frames;
+    }
+
+    /// One frame of the receivers' samples to the client.
+    fn send(&mut self, frame: &[Iq32], to: SocketAddr) {
+        if let Some(p) = self.ep6.push(frame)
+            && self.sock.send_to(&p, to).is_ok()
+        {
+            self.stats.packets_sent += 1;
         }
     }
 }

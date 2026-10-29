@@ -137,9 +137,20 @@ impl AudioSpec {
     }
 }
 
+/// The decimator's passband edge for `spec`'s passband, with a margin, in
+/// 500 Hz steps: what it lets through between there and 6 kHz lands outside
+/// the passband at 12 kS/s, where the channel filter takes it out. A
+/// narrow passband (SSB, CW) gets a wide transition band and few taps.
+fn decim_pass(spec: &AudioSpec) -> f64 {
+    let c = spec.channel();
+    let edge = c.lo_hz.abs().max(c.hi_hz.abs()) + 300.0;
+    ((edge / 500.0).ceil() * 500.0).min(MAX_EDGE_HZ + 300.0)
+}
+
 pub struct AudioChain {
     spec: AudioSpec,
     droop: Droop,
+    rx_rate: f64,
     decim: Decimator,
     filter: OverlapSave,
     shift: Shifter,
@@ -177,7 +188,8 @@ impl AudioChain {
         AudioChain {
             spec,
             droop,
-            decim: Decimator::new(rx_rate, r, MAX_EDGE_HZ + 300.0, 80.0),
+            rx_rate,
+            decim: Decimator::new(rx_rate, r, decim_pass(&spec), 80.0),
             filter: Self::filter(&spec, droop),
             shift: Shifter::new(spec.pitch_hz, AUDIO_RATE),
             am: Am::new(AUDIO_RATE),
@@ -221,6 +233,11 @@ impl AudioChain {
         let old = self.spec;
         if spec.channel() != old.channel() {
             self.filter = Self::filter(&spec, self.droop);
+        }
+        if decim_pass(&spec) != decim_pass(&old) {
+            let r = (self.rx_rate / AUDIO_RATE).round() as usize;
+            let taps = Decimator::design(self.rx_rate, r, decim_pass(&spec), 80.0);
+            self.decim.set_taps(taps);
         }
         if spec.pitch_hz != old.pitch_hz {
             self.shift = Shifter::new(spec.pitch_hz, AUDIO_RATE);

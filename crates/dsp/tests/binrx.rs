@@ -215,7 +215,7 @@ fn channels_from_bins() {
 fn rates_follow_r2() {
     let mut r = BinRx::new(FakeBins::new(), 2).unwrap();
     r.tune_rx(0, 7.074e6).unwrap();
-    for (r2, num, den) in [(10u16, 4, 5), (20, 2, 5), (40, 1, 5), (5, 8, 5)] {
+    for (r2, num, den) in [(10u16, 4, 5), (8, 1, 1), (20, 2, 5), (40, 1, 5), (5, 8, 5)] {
         r.set_rx_rate(r2).unwrap();
         let f0 = r.inner().frame;
         let mut buf = vec![Iq32::default(); 2 * 64];

@@ -675,9 +675,13 @@ pub async fn run(
     let job = AudioJob::new(
         lease.channel(),
         sh.radio.rx_rate,
-        Droop::Rx {
-            adc_hz: sh.radio.adc_hz,
-            r2: sh.rx_r2,
+        if sh.waterfalls.bins_mode() {
+            Droop::None // no CIC before the chain
+        } else {
+            Droop::Rx {
+                adc_hz: sh.radio.adc_hz,
+                r2: sh.rx_r2,
+            }
         },
         spec,
         audio_cmd_rx,

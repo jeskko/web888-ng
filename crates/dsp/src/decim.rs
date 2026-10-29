@@ -18,16 +18,36 @@ impl Decimator {
     /// Decimate by `r` at input rate `fs`, keeping `|f| <= pass_hz` flat and
     /// attenuating by `atten_db` everything that would alias into it.
     pub fn new(fs: f64, r: usize, pass_hz: f64, atten_db: f64) -> Self {
+        Self::with_taps(Self::design(fs, r, pass_hz, atten_db), r)
+    }
+
+    /// Taps passing `pass_hz` and rejecting what would fold into it.
+    pub fn design(fs: f64, r: usize, pass_hz: f64, atten_db: f64) -> Vec<f32> {
         assert!(r >= 1);
         let stop = fs / r as f64 - pass_hz;
         assert!(stop > pass_hz, "passband too wide for decimation by {r}");
         let n = kaiser_len(atten_db, (stop - pass_hz) / fs);
         let fc = (pass_hz + stop) / 2.0 / fs;
-        let taps = lowpass(n, fc, atten_db)
+        lowpass(n, fc, atten_db)
             .into_iter()
             .map(|x| x as f32)
-            .collect();
-        Self::with_taps(taps, r)
+            .collect()
+    }
+
+    /// New taps, keeping the newest history (no gap in the output).
+    pub fn set_taps(&mut self, taps: Vec<f32>) {
+        let (old, new) = (self.taps.len(), taps.len());
+        if new < old {
+            let d = (old - new).min(self.next);
+            self.buf.drain(..d);
+            self.next -= d;
+        } else {
+            let d = new - old;
+            self.buf
+                .splice(0..0, std::iter::repeat_n(C32::new(0.0, 0.0), d));
+            self.next += d;
+        }
+        self.taps = taps;
     }
 
     pub fn with_taps(taps: Vec<f32>, r: usize) -> Self {
@@ -50,18 +70,31 @@ impl Decimator {
         let n = self.taps.len();
         let mut i = self.next;
         while i < self.buf.len() {
-            let w = &self.buf[i + 1 - n..=i];
-            let mut acc = C32::new(0.0, 0.0);
-            for (x, &h) in w.iter().zip(&self.taps) {
-                acc += x * h;
-            }
-            out.push(acc);
+            out.push(dot(&self.buf[i + 1 - n..=i], &self.taps));
             i += self.r;
         }
         let keep_from = i + 1 - n;
         self.buf.drain(..keep_from);
         self.next = i - keep_from;
     }
+}
+
+/// `x` weighed by `h`, in four partial sums: no dependency chain on one
+/// accumulator (the A9's VFP waits out each add's latency otherwise).
+fn dot(x: &[C32], h: &[f32]) -> C32 {
+    let mut a = [C32::new(0.0, 0.0); 4];
+    let (xc, xt) = x.as_chunks::<4>();
+    let (hc, ht) = h.as_chunks::<4>();
+    for (x, h) in xc.iter().zip(hc) {
+        for k in 0..4 {
+            a[k] += x[k] * h[k];
+        }
+    }
+    let mut acc = (a[0] + a[1]) + (a[2] + a[3]);
+    for (x, &h) in xt.iter().zip(ht) {
+        acc += x * h;
+    }
+    acc
 }
 
 #[cfg(test)]
@@ -79,6 +112,22 @@ mod tests {
 
     fn rms(z: &[C32]) -> f64 {
         (z.iter().map(|x| x.norm_sqr() as f64).sum::<f64>() / z.len() as f64).sqrt()
+    }
+
+    #[test]
+    fn new_taps_keep_the_stream_whole() {
+        let fs = 60_000.0;
+        let x = tone(1500.0, fs, 60_000);
+        for (a, b) in [(5300.0, 3000.0), (3000.0, 5300.0)] {
+            let mut d = Decimator::new(fs, 5, a, 80.0);
+            let mut y = Vec::new();
+            d.process(&x[..30_001], &mut y);
+            d.set_taps(Decimator::design(fs, 5, b, 80.0));
+            d.process(&x[30_001..], &mut y);
+            // one output per 5 inputs, the tone's level through the switch
+            assert_eq!(y.len(), 12_000);
+            assert!((rms(&y[5000..7000]) - 1.0).abs() < 0.01);
+        }
     }
 
     #[test]
