@@ -54,9 +54,9 @@ pub enum TapMsg {
     Power(Arc<Vec<f32>>),
 }
 
-/// Bins the tap may add to the channels' (a 480 kHz view shows 17 and
-/// runs one more on each side).
-pub const TAP_BINS: usize = 19;
+/// Bins the tap may add to the channels': a 960 kHz view (33 shown, one
+/// more run on each side), or two 480 kHz views (19 each).
+pub const TAP_BINS: usize = 40;
 
 /// Messages queued per subscriber; a full queue drops (the frames' numbers
 /// show the gap).

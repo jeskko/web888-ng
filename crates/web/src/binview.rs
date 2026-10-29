@@ -24,10 +24,12 @@ use web888_dsp::rx_to_c32;
 use web888_dsp::wf::{WF_DB0, WfEngine, WfSpec};
 use web888_radio::bins::{BinCaps, BinFrames};
 
-/// Most bins a zoomed view shows (a 480 kHz span at 30 kHz: 17; each bin
-/// read costs the A9 about 1 % of a core); wider views draw the power
-/// line. All views together get `binrx::TAP_BINS` beyond the channels'.
-pub const ZOOM_BINS: usize = 17;
+/// Most bins a zoomed view shows (a 960 kHz span at 30 kHz: 33); wider
+/// views draw the power line. All views together get `binrx::TAP_BINS`
+/// beyond the channels' (each bin read costs the A9 about 1 % of a core,
+/// memory-bound; a view's FFTs about 9 % whatever its span), from the
+/// view's centre out: bins left over show the power line, interpolated.
+pub const ZOOM_BINS: usize = 33;
 
 /// Bins a zoomed view also runs on each side of the ones it shows, so a
 /// view dragged across a bin edge has the new bin's spectrum at hand.
@@ -259,8 +261,14 @@ impl BinViewJob {
         let hi = self.center_hz + self.span_hz / 2.0;
         let run = view_bins(&self.caps, lo - m, hi + m);
         self.zoom.as_mut().expect("set").keep(&run, spec);
-        // the shown bins first: the margin is the first to go short
+        // the shown bins from the centre out, then the margin: what the
+        // frames have no room for goes from the edges
         let mut want = self.view.clone();
+        let c = self.center_hz;
+        want.sort_by(|&a, &b| {
+            let d = |k: usize| (self.caps.freq(k) - c).abs();
+            d(a).total_cmp(&d(b))
+        });
         want.extend(run.iter().filter(|b| !self.view.contains(b)));
         self.tap.want(want, fps);
     }
@@ -383,11 +391,25 @@ impl BinViewJob {
                 }
                 // missing from the frames a while: its last spectrum
                 (_, Some((h, t))) if now < *t + HOLD => db.extend_from_slice(h),
-                // not in the frames: the power line's level
-                _ => {
-                    let p = power.as_ref().map_or(WF_DB0, |(p, _)| p[i] - spread);
-                    db.extend(std::iter::repeat_n(p, keep));
-                }
+                // not in the frames: the power line's level, interpolated
+                // towards the neighbours' between the bins' centres
+                _ => match &power {
+                    Some((p, _)) => {
+                        let at = |k: usize| (p[k] - spread).max(WF_DB0);
+                        let lo = at(i.saturating_sub(1));
+                        let hi = at((i + 1).min(p.len() - 1));
+                        let mid = at(i);
+                        db.extend((0..keep).map(|m| {
+                            let x = (m as f32 + 0.5) / keep as f32 - 0.5;
+                            if x < 0.0 {
+                                mid + (lo - mid) * -x
+                            } else {
+                                mid + (hi - mid) * x
+                            }
+                        }));
+                    }
+                    None => db.extend(std::iter::repeat_n(WF_DB0, keep)),
+                },
             }
         }
         if !any {
@@ -600,10 +622,13 @@ mod tests {
         j.tick(t0 + SETTLE + Duration::from_millis(50), Ctx::default());
         let l = newest(&mut rx);
         // bin 238 (7.14 MHz) at the power line's -30 dB spread over its 30
-        // kHz: 64 FFT bins of 468.75 Hz, each 18.1 dB below
-        for off in [-14e3, 0.0, 14e3] {
-            let d = l.at(7.14e6 + off);
-            assert!((d + 48.06).abs() < 0.5, "{off}: {d}");
+        // kHz (64 FFT bins of 468.75 Hz, each 18.1 dB below) at its centre,
+        // sloping to the neighbours' levels (none: the floor) at the edges
+        let d = l.at(7.14e6);
+        assert!((d + 48.06).abs() < 1.0, "centre: {d}");
+        for off in [-14e3, 14e3] {
+            let e = l.at(7.14e6 + off);
+            assert!(e < d - 50.0, "{off}: {e}");
         }
         assert!(l.at(7.1e6) < -120.0);
     }

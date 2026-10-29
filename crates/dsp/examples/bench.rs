@@ -5,11 +5,11 @@
 //! (`R2=8`: the audio chain at 60 kS/s, as in bins mode)
 use std::hint::black_box;
 use std::time::Instant;
-use web888_dsp::C32;
 use web888_dsp::audio::{AudioChain, AudioSpec, Mode};
 use web888_dsp::chan::Droop;
 use web888_dsp::pfb::{PfbChannel, PfbSpec};
 use web888_dsp::wf::{WfEngine, WfSpec};
+use web888_dsp::{C32, rx_to_c32};
 use web888_radio::Iq32;
 use web888_radio::chan::{ADC_HZ_HF, rx_rate};
 
@@ -121,6 +121,77 @@ fn zoom(nbins: usize, n: usize, fps: f64, budget: usize, secs: f64) {
     );
 }
 
+/// As [`zoom`], fed as the view is: bin frames of `width` bins (10 ms
+/// reads), each engine taking its bin out of them (`strided`), or the
+/// view's bins split out in one pass first.
+fn zoom_frames(
+    nbins: usize,
+    width: usize,
+    n: usize,
+    fps: f64,
+    budget: usize,
+    strided: bool,
+    secs: f64,
+) {
+    let fs = 60e3;
+    let spec = WfSpec {
+        fs,
+        bins: n,
+        budget,
+        fps,
+        droop: Droop::None,
+        fft_per_bin: 1,
+    };
+    let mut e: Vec<WfEngine> = (0..nbins)
+        .map(|_| WfEngine::with_fft_size(spec, n))
+        .collect();
+    let mut r = Noise(5);
+    let per_read = 600;
+    let reads = (secs * fs) as usize / per_read;
+    let per_line = (fs / fps) as usize / per_read;
+    let frames: Vec<Iq32> = (0..per_read * width)
+        .map(|_| Iq32 {
+            i: (r.next() * 1e6) as i32,
+            q: (r.next() * 1e6) as i32,
+        })
+        .collect();
+    let mut split: Vec<Vec<C32>> = vec![Vec::with_capacity(per_read); nbins];
+    let t = Instant::now();
+    for k in 0..reads {
+        let f = black_box(&frames);
+        if strided {
+            for (j, e) in e.iter_mut().enumerate() {
+                e.push_c32((0..per_read).map(|k| rx_to_c32(f[k * width + j])), true);
+            }
+        } else {
+            for s in &mut split {
+                s.clear();
+            }
+            for fr in f.chunks_exact(width) {
+                for (s, &x) in split.iter_mut().zip(&fr[..nbins]) {
+                    s.push(rx_to_c32(x));
+                }
+            }
+            for (e, s) in e.iter_mut().zip(&split) {
+                e.push_c32(s.iter().copied(), true);
+            }
+        }
+        if (k + 1) % per_line == 0 {
+            for e in &mut e {
+                black_box(e.line());
+            }
+        }
+    }
+    report(
+        &format!(
+            "zoom {nbins} of {width} bins x {n}-pt {fps} fps x{budget}, {}",
+            if strided { "strided" } else { "split first" }
+        ),
+        t.elapsed().as_secs_f64(),
+        secs,
+    );
+}
+
 /// `jobs` consumers each taking its channel out of `nch`-channel RX blocks
 /// at `fs` (10 ms blocks), as the pool's audio jobs do.
 fn fanout(nch: usize, jobs: usize, fs: f64, secs: f64) {
@@ -195,6 +266,14 @@ fn main() {
         .ok()
         .and_then(|v| v.parse().ok())
         .unwrap_or(10);
+    if std::env::var_os("ZOOM_FRAMES").is_some() {
+        // only the zooms fed from bin frames
+        for strided in [true, false] {
+            zoom_frames(19, 30, 128, 20.0, 6, strided, secs);
+            zoom_frames(35, 46, 64, 20.0, 6, strided, secs);
+        }
+        return;
+    }
     let fs = rx_rate(ADC_HZ_HF, r2);
     let rx = rx_input(fs, secs);
     println!("audio chain, {fs:.0} S/s in, {secs} s:");
@@ -242,6 +321,10 @@ fn main() {
     println!("bins mode:");
     zoom(17, 128, 20.0, 6, secs);
     zoom(17, 128, 20.0, 30, secs);
+    for strided in [true, false] {
+        zoom_frames(19, 30, 128, 20.0, 6, strided, secs);
+        zoom_frames(35, 46, 64, 20.0, 6, strided, secs);
+    }
     fanout(32, 16, 60e3, secs);
     fanout(16, 16, 60e3, secs);
     println!("kernels:");

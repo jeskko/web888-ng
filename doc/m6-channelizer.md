@@ -130,8 +130,19 @@ average follows a moved view instead of restarting. Wide views (more
 than 17 bins: 960 kHz and up) still have only the power line's 30 kHz:
 the UI draws bins wider than 3 pixels interpolated between their
 centres (spectrum and waterfall shader) instead of as blocks. That is
-smoother, not finer; finer needs more bins read (a 960 kHz zoom: 35, about
-18 % more of a core) or bins read in turns.
+smoother, not finer; finer needs more bins read or bins read in turns.
+
+**960 kHz zooms (2026-10-30).** Measured on the unit: each bin read costs
+the hw thread 1.05 % of a core (0.63 % in the driver's cache invalidate
+and copy, 0.46 % parsing), memory-bound: the A9 copies about 230 MB/s
+(`memcpy`), 150 MB/s element-wise, and a bin's 480 kB/s goes through
+about five passes. A view's FFTs fed from the frames cost about 9 %
+whatever its span (`examples/bench` with `ZOOM_FRAMES`: 19 bins of
+128 points 9.0 %, 35 of 64 9.2 %). So views up to 33 bins (960 kHz) are
+zoomed (`ZOOM_BINS`) and the tap may add 40 bins (`TAP_BINS`: one 960
+kHz view, or two 480 kHz); a view's bins are wanted from its centre
+out, and a bin left out shows the power line interpolated towards its
+neighbours' (the detail in the middle, smooth edges).
 
 ## 5. Steps (each ends in a commit)
 
