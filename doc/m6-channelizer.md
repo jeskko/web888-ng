@@ -90,14 +90,12 @@ the input's band instead of 0–61 MHz.
 | 3 | bin leases; users and skimmers on `PfbChannel` | the M3 load test (13 sessions) on bins; skimmer decodes on a recording as many as on RX channels |
 | 4 | waterfall from the power line and per-bin zoom | browser check; zoomed view seamless across bin edges |
 | 5 | HPSDR at 48 kS/s from bins | `p1probe` against the server |
-| 6 | the channelizer bitstream's driver (`/dev/mem` + a reserved DMA window, or a small kernel module) | on the test unit (`hw/docs/channelizer.md` §5) |
+| 6 | the channelizer bitstream's driver (`/dev/mem` + a reserved DMA window, or a small kernel module) | on the test unit (`hw/docs/channelizer.md` §5). **Driver side done** (2026-10-29): the open `web888-sdr` driver's `ZSDR_PFB_*` ioctls (the units now run it under web888-ng-os, so the driver allocates the rings itself), `BinRadio` for `ZynqsdrRadio` with the channelizer signature (`crates/zynqsdr/src/pfb.rs`: the ring parsers; tests against a fake driver). Not yet on hardware |
 
 ## 6. Open
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
   sooner.
-* The driver for step 6: the stock `zynqsdr` module's DMA buffers can't
-  be reused for another bitstream's layout without its source; a
-  reserved-memory window needs a device-tree change, which waits for the
-  os image (`docs/os-base.md`).
+* The driver for step 6: settled by running our own OS and driver (the
+  stock module's buffers couldn't serve another layout).

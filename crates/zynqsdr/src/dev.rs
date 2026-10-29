@@ -22,6 +22,25 @@ pub trait Device: Send {
     fn stats(&mut self) -> io::Result<Option<Stats>> {
         Ok(None)
     }
+
+    /// The channelizer bitstream (open driver; unsupported elsewhere).
+    fn pfb_info(&mut self) -> io::Result<PfbInfo> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+    fn pfb_set_mask(&mut self, _generation: u32, _mask: &[u32; 64]) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+    fn pfb_start(&mut self, _streams: u32, _power_frames: u32) -> io::Result<()> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+    /// Ring bytes of `stream` (`PFB_BINS` or `PFB_POWER`) since the last
+    /// read; may be short or 0.
+    fn pfb_read(&mut self, _stream: u32, _dst: &mut [u8]) -> io::Result<usize> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+    fn pfb_status(&mut self) -> io::Result<PfbStatus> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
 }
 
 /// The real `/dev/zynqsdr`. Only works on 32-bit ARM: the driver takes user
@@ -137,6 +156,45 @@ impl Device for ZynqsdrDev {
             Err(e) if e.raw_os_error() == Some(libc::EBUSY) => Ok(None),
             Err(e) => Err(e),
         }
+    }
+
+    fn pfb_info(&mut self) -> io::Result<PfbInfo> {
+        let mut v = PfbInfo::default();
+        self.ioctl_ptr(PFB_INFO, &mut v)?;
+        Ok(v)
+    }
+
+    fn pfb_set_mask(&mut self, generation: u32, mask: &[u32; 64]) -> io::Result<()> {
+        let mut m = PfbMask {
+            generation,
+            mask: *mask,
+        };
+        self.ioctl_ptr(PFB_SET_MASK, &mut m)
+    }
+
+    fn pfb_start(&mut self, streams: u32, power_frames: u32) -> io::Result<()> {
+        let mut s = PfbStart {
+            streams,
+            power_frames,
+        };
+        self.ioctl_ptr(PFB_START, &mut s)
+    }
+
+    fn pfb_read(&mut self, stream: u32, dst: &mut [u8]) -> io::Result<usize> {
+        let mut r = PfbRead {
+            stream,
+            address: addr32(dst.as_mut_ptr())?,
+            length: dst.len() as u32,
+            readed: 0,
+        };
+        self.ioctl_ptr(PFB_READ, &mut r)?;
+        Ok((r.readed as usize).min(dst.len()))
+    }
+
+    fn pfb_status(&mut self) -> io::Result<PfbStatus> {
+        let mut s = PfbStatus::default();
+        self.ioctl_ptr(PFB_STATUS, &mut s)?;
+        Ok(s)
     }
 
     fn stats(&mut self) -> io::Result<Option<Stats>> {

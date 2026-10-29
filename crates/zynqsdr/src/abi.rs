@@ -22,6 +22,18 @@ pub const PPS_READ: u32 = 0x8004_5A15; // -> u32, EBUSY if none new
 /// Open driver (web888-ng-hw `driver/web888_sdr.h`) only; ENOTTY on stock.
 pub const GET_STATS: u32 = 0x8040_5A20; // -> Stats
 
+/// The channelizer bitstream (signature 0x0E5D0010) through the open
+/// driver: ENODEV with any other bitstream, ENOTTY with the stock driver.
+pub const PFB_INFO: u32 = 0x801C_5A21; // -> PfbInfo
+pub const PFB_SET_MASK: u32 = 0x4104_5A22; // PfbMask
+pub const PFB_START: u32 = 0x4008_5A23; // PfbStart
+pub const PFB_READ: u32 = 0xC010_5A24; // PfbRead
+pub const PFB_STATUS: u32 = 0x801C_5A25; // -> PfbStatus
+
+/// `PfbStart::streams`, `PfbRead::stream`.
+pub const PFB_BINS: u32 = 1 << 0;
+pub const PFB_POWER: u32 = 1 << 1;
+
 /// `WF_START` flag: continuous waterfall. The driver clears the WF mode bit
 /// (CFG 0x9E) when it is set and sets it otherwise; mode bit 1 = one-shot
 /// (open bitstream; stock by the flag's name, unconfirmed on hardware).
@@ -89,6 +101,55 @@ pub struct Stats {
     pub rx_overrun_bytes: u64,
 }
 
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PfbInfo {
+    pub size: u32,
+    pub bins: u32,
+    pub max_selected: u32,
+    pub bin_hz: u32,
+    pub frame_hz: u32,
+    pub bins_ring_bytes: u32,
+    pub power_ring_bytes: u32,
+}
+
+/// Bit b of `mask[w]` selects bin 32w + b; frames using it carry
+/// `generation` (1..=15).
+#[repr(C)]
+#[derive(Clone, Copy, Debug)]
+pub struct PfbMask {
+    pub generation: u32,
+    pub mask: [u32; 64],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PfbStart {
+    pub streams: u32,
+    pub power_frames: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PfbRead {
+    pub stream: u32,
+    pub address: u32,
+    pub length: u32,
+    pub readed: u32,
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PfbStatus {
+    pub size: u32,
+    pub generation: u32,
+    pub flags: u32,
+    pub bins_frames: u32,
+    pub bins_dropped: u32,
+    pub power_chunks: u32,
+    pub power_dropped: u32,
+}
+
 /// The size field of an ioctl number (bits 29:16).
 pub const fn ioc_size(cmd: u32) -> usize {
     ((cmd >> 16) & 0x3fff) as usize
@@ -120,6 +181,21 @@ mod tests {
         assert_eq!(ioc_size(GET_STATS), 64);
         assert_eq!(std::mem::offset_of!(Stats, adc_samples), 32);
         assert_eq!(std::mem::offset_of!(Stats, rx_overrun_bytes), 56);
+        assert_eq!(size_of::<PfbInfo>(), ioc_size(PFB_INFO));
+        assert_eq!(size_of::<PfbMask>(), ioc_size(PFB_SET_MASK));
+        assert_eq!(size_of::<PfbStart>(), ioc_size(PFB_START));
+        assert_eq!(size_of::<PfbRead>(), ioc_size(PFB_READ));
+        assert_eq!(size_of::<PfbStatus>(), ioc_size(PFB_STATUS));
+        // _IOR/_IOW/_IOWR('Z', nr, size): direction, size, type, number
+        for (cmd, dir, nr) in [
+            (PFB_INFO, 2, 0x21),
+            (PFB_SET_MASK, 1, 0x22),
+            (PFB_START, 1, 0x23),
+            (PFB_READ, 3, 0x24),
+            (PFB_STATUS, 2, 0x25),
+        ] {
+            assert_eq!((cmd >> 30, (cmd >> 8) & 0xff, cmd & 0xff), (dir, 0x5a, nr));
+        }
     }
 
     #[test]

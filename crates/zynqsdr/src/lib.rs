@@ -13,15 +13,20 @@
 //!   one-shot), so without the open driver continuous is emulated: the
 //!   next block is started as soon as one is read, with a gap between
 //!   blocks. A continuous stream that stalls anyway is restarted.
+//! * The channelizer bitstream (signature 0x0E5D0010, open driver): no RX
+//!   or WF channels; the bins and the power line through [`BinRadio`].
 
 pub mod abi;
 pub mod bitstream;
 pub mod dev;
+pub mod pfb;
 pub mod si5351;
 
 use abi::*;
 use dev::Device;
+use std::sync::Arc;
 use std::time::{Duration, Instant};
+use web888_radio::bins::{BinCaps, BinFrame, BinRadio, selection};
 use web888_radio::*;
 
 /// Static facts the driver can't tell us.
@@ -70,6 +75,23 @@ pub struct ZynqsdrRadio<D: Device> {
     build_id: Option<u32>,
     /// Open driver: GET_STATS works, and `WF_READ_CONTINUES` is honoured.
     has_stats: bool,
+    /// The channelizer bitstream.
+    pfb: Option<Pfb>,
+}
+
+/// The channelizer's state (`BinRadio`).
+struct Pfb {
+    generation: u8,
+    streams: u32,
+    power_frames: u16,
+    bins: pfb::BinsParser,
+    power: pfb::PowerParser,
+    buf: Vec<u8>,
+}
+
+/// The signature's channelizer field ([7:4] = 1, open bitstream).
+pub fn is_channelizer(signature: u32) -> bool {
+    signature >> 16 == 0x0e5d && (signature >> 4) & 0xf == 1
 }
 
 fn io(e: std::io::Error) -> Error {
@@ -81,7 +103,8 @@ impl<D: Device> ZynqsdrRadio<D> {
     pub fn new(mut dev: D, cfg: ZynqConfig) -> Result<Self> {
         let signature = dev.get_u32(GET_SIGNATURE).map_err(io)?;
         let (rx_ch, wf_ch) = signature_counts(signature);
-        if rx_ch == 0 || rx_ch > 15 || wf_ch == 0 {
+        let channelizer = is_channelizer(signature);
+        if !channelizer && (rx_ch == 0 || rx_ch > 15 || wf_ch == 0) {
             return Err(Error::Unsupported(
                 "FPGA signature reports no channels (bitstream loaded?)",
             ));
@@ -117,7 +140,18 @@ impl<D: Device> ZynqsdrRadio<D> {
             gpio,
             build_id: stats.filter(|s| s.ext != 0).map(|s| s.build_id),
             has_stats: stats.is_some(),
+            pfb: channelizer.then(|| Pfb {
+                generation: 0,
+                streams: 0,
+                power_frames: 0,
+                bins: pfb::BinsParser::default(),
+                power: pfb::PowerParser::new(1),
+                buf: vec![0; 256 * 1024],
+            }),
         };
+        if channelizer {
+            return Ok(r);
+        }
         r.set_rx_rate(20)?;
         Ok(r)
     }
@@ -176,6 +210,11 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
     }
 
     fn set_rx_rate(&mut self, r2: u16) -> Result<()> {
+        if self.pfb.is_some() {
+            return Err(Error::Unsupported(
+                "the channelizer bitstream has no RX channels",
+            ));
+        }
         if !(5..=40).contains(&r2) {
             return Err(Error::InvalidParam("r2 out of range"));
         }
@@ -202,6 +241,11 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
 
     fn read_rx(&mut self, buf: &mut [Iq32]) -> Result<usize> {
         let n = self.rx_ch;
+        if n == 0 {
+            return Err(Error::Unsupported(
+                "the channelizer bitstream has no RX channels",
+            ));
+        }
         if !buf.len().is_multiple_of(n) {
             return Err(Error::BadBuffer);
         }
@@ -352,4 +396,99 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             live: true,
         }
     }
+}
+
+/// The channelizer bitstream; with any other every call fails.
+impl<D: Device> BinRadio for ZynqsdrRadio<D> {
+    fn bin_caps(&self) -> BinCaps {
+        let on = self.pfb.is_some();
+        BinCaps {
+            bin_hz: self.adc_assumed / 4096.0,
+            frame_rate: self.adc_assumed / 2048.0,
+            // bin 2047's slot carries the next frame's header
+            bins: if on { pfb::POWER_BINS - 1 } else { 0 },
+            first_hz: 0.0,
+            wraps: false,
+            max_selected: if on { 64 } else { 0 },
+        }
+    }
+
+    fn set_bins(&mut self, bins: &[usize]) -> Result<u8> {
+        let caps = self.bin_caps();
+        let p = pfb_mut(&mut self.pfb)?;
+        let sel = selection(bins, caps.bins, caps.max_selected);
+        let mut mask = [0u32; 64];
+        for &b in &sel {
+            mask[b / 32] |= 1 << (b % 32);
+        }
+        // 1..=15, never the one in use: a new one switches the banks
+        let generation = p.generation % 15 + 1;
+        self.dev
+            .pfb_set_mask(generation as u32, &mask)
+            .map_err(io)?;
+        p.bins.set_selection(generation, Arc::from(sel));
+        p.generation = generation;
+        if p.streams & PFB_BINS == 0 {
+            p.streams |= PFB_BINS;
+            self.dev
+                .pfb_start(p.streams, p.power_frames.max(1) as u32)
+                .map_err(io)?;
+        }
+        Ok(generation)
+    }
+
+    fn read_bins(&mut self, out: &mut Vec<BinFrame>) -> Result<usize> {
+        let p = pfb_mut(&mut self.pfb)?;
+        if p.streams & PFB_BINS == 0 {
+            return Ok(0);
+        }
+        let mut n = 0;
+        loop {
+            let got = self.dev.pfb_read(PFB_BINS, &mut p.buf).map_err(io)?;
+            n += p.bins.push(&p.buf[..got], out);
+            if got < p.buf.len() {
+                return Ok(n);
+            }
+        }
+    }
+
+    fn set_power(&mut self, frames: u16) -> Result<()> {
+        let p = pfb_mut(&mut self.pfb)?;
+        let streams = if frames == 0 {
+            p.streams & !PFB_POWER
+        } else {
+            p.streams | PFB_POWER
+        };
+        self.dev
+            .pfb_start(streams, frames.max(1) as u32)
+            .map_err(io)?;
+        if frames != p.power_frames || streams & PFB_POWER == 0 {
+            p.power = pfb::PowerParser::new(frames);
+        }
+        p.streams = streams;
+        p.power_frames = frames;
+        Ok(())
+    }
+
+    fn read_power(&mut self, line: &mut Vec<f32>) -> Result<Option<u32>> {
+        let p = pfb_mut(&mut self.pfb)?;
+        if p.streams & PFB_POWER != 0 {
+            loop {
+                let got = self.dev.pfb_read(PFB_POWER, &mut p.buf).map_err(io)?;
+                p.power.push(&p.buf[..got]);
+                if got < p.buf.len() {
+                    break;
+                }
+            }
+        }
+        Ok(p.power.pop().map(|(n, l)| {
+            *line = l;
+            n
+        }))
+    }
+}
+
+fn pfb_mut(p: &mut Option<Pfb>) -> Result<&mut Pfb> {
+    p.as_mut()
+        .ok_or(Error::Unsupported("not the channelizer bitstream"))
 }
