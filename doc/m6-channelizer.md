@@ -168,6 +168,20 @@ power line averaged.
   fine tuner in the FPGA (bin, shift, decimate to 12 kS/s for up to 64
   users: 1-2 DSP48, ~2 BRAM36; removes `BinRx` and the chain's
   decimator, and most of the bins read), then zoom spectra in the FPGA.
+* **The bins tuner (2026-10-29): done, on the unit.** The FPGA's
+  `pfb_tune` (`hw/docs/channelizer.md` §3.8) turns and decimates 32
+  users' bins to 12 kS/s and hands them to the stock RX ring; web888d
+  takes its users as the RX channels (`BinRx::tap_only`: the bins only
+  for the waterfall). On the unit: the hw thread 12 % idle (21 % with the
+  bins on the CPU); **20 mixed-view sessions + 2 FT8 skimmers clean**
+  (10 before), 30 on one shared view clean, 30 mixed nearly (the cores
+  full: the pool's audio and waterfalls, 93 %, and the web threads, 43
+  %). Next limits: the waterfall's FFTs (the zooms) and the web tasks;
+  zoom spectra in the FPGA would take the first. HPSDR from the tuner
+  is 12 kS/s resampled to 48 (±6 kHz of content). The bitstream meets
+  timing against the real clock (+0.22 ns) but not with the build's 0.4
+  ns guardband (WNS −0.316 ns, a FIR bank → DSP path): not releasable
+  yet.
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
