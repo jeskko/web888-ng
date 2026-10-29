@@ -132,29 +132,29 @@ impl IqBins {
                 *sel = s;
                 *generation = g;
             }
-            if !sel.is_empty() {
-                let k = RX_SINE_FULL_SCALE as f32;
-                let iq = sel
-                    .iter()
-                    .map(|&b| {
-                        let z = u[b] * k;
-                        Iq32 {
-                            i: z.re.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
-                            q: z.im.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
-                        }
-                    })
-                    .collect();
-                if frames.len() >= QUEUE {
-                    frames.pop_front();
-                    *dropped += 1;
-                }
-                frames.push_back(BinFrame {
-                    frame: *frame,
-                    generation: *generation,
-                    bins: sel.clone(),
-                    iq,
-                });
+            // a frame without bins too, as the hardware sends: its
+            // reader's clock (RX frames from bins keep coming)
+            let k = RX_SINE_FULL_SCALE as f32;
+            let iq = sel
+                .iter()
+                .map(|&b| {
+                    let z = u[b] * k;
+                    Iq32 {
+                        i: z.re.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                        q: z.im.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                    }
+                })
+                .collect();
+            if frames.len() >= QUEUE {
+                frames.pop_front();
+                *dropped += 1;
             }
+            frames.push_back(BinFrame {
+                frame: *frame,
+                generation: *generation,
+                bins: sel.clone(),
+                iq,
+            });
             if *per_line > 0 {
                 for (s, z) in sum.iter_mut().zip(u) {
                     *s += z.norm_sqr() as f64;
@@ -240,6 +240,18 @@ mod tests {
             (d - std::f64::consts::TAU * 4000.0 / 60e3).abs() < 1e-3,
             "{d}"
         );
+    }
+
+    #[test]
+    fn frames_come_without_bins_selected() {
+        // BinRx's RX frames follow the bin frames: none selected must not
+        // stop them
+        let mut b = IqBins::new(CENTER, RATE);
+        // a frame per 128 samples, after the bank's filter has filled
+        b.push(&tone(7.074e6, 0.1, 128 * 200, 0));
+        let mut out = Vec::new();
+        assert!(b.read_bins(&mut out) > 150);
+        assert!(out.iter().all(|f| f.iq.is_empty()));
     }
 
     #[test]
