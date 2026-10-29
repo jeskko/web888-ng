@@ -311,23 +311,20 @@ mod tests {
             dbm: None,
             live: true,
         });
+        // the event bus is the process's: other tests' events come too
+        let event = |m: &String| {
+            m.starts_with("<133>1 ")
+                && m.contains(" rx web888d ")
+                && m.ends_with(" skim - start ft8 7074.0 khz")
+        };
+        let spot =
+            |m: &String| m.contains(" spot - FT8 7074.0 kHz 211145 -12  0.1 1234 CQ K1ABC FN42");
         let mut got = vec![];
         let mut buf = [0u8; 2048];
-        while got.len() < 2 {
-            let n = rx.recv(&mut buf).unwrap();
+        while !(got.iter().any(event) && got.iter().any(spot)) {
+            let n = rx.recv(&mut buf).unwrap_or_else(|e| panic!("{e}: {got:?}"));
             got.push(String::from_utf8_lossy(&buf[..n]).to_string());
         }
-        assert!(
-            got.iter().any(|m| m.starts_with("<133>1 ")
-                && m.contains(" rx web888d ")
-                && m.ends_with(" skim - start ft8 7074.0 khz")),
-            "{got:?}"
-        );
-        assert!(
-            got.iter()
-                .any(|m| m.contains(" spot - FT8 7074.0 kHz 211145 -12  0.1 1234 CQ K1ABC FN42")),
-            "{got:?}"
-        );
     }
 
     #[test]
