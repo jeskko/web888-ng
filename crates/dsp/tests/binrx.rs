@@ -284,6 +284,34 @@ fn the_tap_gets_frames_and_power_lines() {
 }
 
 #[test]
+fn a_burst_takes_its_bins_for_its_frames() {
+    let mut r = BinRx::new(FakeBins::new(), 1).unwrap();
+    r.tune_rx(0, 7.074e6).unwrap();
+    let tap = r.tap();
+    let (h, rx) = tap.subscribe();
+    h.burst(vec![991, 990], 500);
+    let mut buf = vec![Iq32::default(); 512];
+    // 300 frames a read: two reads with the bins, then the channel's alone
+    r.read_rx(&mut buf).unwrap();
+    assert_eq!(r.inner().selections.last().unwrap(), &vec![236, 990, 991]);
+    r.read_rx(&mut buf).unwrap();
+    r.read_rx(&mut buf).unwrap();
+    assert_eq!(r.inner().selections.last().unwrap(), &vec![236]);
+    let mut frames = 0;
+    while let Ok(m) = rx.try_recv() {
+        if let TapMsg::Frames(f) = m {
+            assert!(f.iter().all(|f| f.bins.len() == 3));
+            frames += f.iter().map(|f| f.count).sum::<usize>();
+        }
+    }
+    assert_eq!(frames, 600);
+    // a new burst takes them again
+    h.burst(vec![990], 100);
+    r.read_rx(&mut buf).unwrap();
+    assert_eq!(r.inner().selections.last().unwrap(), &vec![236, 990]);
+}
+
+#[test]
 fn tap_only_leaves_rx_to_the_radio() {
     let mut r = BinRx::tap_only(FakeBins::new()).unwrap();
     // the radio's own channels and errors (the fake has none)

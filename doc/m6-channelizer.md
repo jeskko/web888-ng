@@ -144,6 +144,31 @@ kHz view, or two 480 kHz); a view's bins are wanted from its centre
 out, and a bin left out shows the power line interpolated towards its
 neighbours' (the detail in the middle, smooth edges).
 
+**Cheaper bins (plan, 2026-10-30).** A bin's samples pass the CPU about
+five times: the driver's cache invalidate and `copy_to_user` from the
+ring, the parser reading that copy and writing frame runs, the
+consumers reading the runs. Two steps:
+
+1. **Views read their bins in bursts** (done, below): a view needs
+   `n x (budget + 1) / 2` frames a line (its FFTs at half overlap), not
+   every frame: at 20 lines/s with the A9's budget of 6, a 480 kHz view
+   768 frames of 3000 (26 %), a 960 kHz view 384 (13 %). After each line
+   it asks the tap for its bins for that many frames (`TapHandle::burst`);
+   `BinRx` selects them on its next read (every 5 ms), counts the frames
+   read with them and drops them when done. Frames before the selection
+   takes effect don't carry the bins and cost nothing; a burst overshoots
+   by at most one read (300 frames). Channels' bins stay selected. This
+   also makes wider detailed views possible later (bins in turns past
+   the 64 a frame).
+2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
+   (cached, read-only) and an ioctl that invalidates the new part and
+   returns the write position, and one that releases what was parsed
+   (lap detection as now). The parser reads the ring in place (a frame
+   across the end copied) and the `copy_to_user` pass goes: for every
+   bin, the channels' and skimmers' too, an estimated 0.2-0.3 % of a
+   core each. The old ioctls stay (an old web888d on a new driver works);
+   the unit needs the module reloaded (service stopped).
+
 ## 5. Steps (each ends in a commit)
 
 | # | content | done when |

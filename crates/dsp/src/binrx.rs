@@ -7,7 +7,10 @@
 //! are the bins a frame carries (64) and the CPU. The waterfall slots stay
 //! the inner radio's; waterfalls from the bins go through a [`BinTap`]:
 //! power lines, and the frames of the bins a zoomed view wants (selected
-//! after the channels' bins, as far as the frame has room).
+//! after the channels' bins, as far as the frame has room): all along, or
+//! in bursts of a number of frames (a view needs a few FFTs' worth a
+//! line, not every frame: each bin read costs the A9 about 1 % of a
+//! core).
 //!
 //! All channels resample in step (one phase schedule), so each bin frame
 //! gives every channel the same number of samples and RX frames stay whole.
@@ -81,8 +84,24 @@ struct TapSubs {
 struct TapSub {
     id: u64,
     bins: Vec<usize>,
+    burst: Option<Burst>,
     power_fps: f64,
     tx: SyncSender<TapMsg>,
+}
+
+impl TapSub {
+    fn wants_frames(&self) -> bool {
+        !self.bins.is_empty() || self.burst.is_some()
+    }
+}
+
+/// Bins wanted for a number of frames.
+struct Burst {
+    bins: Vec<usize>,
+    frames: usize,
+    /// Frames read with the bin it is counted on (the first granted).
+    got: usize,
+    counted_on: Option<usize>,
 }
 
 impl BinTap {
@@ -108,6 +127,7 @@ impl BinTap {
         g.list.push(TapSub {
             id,
             bins: Vec::new(),
+            burst: None,
             power_fps: 0.0,
             tx,
         });
@@ -120,13 +140,57 @@ impl BinTap {
         )
     }
 
-    /// Bins wanted after the channels' (in subscription order) and the
-    /// power line rate (the fastest wanted; 0: none).
+    /// Bins wanted after the channels' (in subscription order: each
+    /// subscriber's all-along bins, then its burst's) and the power line
+    /// rate (the fastest wanted; 0: none).
     fn wants(&self) -> (Vec<usize>, f64) {
         let g = self.0.subs.lock().unwrap();
-        let bins = g.list.iter().flat_map(|s| s.bins.iter().copied()).collect();
+        let bins = g
+            .list
+            .iter()
+            .flat_map(|s| {
+                let b = s.burst.as_ref().map_or(&[][..], |b| &b.bins[..]);
+                s.bins.iter().chain(b).copied()
+            })
+            .collect();
         let fps = g.list.iter().map(|s| s.power_fps).fold(0.0, f64::max);
         (bins, fps)
+    }
+
+    /// The selection is `sel`: each burst is counted on its first bin in
+    /// it (none: it waits for room).
+    fn granted(&self, sel: &[usize]) {
+        let mut g = self.0.subs.lock().unwrap();
+        for b in g.list.iter_mut().filter_map(|s| s.burst.as_mut()) {
+            b.counted_on = b
+                .bins
+                .iter()
+                .copied()
+                .find(|k| sel.binary_search(k).is_ok());
+        }
+    }
+
+    /// Frames read: the bursts count them; the ones done end (the
+    /// selection then changes).
+    fn count(&self, frames: &[BinFrames]) {
+        let mut g = self.0.subs.lock().unwrap();
+        let mut done = false;
+        for s in &mut g.list {
+            let Some(b) = &mut s.burst else { continue };
+            let Some(k) = b.counted_on else { continue };
+            b.got += frames
+                .iter()
+                .filter(|f| f.bins.binary_search(&k).is_ok())
+                .map(|f| f.count)
+                .sum::<usize>();
+            if b.got >= b.frames {
+                s.burst = None;
+                done = true;
+            }
+        }
+        if done {
+            self.0.changed.store(true, Ordering::Relaxed);
+        }
     }
 
     /// Whether a subscriber wants bins.
@@ -137,12 +201,12 @@ impl BinTap {
             .unwrap()
             .list
             .iter()
-            .any(|s| !s.bins.is_empty())
+            .any(TapSub::wants_frames)
     }
 
     /// Frames to the subscribers wanting bins.
     pub fn send_frames(&self, f: Arc<Vec<BinFrames>>) {
-        self.send(|| TapMsg::Frames(f.clone()), |s| !s.bins.is_empty());
+        self.send(|| TapMsg::Frames(f.clone()), TapSub::wants_frames);
     }
 
     /// A power line to the subscribers wanting them.
@@ -178,6 +242,23 @@ impl TapHandle {
         if let Some(s) = g.list.iter_mut().find(|s| s.id == self.id) {
             s.bins = bins;
             s.power_fps = power_fps;
+        }
+        t.changed.store(true, Ordering::Relaxed);
+    }
+
+    /// Want `bins` for the next `frames` frames read with them (the first
+    /// of them that gets room), on top of the all-along ones; replaces a
+    /// burst not done yet. Empty `bins`: none.
+    pub fn burst(&self, bins: Vec<usize>, frames: usize) {
+        let t = &self.tap.0;
+        let mut g = t.subs.lock().unwrap();
+        if let Some(s) = g.list.iter_mut().find(|s| s.id == self.id) {
+            s.burst = (!bins.is_empty() && frames > 0).then_some(Burst {
+                bins,
+                frames,
+                got: 0,
+                counted_on: None,
+            });
         }
         t.changed.store(true, Ordering::Relaxed);
     }
@@ -330,6 +411,9 @@ impl<R: Radio + BinRadio> BinRx<R> {
             self.inner.set_bins(&want)?;
             self.selected = want;
         }
+        if let Some(t) = &self.tap {
+            t.granted(&self.selected);
+        }
         Ok(())
     }
 
@@ -443,11 +527,12 @@ impl<R: Radio + BinRadio> BinRx<R> {
         if self.frames.is_empty() {
             return Ok(());
         }
+        // the bursts end after their last frames went out
+        let frames = Arc::new(std::mem::take(&mut self.frames));
         if t.wants_frames() {
-            t.send_frames(Arc::new(std::mem::take(&mut self.frames)));
-        } else {
-            self.frames.clear();
+            t.send_frames(frames.clone());
         }
+        t.count(&frames);
         Ok(())
     }
 }

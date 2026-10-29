@@ -141,6 +141,10 @@ pub struct BinViewJob {
     /// The last move or zoom.
     moved: Instant,
     next: Instant,
+    /// The bins a zoomed view reads (centre out, then the margin), and
+    /// its FFTs a line (load shedding may lower it).
+    want: Vec<usize>,
+    ffts: usize,
 }
 
 /// The bins whose 30 kHz around the centre meet `lo..hi`, by frequency.
@@ -187,6 +191,8 @@ impl BinViewJob {
             praw: None,
             moved: Instant::now(),
             next: Instant::now(),
+            want: Vec::new(),
+            ffts: budget.max(1),
         }
         .moved_to(center_hz, span_hz)
     }
@@ -231,7 +237,9 @@ impl BinViewJob {
         let fps = self.fps();
         if !self.zoomed() {
             self.zoom = None;
+            self.want.clear();
             self.tap.want(Vec::new(), fps);
+            self.tap.burst(Vec::new(), 0);
             return;
         }
         let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
@@ -270,7 +278,17 @@ impl BinViewJob {
             d(a).total_cmp(&d(b))
         });
         want.extend(run.iter().filter(|b| !self.view.contains(b)));
-        self.tap.want(want, fps);
+        self.want = want;
+        // the power lines all along, the bins in bursts
+        self.tap.want(Vec::new(), fps);
+        self.burst();
+    }
+
+    /// The bins for the next line's FFTs: `ffts` of `n` at half overlap.
+    fn burst(&self) {
+        if let Some(z) = &self.zoom {
+            self.tap.burst(self.want.clone(), z.n * (self.ffts + 1) / 2);
+        }
     }
 
     fn commands(&mut self, now: Instant) -> bool {
@@ -303,6 +321,7 @@ impl BinViewJob {
         if changed {
             if self.subs.is_empty() {
                 self.tap.want(Vec::new(), 0.0);
+                self.tap.burst(Vec::new(), 0);
             } else {
                 self.fit();
             }
@@ -461,9 +480,12 @@ impl Job for BinViewJob {
                 e.e.set_budget(budget);
             }
         }
+        self.ffts = budget;
         if let Some((db, f0, df, fresh)) = self.line(now) {
             self.send(&db, f0, df, fresh, now, p);
         }
+        // the next line's samples
+        self.burst();
         true
     }
 }
