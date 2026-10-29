@@ -1,11 +1,9 @@
 # M6 channelizer: server side
 
-Status: **step 1 done, step 2 half** (2026-10-29: the iq backend runs the
-bank behind `BinRadio`; the hw thread's fan-out is next). The bitstream side is
-`hw/docs/channelizer.md` in web888-ng-hw (datapath and outputs
-bit-exact in simulation, timing met). Scope: the server running on
-**bins** instead of tuned RX channels and waterfall slots, first against
-the iq backend, then the channelizer bitstream.
+Status: **steps 1-6 done** (2026-10-29): web888d serves the web UI,
+the skimmers and HPSDR from the bins, and draws the waterfall from them,
+on the iq backend and on the unit's channelizer bitstream. The bitstream
+side is `hw/docs/channelizer.md` in web888-ng-hw. Open: §6.
 
 Done when:
 
@@ -68,8 +66,19 @@ web sessions, the skimmers and HPSDR run unchanged; the channel count is
 a setting, not the bitstream's. Against an RX channel on the same
 recording (`crates/iq/examples/binscompare.rs`): coherence 1.00000, the
 residual −74.5 dB within ±3 kHz (−66 dB within ±12 kHz), the level
-within 0.15 dB. The plan below (each user's `AudioChain` straight at
-60 kS/s, no resampler) remains the way to save the resampler's CPU.
+within 0.15 dB.
+
+**At 60 kS/s (2026-10-29).** web888d runs bins mode with the RX rate
+equal to the bins' frame rate (r2 8: 60 kS/s), where `BinRx` passes the
+shifted bin through without a resampler: the plan below, the
+`AudioChain` straight at 60 kS/s, decimating by 5. HPSDR resamples its
+receivers to 48 kS/s (`web888_dsp::resample`, 4/5, the same polyphase
+filter). The chain's decimator is now sized for the passband (edge +
+300 Hz in 500 Hz steps: SSB and CW a quarter of the taps; AM as
+before), and bins mode corrects no CIC droop (there is none). On the
+A9, a USB listener costs 3.2 % of a core instead of 5.4 % (`BinRx` 0.98
+% per channel, marginal, instead of 2.35 %; the chain 2.2 % at 60 kS/s
+instead of 3.0 % at 48), and stock mode's USB chain halves (1.5 %).
 
 * **Leases**: a receiver is a dial and a passband; it needs the bin its
   passband sits in (the nearest centre: the channel is within ±15 kHz of
@@ -96,18 +105,46 @@ within 0.15 dB. The plan below (each user's `AudioChain` straight at
 * The WF scheduler's slots and time-sharing go away for this backend;
   the stock-driver backend keeps them.
 
+**Done (2026-10-29)** as above: `crates/web/src/binview.rs`
+(`BinViewJob`, one per shared view, on the DSP pool) through `BinRx`'s
+tap (`BinTap`: frames and power lines handed to other threads by
+`Arc`, no copy and no FFT on the hw thread). Zoom up to 33 bins (960
+kHz); a view's bins are selected after the RX channels' as far as the
+frame has room, and a bin left out shows the power line's level. Each
+bin's FFT is sized so its bins are no wider than the display's, and its
+budget is the view's (the sum of the per-bin FFT lengths equals one
+full view's FFT). In bins mode even views inside a session's channel
+come from the bins: the channel is clean only within ±21 kHz of its
+bin's centre. Checked in headless Chromium on the iq backend: spans
+3.84 MHz to 15 kHz, no seam at the bin edges; unit tests: a tone on a
+bin edge at its level once, a missing bin at the power line's level, the
+power line averaged.
+
 ## 5. Steps (each ends in a commit)
 
 | # | content | done when |
 |---|---|---|
 | 1 | the bin-source trait; the iq backend's bank behind it | unit tests: a tone in the right bin at the right level, selection switching by gen, the power line equal to the bins' summed power |
 | 2 | the iq backend in bins mode (`--backend iq --bins`): the hw thread reads frames and fans them out | a bench: frames per second, CPU, on a recording. **Bank side done**: `IqConfig::bins`, `BinRadio for IqRadio`; `examples/binsbench`: 4.0x real time at 7.68 MS/s on the workstation (0 bins), 3.2x with 64 selected and power lines (one core; the bank's branch sums dominate) |
-| 3 | bin leases; users and skimmers on `PfbChannel` | the M3 load test (13 sessions) on bins; skimmer decodes on a recording as many as on RX channels. **First form done** (§3: `BinRx`, virtual RX channels from bins; the bins channel equals the RX channel to −74.5 dB within ±3 kHz). Load test on the workstation (iq backend, `bins = 32`, the 60 s recording looped): **24 sessions, each its own receiver** (dials 25 kHz apart over 21 bins, mixed views): 12 012 S/s audio each, no gaps or drops, waterfalls 20 lines/s; 66 % of a core with the software bank. **On the unit** (2026-10-29, the channelizer bitstream, `bins = 16`): RX 47 976 frames/s (48 000 due); FT8 on bins 211 spots in the first 4 slots (40 m + 20 m, as the RX-channel receiver that morning); 14 web sessions + the 2 skimmers on all 16 channels: 12 000 S/s each, no gaps or drops, no FT8 slot dropped (416 spots in 8), both cores busy. `BinRx` costs 3.1 % of an A9 core per tuned channel (`examples/binrxbench`), so 16 channels is the hw thread's practical limit; more need the per-channel work on the DSP pool or §3's 60 kS/s path. (A first run lost 15 % of the frames: idle channels were filtered too; fixed.) |
-| 4 | waterfall from the power line and per-bin zoom | browser check; zoomed view seamless across bin edges |
-| 5 | HPSDR at 48 kS/s from bins | `p1probe` against the server |
+| 3 | bin leases; users and skimmers on `PfbChannel` | the M3 load test (13 sessions) on bins; skimmer decodes on a recording as many as on RX channels. **First form done** (§3: `BinRx`, virtual RX channels from bins; the bins channel equals the RX channel to −74.5 dB within ±3 kHz). Load test on the workstation (iq backend, `bins = 32`, the 60 s recording looped): **24 sessions, each its own receiver** (dials 25 kHz apart over 21 bins, mixed views): 12 012 S/s audio each, no gaps or drops, waterfalls 20 lines/s; 66 % of a core with the software bank. **On the unit** (2026-10-29, the channelizer bitstream, `bins = 16`): RX 47 976 frames/s (48 000 due); FT8 on bins 211 spots in the first 4 slots (40 m + 20 m, as the RX-channel receiver that morning); 14 web sessions + the 2 skimmers on all 16 channels: 12 000 S/s each, no gaps or drops, no FT8 slot dropped (416 spots in 8), both cores busy. `BinRx` cost 3.1 % of an A9 core per tuned channel (`examples/binrxbench`), so 16 channels was the hw thread's practical limit; since §3's 60 kS/s path, 0.98 % (marginal), and a USB listener 3.2 % in all instead of 5.4 %. (A first run lost 15 % of the frames: idle channels were filtered too; fixed.) |
+| 4 | waterfall from the power line and per-bin zoom | browser check; zoomed view seamless across bin edges. **Done** (§4): spans 3.84 MHz to 15 kHz in headless Chromium, no seams; webload 14 sessions (mixed views; and 14 distinct 480 kHz zooms): audio 12 000 S/s each, no gaps, 20 fresh lines/s |
+| 5 | HPSDR at 48 kS/s from bins | `p1probe` against the server. **Done**: 48 kS/s, no sequence gaps, the in-band tones as on RX channels (within 0.2 dB); since the 60 kS/s change, resampled in the HPSDR server (test `two_receivers_from_60k_blocks`: tones within 0.02 dB). The band edges differ: §6 |
 | 6 | the channelizer bitstream's driver (`/dev/mem` + a reserved DMA window, or a small kernel module) | on the test unit (`hw/docs/channelizer.md` §5). **Driver side done** (2026-10-29): the open `web888-sdr` driver's `ZSDR_PFB_*` ioctls (the units now run it under web888-ng-os, so the driver allocates the rings itself), `BinRadio` for `ZynqsdrRadio` with the channelizer signature (`crates/zynqsdr/src/pfb.rs`: the ring parsers; tests against a fake driver). Not yet on hardware |
 
 ## 6. Open
+
+* **HPSDR's 48 kHz from one bin**: the bin is flat to ±21 kHz around
+  its centre and the dial may be 15 kHz off it, so of the 48 kHz a
+  receiver sends, only what is within both ±18 kHz of the dial and ±21
+  kHz of the bin's centre is clean; the rest of one edge is folded
+  (p1probe on the recording: components at ±21-23 kHz up to 14 dB
+  above the RX channel's). Decoding and listening are unaffected; a
+  panadapter shows it. A clean 48 kHz would take the two or three bins
+  the window covers, crossed over (2-3x the per-channel work).
+* **The frames' cost per frame**: a `BinFrame` (and a `Vec`) per 60 kHz
+  frame on the hw thread; binrxbench's fixed part is ~11-14 % of an A9
+  core. A block of frames in one allocation would save most of it.
+* **The unit at more than 16 channels** (`bins = 32`): not run yet.
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
