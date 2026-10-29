@@ -154,6 +154,11 @@ impl WfEngine {
         self.n
     }
 
+    /// Whether [`line`](Self::line) has new samples to draw.
+    pub fn ready(&self) -> bool {
+        self.fresh > 0 && (self.nacc > 0 || self.buf.len() >= self.n)
+    }
+
     /// Most FFTs per line from the next line on (load shedding).
     pub fn set_budget(&mut self, budget: usize) {
         self.spec.budget = budget.max(1);

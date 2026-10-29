@@ -120,6 +120,19 @@ bin's centre. Checked in headless Chromium on the iq backend: spans
 bin edge at its level once, a missing bin at the power line's level, the
 power line averaged.
 
+**Dragging and wide views (2026-10-29).** A view whose only session
+drags or zooms it moves with the session instead of starting over: it
+keeps the FFTs of the bins it still covers and runs one bin more on
+each side (`TAP_BINS` 19), so a bin coming into view has its spectrum
+at hand; while bins new to it fill, it holds its lines (at most 250 ms)
+rather than draw the power line's flat level there. The UI's spectrum
+average follows a moved view instead of restarting. Wide views (more
+than 17 bins: 960 kHz and up) still have only the power line's 30 kHz:
+the UI draws bins wider than 3 pixels interpolated between their
+centres (spectrum and waterfall shader) instead of as blocks. That is
+smoother, not finer; finer needs more bins read (a 960 kHz zoom: 35, about
+18 % more of a core) or bins read in turns.
+
 ## 5. Steps (each ends in a commit)
 
 | # | content | done when |

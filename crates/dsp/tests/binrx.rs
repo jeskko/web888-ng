@@ -249,17 +249,21 @@ fn the_tap_gets_frames_and_power_lines() {
     h.want((990..1060).collect(), 20.0);
     let mut buf = vec![Iq32::default(); 2 * 512];
     r.read_rx(&mut buf).unwrap();
-    // the channels' bins, then the tap's from its first on, 17 more
+    // the channels' bins, then the tap's from its first on, TAP_BINS more
     let sel = r.inner().selections.last().unwrap().clone();
     assert_eq!(sel.len(), 2 + web888_dsp::binrx::TAP_BINS);
     assert_eq!(sel[0], 236);
-    assert_eq!(sel[1..], (990..1008).collect::<Vec<_>>()[..]);
+    let tap_end = 990 + web888_dsp::binrx::TAP_BINS + 1;
+    assert_eq!(sel[1..], (990..tap_end).collect::<Vec<_>>()[..]);
     assert_eq!(r.inner().power_frames, 3000);
     let (mut frames, mut lines) = (0, 0);
     while let Ok(m) = rx.try_recv() {
         match m {
             TapMsg::Frames(f) => {
-                assert!(f.iter().all(|f| f.bins.len() == 19));
+                assert!(
+                    f.iter()
+                        .all(|f| f.bins.len() == 2 + web888_dsp::binrx::TAP_BINS)
+                );
                 frames += f.iter().map(|f| f.count).sum::<usize>();
             }
             TapMsg::Power(p) => {

@@ -101,8 +101,21 @@ impl Waterfalls {
         for (slot, views) in g.sched.plans() {
             let _ = g.hw.send(HwCmd::WfPlan { slot, views });
         }
-        // views no session watches end with their jobs
         let live: Vec<u64> = g.sched.views().iter().map(|v| v.generation).collect();
+        // from the bins, a view whose only session moved it to where no
+        // view is goes along: its FFTs carry on (a new one starts empty)
+        let moved = match (old, new) {
+            (Some(o), Some(n))
+                if self.bins.is_some()
+                    && o != n
+                    && !live.contains(&o)
+                    && !g.jobs.contains_key(&n) =>
+            {
+                g.jobs.remove(&o)
+            }
+            _ => None,
+        };
+        // views no session watches end with their jobs
         g.jobs.retain(|k, _| live.contains(k));
         if let Some(o) = old
             && Some(o) != new
@@ -112,12 +125,21 @@ impl Waterfalls {
         }
         match (new, v) {
             (Some(n), Some(v)) => {
+                let span_hz = self.adc_hz / v.decim as f64;
+                let new_gen = old != new && moved.is_none();
+                if let Some(tx) = moved {
+                    let _ = tx.send(ViewCmd::Move {
+                        center_hz: v.center_hz,
+                        span_hz,
+                    });
+                    g.jobs.insert(n, tx);
+                }
                 let tx = g.jobs.entry(n).or_insert_with(|| {
                     let (tx, rx) = crossbeam_channel::unbounded();
                     match &self.bins {
                         Some(tap) => self.pool.add(Box::new(BinViewJob::new(
                             v.center_hz,
-                            self.adc_hz / v.decim as f64,
+                            span_hz,
                             budget,
                             tap,
                             rx,
@@ -138,7 +160,7 @@ impl Waterfalls {
                     bins: v.bins,
                     fps: v.fps,
                     sink: sink.clone(),
-                    new_gen: old != new,
+                    new_gen,
                 }));
                 g.sessions.insert(s, n);
             }

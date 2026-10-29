@@ -24,55 +24,92 @@ use web888_dsp::rx_to_c32;
 use web888_dsp::wf::{WF_DB0, WfEngine, WfSpec};
 use web888_radio::bins::{BinCaps, BinFrames};
 
-/// Most bins a zoomed view takes (a 480 kHz span at 30 kHz: 17; each bin
+/// Most bins a zoomed view shows (a 480 kHz span at 30 kHz: 17; each bin
 /// read costs the A9 about 1 % of a core); wider views draw the power
 /// line. All views together get `binrx::TAP_BINS` beyond the channels'.
 pub const ZOOM_BINS: usize = 17;
+
+/// Bins a zoomed view also runs on each side of the ones it shows, so a
+/// view dragged across a bin edge has the new bin's spectrum at hand.
+const MARGIN: usize = 1;
+
+/// After a move or a zoom, how long a view holds its lines while bins
+/// new to it fill their FFTs (instead of drawing the power line there).
+const SETTLE: Duration = Duration::from_millis(250);
 
 struct Sub {
     s: ViewSub,
     next: Instant,
 }
 
-/// The frames' bin list last seen and each view bin's index in it.
+/// The frames' bin list last seen and each engine's index in it.
 type BinMap = (Arc<[usize]>, Vec<Option<usize>>);
 
-/// The per-bin FFTs of a zoomed view.
+/// One bin's FFT.
+struct Eng {
+    bin: usize,
+    e: WfEngine,
+    /// The bin's last frame.
+    last: Option<u64>,
+}
+
+/// The per-bin FFTs of a zoomed view: the bins it shows and its margin,
+/// by frequency.
 struct Zoom {
     n: usize,
     fps: f64,
-    engines: Vec<WfEngine>,
-    /// Each view bin's last frame.
-    last: Vec<Option<u64>>,
+    engs: Vec<Eng>,
     map: Option<BinMap>,
 }
 
 impl Zoom {
-    fn frames(&mut self, view: &[usize], runs: &[BinFrames]) {
+    /// Run `bins`, keeping the FFTs of those already running.
+    fn keep(&mut self, bins: &[usize], spec: WfSpec) {
+        let mut old = std::mem::take(&mut self.engs);
+        self.engs = bins
+            .iter()
+            .map(|&bin| match old.iter().position(|e| e.bin == bin) {
+                Some(k) => old.swap_remove(k),
+                None => Eng {
+                    bin,
+                    e: WfEngine::with_fft_size(spec, self.n),
+                    last: None,
+                },
+            })
+            .collect();
+        self.map = None;
+    }
+
+    fn frames(&mut self, runs: &[BinFrames]) {
         for f in runs {
             if !self
                 .map
                 .as_ref()
                 .is_some_and(|(b, _)| Arc::ptr_eq(b, &f.bins))
             {
-                let idx = view.iter().map(|b| f.bins.binary_search(b).ok()).collect();
+                let idx = self
+                    .engs
+                    .iter()
+                    .map(|e| f.bins.binary_search(&e.bin).ok())
+                    .collect();
                 self.map = Some((f.bins.clone(), idx));
             }
             let (_, idx) = self.map.as_ref().expect("set");
             let n = f.bins.len();
-            for (i, j) in idx.iter().enumerate() {
+            for (e, j) in self.engs.iter_mut().zip(idx) {
                 let Some(j) = *j else { continue };
-                let contiguous = self.last[i].is_some_and(|l| l + 1 == f.first);
+                let contiguous = e.last.is_some_and(|l| l + 1 == f.first);
                 let x = (0..f.count).map(|k| rx_to_c32(f.iq[k * n + j]));
-                self.engines[i].push_c32(x, contiguous);
-                self.last[i] = Some(f.end() - 1);
+                e.e.push_c32(x, contiguous);
+                e.last = Some(f.end() - 1);
             }
         }
     }
 }
 
-/// One view from the bins, shared by its sessions. Ends when the service
-/// drops its command sender (the view is gone).
+/// One view from the bins, shared by its sessions; its only session may
+/// move it ([`ViewCmd::Move`]). Ends when the service drops its command
+/// sender (the view is gone).
 pub struct BinViewJob {
     center_hz: f64,
     span_hz: f64,
@@ -90,6 +127,10 @@ pub struct BinViewJob {
     psum: Vec<f64>,
     plines: usize,
     plast: Option<Vec<f32>>,
+    /// The last power line, for the levels of a moved view's new bins.
+    praw: Option<Arc<Vec<f32>>>,
+    /// The last move or zoom.
+    moved: Instant,
     next: Instant,
 }
 
@@ -106,6 +147,10 @@ pub fn view_bins(caps: &BinCaps, lo: f64, hi: f64) -> Vec<usize> {
     v
 }
 
+fn db(p: f64) -> f32 {
+    (10.0 * p.max(1e-30).log10()) as f32
+}
+
 impl BinViewJob {
     pub fn new(
         center_hz: f64,
@@ -116,7 +161,6 @@ impl BinViewJob {
     ) -> Self {
         let caps = tap.caps();
         let (handle, rx) = tap.subscribe();
-        let view = view_bins(&caps, center_hz - span_hz / 2.0, center_hz + span_hz / 2.0);
         BinViewJob {
             center_hz,
             span_hz,
@@ -126,13 +170,42 @@ impl BinViewJob {
             subs: Vec::new(),
             tap: handle,
             rx,
-            psum: vec![0.0; view.len()],
-            view,
+            psum: Vec::new(),
+            view: Vec::new(),
             zoom: None,
             plines: 0,
             plast: None,
+            praw: None,
+            moved: Instant::now(),
             next: Instant::now(),
         }
+        .moved_to(center_hz, span_hz)
+    }
+
+    /// The view at `center_hz`, `span_hz`: its bins, and its power levels
+    /// from the last power line.
+    fn moved_to(mut self, center_hz: f64, span_hz: f64) -> Self {
+        self.move_to(center_hz, span_hz);
+        self
+    }
+
+    fn move_to(&mut self, center_hz: f64, span_hz: f64) {
+        self.center_hz = center_hz;
+        self.span_hz = span_hz;
+        self.view = view_bins(
+            &self.caps,
+            center_hz - span_hz / 2.0,
+            center_hz + span_hz / 2.0,
+        );
+        self.psum = vec![0.0; self.view.len()];
+        self.plines = 0;
+        self.plast = self.praw.as_ref().map(|p| {
+            self.view
+                .iter()
+                .map(|&k| db(p.get(k).copied().unwrap_or(0.0) as f64))
+                .collect()
+        });
+        self.moved = Instant::now();
     }
 
     fn zoomed(&self) -> bool {
@@ -147,35 +220,42 @@ impl BinViewJob {
     /// and the tap told what the view wants.
     fn fit(&mut self) {
         let fps = self.fps();
-        if self.zoomed() {
-            let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
-            // FFT bins no wider than the display's
-            let fs = self.caps.frame_rate;
-            let n = ((fs * px as f64 / self.span_hz).ceil() as usize)
-                .next_power_of_two()
-                .clamp(64, 8192);
-            if !self.zoom.as_ref().is_some_and(|z| z.n == n && z.fps == fps) {
-                let spec = WfSpec {
-                    fs,
-                    bins: n,
-                    budget: self.budget,
-                    fps,
-                    droop: Droop::None,
-                    fft_per_bin: 1,
-                };
-                let k = self.view.len();
-                self.zoom = Some(Zoom {
-                    n,
-                    fps,
-                    engines: (0..k).map(|_| WfEngine::with_fft_size(spec, n)).collect(),
-                    last: vec![None; k],
-                    map: None,
-                });
-            }
-            self.tap.want(self.view.clone(), fps);
-        } else {
+        if !self.zoomed() {
+            self.zoom = None;
             self.tap.want(Vec::new(), fps);
+            return;
         }
+        let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
+        // FFT bins no wider than the display's
+        let fs = self.caps.frame_rate;
+        let n = ((fs * px as f64 / self.span_hz).ceil() as usize)
+            .next_power_of_two()
+            .clamp(64, 8192);
+        if !self.zoom.as_ref().is_some_and(|z| z.n == n && z.fps == fps) {
+            self.zoom = Some(Zoom {
+                n,
+                fps,
+                engs: Vec::new(),
+                map: None,
+            });
+        }
+        let spec = WfSpec {
+            fs,
+            bins: n,
+            budget: self.budget,
+            fps,
+            droop: Droop::None,
+            fft_per_bin: 1,
+        };
+        let m = MARGIN as f64 * self.caps.bin_hz;
+        let lo = self.center_hz - self.span_hz / 2.0;
+        let hi = self.center_hz + self.span_hz / 2.0;
+        let run = view_bins(&self.caps, lo - m, hi + m);
+        self.zoom.as_mut().expect("set").keep(&run, spec);
+        // the shown bins first: the margin is the first to go short
+        let mut want = self.view.clone();
+        want.extend(run.iter().filter(|b| !self.view.contains(b)));
+        self.tap.want(want, fps);
     }
 
     fn commands(&mut self, now: Instant) -> bool {
@@ -195,6 +275,10 @@ impl BinViewJob {
                 }
                 Ok(ViewCmd::Remove(id)) => {
                     self.subs.retain(|x| x.s.session != id);
+                    changed = true;
+                }
+                Ok(ViewCmd::Move { center_hz, span_hz }) => {
+                    self.move_to(center_hz, span_hz);
                     changed = true;
                 }
                 Err(TryRecvError::Empty) => break,
@@ -217,7 +301,7 @@ impl BinViewJob {
             match m {
                 TapMsg::Frames(f) => {
                     if let Some(z) = &mut self.zoom {
-                        z.frames(&self.view, &f);
+                        z.frames(&f);
                     }
                 }
                 TapMsg::Power(line) => {
@@ -225,6 +309,7 @@ impl BinViewJob {
                         *s += line.get(k).copied().unwrap_or(0.0) as f64;
                     }
                     self.plines += 1;
+                    self.praw = Some(line);
                 }
             }
         }
@@ -234,11 +319,7 @@ impl BinViewJob {
     fn power_line(&mut self) -> Option<(Vec<f32>, bool)> {
         if self.plines > 0 {
             let inv = 1.0 / self.plines as f64;
-            let db = self
-                .psum
-                .iter()
-                .map(|&p| (10.0 * (p * inv).max(1e-30).log10()) as f32)
-                .collect::<Vec<_>>();
+            let db = self.psum.iter().map(|&p| db(p * inv)).collect::<Vec<_>>();
             self.psum.fill(0.0);
             self.plines = 0;
             self.plast = Some(db.clone());
@@ -248,10 +329,19 @@ impl BinViewJob {
     }
 
     /// This line, finely binned over the view's bins: levels, the first
-    /// one's frequency, the spacing, whether anything new came.
-    fn line(&mut self) -> Option<(Vec<f32>, f64, f64, bool)> {
+    /// one's frequency, the spacing, whether anything new came. `None`
+    /// while there is nothing yet, or while bins just added fill.
+    fn line(&mut self, now: Instant) -> Option<(Vec<f32>, f64, f64, bool)> {
         let bin_hz = self.caps.bin_hz;
         let first = self.caps.freq(*self.view.first()?);
+        if let Some(z) = &self.zoom
+            && now < self.moved + SETTLE
+            && z.engs
+                .iter()
+                .any(|e| self.view.contains(&e.bin) && !e.e.ready())
+        {
+            return None;
+        }
         let power = self.power_line();
         let Some(z) = &mut self.zoom else {
             let (db, fresh) = power?;
@@ -264,8 +354,12 @@ impl BinViewJob {
         let mut db = Vec::with_capacity(keep * self.view.len());
         let mut fresh = false;
         let mut any = power.is_some();
-        for (i, e) in z.engines.iter_mut().enumerate() {
-            let l = e.line();
+        for e in &mut z.engs {
+            // the margin's lines too: they stay current
+            let l = e.e.line();
+            let Some(i) = self.view.iter().position(|&b| b == e.bin) else {
+                continue;
+            };
             any |= l.is_some();
             match l {
                 Some(l) if l.fresh => {
@@ -324,11 +418,11 @@ impl Job for BinViewJob {
         let (budget, p) = shed(self.budget, self.fps(), ctx.shed);
         self.next = (self.next + p).max(now);
         if let Some(z) = &mut self.zoom {
-            for e in &mut z.engines {
-                e.set_budget(budget);
+            for e in &mut z.engs {
+                e.e.set_budget(budget);
             }
         }
-        if let Some((db, f0, df, fresh)) = self.line() {
+        if let Some((db, f0, df, fresh)) = self.line(now) {
             self.send(&db, f0, df, fresh, now, p);
         }
         true
@@ -421,7 +515,11 @@ mod tests {
         tap: &BinTap,
         center: f64,
         span: f64,
-    ) -> (BinViewJob, tokio::sync::mpsc::Receiver<Vec<u8>>) {
+    ) -> (
+        BinViewJob,
+        tokio::sync::mpsc::Receiver<Vec<u8>>,
+        crossbeam_channel::Sender<ViewCmd>,
+    ) {
         let (ctx, crx) = crossbeam_channel::unbounded();
         let (tx, rx) = tokio::sync::mpsc::channel(64);
         let sink = WfSink::new(Out {
@@ -436,16 +534,14 @@ mod tests {
             new_gen: true,
         }))
         .unwrap();
-        // the job keeps its command channel open while the sender lives
-        std::mem::forget(ctx);
-        (BinViewJob::new(center, span, 4, tap, crx), rx)
+        (BinViewJob::new(center, span, 4, tap, crx), rx, ctx)
     }
 
     #[test]
     fn a_zoomed_view_tiles_the_bins_without_a_seam() {
         let tap = BinTap::new(CAPS);
         // 480 kHz around 7.074 MHz: bins 228..=244
-        let (mut j, mut rx) = job(&tap, 7.074e6, 480e3);
+        let (mut j, mut rx, _ctx) = job(&tap, 7.074e6, 480e3);
         let t0 = Instant::now();
         assert!(j.tick(t0, Ctx::default()));
         assert!(tap.wants_frames());
@@ -473,7 +569,7 @@ mod tests {
     #[test]
     fn bins_missing_from_the_frames_show_the_power_line() {
         let tap = BinTap::new(CAPS);
-        let (mut j, mut rx) = job(&tap, 7.074e6, 480e3);
+        let (mut j, mut rx, _ctx) = job(&tap, 7.074e6, 480e3);
         let t0 = Instant::now();
         j.tick(t0, Ctx::default());
         let sel: Vec<usize> = j.view.iter().copied().filter(|&k| k != 238).collect();
@@ -481,7 +577,10 @@ mod tests {
         let mut p = vec![0f32; 2048];
         p[238] = 1e-3;
         tap.send_power(Arc::new(p));
-        j.tick(t0 + Duration::from_millis(200), Ctx::default());
+        // held while the view settles: the bin may yet come
+        j.tick(t0 + Duration::from_millis(100), Ctx::default());
+        assert!(rx.try_recv().is_err());
+        j.tick(t0 + SETTLE + Duration::from_millis(50), Ctx::default());
         let l = newest(&mut rx);
         // bin 238 (7.14 MHz) at the power line's -30 dB across its 30 kHz
         for off in [-14e3, 0.0, 14e3] {
@@ -492,10 +591,47 @@ mod tests {
     }
 
     #[test]
+    fn a_dragged_view_keeps_its_ffts() {
+        let tap = BinTap::new(CAPS);
+        // 60 kHz around 7.074 MHz: bins 235..=237 shown, 234 and 238 run
+        let (mut j, mut rx, ctx) = job(&tap, 7.074e6, 60e3);
+        let t0 = Instant::now();
+        j.tick(t0, Ctx::default());
+        assert_eq!(j.view, vec![235, 236, 237]);
+        let tones = [(7.074e6, 0.1), (7.11e6, 0.1)];
+        let run = [234, 235, 236, 237, 238];
+        tap.send_frames(frames(&run, 0, 6000, &tones));
+        j.tick(t0 + Duration::from_millis(100), Ctx::default());
+        newest(&mut rx);
+        let bins = |j: &BinViewJob| {
+            j.zoom
+                .as_ref()
+                .unwrap()
+                .engs
+                .iter()
+                .map(|e| e.bin)
+                .collect::<Vec<_>>()
+        };
+        assert_eq!(bins(&j), vec![234, 235, 236, 237, 238]);
+        // 30 kHz up: bin 238 is shown at once, from the margin's FFTs
+        ctx.send(ViewCmd::Move {
+            center_hz: 7.104e6,
+            span_hz: 60e3,
+        })
+        .unwrap();
+        tap.send_frames(frames(&run, 6000, 6000, &tones));
+        j.tick(t0 + Duration::from_millis(200), Ctx::default());
+        assert_eq!(j.view, vec![236, 237, 238]);
+        let l = newest(&mut rx);
+        assert!((l.at(7.11e6) + 20.0).abs() < 1.0, "{}", l.at(7.11e6));
+        assert_eq!(bins(&j), vec![235, 236, 237, 238, 239]);
+    }
+
+    #[test]
     fn a_wide_view_draws_the_power_line() {
         let tap = BinTap::new(CAPS);
         // 7.68 MHz around 7.68 MHz: 257 bins, too many to zoom
-        let (mut j, mut rx) = job(&tap, 7.68e6, 7.68e6);
+        let (mut j, mut rx, _ctx) = job(&tap, 7.68e6, 7.68e6);
         let t0 = Instant::now();
         j.tick(t0, Ctx::default());
         assert!(!tap.wants_frames());

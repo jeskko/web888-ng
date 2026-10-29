@@ -14,6 +14,7 @@
 
 import type { WfLine } from "../proto.ts";
 import { colormap } from "./colormap.ts";
+import { COARSE_PX } from "./spectrum.ts";
 
 const ROWS = 2048;
 const MAX_BINS = 4096;
@@ -42,10 +43,20 @@ void main() {
   vec4 p0 = texelFetch(uParams, ivec2(0, line), 0); // f0 block, f0 lo, df, bins
   vec4 p1 = texelFetch(uParams, ivec2(1, line), 0); // db0, step
   float off = float(uViewBlk - int(p0.x)) * ${SPLIT}.0 + (uViewLo - p0.y) + gl_FragCoord.x / uWidth * uSpan;
-  float b = floor(off / p0.z + 0.5);
+  float fb = off / p0.z;
+  float b = floor(fb + 0.5);
   if (uDebug == 1 && p0.z <= 0.0) { color = vec4(1, 1, 0, 1); return; }
   if (b < 0.0 || b >= p0.w) { color = uDebug == 1 ? (b < 0.0 ? vec4(0, 1, 0, 1) : vec4(0, 0, 1, 1)) : BG; return; }
   float v = texelFetch(uHist, ivec2(int(b), line), 0).r * 255.0;
+  // bins several pixels wide (the power line's in a wide view):
+  // interpolated between their centres, not drawn as blocks
+  if (p0.z > ${COARSE_PX}.0 * uSpan / uWidth) {
+    float i = clamp(floor(fb), 0.0, p0.w - 1.0);
+    float j = min(i + 1.0, p0.w - 1.0);
+    float v0 = texelFetch(uHist, ivec2(int(i), line), 0).r;
+    float v1 = texelFetch(uHist, ivec2(int(j), line), 0).r;
+    v = mix(v0, v1, clamp(fb - i, 0.0, 1.0)) * 255.0;
+  }
   float db = p1.x + v * p1.y;
   float t = clamp((db - uMin) / (uMax - uMin), 0.0, 1.0);
   color = texture(uLut, vec2(t, 0.5));

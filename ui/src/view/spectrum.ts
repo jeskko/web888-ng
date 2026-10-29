@@ -65,6 +65,10 @@ export interface SpotHit<T = unknown> {
 const SPOT_ROWS = 3;
 const SPOT_ROW_PX = 13;
 
+/** Bins wider than this many device pixels are interpolated between their
+ * centres (the waterfall's shader does the same). */
+export const COARSE_PX = 3;
+
 /** Marker triangle size (CSS px). */
 export const MARK_PX = 7;
 
@@ -95,11 +99,21 @@ export class Spectrum {
   }
 
   push(l: WfLine): void {
-    const fresh =
-      !this.avg || !this.last || l.flags & FLAG_NEW_GEN || this.avg.length !== l.levels.length || l.f0 !== this.last.f0 || l.df !== this.last.df;
+    const fresh = !this.avg || !this.last || l.flags & FLAG_NEW_GEN || l.df !== this.last.df;
+    const moved = !fresh && (this.avg!.length !== l.levels.length || l.f0 !== this.last!.f0);
     if (fresh) {
       this.avg = new Float32Array(l.levels.length);
       for (let k = 0; k < l.levels.length; k++) this.avg[k] = l.db0 + l.levels[k] * l.dbStep;
+    } else if (moved) {
+      // the view moved: the average goes along where it overlaps
+      const old = this.avg!;
+      const shift = (l.f0 - this.last!.f0) / l.df;
+      this.avg = new Float32Array(l.levels.length);
+      for (let k = 0; k < l.levels.length; k++) {
+        const v = l.db0 + l.levels[k] * l.dbStep;
+        const j = Math.round(k + shift);
+        this.avg[k] = j >= 0 && j < old.length ? old[j] + 0.15 * (v - old[j]) : v;
+      }
     } else {
       for (let k = 0; k < l.levels.length; k++) this.avg![k] += 0.15 * (l.db0 + l.levels[k] * l.dbStep - this.avg![k]);
     }
@@ -174,11 +188,31 @@ export class Spectrum {
     const l = this.last;
     if (l && this.avg) {
       const bin = (px: number) => (start + (px / w) * span - l.f0) / l.df;
+      // bins wider than COARSE_PX pixels (the power line's 30 kHz in a
+      // wide view): drawn interpolated
+      const coarse = l.df > (COARSE_PX * span) / w;
       const trace = (val: (k: number) => number, style: string, peak: boolean) => {
         ctx.strokeStyle = style;
         ctx.beginPath();
         let pen = false;
+        const last = l.levels.length - 1;
         for (let px = 0; px < w; px++) {
+          if (coarse) {
+            // between the bins' centres: a line, not steps
+            const t = bin(px + 0.5);
+            if (t < -0.5 || t > last + 0.5) {
+              pen = false;
+              continue;
+            }
+            const i = Math.min(Math.max(Math.floor(t), 0), last);
+            const j = Math.min(i + 1, last);
+            const f = Math.min(Math.max(t - i, 0), 1);
+            const yy = y(val(i) + f * (val(j) - val(i)));
+            if (pen) ctx.lineTo(px, yy);
+            else ctx.moveTo(px, yy);
+            pen = true;
+            continue;
+          }
           const b0 = Math.round(bin(px));
           const b1 = Math.max(b0, Math.round(bin(px + 1)) - 1);
           if (b1 < 0 || b0 >= l.levels.length) {

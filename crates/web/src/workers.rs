@@ -356,6 +356,12 @@ pub enum ViewCmd {
     /// Add a session, or update its bins and rate.
     Add(ViewSub),
     Remove(SessionId),
+    /// Show another part of the band (a view from the bins whose only
+    /// session moved it: its FFTs carry on).
+    Move {
+        center_hz: f64,
+        span_hz: f64,
+    },
 }
 
 /// One hardware view shared by its sessions, captured at twice its span
@@ -450,6 +456,8 @@ impl ViewJob {
                     self.subs.retain(|x| x.s.session != id);
                     changed = true;
                 }
+                // hardware views are captured where they are
+                Ok(ViewCmd::Move { .. }) => {}
                 Err(TryRecvError::Empty) => break,
                 Err(TryRecvError::Disconnected) => return false,
             }
