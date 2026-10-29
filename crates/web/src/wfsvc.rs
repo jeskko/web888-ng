@@ -11,13 +11,19 @@
 //! widest view (decimation 2) is then the undecimated mixer output, whose
 //! middle half is exactly 0..fs/2 of the real ADC signal, free of the
 //! mirror images a decimated complex view of it shows.
+//!
+//! In bins mode (a channelizer, [`Waterfalls::from_bins`]) there are no
+//! slots: each view is a [`BinViewJob`] drawing the bins or the power
+//! line, at the span asked for.
 
+use crate::binview::BinViewJob;
 use crate::workers::{ViewCmd, ViewJob, ViewSub, WfSink};
 use std::collections::HashMap;
 use std::sync::mpsc::Sender;
 use std::sync::{Arc, Mutex};
 use web888_core::pool::DspPool;
 use web888_core::wf::{HwReq, SessionId, ViewInfo, WfScheduler};
+use web888_dsp::binrx::BinTap;
 use web888_hw::HwCmd;
 
 /// A view's hardware decimation: twice its span (see the module docs).
@@ -38,6 +44,7 @@ pub struct Waterfalls {
     inner: Mutex<Inner>,
     pool: Arc<DspPool>,
     adc_hz: f64,
+    bins: Option<BinTap>,
 }
 
 struct Inner {
@@ -66,6 +73,15 @@ impl Waterfalls {
             }),
             pool,
             adc_hz,
+            bins: None,
+        }
+    }
+
+    /// Views from a channelizer's bins (no WF slots).
+    pub fn from_bins(tap: BinTap, adc_hz: f64, hw: Sender<HwCmd>, pool: Arc<DspPool>) -> Self {
+        Waterfalls {
+            bins: Some(tap),
+            ..Self::new(0, adc_hz, 1, hw, pool)
         }
     }
 
@@ -98,14 +114,23 @@ impl Waterfalls {
             (Some(n), Some(v)) => {
                 let tx = g.jobs.entry(n).or_insert_with(|| {
                     let (tx, rx) = crossbeam_channel::unbounded();
-                    self.pool.add(Box::new(ViewJob::new(
-                        n,
-                        v.center_hz,
-                        self.adc_hz,
-                        hw_decim(v.decim),
-                        budget,
-                        rx,
-                    )));
+                    match &self.bins {
+                        Some(tap) => self.pool.add(Box::new(BinViewJob::new(
+                            v.center_hz,
+                            self.adc_hz / v.decim as f64,
+                            budget,
+                            tap,
+                            rx,
+                        ))),
+                        None => self.pool.add(Box::new(ViewJob::new(
+                            n,
+                            v.center_hz,
+                            self.adc_hz,
+                            hw_decim(v.decim),
+                            budget,
+                            rx,
+                        ))),
+                    };
                     tx
                 });
                 let _ = tx.send(ViewCmd::Add(ViewSub {

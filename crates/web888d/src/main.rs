@@ -290,7 +290,20 @@ fn parse_gain(s: &str) -> std::result::Result<(String, f64), String> {
     Ok((n.to_string(), g.parse().map_err(|e| format!("{e}"))?))
 }
 
-fn open_iq(a: &web888_config::Iq, bins: Option<usize>) -> AnyResult<Box<dyn Radio>> {
+/// The radio, and in bins mode the tap for waterfalls from the bins.
+type Opened = (Box<dyn Radio>, Option<web888_dsp::binrx::BinTap>);
+
+/// `radio`'s bins as `n` RX channels.
+fn bin_rx<R: Radio + web888_radio::bins::BinRadio + 'static>(
+    radio: R,
+    n: usize,
+) -> AnyResult<Opened> {
+    let mut r = web888_dsp::binrx::BinRx::new(radio, n)?;
+    let tap = r.tap();
+    Ok((Box::new(r), Some(tap)))
+}
+
+fn open_iq(a: &web888_config::Iq, bins: Option<usize>) -> AnyResult<Opened> {
     use web888_iq::source::{FileSource, Format, IqSource};
     use web888_iq::{IqConfig, IqRadio};
     let spec = a
@@ -322,9 +335,9 @@ fn open_iq(a: &web888_config::Iq, bins: Option<usize>) -> AnyResult<Box<dyn Radi
     match bins {
         Some(n) => {
             eprintln!("bins: {n} RX channels from the software bank's 30 kHz bins");
-            Ok(Box::new(web888_dsp::binrx::BinRx::new(radio, n)?))
+            bin_rx(radio, n)
         }
-        None => Ok(Box::new(radio)),
+        None => Ok((Box::new(radio), None)),
     }
 }
 
@@ -604,7 +617,7 @@ fn wf_span_decim_min(caps: &Caps) -> u16 {
     d
 }
 
-fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
+fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
     match a.backend {
         Backend::Sim => {
             let mut scene = Scene::new();
@@ -614,10 +627,10 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
             if a.sim.noise {
                 scene = scene.adc_noise();
             }
-            Ok(Box::new(SimRadio::new(SimConfig::hf(
-                scene,
-                Pacing::RealTime,
-            ))))
+            Ok((
+                Box::new(SimRadio::new(SimConfig::hf(scene, Pacing::RealTime))),
+                None,
+            ))
         }
         Backend::Iq => open_iq(&a.iq, a.bins),
         Backend::Zynqsdr => {
@@ -670,11 +683,11 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Box<dyn Radio>> {
             if web888_zynqsdr::is_channelizer(sig) {
                 let n = a.bins.unwrap_or(32);
                 eprintln!("bins: {n} RX channels from the channelizer bitstream");
-                Ok(Box::new(web888_dsp::binrx::BinRx::new(radio, n)?))
+                bin_rx(radio, n)
             } else if a.bins.is_some() {
                 Err(format!("bins: needs the channelizer bitstream (signature 0x{sig:08x})").into())
             } else {
-                Ok(Box::new(radio))
+                Ok((Box::new(radio), None))
             }
         }
     }
@@ -817,7 +830,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     } else {
         eprintln!("config: {} not found, using defaults", a.config.display());
     }
-    let mut radio = open_radio(&cfg.radio)?;
+    let (mut radio, bin_tap) = open_radio(&cfg.radio)?;
     let caps = radio.caps();
     let id = radio.identity();
     eprintln!(
@@ -910,13 +923,21 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 wf_decim_max: caps.wf_decim_max,
             },
             channels: channels.clone(),
-            waterfalls: web888_web::wfsvc::Waterfalls::new(
-                caps.wf_channels,
-                caps.adc_hz,
-                caps.wf_block,
-                ctl_tx.clone(),
-                pool.clone(),
-            ),
+            waterfalls: match bin_tap {
+                Some(tap) => web888_web::wfsvc::Waterfalls::from_bins(
+                    tap,
+                    caps.adc_hz,
+                    ctl_tx.clone(),
+                    pool.clone(),
+                ),
+                None => web888_web::wfsvc::Waterfalls::new(
+                    caps.wf_channels,
+                    caps.adc_hz,
+                    caps.wf_block,
+                    ctl_tx.clone(),
+                    pool.clone(),
+                ),
+            },
             pool,
             rx_r2: r2,
             live: live_rx,

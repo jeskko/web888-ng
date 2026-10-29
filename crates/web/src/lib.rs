@@ -6,6 +6,7 @@
 
 pub mod admin;
 pub mod auth;
+pub mod binview;
 pub mod proto;
 pub mod session;
 pub mod sysstat;

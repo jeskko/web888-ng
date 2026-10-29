@@ -93,9 +93,16 @@ pub struct WfEngine {
 
 impl WfEngine {
     pub fn new(spec: WfSpec) -> Self {
+        Self::with_fft_size(spec, fft_size(spec.bins, spec.fft_per_bin))
+    }
+
+    /// With FFT size `n` (a power of two, at least `spec.bins`), smaller
+    /// than [`fft_size`] allows: the per-bin FFTs of a view from a
+    /// channelizer's bins.
+    pub fn with_fft_size(spec: WfSpec, n: usize) -> Self {
         assert!(spec.bins.is_power_of_two() && spec.bins <= 8192);
         assert!(spec.budget >= 1);
-        let n = fft_size(spec.bins, spec.fft_per_bin);
+        assert!(n.is_power_of_two() && n >= spec.bins);
         let fft = FftPlanner::new().plan_fft_forward(n);
         // 4-term Blackman-Harris
         let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);

@@ -64,7 +64,7 @@ impl WfSink {
     }
 
     /// Send levels `db` (dBFS) for bins from `f0` (Hz) every `df`.
-    fn send(&self, new_gen: bool, fresh: bool, f0: f64, df: f64, db: &[f32]) -> bool {
+    pub(crate) fn send(&self, new_gen: bool, fresh: bool, f0: f64, df: f64, db: &[f32]) -> bool {
         let mut flags = if new_gen { FLAG_NEW_GEN } else { 0 };
         if !fresh {
             flags |= FLAG_STALE;
@@ -89,13 +89,13 @@ fn unix_ms() -> f64 {
         .map_or(0.0, |d| d.as_secs_f64() * 1e3)
 }
 
-fn period(fps: f64) -> Duration {
+pub(crate) fn period(fps: f64) -> Duration {
     Duration::from_secs_f64(1.0 / fps.clamp(0.5, 60.0))
 }
 
 /// FFT budget and line period under shedding level `shed`: the budget
 /// halves per level down to 1, then the rate does.
-fn shed(budget: usize, fps: f64, level: u32) -> (usize, Duration) {
+pub(crate) fn shed(budget: usize, fps: f64, level: u32) -> (usize, Duration) {
     let steps = usize::BITS - budget.max(1).leading_zeros() - 1;
     let b = (budget >> level.min(steps)).max(1);
     let slow = level.saturating_sub(steps).min(4);
@@ -103,7 +103,7 @@ fn shed(budget: usize, fps: f64, level: u32) -> (usize, Duration) {
 }
 
 /// Merge display bins in groups of `g` (power average).
-fn rebin(db: &[f32], g: usize) -> Vec<f32> {
+pub(crate) fn rebin(db: &[f32], g: usize) -> Vec<f32> {
     if g <= 1 {
         return db.to_vec();
     }

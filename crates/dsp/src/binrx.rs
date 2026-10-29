@@ -4,8 +4,10 @@
 //! shift it to 0 Hz and resample it from the frame rate to the RX rate.
 //! Behind it the rest of the server (leases, web, skimmers, HPSDR) works as
 //! with tuned RX channels, with as many of them as configured: the limits
-//! are the bins a frame carries (64) and the CPU. The waterfall stays the
-//! inner radio's.
+//! are the bins a frame carries (64) and the CPU. The waterfall slots stay
+//! the inner radio's; waterfalls from the bins go through a [`BinTap`]:
+//! power lines, and the frames of the bins a zoomed view wants (selected
+//! after the channels' bins, as far as the frame has room).
 //!
 //! All channels resample in step (one phase schedule), so each bin frame
 //! gives every channel the same number of samples and RX frames stay whole.
@@ -15,6 +17,9 @@
 use crate::C32;
 use crate::fir::{kaiser_len, lowpass};
 use std::collections::BTreeSet;
+use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
+use std::sync::{Arc, Mutex};
 use web888_radio::bins::{BinCaps, BinFrame, BinRadio};
 use web888_radio::*;
 
@@ -125,6 +130,147 @@ impl Chan {
     }
 }
 
+/// What a [`BinTap`] subscriber gets.
+pub enum TapMsg {
+    /// Bin frames, as read (every selected bin, not only the wanted ones).
+    Frames(Arc<Vec<BinFrame>>),
+    /// A power line: every bin's mean |X|² (a full-scale sine reads 1).
+    Power(Arc<Vec<f32>>),
+}
+
+/// Messages queued per subscriber; a full queue drops (the frames' numbers
+/// show the gap).
+const TAP_DEPTH: usize = 256;
+
+/// Waterfalls' access to a [`BinRx`]'s bins, from other threads.
+#[derive(Clone)]
+pub struct BinTap(Arc<Tap>);
+
+struct Tap {
+    caps: BinCaps,
+    subs: Mutex<TapSubs>,
+    changed: AtomicBool,
+}
+
+#[derive(Default)]
+struct TapSubs {
+    next_id: u64,
+    list: Vec<TapSub>,
+}
+
+struct TapSub {
+    id: u64,
+    bins: Vec<usize>,
+    power_fps: f64,
+    tx: SyncSender<TapMsg>,
+}
+
+impl BinTap {
+    /// A tap on a source of `caps`' bins (`BinRx::tap` makes its own).
+    pub fn new(caps: BinCaps) -> Self {
+        BinTap(Arc::new(Tap {
+            caps,
+            subs: Mutex::default(),
+            changed: AtomicBool::new(false),
+        }))
+    }
+
+    pub fn caps(&self) -> BinCaps {
+        self.0.caps
+    }
+
+    /// A new subscriber, wanting nothing until [`TapHandle::want`].
+    pub fn subscribe(&self) -> (TapHandle, Receiver<TapMsg>) {
+        let (tx, rx) = sync_channel(TAP_DEPTH);
+        let mut g = self.0.subs.lock().unwrap();
+        let id = g.next_id;
+        g.next_id += 1;
+        g.list.push(TapSub {
+            id,
+            bins: Vec::new(),
+            power_fps: 0.0,
+            tx,
+        });
+        (
+            TapHandle {
+                tap: self.clone(),
+                id,
+            },
+            rx,
+        )
+    }
+
+    /// Bins wanted after the channels' (in subscription order) and the
+    /// power line rate (the fastest wanted; 0: none).
+    fn wants(&self) -> (Vec<usize>, f64) {
+        let g = self.0.subs.lock().unwrap();
+        let bins = g.list.iter().flat_map(|s| s.bins.iter().copied()).collect();
+        let fps = g.list.iter().map(|s| s.power_fps).fold(0.0, f64::max);
+        (bins, fps)
+    }
+
+    /// Whether a subscriber wants bins.
+    pub fn wants_frames(&self) -> bool {
+        self.0
+            .subs
+            .lock()
+            .unwrap()
+            .list
+            .iter()
+            .any(|s| !s.bins.is_empty())
+    }
+
+    /// Frames to the subscribers wanting bins.
+    pub fn send_frames(&self, f: Arc<Vec<BinFrame>>) {
+        self.send(|| TapMsg::Frames(f.clone()), |s| !s.bins.is_empty());
+    }
+
+    /// A power line to the subscribers wanting them.
+    pub fn send_power(&self, line: Arc<Vec<f32>>) {
+        self.send(|| TapMsg::Power(line.clone()), |s| s.power_fps > 0.0);
+    }
+
+    /// Send to the subscribers `pick` chooses; drops the ones gone.
+    fn send(&self, msg: impl Fn() -> TapMsg, pick: impl Fn(&TapSub) -> bool) {
+        let mut g = self.0.subs.lock().unwrap();
+        let before = g.list.len();
+        g.list.retain(|s| {
+            !pick(s) || !matches!(s.tx.try_send(msg()), Err(TrySendError::Disconnected(_)))
+        });
+        if g.list.len() != before {
+            self.0.changed.store(true, Ordering::Relaxed);
+        }
+    }
+}
+
+/// A subscription; dropping it unsubscribes.
+pub struct TapHandle {
+    tap: BinTap,
+    id: u64,
+}
+
+impl TapHandle {
+    /// Want `bins` (frames carrying them) and power lines at `power_fps`
+    /// lines a second (0: none).
+    pub fn want(&self, bins: Vec<usize>, power_fps: f64) {
+        let t = &self.tap.0;
+        let mut g = t.subs.lock().unwrap();
+        if let Some(s) = g.list.iter_mut().find(|s| s.id == self.id) {
+            s.bins = bins;
+            s.power_fps = power_fps;
+        }
+        t.changed.store(true, Ordering::Relaxed);
+    }
+}
+
+impl Drop for TapHandle {
+    fn drop(&mut self) {
+        let t = &self.tap.0;
+        t.subs.lock().unwrap().list.retain(|s| s.id != self.id);
+        t.changed.store(true, Ordering::Relaxed);
+    }
+}
+
 /// RX channels from the bins of `R`.
 pub struct BinRx<R> {
     inner: R,
@@ -138,6 +284,10 @@ pub struct BinRx<R> {
     /// RX frames made but not read yet (whole frames).
     out: Vec<Iq32>,
     out_pos: usize,
+    tap: Option<BinTap>,
+    /// Frames per power line (0: none).
+    power_frames: u16,
+    power: Vec<f32>,
 }
 
 fn gcd(a: usize, b: usize) -> usize {
@@ -166,6 +316,9 @@ impl<R: Radio + BinRadio> BinRx<R> {
             frames: Vec::new(),
             out: Vec::new(),
             out_pos: 0,
+            tap: None,
+            power_frames: 0,
+            power: Vec::new(),
         };
         r.ch = (0..channels).map(|_| Chan::new(1)).collect();
         r.set_rx_rate(10)?;
@@ -180,12 +333,29 @@ impl<R: Radio + BinRadio> BinRx<R> {
         self.inner.adc_hz() / (256.0 * r2 as f64)
     }
 
+    /// The tap for waterfalls from the bins.
+    pub fn tap(&mut self) -> BinTap {
+        let caps = self.bins;
+        self.tap.get_or_insert_with(|| BinTap::new(caps)).clone()
+    }
+
     fn reselect(&mut self) -> Result<()> {
-        let want: BTreeSet<usize> = self
+        let mut want: BTreeSet<usize> = self
             .ch
             .iter()
             .filter_map(|c| c.tuned.map(|t| t.0))
             .collect();
+        // the tap's bins where the frame has room
+        if let Some(t) = &self.tap {
+            for b in t.wants().0 {
+                if want.len() >= self.bins.max_selected {
+                    break;
+                }
+                if b < self.bins.bins {
+                    want.insert(b);
+                }
+            }
+        }
         let want: Vec<usize> = want.into_iter().collect();
         if want != self.selected {
             self.inner.set_bins(&want)?;
@@ -236,7 +406,50 @@ impl<R: Radio + BinRadio> BinRx<R> {
         for c in self.ch.iter_mut() {
             c.rot /= c.rot.norm();
         }
-        self.frames.clear();
+    }
+
+    /// The tap's changes: its bins, its power line rate.
+    fn tap_changes(&mut self) -> Result<()> {
+        let Some(t) = &self.tap else { return Ok(()) };
+        if !t.0.changed.swap(false, Ordering::Relaxed) {
+            return Ok(());
+        }
+        let fps = t.wants().1;
+        let frames = if fps > 0.0 {
+            (self.bins.frame_rate / fps)
+                .round()
+                .clamp(1.0, u16::MAX as f64) as u16
+        } else {
+            0
+        };
+        if frames != self.power_frames {
+            self.inner.set_power(frames)?;
+            self.power_frames = frames;
+        }
+        self.reselect()
+    }
+
+    /// The frames read to the subscribers wanting bins, the power lines to
+    /// those wanting them.
+    fn tap_send(&mut self) -> Result<()> {
+        let Some(t) = &self.tap else {
+            self.frames.clear();
+            return Ok(());
+        };
+        if self.power_frames > 0 {
+            while self.inner.read_power(&mut self.power)?.is_some() {
+                t.send_power(Arc::new(std::mem::take(&mut self.power)));
+            }
+        }
+        if self.frames.is_empty() {
+            return Ok(());
+        }
+        if t.wants_frames() {
+            t.send_frames(Arc::new(std::mem::take(&mut self.frames)));
+        } else {
+            self.frames.clear();
+        }
+        Ok(())
     }
 }
 
@@ -324,9 +537,11 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
         if self.out.len() - self.out_pos < buf.len() {
             self.out.drain(..self.out_pos);
             self.out_pos = 0;
+            self.tap_changes()?;
             if self.inner.read_bins(&mut self.frames)? > 0 {
                 self.process();
             }
+            self.tap_send()?;
         }
         let k = (self.out.len() - self.out_pos).min(buf.len()) / n * n;
         buf[..k].copy_from_slice(&self.out[self.out_pos..self.out_pos + k]);

@@ -3,7 +3,7 @@
 
 use std::f64::consts::PI;
 use std::sync::Arc;
-use web888_dsp::binrx::BinRx;
+use web888_dsp::binrx::{BinRx, TapMsg};
 use web888_radio::bins::{BinCaps, BinFrame, BinRadio, selection};
 use web888_radio::*;
 
@@ -18,6 +18,8 @@ struct FakeBins {
     generation: u8,
     frame: u64,
     selections: Vec<Vec<usize>>,
+    power_frames: u16,
+    lines: u32,
 }
 
 impl FakeBins {
@@ -27,6 +29,8 @@ impl FakeBins {
             generation: 0,
             frame: 0,
             selections: vec![],
+            power_frames: 0,
+            lines: 0,
         }
     }
 }
@@ -77,11 +81,19 @@ impl BinRadio for FakeBins {
         }
         Ok(300)
     }
-    fn set_power(&mut self, _frames: u16) -> Result<()> {
+    fn set_power(&mut self, frames: u16) -> Result<()> {
+        self.power_frames = frames;
         Ok(())
     }
-    fn read_power(&mut self, _line: &mut Vec<f32>) -> Result<Option<u32>> {
-        Ok(None)
+    /// A line per batch while lines are on (the tone's bin at 1).
+    fn read_power(&mut self, line: &mut Vec<f32>) -> Result<Option<u32>> {
+        if self.power_frames == 0 || self.lines as u64 * 300 >= self.frame {
+            return Ok(None);
+        }
+        *line = vec![0.0; 2047];
+        line[TONE_BIN] = 1.0;
+        self.lines += 1;
+        Ok(Some(self.lines))
     }
 }
 
@@ -233,4 +245,45 @@ fn rates_follow_r2() {
             a / AMP
         );
     }
+}
+
+#[test]
+fn the_tap_gets_frames_and_power_lines() {
+    let mut r = BinRx::new(FakeBins::new(), 2).unwrap();
+    r.tune_rx(0, 7.074e6).unwrap();
+    r.tune_rx(1, 30e6).unwrap(); // bin 1000
+    let tap = r.tap();
+    let (h, rx) = tap.subscribe();
+    // more than the frame has room for, one of them a channel's
+    h.want((990..1060).collect(), 20.0);
+    let mut buf = vec![Iq32::default(); 2 * 512];
+    r.read_rx(&mut buf).unwrap();
+    // the channels' bins first, then the tap's from its first on
+    let sel = r.inner().selections.last().unwrap().clone();
+    assert_eq!(sel.len(), 64);
+    assert_eq!(sel[0], 236);
+    assert_eq!(sel[1..], (990..1053).collect::<Vec<_>>()[..]);
+    assert_eq!(r.inner().power_frames, 3000);
+    let (mut frames, mut lines) = (0, 0);
+    while let Ok(m) = rx.try_recv() {
+        match m {
+            TapMsg::Frames(f) => {
+                assert!(f.iter().all(|f| f.bins.len() == 64));
+                frames += f.len();
+            }
+            TapMsg::Power(p) => {
+                assert_eq!(p[TONE_BIN], 1.0);
+                lines += 1;
+            }
+        }
+    }
+    assert_eq!((frames, lines), (300, 1));
+    // the RX channels still right
+    assert!(buf[..2 * 200].iter().any(|s| s.i != 0));
+
+    // gone: the selection is the channels' again, no lines
+    drop(h);
+    r.read_rx(&mut buf).unwrap();
+    assert_eq!(r.inner().selections.last().unwrap(), &vec![236, 1000]);
+    assert_eq!(r.inner().power_frames, 0);
 }
