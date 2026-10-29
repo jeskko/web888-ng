@@ -58,6 +58,7 @@
       "$ref": "#/$defs/Limits",
       "default": {
         "per_ip": 4,
+        "trusted": [],
         "session_minutes": 0,
         "idle_minutes": 0,
         "preempt": false,
@@ -420,6 +421,14 @@
           "format": "uint",
           "minimum": 0,
           "default": 4
+        },
+        "trusted": {
+          "description": "Addresses or networks (e.g. \"192.0.2.7\", \"10.0.0.0/8\") whose\nsessions `per_ip` doesn't limit: your own network, test machines.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
         },
         "session_minutes": {
           "description": "Web session time limit, minutes (0 = none). Admins aren't\nlimited; users get a notice a minute before, and reconnect by hand.",

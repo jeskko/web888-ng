@@ -260,9 +260,13 @@ struct Admission<'a> {
 
 impl<'a> Admission<'a> {
     /// Err if the address has its limit of sessions already (`exempt`:
-    /// admins aren't limited).
+    /// admins aren't limited, nor trusted addresses).
     fn new(sh: &'a Shared, ip: IpAddr, exempt: bool) -> Result<Self, usize> {
-        let limit = sh.live.borrow().limits.per_ip;
+        let (limit, trusted) = {
+            let l = &sh.live.borrow().limits;
+            (l.per_ip, l.trusted.iter().any(|n| n.contains(ip)))
+        };
+        let exempt = exempt || trusted;
         let mut ips = sh.ips.lock().unwrap();
         let n = ips.entry(ip).or_insert(0);
         if limit > 0 && *n >= limit && !exempt {

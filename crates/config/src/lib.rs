@@ -333,6 +333,10 @@ impl Default for Web {
 pub struct Limits {
     /// Sessions per client address (0 = no limit).
     pub per_ip: usize,
+    /// Addresses or networks (e.g. "192.0.2.7", "10.0.0.0/8") whose
+    /// sessions `per_ip` doesn't limit: your own network, test machines.
+    #[schemars(with = "Vec<String>")]
+    pub trusted: Vec<IpNet>,
     /// Web session time limit, minutes (0 = none). Admins aren't
     /// limited; users get a notice a minute before, and reconnect by hand.
     pub session_minutes: u32,
@@ -355,6 +359,7 @@ impl Default for Limits {
     fn default() -> Self {
         Limits {
             per_ip: 4,
+            trusted: Vec::new(),
             session_minutes: 0,
             idle_minutes: 0,
             preempt: false,

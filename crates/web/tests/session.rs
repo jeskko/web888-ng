@@ -247,6 +247,23 @@ async fn sessions_per_address_are_limited() {
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
 
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn trusted_addresses_are_not_limited() {
+    let mut config = web888_config::Config::default();
+    config.limits.per_ip = 1;
+    config.limits.trusted = vec!["127.0.0.0/8".parse().unwrap()];
+    let (addr, stop, _) = start_with(config).await;
+    let url = format!("ws://{addr}/ws");
+    let mut open = Vec::new();
+    for _ in 0..3 {
+        let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+        let m = json(&ws.next().await.unwrap().unwrap()).unwrap();
+        assert!(matches!(m, ServerMsg::Hello { .. }), "{m:?}");
+        open.push(ws);
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
 #[tokio::test]
 async fn status_and_missing_ui() {
     use tokio::io::{AsyncReadExt, AsyncWriteExt};
