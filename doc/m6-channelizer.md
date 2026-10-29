@@ -159,7 +159,10 @@ consumers reading the runs. Two steps:
    takes effect don't carry the bins and cost nothing; a burst overshoots
    by at most one read (300 frames). Channels' bins stay selected. This
    also makes wider detailed views possible later (bins in turns past
-   the 64 a frame).
+   the 64 a frame). **On the unit** (cadd14d, 2026-10-30, per-thread CPU
+   over 20 s, one headless view): a 960 kHz view +6.6 % of a core on the
+   hw thread and +10.2 % on the pool, a 480 kHz view +5.1 % and +10.8 %;
+   before the bursts a 480 kHz view took +19.3 % and about +21 %.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed
