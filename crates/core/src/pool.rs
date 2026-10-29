@@ -130,9 +130,11 @@ impl DspPool {
     }
 
     /// One worker per available CPU.
+    /// A worker per CPU, pinned unless `WEB888_POOL_PIN=0`.
     pub fn per_cpu(hw: &Sender<HwCmd>) -> std::io::Result<Self> {
         let n = std::thread::available_parallelism().map_or(1, |n| n.get());
-        Self::new(n, hw, true)
+        let pin = std::env::var("WEB888_POOL_PIN").map_or(true, |v| v != "0");
+        Self::new(n, hw, pin)
     }
 
     pub fn workers(&self) -> usize {
