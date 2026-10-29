@@ -37,6 +37,10 @@ const MARGIN: usize = 1;
 /// new to it fill their FFTs (instead of drawing the power line there).
 const SETTLE: Duration = Duration::from_millis(250);
 
+/// How long a bin missing from the frames (the CPU busy, the tap's queue
+/// full) shows its last spectrum before the power line's level.
+const HOLD: Duration = Duration::from_secs(2);
+
 struct Sub {
     s: ViewSub,
     next: Instant,
@@ -51,6 +55,8 @@ struct Eng {
     e: WfEngine,
     /// The bin's last frame.
     last: Option<u64>,
+    /// Its last spectrum (the view's part) and when it came.
+    held: Option<(Vec<f32>, Instant)>,
 }
 
 /// The per-bin FFTs of a zoomed view: the bins it shows and its margin,
@@ -74,6 +80,7 @@ impl Zoom {
                     bin,
                     e: WfEngine::with_fft_size(spec, self.n),
                     last: None,
+                    held: None,
                 },
             })
             .collect();
@@ -354,21 +361,31 @@ impl BinViewJob {
         let mut db = Vec::with_capacity(keep * self.view.len());
         let mut fresh = false;
         let mut any = power.is_some();
+        // the power line's level spread over the FFT bins (as a density:
+        // a 30 kHz bin's noise is 10 log10(keep) dB above one FFT bin's)
+        let spread = 10.0 * (keep as f32).log10();
         for e in &mut z.engs {
             // the margin's lines too: they stay current
             let l = e.e.line();
+            if let Some(l) = &l
+                && l.fresh
+            {
+                e.held = Some((l.db[j0..j0 + keep].to_vec(), now));
+            }
             let Some(i) = self.view.iter().position(|&b| b == e.bin) else {
                 continue;
             };
-            any |= l.is_some();
-            match l {
-                Some(l) if l.fresh => {
+            any |= l.is_some() || e.held.is_some();
+            match (&l, &e.held) {
+                (Some(l), _) if l.fresh => {
                     db.extend_from_slice(&l.db[j0..j0 + keep]);
                     fresh = true;
                 }
+                // missing from the frames a while: its last spectrum
+                (_, Some((h, t))) if now < *t + HOLD => db.extend_from_slice(h),
                 // not in the frames: the power line's level
                 _ => {
-                    let p = power.as_ref().map_or(WF_DB0, |(p, _)| p[i]);
+                    let p = power.as_ref().map_or(WF_DB0, |(p, _)| p[i] - spread);
                     db.extend(std::iter::repeat_n(p, keep));
                 }
             }
@@ -582,10 +599,11 @@ mod tests {
         assert!(rx.try_recv().is_err());
         j.tick(t0 + SETTLE + Duration::from_millis(50), Ctx::default());
         let l = newest(&mut rx);
-        // bin 238 (7.14 MHz) at the power line's -30 dB across its 30 kHz
+        // bin 238 (7.14 MHz) at the power line's -30 dB spread over its 30
+        // kHz: 64 FFT bins of 468.75 Hz, each 18.1 dB below
         for off in [-14e3, 0.0, 14e3] {
             let d = l.at(7.14e6 + off);
-            assert!((d + 30.0).abs() < 0.5, "{off}: {d}");
+            assert!((d + 48.06).abs() < 0.5, "{off}: {d}");
         }
         assert!(l.at(7.1e6) < -120.0);
     }
@@ -625,6 +643,35 @@ mod tests {
         let l = newest(&mut rx);
         assert!((l.at(7.11e6) + 20.0).abs() < 1.0, "{}", l.at(7.11e6));
         assert_eq!(bins(&j), vec![235, 236, 237, 238, 239]);
+    }
+
+    #[test]
+    fn a_bin_gone_from_the_frames_shows_its_last_spectrum_a_while() {
+        let tap = BinTap::new(CAPS);
+        let (mut j, mut rx, _ctx) = job(&tap, 7.074e6, 480e3);
+        let t0 = Instant::now();
+        j.tick(t0, Ctx::default());
+        let tones = [(7.14e6, 0.1)];
+        tap.send_frames(frames(&j.view, 0, 6000, &tones));
+        j.tick(t0 + SETTLE, Ctx::default());
+        newest(&mut rx);
+        // bin 238 drops out (no room, or the queue overflowed)
+        let sel: Vec<usize> = j.view.iter().copied().filter(|&k| k != 238).collect();
+        tap.send_frames(frames(&sel, 6000, 6000, &tones));
+        j.tick(t0 + SETTLE + Duration::from_millis(500), Ctx::default());
+        let l = newest(&mut rx);
+        let p = (-2..=2)
+            .map(|k| l.at(7.14e6 + k as f64 * l.bin_hz))
+            .fold(-200f32, f32::max);
+        assert!((p + 20.0).abs() < 1.0, "held: {p} dB");
+        // later: the power line's level (none here: the floor)
+        tap.send_frames(frames(&sel, 12000, 6000, &tones));
+        j.tick(
+            t0 + SETTLE + HOLD + Duration::from_millis(500),
+            Ctx::default(),
+        );
+        let l = newest(&mut rx);
+        assert!(l.at(7.14e6) < -120.0, "{}", l.at(7.14e6));
     }
 
     #[test]
