@@ -95,13 +95,23 @@ impl TapSub {
     }
 }
 
-/// Bins wanted for a number of frames.
+/// Bins wanted for a number of frames, in groups as the frames have
+/// room (a group after the other, in the order given).
 struct Burst {
     bins: Vec<usize>,
     frames: usize,
-    /// Frames read with the bin it is counted on (the first granted).
-    got: usize,
+    /// Where the current group starts in `bins`.
+    next: usize,
+    /// The current group's first bin (the frames read with it count),
+    /// once it has room.
     counted_on: Option<usize>,
+    got: usize,
+}
+
+impl Burst {
+    fn rest(&self) -> &[usize] {
+        &self.bins[self.next..]
+    }
 }
 
 impl BinTap {
@@ -149,7 +159,7 @@ impl BinTap {
             .list
             .iter()
             .flat_map(|s| {
-                let b = s.burst.as_ref().map_or(&[][..], |b| &b.bins[..]);
+                let b = s.burst.as_ref().map_or(&[][..], Burst::rest);
                 s.bins.iter().chain(b).copied()
             })
             .collect();
@@ -157,22 +167,23 @@ impl BinTap {
         (bins, fps)
     }
 
-    /// The selection is `sel`: each burst is counted on its first bin in
-    /// it (none: it waits for room).
+    /// The selection is `sel`: each burst's group is what of its next
+    /// bins it has, counted on the first (none: it waits for room).
     fn granted(&self, sel: &[usize]) {
         let mut g = self.0.subs.lock().unwrap();
         for b in g.list.iter_mut().filter_map(|s| s.burst.as_mut()) {
-            b.counted_on = b
-                .bins
-                .iter()
-                .copied()
-                .find(|k| sel.binary_search(k).is_ok());
+            let first = b.rest().first().copied();
+            let has = first.filter(|k| sel.binary_search(k).is_ok());
+            if has != b.counted_on {
+                b.counted_on = has;
+                b.got = 0;
+            }
         }
     }
 
-    /// Frames read: the bursts count them; the ones done end (the
-    /// selection then changes).
-    fn count(&self, frames: &[BinFrames]) {
+    /// Frames read: the bursts count them; a group done gives way to the
+    /// next, the last ends the burst (the selection then changes).
+    fn count(&self, frames: &[BinFrames], sel: &[usize]) {
         let mut g = self.0.subs.lock().unwrap();
         let mut done = false;
         for s in &mut g.list {
@@ -184,7 +195,19 @@ impl BinTap {
                 .map(|f| f.count)
                 .sum::<usize>();
             if b.got >= b.frames {
-                s.burst = None;
+                // the group: the bins from `next` on that were selected
+                let n = b
+                    .rest()
+                    .iter()
+                    .take_while(|k| sel.binary_search(k).is_ok())
+                    .count()
+                    .max(1);
+                b.next += n;
+                b.counted_on = None;
+                b.got = 0;
+                if b.next >= b.bins.len() {
+                    s.burst = None;
+                }
                 done = true;
             }
         }
@@ -246,19 +269,28 @@ impl TapHandle {
         t.changed.store(true, Ordering::Relaxed);
     }
 
-    /// Want `bins` for the next `frames` frames read with them (the first
-    /// of them that gets room), on top of the all-along ones; replaces a
-    /// burst not done yet. Empty `bins`: none.
-    pub fn burst(&self, bins: Vec<usize>, frames: usize) {
+    /// Want `bins` for `frames` frames read with them, on top of the
+    /// all-along ones; as many at a time as the frames have room for, a
+    /// group after the other. A burst not done yet goes on (`restart`:
+    /// this one replaces it). Empty `bins`: none.
+    pub fn burst(&self, bins: Vec<usize>, frames: usize, restart: bool) {
         let t = &self.tap.0;
         let mut g = t.subs.lock().unwrap();
-        if let Some(s) = g.list.iter_mut().find(|s| s.id == self.id) {
-            s.burst = (!bins.is_empty() && frames > 0).then_some(Burst {
+        let Some(s) = g.list.iter_mut().find(|s| s.id == self.id) else {
+            return;
+        };
+        if bins.is_empty() || frames == 0 {
+            s.burst = None;
+        } else if restart || s.burst.is_none() {
+            s.burst = Some(Burst {
                 bins,
                 frames,
-                got: 0,
+                next: 0,
                 counted_on: None,
+                got: 0,
             });
+        } else {
+            return;
         }
         t.changed.store(true, Ordering::Relaxed);
     }
@@ -532,7 +564,7 @@ impl<R: Radio + BinRadio> BinRx<R> {
         if t.wants_frames() {
             t.send_frames(frames.clone());
         }
-        t.count(&frames);
+        t.count(&frames, &self.selected);
         Ok(())
     }
 }

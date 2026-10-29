@@ -2,15 +2,18 @@
 //! Waterfall views from a channelizer's bins (`doc/m6-channelizer.md` §4),
 //! for radios without WF slots in bins mode:
 //!
-//! * a **zoomed** view (at most [`ZOOM_BINS`] bins) takes the bins it
-//!   covers through a [`BinTap`] and puts each through its own FFT; the
-//!   middle 30 kHz of each (the bins are 60 kS/s, 30 kHz apart, flat well
-//!   past ±15 kHz) side by side tile the view without a seam;
+//! * a **zoomed** view (at most [`ZOOM_BINS`] bins: 7.68 MHz) takes the
+//!   bins it covers through a [`BinTap`] and puts each through its own
+//!   FFT; the middle 30 kHz of each (the bins are 60 kS/s, 30 kHz apart,
+//!   flat well past ±15 kHz) side by side tile the view without a seam;
 //! * a **wide** view draws the power line: 30 kHz per bin, merged into
 //!   the view's display bins.
 //!
-//! A zoomed view's bins come after the RX channels' in the selection; a
-//! bin the frame had no room for shows the power line's level instead.
+//! A zoomed view reads its bins in a burst after each line, a line's
+//! FFTs' worth, in groups as the frames have room after the RX channels'
+//! bins; a bin left out shows its last spectrum, then the power line's
+//! level. Under load (the pool shedding) only views up to [`LIGHT_BINS`]
+//! are zoomed.
 
 use crate::workers::{ViewCmd, ViewSub, period, rebin, shed};
 use crossbeam_channel::{Receiver as CbReceiver, TryRecvError};
@@ -24,12 +27,15 @@ use web888_dsp::rx_to_c32;
 use web888_dsp::wf::{WF_DB0, WfEngine, WfSpec};
 use web888_radio::bins::{BinCaps, BinFrames};
 
-/// Most bins a zoomed view shows (a 960 kHz span at 30 kHz: 33); wider
-/// views draw the power line. All views together get `binrx::TAP_BINS`
-/// beyond the channels' (each bin read costs the A9 about 1 % of a core,
-/// memory-bound; a view's FFTs about 9 % whatever its span), from the
-/// view's centre out: bins left over show the power line, interpolated.
-pub const ZOOM_BINS: usize = 33;
+/// Most bins a zoomed view shows (a 7.68 MHz span at 30 kHz: 257); wider
+/// views draw the power line. A bin read all along costs the A9 about 1 %
+/// of a core (memory-bound), so views read theirs in bursts (a group at
+/// least one hw read, 300 frames: about 0.1 % a bin); a view's FFTs cost
+/// about 10 % whatever its span. Bins from the view's centre out.
+pub const ZOOM_BINS: usize = 257;
+
+/// Most bins a zoomed view shows while the pool sheds load (960 kHz).
+pub const LIGHT_BINS: usize = 33;
 
 /// Bins a zoomed view also runs on each side of the ones it shows, so a
 /// view dragged across a bin edge has the new bin's spectrum at hand.
@@ -145,6 +151,8 @@ pub struct BinViewJob {
     /// its FFTs a line (load shedding may lower it).
     want: Vec<usize>,
     ffts: usize,
+    /// The pool sheds load: only light views are zoomed.
+    loaded: bool,
 }
 
 /// The bins whose 30 kHz around the centre meet `lo..hi`, by frequency.
@@ -193,6 +201,7 @@ impl BinViewJob {
             next: Instant::now(),
             want: Vec::new(),
             ffts: budget.max(1),
+            loaded: false,
         }
         .moved_to(center_hz, span_hz)
     }
@@ -224,7 +233,7 @@ impl BinViewJob {
     }
 
     fn zoomed(&self) -> bool {
-        self.view.len() <= ZOOM_BINS
+        self.view.len() <= if self.loaded { LIGHT_BINS } else { ZOOM_BINS }
     }
 
     fn fps(&self) -> f64 {
@@ -239,7 +248,7 @@ impl BinViewJob {
             self.zoom = None;
             self.want.clear();
             self.tap.want(Vec::new(), fps);
-            self.tap.burst(Vec::new(), 0);
+            self.tap.burst(Vec::new(), 0, true);
             return;
         }
         let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
@@ -247,7 +256,7 @@ impl BinViewJob {
         let fs = self.caps.frame_rate;
         let n = ((fs * px as f64 / self.span_hz).ceil() as usize)
             .next_power_of_two()
-            .clamp(64, 8192);
+            .clamp(8, 8192);
         if !self.zoom.as_ref().is_some_and(|z| z.n == n && z.fps == fps) {
             self.zoom = Some(Zoom {
                 n,
@@ -281,13 +290,15 @@ impl BinViewJob {
         self.want = want;
         // the power lines all along, the bins in bursts
         self.tap.want(Vec::new(), fps);
-        self.burst();
+        self.burst(true);
     }
 
-    /// The bins for the next line's FFTs: `ffts` of `n` at half overlap.
-    fn burst(&self) {
+    /// The bins for the next line's FFTs: `ffts` of `n` at half overlap
+    /// (`restart`: also if the last burst isn't done; the view changed).
+    fn burst(&self, restart: bool) {
         if let Some(z) = &self.zoom {
-            self.tap.burst(self.want.clone(), z.n * (self.ffts + 1) / 2);
+            self.tap
+                .burst(self.want.clone(), z.n * (self.ffts + 1) / 2, restart);
         }
     }
 
@@ -321,7 +332,7 @@ impl BinViewJob {
         if changed {
             if self.subs.is_empty() {
                 self.tap.want(Vec::new(), 0.0);
-                self.tap.burst(Vec::new(), 0);
+                self.tap.burst(Vec::new(), 0, true);
             } else {
                 self.fit();
             }
@@ -475,6 +486,10 @@ impl Job for BinViewJob {
         }
         let (budget, p) = shed(self.budget, self.fps(), ctx.shed);
         self.next = (self.next + p).max(now);
+        if self.loaded != (ctx.shed > 0) {
+            self.loaded = ctx.shed > 0;
+            self.fit();
+        }
         if let Some(z) = &mut self.zoom {
             for e in &mut z.engs {
                 e.e.set_budget(budget);
@@ -484,8 +499,9 @@ impl Job for BinViewJob {
         if let Some((db, f0, df, fresh)) = self.line(now) {
             self.send(&db, f0, df, fresh, now, p);
         }
-        // the next line's samples
-        self.burst();
+        // the next line's samples (a wide view's last burst may still
+        // be going: it goes on)
+        self.burst(false);
         true
     }
 }
@@ -724,8 +740,8 @@ mod tests {
     #[test]
     fn a_wide_view_draws_the_power_line() {
         let tap = BinTap::new(CAPS);
-        // 7.68 MHz around 7.68 MHz: 257 bins, too many to zoom
-        let (mut j, mut rx, _ctx) = job(&tap, 7.68e6, 7.68e6);
+        // 15.36 MHz from 0: 513 bins, too many to zoom
+        let (mut j, mut rx, _ctx) = job(&tap, 7.68e6, 15.36e6);
         let t0 = Instant::now();
         j.tick(t0, Ctx::default());
         assert!(!tap.wants_frames());
@@ -736,12 +752,37 @@ mod tests {
         }
         j.tick(t0 + Duration::from_millis(200), Ctx::default());
         let l = newest(&mut rx);
-        // the bins as they are (7.5 kHz display bins are finer)
+        // the bins as they are (15 kHz display bins are finer)
         assert_eq!(l.bin_hz, 30e3);
-        assert_eq!(l.first_hz, 3.84e6);
+        assert_eq!(l.first_hz, 0.0);
         // two lines averaged: (1e-2 + 1e-4) / 2
         assert!((l.at(7.08e6) + 22.97).abs() < 0.5, "{}", l.at(7.08e6));
         assert!(l.at(7.11e6) < -110.0);
+    }
+
+    #[test]
+    fn a_7_68_mhz_view_is_zoomed_unless_the_pool_sheds() {
+        let tap = BinTap::new(CAPS);
+        let (mut j, mut rx, _ctx) = job(&tap, 7.68e6, 7.68e6);
+        let t0 = Instant::now();
+        j.tick(t0, Ctx::default());
+        assert!(tap.wants_frames());
+        let z = j.zoom.as_ref().expect("zoomed");
+        // 8-point FFTs: 7.5 kHz, the display's bins
+        assert_eq!((z.n, z.engs.len()), (8, 259));
+        let tones = [(7.08e6, 0.1)];
+        tap.send_frames(frames(&j.view, 0, 3000, &tones));
+        j.tick(t0 + SETTLE, Ctx::default());
+        let l = newest(&mut rx);
+        assert_eq!(l.bin_hz, 7.5e3);
+        let p = (-1..=1)
+            .map(|k| l.at(7.08e6 + k as f64 * l.bin_hz))
+            .fold(-200f32, f32::max);
+        assert!((p + 20.0).abs() < 1.5, "{p} dB");
+        // under load: the power line
+        let busy = Ctx { shed: 1 };
+        j.tick(t0 + SETTLE + Duration::from_millis(100), busy);
+        assert!(j.zoom.is_none());
     }
 
     #[test]

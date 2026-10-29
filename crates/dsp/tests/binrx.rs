@@ -289,7 +289,7 @@ fn a_burst_takes_its_bins_for_its_frames() {
     r.tune_rx(0, 7.074e6).unwrap();
     let tap = r.tap();
     let (h, rx) = tap.subscribe();
-    h.burst(vec![991, 990], 500);
+    h.burst(vec![991, 990], 500, true);
     let mut buf = vec![Iq32::default(); 512];
     // 300 frames a read: two reads with the bins, then the channel's alone
     r.read_rx(&mut buf).unwrap();
@@ -306,9 +306,40 @@ fn a_burst_takes_its_bins_for_its_frames() {
     }
     assert_eq!(frames, 600);
     // a new burst takes them again
-    h.burst(vec![990], 100);
+    h.burst(vec![990], 100, true);
     r.read_rx(&mut buf).unwrap();
     assert_eq!(r.inner().selections.last().unwrap(), &vec![236, 990]);
+}
+
+#[test]
+fn a_burst_wider_than_the_frames_room_goes_in_groups() {
+    let mut r = BinRx::new(FakeBins::new(), 1).unwrap();
+    r.tune_rx(0, 7.074e6).unwrap();
+    let tap = r.tap();
+    let (h, _rx) = tap.subscribe();
+    let tap_bins = web888_dsp::binrx::TAP_BINS;
+    let want: Vec<usize> = (1000..1100).collect();
+    h.burst(want.clone(), 200, true);
+    let mut buf = vec![Iq32::default(); 512];
+    // a group a read (300 frames, 200 wanted), the channel's bin in each
+    let mut groups = Vec::new();
+    for _ in 0..4 {
+        r.read_rx(&mut buf).unwrap();
+        groups.push(r.inner().selections.last().unwrap()[1..].to_vec());
+    }
+    assert_eq!(groups[0], want[..tap_bins]);
+    assert_eq!(groups[1], want[tap_bins..2 * tap_bins]);
+    assert_eq!(groups[2], want[2 * tap_bins..]);
+    assert!(groups[3].is_empty());
+    // a new one while one goes on: it goes on (unless restarted)
+    h.burst(want.clone(), 200, true);
+    r.read_rx(&mut buf).unwrap();
+    h.burst(vec![5], 200, false);
+    r.read_rx(&mut buf).unwrap();
+    assert_eq!(
+        r.inner().selections.last().unwrap()[1..],
+        want[tap_bins..2 * tap_bins]
+    );
 }
 
 #[test]

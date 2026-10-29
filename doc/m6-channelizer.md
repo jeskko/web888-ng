@@ -163,6 +163,15 @@ consumers reading the runs. Two steps:
    over 20 s, one headless view): a 960 kHz view +6.6 % of a core on the
    hw thread and +10.2 % on the pool, a 480 kHz view +5.1 % and +10.8 %;
    before the bursts a 480 kHz view took +19.3 % and about +21 %.
+   **Bins in turns** (2026-10-30): a burst wider than the frames' room
+   goes in groups (`TAP_BINS` at a time after the channels', a group
+   after the other); a burst still going when the view asks again goes
+   on (a wide view's groups all get their turn). Views up to 257 bins
+   (7.68 MHz) are zoomed, with FFTs down to 8 points (7.5 kHz, a 1024-pixel
+   7.68 MHz view's own bins); while the pool sheds load only views up to
+   33 bins (960 kHz) are, the wider ones draw the power line. Each group
+   is read for at least one hw read (300 frames), so a wide view costs
+   about 0.1 % of a core a bin on the hw thread.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed
