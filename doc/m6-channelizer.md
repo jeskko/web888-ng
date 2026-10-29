@@ -176,8 +176,13 @@ power line averaged.
   bins on the CPU); **20 mixed-view sessions + 2 FT8 skimmers clean**
   (10 before), 30 on one shared view clean, 30 mixed nearly (the cores
   full: the pool's audio and waterfalls, 93 %, and the web threads, 43
-  %). Next limits: the waterfall's FFTs (the zooms) and the web tasks;
-  zoom spectra in the FPGA would take the first. HPSDR from the tuner
+  %). Next limits: the waterfall's FFTs (the zooms) and the web tasks.
+  Measured on the A9 at 12 kS/s (`examples/bench`, `R2=40`): a zoom view
+  (17 bins, 128-point FFTs at 20 fps) 0.74 % of a core, a USB chain 1.35
+  % (3.4 % with NB, NR and squelch). Zoom spectra in the FPGA would save
+  at most ~22 % of one core at 30 zoomed sessions, and the device has no
+  room left for them (LUT 87.5 %, BRAM 56.5/60): not pursued. The web
+  threads (43 % at 30 sessions) are the larger share. HPSDR from the tuner
   is 12 kS/s resampled to 48 (±6 kHz of content). The bitstream meets
   timing against the real clock (+0.22 ns) but not with the build's 0.4
   ns guardband (WNS −0.316 ns, a FIR bank → DSP path): not releasable
