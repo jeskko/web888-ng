@@ -4,12 +4,13 @@
 //!
 //! Each configured band holds a lease and runs a [`BandJob`] on the DSP
 //! pool, which turns its channel into USB audio and cuts it into UTC
-//! slots. Slots go to decoder threads at idle priority, which share the
-//! time until the next slot between the bands waiting, and publish what
-//! they decode on the [`SpotBus`]. The slots of one boundary are gathered
-//! first; the earliest deadline goes first, and of those due together the
-//! band that cost least last time, so the quiet bands are done quickly
-//! and the busy ones have the time left. [`Skimmers`] starts and stops bands as
+//! slots. Slots go to decoder threads at idle priority, which decode them
+//! by their deadlines and publish what they decode on the [`SpotBus`]. The
+//! slots of one boundary are gathered first; the earliest deadline goes
+//! first, and of those due together the band that cost least last time.
+//! When the slots waiting need more time than the decoders have before
+//! the deadline, each gets a share of it in proportion to what its band
+//! cost last time, so the busy bands keep more of their decodes. [`Skimmers`] starts and stops bands as
 //! the config and the hours of the day say.
 
 pub mod events;
@@ -88,6 +89,8 @@ pub struct BandStatus {
     /// Decoder CPU time, microseconds: in all, and of the last slot.
     pub cpu_us: AtomicU64,
     pub last_cpu_us: AtomicU64,
+    /// The last slot's decoding was cut short.
+    pub last_cut: AtomicBool,
     /// Slot start (UTC seconds) of the last slot decoded.
     pub last_slot: AtomicU64,
     /// Channel granted (0 = waiting).
@@ -117,15 +120,37 @@ impl Work {
 }
 
 /// Slots waiting for a decoder thread.
+#[derive(Default)]
 struct Queue {
     work: Mutex<VecDeque<Work>>,
     ready: Condvar,
-    /// Slots allowed to wait.
-    cap: usize,
 }
 
 /// How long the first slot of a boundary waits for the other bands'.
 const GATHER: Duration = Duration::from_millis(250);
+
+/// What a band's next slot is expected to cost, seconds: the last one's
+/// CPU, twice that if it was cut short (it would have taken more).
+fn expected(st: &BandStatus) -> f64 {
+    let s = st.last_cpu_us.load(Ordering::Relaxed).max(200_000) as f64 / 1e6;
+    if st.last_cut.load(Ordering::Relaxed) {
+        2.0 * s
+    } else {
+        s
+    }
+}
+
+/// Seconds a slot may take: all `left` when the work waiting (`own` and
+/// `others`, expected seconds) fits on `threads` decoders by then, else
+/// its part in proportion to `own`.
+fn share(left: f64, threads: usize, own: f64, others: f64) -> f64 {
+    let room = left * threads as f64;
+    if own + others <= room {
+        left
+    } else {
+        (room * own / (own + others)).min(left)
+    }
+}
 
 /// The slot to decode next, of (deadline, last CPU) keys: the earliest
 /// deadline, then the cheapest band.
@@ -154,8 +179,9 @@ pub struct BandJob {
     stop: Arc<AtomicBool>,
 }
 
-/// Slots allowed to wait per decoder thread before new ones are dropped.
-const MAX_QUEUED: usize = 8;
+/// Slots allowed to wait in all: a band whose earlier slot still waits
+/// loses its new one anyway, so this only bounds a pile-up of bands.
+const MAX_QUEUED: usize = 64;
 
 impl Job for BandJob {
     fn rx(&mut self, b: &RxBlock) -> bool {
@@ -197,7 +223,7 @@ impl Job for BandJob {
         );
         for s in slots {
             let mut q = self.queue.work.lock().unwrap();
-            if q.len() >= self.queue.cap {
+            if q.len() >= MAX_QUEUED || q.iter().any(|w| Arc::ptr_eq(&w.band, &self.band)) {
                 self.band.status.dropped.fetch_add(1, Ordering::Relaxed);
                 continue;
             }
@@ -264,7 +290,7 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
     let mut wspr = web888_wspr::Decoder::new(Default::default());
     let mut hashes = web888_ftx::msg::CallHashes::default();
     loop {
-        let (w, waiting) = {
+        let (w, waiting, others) = {
             let mut q = queue.work.lock().unwrap();
             loop {
                 let Some(first) = q.iter().map(|w| w.queued).min() else {
@@ -282,15 +308,14 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
                 });
                 let k = pick(keys).expect("not empty");
                 let w = q.remove(k).expect("in range");
-                break (w, q.len());
+                let others: f64 = q.iter().map(|w| expected(&w.band.status)).sum();
+                break (w, q.len(), others);
             }
         };
         let st = &w.band.status;
         let now = unix_now();
-        // Share the time left between this slot and those still waiting
-        // for this thread.
         let left = (w.start + timing(w.band.cfg.mode).done_by - now).max(0.0);
-        let share = left / (1.0 + waiting as f64 / threads as f64);
+        let share = share(left, threads, expected(st), others);
         let deadline = Instant::now() + Duration::from_secs_f64(share);
         let cpu0 = thread_cpu();
         let cut0 = ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short;
@@ -343,10 +368,9 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         st.cpu_us.fetch_add(cpu, Ordering::Relaxed);
         st.last_cpu_us.store(cpu, Ordering::Relaxed);
         st.slots.fetch_add(1, Ordering::Relaxed);
-        st.cut_short.fetch_add(
-            ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short - cut0,
-            Ordering::Relaxed,
-        );
+        let cut = ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short - cut0;
+        st.cut_short.fetch_add(cut, Ordering::Relaxed);
+        st.last_cut.store(cut > 0, Ordering::Relaxed);
         st.last_slot.store(w.start as u64, Ordering::Relaxed);
         st.spots.fetch_add(ds.len() as u64, Ordering::Relaxed);
         if std::env::var_os("WEB888_SKIM_DEBUG").is_some() {
@@ -390,11 +414,7 @@ impl Skimmers {
         live: bool,
         threads: usize,
     ) -> std::io::Result<Arc<Self>> {
-        let queue = Arc::new(Queue {
-            work: Mutex::new(VecDeque::new()),
-            ready: Condvar::new(),
-            cap: MAX_QUEUED * threads.max(1),
-        });
+        let queue = Arc::new(Queue::default());
         let bus = SpotBus::new(10_000);
         for k in 0..threads.max(1) {
             let (q, b) = (queue.clone(), bus.clone());
@@ -501,5 +521,14 @@ mod tests {
         assert_eq!(pick(keys.into_iter()), Some(2));
         assert_eq!(pick(keys[..2].iter().copied()), Some(1));
         assert_eq!(pick(std::iter::empty()), None);
+    }
+
+    #[test]
+    fn shares_follow_the_expected_cost_when_time_is_short() {
+        // 14 s left on 2 decoders: 10 s of work fits, each gets it all
+        assert_eq!(share(14.0, 2, 5.0, 5.0), 14.0);
+        // 60 s of work in 28 s of room: a 6 s band gets 2.8 s, a 0.6 s one 0.28 s
+        assert!((share(14.0, 2, 6.0, 54.0) - 2.8).abs() < 1e-9);
+        assert!((share(14.0, 2, 0.6, 59.4) - 0.28).abs() < 1e-9);
     }
 }
