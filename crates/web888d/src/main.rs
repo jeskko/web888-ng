@@ -680,7 +680,18 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
                 .map_err(|e| format!("{}: {e} (is the stock server running?)", ZynqsdrDev::PATH))?;
             let radio = ZynqsdrRadio::new(dev, cfg)?;
             let sig = radio.identity().signature;
-            if web888_zynqsdr::is_channelizer(sig) {
+            if web888_zynqsdr::is_channelizer(sig)
+                && a.bins.is_none()
+                && radio.caps().rx_channels > 0
+            {
+                eprintln!(
+                    "bins tuner: {} RX channels at 12 kS/s from the channelizer; its bins for the waterfall",
+                    radio.caps().rx_channels
+                );
+                let mut r = web888_dsp::binrx::BinRx::tap_only(radio)?;
+                let tap = r.tap();
+                Ok((Box::new(r), Some(tap)))
+            } else if web888_zynqsdr::is_channelizer(sig) {
                 let n = a.bins.unwrap_or(32);
                 eprintln!("bins: {n} RX channels from the channelizer bitstream");
                 bin_rx(radio, n)
@@ -840,9 +851,13 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     // HPSDR P1 is served at 48 kS/s; the web audio chain decimates from it
     // bins mode: RX at the bins' frame rate, no resampler in BinRx (HPSDR
     // resamples its receivers to 48 kS/s)
-    let r2 = match &bin_tap {
-        Some(t) => r2_for_rate(caps.adc_hz, t.caps().frame_rate),
-        None => r2_for_rate(caps.adc_hz, 48_000.0),
+    let r2 = if caps.rx_r2.start() == caps.rx_r2.end() {
+        *caps.rx_r2.start() // one rate only (the bins tuner's)
+    } else {
+        match &bin_tap {
+            Some(t) => r2_for_rate(caps.adc_hz, t.caps().frame_rate),
+            None => r2_for_rate(caps.adc_hz, 48_000.0),
+        }
     };
     radio.set_rx_rate(r2)?;
 

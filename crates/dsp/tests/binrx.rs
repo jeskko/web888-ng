@@ -278,3 +278,27 @@ fn the_tap_gets_frames_and_power_lines() {
     assert_eq!(r.inner().selections.last().unwrap(), &vec![236, 1000]);
     assert_eq!(r.inner().power_frames, 0);
 }
+
+#[test]
+fn tap_only_leaves_rx_to_the_radio() {
+    let mut r = BinRx::tap_only(FakeBins::new()).unwrap();
+    // the radio's own channels and errors (the fake has none)
+    assert_eq!(r.caps().rx_channels, 0);
+    assert!(matches!(
+        r.tune_rx(0, 7.074e6),
+        Err(Error::InvalidChannel(0))
+    ));
+    let tap = r.tap();
+    let (h, rx) = tap.subscribe();
+    h.want(vec![236], 0.0);
+    let mut buf = vec![Iq32::default(); 4];
+    // the bins are read for the tap before the radio's RX answers
+    assert!(r.read_rx(&mut buf).is_err());
+    assert_eq!(r.inner().selections.last().unwrap(), &vec![236]);
+    r.read_rx(&mut buf).ok();
+    let mut frames = 0;
+    while let Ok(TapMsg::Frames(f)) = rx.try_recv() {
+        frames += f.iter().map(|f| f.count).sum::<usize>();
+    }
+    assert!(frames >= 300, "{frames}");
+}

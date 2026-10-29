@@ -94,6 +94,19 @@ pub fn is_channelizer(signature: u32) -> bool {
     signature >> 16 == 0x0e5d && (signature >> 4) & 0xf == 1
 }
 
+/// The channelizer bitstream's bins tuner: its users, the RX channels
+/// there ([3:0], [7:4] in [15:12]; 0: none).
+pub fn tuner_users(signature: u32) -> usize {
+    if is_channelizer(signature) {
+        ((signature & 0xf) | (signature >> 8) & 0xf0) as usize
+    } else {
+        0
+    }
+}
+
+/// The tuner's rate as a stage-2 decimation: 12 kS/s.
+pub const TUNER_R2: u16 = 40;
+
 fn io(e: std::io::Error) -> Error {
     Error::Io(e)
 }
@@ -102,8 +115,11 @@ impl<D: Device> ZynqsdrRadio<D> {
     /// Identify the bitstream, enable PPS and start RX at 24 kS/s.
     pub fn new(mut dev: D, cfg: ZynqConfig) -> Result<Self> {
         let signature = dev.get_u32(GET_SIGNATURE).map_err(io)?;
-        let (rx_ch, wf_ch) = signature_counts(signature);
+        let (mut rx_ch, wf_ch) = signature_counts(signature);
         let channelizer = is_channelizer(signature);
+        if channelizer {
+            rx_ch = tuner_users(signature);
+        }
         if !channelizer && (rx_ch == 0 || rx_ch > 15 || wf_ch == 0) {
             return Err(Error::Unsupported(
                 "FPGA signature reports no channels (bitstream loaded?)",
@@ -150,6 +166,9 @@ impl<D: Device> ZynqsdrRadio<D> {
             }),
         };
         if channelizer {
+            if rx_ch > 0 {
+                r.set_rx_rate(TUNER_R2)?;
+            }
             return Ok(r);
         }
         r.set_rx_rate(20)?;
@@ -191,7 +210,12 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             rx_channels: self.rx_ch,
             wf_channels: self.wf_ch,
             adc_hz: self.cfg.adc_hz,
-            rx_r2: 5..=40,
+            // the channelizer's tuner: 12 kS/s only
+            rx_r2: if self.pfb.is_some() {
+                TUNER_R2..=TUNER_R2
+            } else {
+                5..=40
+            },
             wf_decim_min: 1,
             wf_decim_max: 8192,
             wf_block: WF_BLOCK,
@@ -210,10 +234,13 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
     }
 
     fn set_rx_rate(&mut self, r2: u16) -> Result<()> {
-        if self.pfb.is_some() {
+        if self.pfb.is_some() && self.rx_ch == 0 {
             return Err(Error::Unsupported(
-                "the channelizer bitstream has no RX channels",
+                "the channelizer bitstream has no RX channels (no tuner)",
             ));
+        }
+        if self.pfb.is_some() && r2 != TUNER_R2 {
+            return Err(Error::Unsupported("the bins tuner runs at 12 kS/s (r2 40)"));
         }
         if !(5..=40).contains(&r2) {
             return Err(Error::InvalidParam("r2 out of range"));
@@ -243,7 +270,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         let n = self.rx_ch;
         if n == 0 {
             return Err(Error::Unsupported(
-                "the channelizer bitstream has no RX channels",
+                "the channelizer bitstream has no RX channels (no tuner)",
             ));
         }
         if !buf.len().is_multiple_of(n) {

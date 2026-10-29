@@ -8,11 +8,16 @@ use web888_radio::bins::{BinFrames, BinRadio};
 use web888_radio::*;
 use web888_zynqsdr::abi::*;
 use web888_zynqsdr::dev::Device;
-use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, is_channelizer};
+use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, is_channelizer, tuner_users};
 
 const SIG: u32 = 0x0E5D_0010;
+/// With the bins tuner: 32 users.
+const SIG_TUNER: u32 = 0x0E5D_2010;
 
 struct FakePfb {
+    sig: u32,
+    sets: Vec<(u32, u32)>,
+    rx_params: Vec<(u32, u64)>,
     mask: [u32; 64],
     generation: u32,
     masks: Vec<(u32, Vec<usize>)>,
@@ -27,6 +32,9 @@ struct FakePfb {
 impl FakePfb {
     fn new() -> Self {
         FakePfb {
+            sig: SIG,
+            sets: vec![],
+            rx_params: vec![],
             mask: [0; 64],
             generation: 0,
             masks: vec![],
@@ -74,23 +82,40 @@ impl FakePfb {
 }
 
 impl Device for FakePfb {
-    fn set(&mut self, _cmd: u32, _arg: u32) -> io::Result<()> {
+    fn set(&mut self, cmd: u32, arg: u32) -> io::Result<()> {
+        self.sets.push((cmd, arg));
         Ok(())
     }
     fn get_u32(&mut self, cmd: u32) -> io::Result<u32> {
-        Ok(if cmd == GET_SIGNATURE { SIG } else { 0 })
+        Ok(if cmd == GET_SIGNATURE { self.sig } else { 0 })
     }
     fn get_dna(&mut self) -> io::Result<u64> {
         Ok(1)
     }
-    fn rx_param(&mut self, _ch: u32, _word: u64) -> io::Result<()> {
-        Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP))
+    fn rx_param(&mut self, ch: u32, word: u64) -> io::Result<()> {
+        if self.sig != SIG_TUNER {
+            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
+        }
+        self.rx_params.push((ch, word));
+        Ok(())
     }
     fn wf_param(&mut self, _ch: u16, _d: u16, _word: u64) -> io::Result<()> {
         Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP))
     }
-    fn rx_read(&mut self, _dst: &mut [u8]) -> io::Result<usize> {
-        Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP))
+    /// The tuner: three frames, user u reads {I: u, Q: -u}.
+    fn rx_read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
+        if self.sig != SIG_TUNER {
+            return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
+        }
+        let words: Vec<u8> = (0..3 * 32i32)
+            .flat_map(|w| {
+                let u: i32 = w % 32;
+                [u.to_le_bytes(), (-u).to_le_bytes()].concat()
+            })
+            .collect();
+        let n = words.len().min(dst.len());
+        dst[..n].copy_from_slice(&words[..n]);
+        Ok(n)
     }
     fn wf_read(&mut self, _ch: u16, _dst: &mut [u8]) -> io::Result<usize> {
         Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP))
@@ -151,6 +176,30 @@ fn channelizer_signature() {
         (2047, 64, 30e3, 60e3)
     );
     assert_eq!(c.bin_of(7.074e6), Some((236, -6000.0)));
+}
+
+#[test]
+fn the_tuner_is_the_rx() {
+    let mut dev = FakePfb::new();
+    dev.sig = SIG_TUNER;
+    assert_eq!(tuner_users(SIG_TUNER), 32);
+    assert_eq!(tuner_users(SIG), 0);
+    assert_eq!(tuner_users(0x0E5D_020C), 0);
+    let mut r = ZynqsdrRadio::new(dev, ZynqConfig::default()).unwrap();
+    let c = r.caps();
+    assert_eq!((c.rx_channels, c.rx_r2.clone()), (32, 40..=40));
+    // started at 12 kS/s; other rates refused
+    assert!(r.device().sets.contains(&(RX_START, 40)));
+    assert!(matches!(r.set_rx_rate(10), Err(Error::Unsupported(_))));
+    r.tune_rx(5, 7.074e6).unwrap();
+    let w = r.device().rx_params[0];
+    assert_eq!(w.0, 5);
+    assert!((w.1 as f64 / 2f64.powi(48) * 122.88e6 - 7.074e6).abs() < 1e-3);
+    let mut buf = vec![Iq32::default(); 2 * 32];
+    assert_eq!(r.read_rx(&mut buf).unwrap(), 2);
+    assert_eq!(buf[33], Iq32 { i: 1, q: -1 });
+    // the bins are still there for the waterfall
+    assert_eq!(r.bin_caps().bins, 2047);
 }
 
 #[test]

@@ -13,6 +13,10 @@
 //! gives every channel the same number of samples and RX frames stay whole.
 //! A channel whose bin isn't in a frame (the selection just changed) reads
 //! zeros for it.
+//!
+//! [`BinRx::tap_only`]: the radio's own RX channels (the channelizer
+//! bitstream's bins tuner, 12 kS/s receivers from the bins in the FPGA);
+//! the bins only for the tap.
 
 use crate::C32;
 use crate::resample::{History, Rational};
@@ -207,6 +211,8 @@ pub struct BinRx<R> {
     /// (cleared when a channel's bin changes).
     map: Option<BinIndex>,
     tap: Option<BinTap>,
+    /// RX from the inner radio (its bins tuner), the bins only for the tap.
+    tap_only: bool,
     /// Frames per power line (0: none).
     power_frames: u16,
     power: Vec<f32>,
@@ -249,12 +255,39 @@ impl<R: Radio + BinRadio> BinRx<R> {
             out_pos: 0,
             map: None,
             tap: None,
+            tap_only: false,
             power_frames: 0,
             power: Vec::new(),
         };
         r.ch = (0..channels).map(|_| Chan::new(1)).collect();
         r.set_rx_rate(10)?;
         Ok(r)
+    }
+
+    /// `inner`'s own RX channels (the channelizer bitstream's bins tuner),
+    /// its bins only for the tap: the waterfall.
+    pub fn tap_only(mut inner: R) -> Result<Self> {
+        let bins = inner.bin_caps();
+        if bins.bins == 0 || bins.max_selected == 0 {
+            return Err(Error::Unsupported("the radio has no bins"));
+        }
+        inner.set_bins(&[])?;
+        Ok(BinRx {
+            inner,
+            bins,
+            r2: 0,
+            rs: None,
+            ch: Vec::new(),
+            selected: Vec::new(),
+            frames: Vec::new(),
+            out: Vec::new(),
+            out_pos: 0,
+            map: None,
+            tap: None,
+            tap_only: true,
+            power_frames: 0,
+            power: Vec::new(),
+        })
     }
 
     pub fn inner(&mut self) -> &mut R {
@@ -420,8 +453,12 @@ impl<R: Radio + BinRadio> BinRx<R> {
 
 impl<R: Radio + BinRadio> Radio for BinRx<R> {
     fn caps(&self) -> Caps {
+        if self.tap_only {
+            return self.inner.caps();
+        }
         Caps {
             rx_channels: self.ch.len(),
+            rx_r2: 5..=40,
             ..self.inner.caps()
         }
     }
@@ -435,6 +472,9 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
     }
 
     fn set_rx_rate(&mut self, r2: u16) -> Result<()> {
+        if self.tap_only {
+            return self.inner.set_rx_rate(r2);
+        }
         if !(5..=40).contains(&r2) {
             return Err(Error::InvalidParam("r2 out of range"));
         }
@@ -466,10 +506,16 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
     }
 
     fn rx_r2(&self) -> u16 {
+        if self.tap_only {
+            return self.inner.rx_r2();
+        }
         self.r2
     }
 
     fn tune_rx(&mut self, ch: usize, f_hz: f64) -> Result<()> {
+        if self.tap_only {
+            return self.inner.tune_rx(ch, f_hz);
+        }
         if ch >= self.ch.len() {
             return Err(Error::InvalidChannel(ch));
         }
@@ -486,6 +532,9 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
     }
 
     fn idle_rx(&mut self, ch: usize) -> Result<()> {
+        if self.tap_only {
+            return self.inner.idle_rx(ch);
+        }
         if ch >= self.ch.len() {
             return Err(Error::InvalidChannel(ch));
         }
@@ -496,6 +545,14 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
     }
 
     fn read_rx(&mut self, buf: &mut [Iq32]) -> Result<usize> {
+        if self.tap_only {
+            // the bins stream read as it comes, for the tap (and so its
+            // ring doesn't lap), then the RX
+            self.tap_changes()?;
+            self.inner.read_bins(&mut self.frames)?;
+            self.tap_send()?;
+            return self.inner.read_rx(buf);
+        }
         let n = self.ch.len();
         if !buf.len().is_multiple_of(n) {
             return Err(Error::BadBuffer);
@@ -536,6 +593,9 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
     }
 
     fn hw_stats(&mut self) -> Result<Option<HwStats>> {
+        if self.tap_only {
+            return self.inner.hw_stats();
+        }
         // the inner radio's RX stream (if it has one) isn't what is read
         // here: only its ADC counters apply
         Ok(self.inner.hw_stats()?.map(|s| HwStats {
