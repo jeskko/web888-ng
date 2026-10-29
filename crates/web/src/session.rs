@@ -298,7 +298,8 @@ impl Drop for Admission<'_> {
 fn chan_view(sh: &Shared, st: &State, granted: bool) -> Option<ChanView> {
     let span = sh.radio.adc_hz / st.wf.decim as f64;
     let off = (st.wf.center_hz - st.hz).abs() + span / 2.0;
-    (granted && span <= CHAN_VIEW_SPAN && off <= CHAN_VIEW_EDGE).then_some(ChanView {
+    let fits = span <= CHAN_VIEW_SPAN && off <= CHAN_VIEW_EDGE;
+    (granted && fits && !sh.waterfalls.bins_mode()).then_some(ChanView {
         dial_hz: st.hz,
         center_hz: st.wf.center_hz,
         span_hz: span,

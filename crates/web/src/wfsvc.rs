@@ -166,6 +166,13 @@ impl Waterfalls {
         }
     }
 
+    /// Views come from a channelizer's bins. (An RX channel from a bin is
+    /// clean only within ±21 kHz of the bin's centre, so views aren't
+    /// drawn from the session's channel then.)
+    pub fn bins_mode(&self) -> bool {
+        self.bins.is_some()
+    }
+
     /// The shared views, with the span's decimation (not the capture's).
     pub fn views(&self) -> Vec<ViewInfo> {
         let mut v = self.inner.lock().unwrap().sched.views();
