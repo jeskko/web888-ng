@@ -155,9 +155,19 @@ power line averaged.
   likely order: the zoom views' bins fill the selection to 64 (the
   driver's PFB_READ copy alone was 31 % of a core at 64 bins), the
   per-frame `BinFrame` allocation and parse, the RX blocks carrying all
-  32 channels at 60 kS/s, and the zooms' FFTs on the pool. Next: cap the
-  views' bins (per view and in total), frames in blocks (one
-  allocation), RX blocks only as wide as needed, then measure again.
+  32 channels at 60 kS/s, and the zooms' FFTs on the pool.
+  **Then (5f36186):** frames in runs (`BinFrames`, one allocation per
+  run) and the ring parsed in place: the parser on the A9 25 % -> 10 %
+  of a core at 16 bins, 66 % -> 37 % at 64 (`zynqsdr/examples/pfbbench`);
+  views' bins capped at 17 in total. RX blocks' width hardly matters (16
+  jobs: 5.9 % of 32 channels, 5.5 % of 16), left as is. On the unit: hw
+  thread idle 21 % (30), **10 mixed-view sessions + 2 skimmers clean**,
+  14 nearly (11 200 S/s of 12 000; RX 54-57k frames/s). The A9's two
+  cores are full there: hw thread 65 %, pool 81 %, web 23 %, FT8 decode
+  38 %. More users in bins mode need work off the CPU: the per-user
+  fine tuner in the FPGA (bin, shift, decimate to 12 kS/s for up to 64
+  users: 1-2 DSP48, ~2 BRAM36; removes `BinRx` and the chain's
+  decimator, and most of the bins read), then zoom spectra in the FPGA.
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
