@@ -2,6 +2,11 @@
 // Pseudo-stereo (doc/stereo-cw.md): each audio frequency gets a place
 // between the ears, from left (below the passband's middle) to right
 // (above it), so signals at different pitches separate by direction.
+// SSB places them by pitch on a log scale around the passband's geometric
+// middle (0.8-1 kHz for the 1.8-3 kHz filters): CW signals tuned to the
+// usual pitches (500 Hz - 1.1 kHz) then spread over both sides whatever
+// the filter's width, where the linear middle of a 2.7 or 3 kHz filter
+// (1.5-1.8 kHz) put all of them on one side.
 // Option 3, both cues: a level difference (constant power, `ildDb` at
 // the sides) and a time difference (`itdS` between the ears at the
 // sides). A pair of 255-tap FIRs at the audio rate, designed by frequency
@@ -17,9 +22,10 @@ export interface StereoSpec {
   /** Audio sample rate. */
   rate: number;
   /** Audio frequency (Hz) placed in the middle, and how far from it a
-   * signal is fully at one side. */
+   * signal is fully at one side: Hz, or (`log`) a factor. */
   centre: number;
   width: number;
+  log: boolean;
   /** Higher audio = lower RF (LSB): mirror the image, so it matches the
    * waterfall. */
   flip: boolean;
@@ -35,16 +41,26 @@ export const ITD_S = 0.4e-3;
 /** The image for a mode and passband (`lo`, `hi` relative to the dial,
  * as in the state), or null where it doesn't apply (AM). */
 export function stereoSpec(mode: string, lo: number, hi: number, pitch: number, rate: number): StereoSpec | null {
-  const width = Math.max(25, (hi - lo) / 2);
-  const mid = (lo + hi) / 2;
-  const base = { rate, width, ildDb: ILD_DB, itdS: ITD_S };
+  const base = { rate, ildDb: ILD_DB, itdS: ITD_S };
+  // SSB: the audio band's edges as pitches, centred between them by ratio
+  const ssb = (a: number, b: number) => {
+    const f0 = Math.max(50, Math.min(a, b));
+    const f1 = Math.max(f0 * 1.1, Math.max(a, b));
+    return { centre: Math.sqrt(f0 * f1), width: Math.sqrt(f1 / f0), log: true };
+  };
   switch (mode) {
     case "usb":
-      return { ...base, centre: mid, flip: false };
+      return { ...base, ...ssb(lo, hi), flip: false };
     case "lsb":
-      return { ...base, centre: -mid, flip: true };
+      return { ...base, ...ssb(-hi, -lo), flip: true };
     case "cw":
-      return { ...base, centre: pitch + mid, flip: false };
+      return {
+        ...base,
+        centre: pitch + (lo + hi) / 2,
+        width: Math.max(25, (hi - lo) / 2),
+        log: false,
+        flip: false,
+      };
     default:
       return null;
   }
@@ -52,7 +68,8 @@ export function stereoSpec(mode: string, lo: number, hi: number, pitch: number, 
 
 /** Position of audio frequency `f`: -1 left .. +1 right. */
 export function pan(s: StereoSpec, f: number): number {
-  const p = Math.max(-1, Math.min(1, (f - s.centre) / s.width));
+  const x = s.log ? Math.log(Math.max(f, 1) / s.centre) / Math.log(s.width) : (f - s.centre) / s.width;
+  const p = Math.max(-1, Math.min(1, x));
   return s.flip ? -p : p;
 }
 

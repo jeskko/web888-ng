@@ -197,7 +197,7 @@ export function AudioCtl() {
         <button
           class={stereo.value ? "on" : ""}
           onClick={() => setStereo(!stereo.value)}
-          title="Pseudo-stereo (headphones): signals below the passband's middle to the left, above it to the right, as on the waterfall"
+          title="Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
         >
           Stereo
         </button>

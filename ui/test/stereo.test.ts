@@ -47,17 +47,18 @@ test("level is never above mono, and the centre loses little", () => {
       assert.ok(g < 1.03, `${f} Hz: ${g}`);
     }
   }
-  const c = response(t.left, 1500, RATE).gain;
+  // the middle: 900 Hz (by pitch, between 300 and 2700 Hz)
+  const c = response(t.left, 900, RATE).gain;
   assert.ok(c > 0.75, `centre gain ${c}`);
 });
 
 test("LSB is mirrored, so the image follows the waterfall", () => {
   // LSB 300..2700 Hz below the dial: audio 2700 Hz is the lowest RF
   const s = stereoSpec("lsb", -2700, -300, 0, RATE)!;
-  assert.equal(s.centre, 1500);
+  assert.ok(Math.abs(s.centre - 900) < 1e-9, `centre ${s.centre}`);
   const t = design(s);
-  assert.ok(cues(t, 2600).ild < -ILD_DB + 1, "high audio = low RF = left");
-  assert.ok(cues(t, 400).ild > ILD_DB - 1, "low audio = high RF = right");
+  assert.ok(cues(t, 2650).ild < -ILD_DB + 1, "high audio = low RF = left");
+  assert.ok(cues(t, 320).ild > ILD_DB - 1, "low audio = high RF = right");
 });
 
 test("no image for AM", () => {
@@ -82,4 +83,19 @@ test("stereo and mono have the same delay", () => {
   for (let k = 1; k < l.length; k++) if (Math.abs(l[k]) > Math.abs(l[peak])) peak = k;
   assert.ok(Math.abs(peak - (100 + DELAY)) <= 3, `peak at ${peak}`);
   assert.equal(TAPS, 255);
+});
+
+test("SSB: the usual CW pitches spread around the centre whatever the filter's width", () => {
+  // the presets: 300 Hz up to 2.1, 2.7, 3.0, 3.3 kHz
+  for (const hi of [2100, 2700, 3000, 3300]) {
+    const t = design(stereoSpec("usb", 300, hi, 0, RATE)!);
+    // CW tuned to 500 Hz - 1.1 kHz: within 3.5 dB of the middle, both sides
+    for (const f of [500, 700, 900, 1100]) {
+      const c = cues(t, f);
+      assert.ok(Math.abs(c.ild) < 3.5, `${hi}: ${f} Hz at ${c.ild.toFixed(1)} dB`);
+    }
+    // the edges still at the sides, low left, high right
+    assert.ok(cues(t, 320).ild < -ILD_DB + 1, `${hi}: low edge`);
+    assert.ok(cues(t, hi - 50).ild > ILD_DB - 1.5, `${hi}: high edge`);
+  }
 });
