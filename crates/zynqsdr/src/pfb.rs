@@ -18,7 +18,7 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use web888_radio::Iq32;
-use web888_radio::bins::BinFrame;
+use web888_radio::bins::BinFrames;
 
 const MAGIC: u64 = 0x5042;
 const T_BINS: u8 = 1;
@@ -51,23 +51,33 @@ struct Words {
 }
 
 impl Words {
-    fn push(&mut self, data: &[u8]) {
-        self.bytes.extend_from_slice(data);
-        let whole = self.bytes.len() / 8 * 8;
-        self.words.extend(
-            self.bytes[..whole]
-                .as_chunks::<8>()
-                .0
-                .iter()
-                .map(|c| u64::from_le_bytes(*c)),
-        );
-        self.bytes.drain(..whole);
+    fn push(&mut self, mut data: &[u8]) {
+        // a word split over two reads
+        if !self.bytes.is_empty() {
+            let take = (8 - self.bytes.len()).min(data.len());
+            self.bytes.extend_from_slice(&data[..take]);
+            data = &data[take..];
+            if self.bytes.len() < 8 {
+                return;
+            }
+            let w = u64::from_le_bytes(self.bytes[..8].try_into().expect("8 bytes"));
+            self.words.push(w);
+            self.bytes.clear();
+        }
+        let (whole, rest) = data.as_chunks::<8>();
+        self.words
+            .extend(whole.iter().map(|c| u64::from_le_bytes(*c)));
+        self.bytes.extend_from_slice(rest);
     }
 }
 
-/// Bins frames from the bins ring.
+/// Words a bins frame takes at most: the header and 64 bins.
+const FRAME_WORDS: usize = 65;
+
+/// Bins frames from the bins ring. A read is parsed where it lies; only a
+/// frame cut off by its end is copied, to finish with the next read.
 pub struct BinsParser {
-    w: Words,
+    tail: Words,
     /// The selection each generation stands for (0: none yet).
     sel: [Arc<[usize]>; 16],
     last: Option<u32>,
@@ -81,7 +91,7 @@ pub struct BinsParser {
 impl Default for BinsParser {
     fn default() -> Self {
         BinsParser {
-            w: Words::default(),
+            tail: Words::default(),
             sel: std::array::from_fn(|_| Arc::from(Vec::new())),
             last: None,
             high: 0,
@@ -97,28 +107,94 @@ impl BinsParser {
         self.sel[(generation & 0xf) as usize] = bins;
     }
 
-    /// Parse `data`; append the whole frames to `out`, return how many.
-    pub fn push(&mut self, data: &[u8], out: &mut Vec<BinFrame>) -> usize {
-        self.w.push(data);
-        let w = &self.w.words;
-        let mut p = 0;
+    /// Parse `data`; append the whole frames to `out` (merged into runs),
+    /// return how many.
+    pub fn push(&mut self, data: &[u8], out: &mut Vec<BinFrames>) -> usize {
+        let (words, rest) = data.as_chunks::<8>();
+        if !self.tail.bytes.is_empty() || !rest.is_empty() {
+            // a word split over reads: the copying way
+            self.tail.push(data);
+            return self.scan_tail(out);
+        }
+        let mut n = 0;
+        let mut d = 0;
+        if !self.tail.words.is_empty() {
+            // finish the carried frame with this read's first words
+            let before = self.tail.words.len();
+            let k = words.len().min(2 * FRAME_WORDS);
+            self.tail
+                .words
+                .extend(words[..k].iter().map(|c| u64::from_le_bytes(*c)));
+            let (p, m) = self.scan(&self.tail.words.clone(), 0, out);
+            n += m;
+            if p < before {
+                // the carried frame still incomplete (a short read): keep
+                // it, with the rest of the read, for the next
+                self.tail.words.drain(..p);
+                self.tail.push(&data[8 * k..]);
+                return n + self.scan_tail(out);
+            }
+            // resume in the read itself where the carried words stopped
+            self.tail.words.clear();
+            d = p - before;
+        }
+        let (p, m) = self.scan_bytes(words, d, out);
+        n += m;
+        self.tail
+            .words
+            .extend(words[p..].iter().map(|c| u64::from_le_bytes(*c)));
+        n
+    }
+
+    fn scan_tail(&mut self, out: &mut Vec<BinFrames>) -> usize {
+        let w = std::mem::take(&mut self.tail.words);
+        let (p, n) = self.scan(&w, 0, out);
+        self.tail.words = w;
+        self.tail.words.drain(..p);
+        n
+    }
+
+    fn scan(&mut self, w: &[u64], start: usize, out: &mut Vec<BinFrames>) -> (usize, usize) {
+        self.scan_with(w.len(), |i| w[i], start, out)
+    }
+
+    fn scan_bytes(
+        &mut self,
+        w: &[[u8; 8]],
+        start: usize,
+        out: &mut Vec<BinFrames>,
+    ) -> (usize, usize) {
+        self.scan_with(w.len(), |i| u64::from_le_bytes(w[i]), start, out)
+    }
+
+    /// Frames from words `start..len` (`at(i)`); returns where the first
+    /// incomplete frame starts and how many were whole.
+    fn scan_with(
+        &mut self,
+        len: usize,
+        at: impl Fn(usize) -> u64,
+        start: usize,
+        out: &mut Vec<BinFrames>,
+    ) -> (usize, usize) {
+        let mut p = start;
         let mut n = 0;
         loop {
-            while p < w.len() && !is_header(w[p], T_BINS) {
+            while p < len && !is_header(at(p), T_BINS) {
                 p += 1;
                 self.skipped += 1;
             }
-            let Some((_, generation, num)) = w.get(p).and_then(|&h| header(h)) else {
+            if p >= len {
                 break;
-            };
+            }
+            let (_, generation, num) = header(at(p)).expect("a header");
             let bins = &self.sel[generation as usize];
             let end = p + 1 + bins.len();
-            if end > w.len() {
+            if end > len {
                 break; // the rest of the frame comes later
             }
             // a whole frame is followed by the next header: otherwise this
             // wasn't one (a lap mixed old and new data)
-            if end < w.len() && !is_header(w[end], T_BINS) {
+            if end < len && !is_header(at(end), T_BINS) {
                 p += 1;
                 self.skipped += 1;
                 continue;
@@ -132,23 +208,29 @@ impl BinsParser {
                 }
             }
             self.last = Some(num);
-            out.push(BinFrame {
-                frame: self.high | num as u64,
+            BinFrames::append(
+                out,
+                self.high | num as u64,
                 generation,
-                bins: bins.clone(),
-                iq: w[p + 1..end]
-                    .iter()
-                    .map(|&x| Iq32 {
+                bins,
+                (p + 1..end).map(|i| {
+                    let x = at(i);
+                    Iq32 {
                         i: x as i32,
                         q: (x >> 32) as i32,
-                    })
-                    .collect(),
-            });
+                    }
+                }),
+            );
+            // a new run: room for the rest of the read (no regrowing)
+            if let Some(r) = out.last_mut()
+                && r.count == 1
+            {
+                r.iq.reserve(len - end);
+            }
             n += 1;
             p = end;
         }
-        self.w.words.drain(..p);
-        n
+        (p.min(len), n)
     }
 }
 
@@ -267,6 +349,8 @@ mod tests {
         // split mid-word and mid-frame
         assert_eq!(p.push(&b[..45], &mut out), 1);
         assert_eq!(p.push(&b[45..], &mut out), 2);
+        assert_eq!(out.len(), 2, "two runs: one per generation");
+        let out = web888_radio::bins::split(&out);
         assert_eq!(out.len(), 3);
         assert_eq!(out[0].frame, 10);
         assert_eq!(out[0].generation, 1);
@@ -281,6 +365,39 @@ mod tests {
         );
         assert_eq!(out[2].iq, vec![Iq32 { i: -7, q: 7 }]);
         assert_eq!((p.gaps, p.skipped), (0, 2));
+    }
+
+    #[test]
+    fn bins_frames_split_on_words_parse_as_one_read() {
+        let sel = |p: &mut BinsParser| {
+            p.set_selection(1, Arc::from(vec![1, 2, 3]));
+            p.set_selection(2, Arc::from((0..64).collect::<Vec<_>>()));
+        };
+        let mut w = vec![bin(9, 9)]; // a leftover before the first header
+        for n in 0..200u32 {
+            let (g, k) = if n % 50 < 25 { (1, 3) } else { (2, 64) };
+            w.push(hdr(1, g, n));
+            w.extend((0..k).map(|b| bin(n as i32, b)));
+        }
+        let b = bytes(&w);
+        let mut whole = BinsParser::default();
+        sel(&mut whole);
+        let mut want = vec![];
+        assert_eq!(whole.push(&b, &mut want), 200);
+        let want = web888_radio::bins::split(&want);
+        for words in [1, 2, 7, 64, 65, 66, 131, 1000] {
+            let mut p = BinsParser::default();
+            sel(&mut p);
+            let mut got = vec![];
+            let n: usize = b.chunks(8 * words).map(|c| p.push(c, &mut got)).sum();
+            assert_eq!(n, 200, "{words} words a read");
+            assert_eq!(
+                web888_radio::bins::split(&got),
+                want,
+                "{words} words a read"
+            );
+            assert_eq!((p.gaps, p.skipped), (0, 1));
+        }
     }
 
     #[test]
@@ -304,7 +421,10 @@ mod tests {
             bin(7, 0),
         ];
         p.push(&bytes(&w), &mut out);
-        let frames: Vec<u64> = out.iter().map(|f| f.frame).collect();
+        let frames: Vec<u64> = web888_radio::bins::split(&out)
+            .iter()
+            .map(|f| f.frame)
+            .collect();
         assert_eq!(
             frames,
             [

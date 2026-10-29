@@ -60,18 +60,93 @@ impl BinCaps {
     }
 }
 
-/// One frame: a sample of each selected bin.
+/// Consecutive frames with one selection: frame `first + k` carries bin
+/// `bins[i]`'s sample at `iq[k * bins.len() + i]`. One allocation per run
+/// of frames, not per frame (60k frames a second).
 #[derive(Clone, Debug, PartialEq)]
-pub struct BinFrame {
-    /// Frames since the source started.
-    pub frame: u64,
-    /// The selection it used (`BinRadio::set_bins`' result).
+pub struct BinFrames {
+    /// The first frame's number (frames since the source started).
+    pub first: u64,
+    /// The selection they used (`BinRadio::set_bins`' result).
     pub generation: u8,
-    /// The selected bins, ascending; `iq[i]` is bin `bins[i]`'s sample,
-    /// scaled like RX samples (a full-scale sine reads
-    /// `RX_SINE_FULL_SCALE`).
+    /// The selected bins, ascending; samples scaled like RX samples (a
+    /// full-scale sine reads `RX_SINE_FULL_SCALE`).
+    pub bins: Arc<[usize]>,
+    /// Frames in the run (also when no bins are selected).
+    pub count: usize,
+    pub iq: Vec<Iq32>,
+}
+
+impl BinFrames {
+    pub fn new(first: u64, generation: u8, bins: Arc<[usize]>) -> Self {
+        BinFrames {
+            first,
+            generation,
+            bins,
+            count: 0,
+            iq: Vec::new(),
+        }
+    }
+
+    /// Frame `first + k`'s samples.
+    pub fn frame(&self, k: usize) -> &[Iq32] {
+        let n = self.bins.len();
+        &self.iq[k * n..(k + 1) * n]
+    }
+
+    /// The number after the last frame.
+    pub fn end(&self) -> u64 {
+        self.first + self.count as u64
+    }
+
+    /// Frame `frame` with `generation`'s selection `bins` would continue
+    /// this run.
+    pub fn continued_by(&self, frame: u64, generation: u8, bins: &Arc<[usize]>) -> bool {
+        self.end() == frame && self.generation == generation && Arc::ptr_eq(&self.bins, bins)
+    }
+
+    /// Append frame `frame` (its samples, `bins.len()` of them) to the last
+    /// run in `out`, or start a new one.
+    pub fn append(
+        out: &mut Vec<BinFrames>,
+        frame: u64,
+        generation: u8,
+        bins: &Arc<[usize]>,
+        iq: impl IntoIterator<Item = Iq32>,
+    ) {
+        let cont = out
+            .last()
+            .is_some_and(|b| b.continued_by(frame, generation, bins));
+        if !cont {
+            out.push(BinFrames::new(frame, generation, bins.clone()));
+        }
+        let b = out.last_mut().expect("pushed");
+        b.iq.extend(iq);
+        b.count += 1;
+    }
+}
+
+/// One frame on its own (tests and tools; the sources hand runs).
+#[derive(Clone, Debug, PartialEq)]
+pub struct SplitFrame {
+    pub frame: u64,
+    pub generation: u8,
     pub bins: Arc<[usize]>,
     pub iq: Vec<Iq32>,
+}
+
+/// The runs' frames one by one.
+pub fn split(runs: &[BinFrames]) -> Vec<SplitFrame> {
+    runs.iter()
+        .flat_map(|r| {
+            (0..r.count).map(move |k| SplitFrame {
+                frame: r.first + k as u64,
+                generation: r.generation,
+                bins: r.bins.clone(),
+                iq: r.frame(k).to_vec(),
+            })
+        })
+        .collect()
 }
 
 /// A channelizer.
@@ -83,8 +158,9 @@ pub trait BinRadio: Send {
     /// boundary; returns the generation the frames using it carry.
     fn set_bins(&mut self, bins: &[usize]) -> Result<u8>;
 
-    /// Append the frames that came since the last call; returns how many.
-    fn read_bins(&mut self, out: &mut Vec<BinFrame>) -> Result<usize>;
+    /// Append the frames that came since the last call (runs continuing
+    /// the last one in `out` are merged into it); returns how many frames.
+    fn read_bins(&mut self, out: &mut Vec<BinFrames>) -> Result<usize>;
 
     /// Power lines of `frames` frames each (0: none).
     fn set_power(&mut self, frames: u16) -> Result<()>;

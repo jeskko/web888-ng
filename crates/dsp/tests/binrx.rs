@@ -4,7 +4,7 @@
 use std::f64::consts::PI;
 use std::sync::Arc;
 use web888_dsp::binrx::{BinRx, TapMsg};
-use web888_radio::bins::{BinCaps, BinFrame, BinRadio, selection};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio, selection};
 use web888_radio::*;
 
 const TONE_BIN: usize = 236; // 7.080 MHz
@@ -53,30 +53,21 @@ impl BinRadio for FakeBins {
         self.generation = self.generation % 15 + 1;
         Ok(self.generation)
     }
-    fn read_bins(&mut self, out: &mut Vec<BinFrame>) -> Result<usize> {
+    fn read_bins(&mut self, out: &mut Vec<BinFrames>) -> Result<usize> {
         for _ in 0..300 {
             let t = self.frame as f64 / 60e3;
-            let iq = self
-                .sel
-                .iter()
-                .map(|&b| {
-                    if b == TONE_BIN {
-                        let p = 2.0 * PI * TONE_OFF * t;
-                        Iq32 {
-                            i: (AMP * p.cos()) as i32,
-                            q: (AMP * p.sin()) as i32,
-                        }
-                    } else {
-                        Iq32::default()
+            let iq = self.sel.iter().map(|&b| {
+                if b == TONE_BIN {
+                    let p = 2.0 * PI * TONE_OFF * t;
+                    Iq32 {
+                        i: (AMP * p.cos()) as i32,
+                        q: (AMP * p.sin()) as i32,
                     }
-                })
-                .collect();
-            out.push(BinFrame {
-                frame: self.frame,
-                generation: self.generation,
-                bins: self.sel.clone(),
-                iq,
+                } else {
+                    Iq32::default()
+                }
             });
+            BinFrames::append(out, self.frame, self.generation, &self.sel, iq);
             self.frame += 1;
         }
         Ok(300)
@@ -254,22 +245,22 @@ fn the_tap_gets_frames_and_power_lines() {
     r.tune_rx(1, 30e6).unwrap(); // bin 1000
     let tap = r.tap();
     let (h, rx) = tap.subscribe();
-    // more than the frame has room for, one of them a channel's
+    // more than the tap may add (TAP_BINS), one of them a channel's
     h.want((990..1060).collect(), 20.0);
     let mut buf = vec![Iq32::default(); 2 * 512];
     r.read_rx(&mut buf).unwrap();
-    // the channels' bins first, then the tap's from its first on
+    // the channels' bins, then the tap's from its first on, 17 more
     let sel = r.inner().selections.last().unwrap().clone();
-    assert_eq!(sel.len(), 64);
+    assert_eq!(sel.len(), 2 + web888_dsp::binrx::TAP_BINS);
     assert_eq!(sel[0], 236);
-    assert_eq!(sel[1..], (990..1053).collect::<Vec<_>>()[..]);
+    assert_eq!(sel[1..], (990..1008).collect::<Vec<_>>()[..]);
     assert_eq!(r.inner().power_frames, 3000);
     let (mut frames, mut lines) = (0, 0);
     while let Ok(m) = rx.try_recv() {
         match m {
             TapMsg::Frames(f) => {
-                assert!(f.iter().all(|f| f.bins.len() == 64));
-                frames += f.len();
+                assert!(f.iter().all(|f| f.bins.len() == 19));
+                frames += f.iter().map(|f| f.count).sum::<usize>();
             }
             TapMsg::Power(p) => {
                 assert_eq!(p[TONE_BIN], 1.0);

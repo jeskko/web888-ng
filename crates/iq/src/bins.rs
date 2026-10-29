@@ -11,7 +11,7 @@ use std::collections::VecDeque;
 use std::sync::Arc;
 use web888_dsp::C32;
 use web888_dsp::pfb::{PfbComplex, PfbSpec};
-use web888_radio::bins::{BinCaps, BinFrame, selection};
+use web888_radio::bins::{BinCaps, BinFrames, selection};
 use web888_radio::{Iq32, RX_SINE_FULL_SCALE};
 
 /// Bin spacing, as the bitstream's.
@@ -29,7 +29,9 @@ pub struct IqBins {
     sel: Arc<[usize]>,
     generation: u8,
     next: Option<(Arc<[usize]>, u8)>,
-    frames: VecDeque<BinFrame>,
+    /// Runs of frames not read yet, and how many frames they hold.
+    frames: Vec<BinFrames>,
+    queued: usize,
     dropped: u64,
     /// Power: frames per line (0: off), the sums, frames in, lines done.
     per_line: u16,
@@ -67,7 +69,8 @@ impl IqBins {
             sel: Arc::from(Vec::new()),
             generation: 0,
             next: None,
-            frames: VecDeque::new(),
+            frames: Vec::new(),
+            queued: 0,
             dropped: 0,
             per_line: 0,
             sum: vec![0.0; m],
@@ -119,6 +122,7 @@ impl IqBins {
             generation,
             next,
             frames,
+            queued,
             dropped,
             per_line,
             sum,
@@ -135,26 +139,21 @@ impl IqBins {
             // a frame without bins too, as the hardware sends: its
             // reader's clock (RX frames from bins keep coming)
             let k = RX_SINE_FULL_SCALE as f32;
-            let iq = sel
-                .iter()
-                .map(|&b| {
-                    let z = u[b] * k;
-                    Iq32 {
-                        i: z.re.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
-                        q: z.im.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
-                    }
-                })
-                .collect();
-            if frames.len() >= QUEUE {
-                frames.pop_front();
-                *dropped += 1;
-            }
-            frames.push_back(BinFrame {
-                frame: *frame,
-                generation: *generation,
-                bins: sel.clone(),
-                iq,
+            let iq = sel.iter().map(|&b| {
+                let z = u[b] * k;
+                Iq32 {
+                    i: z.re.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                    q: z.im.round().clamp(i32::MIN as f32, i32::MAX as f32) as i32,
+                }
             });
+            BinFrames::append(frames, *frame, *generation, sel, iq);
+            *queued += 1;
+            if *queued > QUEUE {
+                // the reader is behind: the oldest run goes
+                let old = frames.remove(0);
+                *queued -= old.count;
+                *dropped += old.count as u64;
+            }
             if *per_line > 0 {
                 for (s, z) in sum.iter_mut().zip(u) {
                     *s += z.norm_sqr() as f64;
@@ -177,9 +176,10 @@ impl IqBins {
     }
 
     /// Move the frames since the last call to `out`; returns how many.
-    pub fn read_bins(&mut self, out: &mut Vec<BinFrame>) -> usize {
-        let n = self.frames.len();
-        out.extend(self.frames.drain(..));
+    pub fn read_bins(&mut self, out: &mut Vec<BinFrames>) -> usize {
+        let n = self.queued;
+        out.append(&mut self.frames);
+        self.queued = 0;
         n
     }
 
@@ -222,6 +222,8 @@ mod tests {
         let mut f = vec![];
         let n = b.read_bins(&mut f);
         assert!(n > 100, "{n} frames");
+        let f = web888_radio::bins::split(&f);
+        assert_eq!(f.len(), n);
         let last = f.last().unwrap();
         assert_eq!(
             (last.generation, &*last.bins),
@@ -251,7 +253,7 @@ mod tests {
         b.push(&tone(7.074e6, 0.1, 128 * 200, 0));
         let mut out = Vec::new();
         assert!(b.read_bins(&mut out) > 150);
-        assert!(out.iter().all(|f| f.iq.is_empty()));
+        assert!(out.iter().all(|f| f.iq.is_empty() && f.count > 0));
     }
 
     #[test]
@@ -267,6 +269,7 @@ mod tests {
         b.push(&x[128 * 100..]);
         let mut f = vec![];
         b.read_bins(&mut f);
+        let f = web888_radio::bins::split(&f);
         let (old, new): (Vec<_>, Vec<_>) = f.iter().partition(|f| f.generation == g1);
         assert!(!old.is_empty() && !new.is_empty());
         assert!(old.iter().all(|f| f.iq.len() == 2));

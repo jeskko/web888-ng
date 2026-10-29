@@ -87,6 +87,66 @@ fn waterfall(bins: usize, fps: f64, budget: usize, fs: f64, secs: f64) {
     );
 }
 
+/// A zoomed view from `nbins` channelizer bins at 60 kS/s: an FFT of `n`
+/// per bin (`web888_web::binview`), `budget` FFTs a line each.
+fn zoom(nbins: usize, n: usize, fps: f64, budget: usize, secs: f64) {
+    let fs = 60e3;
+    let spec = WfSpec {
+        fs,
+        bins: n,
+        budget,
+        fps,
+        droop: Droop::None,
+        fft_per_bin: 1,
+    };
+    let mut e: Vec<WfEngine> = (0..nbins)
+        .map(|_| WfEngine::with_fft_size(spec, n))
+        .collect();
+    let mut r = Noise(3);
+    let per_line = (fs / fps) as usize;
+    let input: Vec<C32> = (0..per_line)
+        .map(|_| C32::new(r.next(), r.next()))
+        .collect();
+    let t = Instant::now();
+    for _ in 0..(secs * fps) as usize {
+        for e in &mut e {
+            e.push_c32(input.iter().copied(), true);
+            black_box(e.line());
+        }
+    }
+    report(
+        &format!("zoom {nbins} bins x {n}-pt {fps} fps x{budget}"),
+        t.elapsed().as_secs_f64(),
+        secs,
+    );
+}
+
+/// `jobs` consumers each taking its channel out of `nch`-channel RX blocks
+/// at `fs` (10 ms blocks), as the pool's audio jobs do.
+fn fanout(nch: usize, jobs: usize, fs: f64, secs: f64) {
+    let frames = (fs / 100.0) as usize;
+    let block = web888_radio::RxBlock {
+        first_frame: 0,
+        nch,
+        iq: vec![Iq32 { i: 1, q: 2 }; frames * nch],
+        overload: false,
+    };
+    let mut x: Vec<C32> = Vec::new();
+    let t = Instant::now();
+    for _ in 0..(secs * 100.0) as usize {
+        for ch in 0..jobs {
+            x.clear();
+            x.extend(block.channel(ch).map(web888_dsp::rx_to_c32));
+            black_box(&x);
+        }
+    }
+    report(
+        &format!("rx fan-out {jobs} of {nch} ch, {:.0} kS/s", fs / 1e3),
+        t.elapsed().as_secs_f64(),
+        secs,
+    );
+}
+
 fn kernels() {
     // complex f32 FFT
     for n in [1024, 2048, 4096] {
@@ -179,6 +239,11 @@ fn main() {
     waterfall(2048, 25.0, 30, 1.92e6, secs);
     waterfall(1024, 25.0, 30, 30.72e6, secs);
     waterfall(1024, 25.0, 8, 1.92e6, secs);
+    println!("bins mode:");
+    zoom(17, 128, 20.0, 6, secs);
+    zoom(17, 128, 20.0, 30, secs);
+    fanout(32, 16, 60e3, secs);
+    fanout(16, 16, 60e3, secs);
     println!("kernels:");
     kernels();
 }

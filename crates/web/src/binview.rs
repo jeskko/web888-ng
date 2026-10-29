@@ -18,16 +18,16 @@ use std::sync::Arc;
 use std::sync::mpsc::Receiver;
 use std::time::{Duration, Instant};
 use web888_core::pool::{Ctx, Job};
-use web888_dsp::C32;
 use web888_dsp::binrx::{BinTap, TapHandle, TapMsg};
 use web888_dsp::chan::Droop;
 use web888_dsp::rx_to_c32;
 use web888_dsp::wf::{WF_DB0, WfEngine, WfSpec};
-use web888_radio::bins::{BinCaps, BinFrame};
+use web888_radio::bins::{BinCaps, BinFrames};
 
-/// Most bins a zoomed view takes (a 960 kHz span at 30 kHz: 33); wider
-/// views draw the power line.
-pub const ZOOM_BINS: usize = 33;
+/// Most bins a zoomed view takes (a 480 kHz span at 30 kHz: 17; each bin
+/// read costs the A9 about 1 % of a core); wider views draw the power
+/// line. All views together get `binrx::TAP_BINS` beyond the channels'.
+pub const ZOOM_BINS: usize = 17;
 
 struct Sub {
     s: ViewSub,
@@ -42,16 +42,14 @@ struct Zoom {
     n: usize,
     fps: f64,
     engines: Vec<WfEngine>,
-    /// Each view bin's last frame, and the samples since the last push.
+    /// Each view bin's last frame.
     last: Vec<Option<u64>>,
-    run: Vec<Vec<C32>>,
-    run_contiguous: Vec<bool>,
     map: Option<BinMap>,
 }
 
 impl Zoom {
-    fn frames(&mut self, view: &[usize], frames: &[BinFrame]) {
-        for f in frames {
+    fn frames(&mut self, view: &[usize], runs: &[BinFrames]) {
+        for f in runs {
             if !self
                 .map
                 .as_ref()
@@ -61,22 +59,13 @@ impl Zoom {
                 self.map = Some((f.bins.clone(), idx));
             }
             let (_, idx) = self.map.as_ref().expect("set");
+            let n = f.bins.len();
             for (i, j) in idx.iter().enumerate() {
                 let Some(j) = *j else { continue };
-                let contiguous = self.last[i].is_some_and(|l| l + 1 == f.frame);
-                if !contiguous && !self.run[i].is_empty() {
-                    self.engines[i].push_c32(self.run[i].drain(..), self.run_contiguous[i]);
-                }
-                if self.run[i].is_empty() {
-                    self.run_contiguous[i] = contiguous;
-                }
-                self.run[i].push(rx_to_c32(f.iq[j]));
-                self.last[i] = Some(f.frame);
-            }
-        }
-        for (i, e) in self.engines.iter_mut().enumerate() {
-            if !self.run[i].is_empty() {
-                e.push_c32(self.run[i].drain(..), self.run_contiguous[i]);
+                let contiguous = self.last[i].is_some_and(|l| l + 1 == f.first);
+                let x = (0..f.count).map(|k| rx_to_c32(f.iq[k * n + j]));
+                self.engines[i].push_c32(x, contiguous);
+                self.last[i] = Some(f.end() - 1);
             }
         }
     }
@@ -180,8 +169,6 @@ impl BinViewJob {
                     fps,
                     engines: (0..k).map(|_| WfEngine::with_fft_size(spec, n)).collect(),
                     last: vec![None; k],
-                    run: vec![Vec::new(); k],
-                    run_contiguous: vec![false; k],
                     map: None,
                 });
             }
@@ -368,39 +355,30 @@ mod tests {
 
     /// Frames `f0..f0 + n` of bins `sel`: each bin sees the tones within
     /// ±30 kHz of its centre (amplitude 1: a full-scale sine).
-    fn frames(sel: &[usize], f0: u64, n: usize, tones: &[(f64, f64)]) -> Arc<Vec<BinFrame>> {
+    fn frames(sel: &[usize], f0: u64, n: usize, tones: &[(f64, f64)]) -> Arc<Vec<BinFrames>> {
         let bins: Arc<[usize]> = Arc::from(sel.to_vec());
-        let v = (f0..f0 + n as u64)
-            .map(|frame| {
-                let t = frame as f64 / CAPS.frame_rate;
-                let iq = sel
-                    .iter()
-                    .map(|&k| {
-                        let (mut i, mut q) = (0.0, 0.0);
-                        for &(hz, a) in tones {
-                            let off = hz - CAPS.freq(k);
-                            if off.abs() < 30e3 {
-                                let p = 2.0 * PI * off * t;
-                                i += a * p.cos();
-                                q += a * p.sin();
-                            }
-                        }
-                        let s = RX_SINE_FULL_SCALE;
-                        Iq32 {
-                            i: (i * s) as i32,
-                            q: (q * s) as i32,
-                        }
-                    })
-                    .collect();
-                BinFrame {
-                    frame,
-                    generation: 1,
-                    bins: bins.clone(),
-                    iq,
+        let mut out = Vec::new();
+        for frame in f0..f0 + n as u64 {
+            let t = frame as f64 / CAPS.frame_rate;
+            let iq = sel.iter().map(|&k| {
+                let (mut i, mut q) = (0.0, 0.0);
+                for &(hz, a) in tones {
+                    let off = hz - CAPS.freq(k);
+                    if off.abs() < 30e3 {
+                        let p = 2.0 * PI * off * t;
+                        i += a * p.cos();
+                        q += a * p.sin();
+                    }
                 }
-            })
-            .collect();
-        Arc::new(v)
+                let s = RX_SINE_FULL_SCALE;
+                Iq32 {
+                    i: (i * s) as i32,
+                    q: (q * s) as i32,
+                }
+            });
+            BinFrames::append(&mut out, frame, 1, &bins, iq);
+        }
+        Arc::new(out)
     }
 
     struct Line {

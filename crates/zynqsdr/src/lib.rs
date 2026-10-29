@@ -26,7 +26,7 @@ use abi::*;
 use dev::Device;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use web888_radio::bins::{BinCaps, BinFrame, BinRadio, selection};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio, selection};
 use web888_radio::*;
 
 /// Static facts the driver can't tell us.
@@ -437,7 +437,7 @@ impl<D: Device> BinRadio for ZynqsdrRadio<D> {
         Ok(generation)
     }
 
-    fn read_bins(&mut self, out: &mut Vec<BinFrame>) -> Result<usize> {
+    fn read_bins(&mut self, out: &mut Vec<BinFrames>) -> Result<usize> {
         let p = pfb_mut(&mut self.pfb)?;
         if p.streams & PFB_BINS == 0 {
             return Ok(0);

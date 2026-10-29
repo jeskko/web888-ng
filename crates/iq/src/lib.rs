@@ -597,7 +597,7 @@ impl bins_api::BinRadio for IqRadio {
         Ok(self.bins_mut()?.set_bins(sel))
     }
 
-    fn read_bins(&mut self, out: &mut Vec<bins_api::BinFrame>) -> Result<usize> {
+    fn read_bins(&mut self, out: &mut Vec<bins_api::BinFrames>) -> Result<usize> {
         // a direct input reads until the bank made a frame
         let f0 = self.bins_mut()?.frame();
         self.pump(|r| r.bins.as_ref().is_some_and(|b| b.frame() > f0))?;

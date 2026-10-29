@@ -20,7 +20,7 @@ use std::collections::BTreeSet;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex};
-use web888_radio::bins::{BinCaps, BinFrame, BinRadio};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio};
 use web888_radio::*;
 
 struct Chan {
@@ -45,10 +45,13 @@ impl Chan {
 /// What a [`BinTap`] subscriber gets.
 pub enum TapMsg {
     /// Bin frames, as read (every selected bin, not only the wanted ones).
-    Frames(Arc<Vec<BinFrame>>),
+    Frames(Arc<Vec<BinFrames>>),
     /// A power line: every bin's mean |X|² (a full-scale sine reads 1).
     Power(Arc<Vec<f32>>),
 }
+
+/// Bins the tap may add to the channels' (a 480 kHz view takes 17).
+pub const TAP_BINS: usize = 17;
 
 /// Messages queued per subscriber; a full queue drops (the frames' numbers
 /// show the gap).
@@ -133,7 +136,7 @@ impl BinTap {
     }
 
     /// Frames to the subscribers wanting bins.
-    pub fn send_frames(&self, f: Arc<Vec<BinFrame>>) {
+    pub fn send_frames(&self, f: Arc<Vec<BinFrames>>) {
         self.send(|| TapMsg::Frames(f.clone()), |s| !s.bins.is_empty());
     }
 
@@ -196,7 +199,7 @@ pub struct BinRx<R> {
     ch: Vec<Chan>,
     /// The bins asked for, as last given to `set_bins`.
     selected: Vec<usize>,
-    frames: Vec<BinFrame>,
+    frames: Vec<BinFrames>,
     /// RX frames made but not read yet (whole frames).
     out: Vec<Iq32>,
     out_pos: usize,
@@ -274,10 +277,13 @@ impl<R: Radio + BinRadio> BinRx<R> {
             .iter()
             .filter_map(|c| c.tuned.map(|t| t.0))
             .collect();
-        // the tap's bins where the frame has room
+        // the tap's bins where the frame has room, at most TAP_BINS more
+        // (each bin read costs the hw thread; the views fall back on the
+        // power line)
         if let Some(t) = &self.tap {
+            let room = (want.len() + TAP_BINS).min(self.bins.max_selected);
             for b in t.wants().0 {
-                if want.len() >= self.bins.max_selected {
+                if want.len() >= room {
                     break;
                 }
                 if b < self.bins.bins {
@@ -303,6 +309,7 @@ impl<R: Radio + BinRadio> BinRx<R> {
             map,
             ..
         } = self;
+        let nch = ch.len();
         for f in frames.iter() {
             // each channel's index in the frame, found once per selection
             if !map.as_ref().is_some_and(|(b, _)| Arc::ptr_eq(b, &f.bins)) {
@@ -313,38 +320,52 @@ impl<R: Radio + BinRadio> BinRx<R> {
                 *map = Some((f.bins.clone(), idx));
             }
             let idx = &map.as_ref().expect("set").1;
+            let n = f.bins.len();
             // idle channels cost nothing: they read zeros, and a channel
             // starts from a clear history when it is tuned
-            let shifted = |c: &mut Chan, i: Option<usize>| {
-                c.tuned?;
-                Some(i.map_or(C32::new(0.0, 0.0), |i| {
-                    let s = f.iq[i];
-                    let v = C32::new(s.i as f32, s.q as f32) * c.rot;
-                    c.rot *= c.step;
-                    v
-                }))
-            };
             let Some(rs) = rs else {
-                // at the frame rate: the shifted sample itself
-                for (c, &i) in ch.iter_mut().zip(idx) {
-                    out.push(shifted(c, i).map_or(Iq32::default(), to_iq32));
+                // at the frame rate: the shifted samples themselves, a
+                // channel at a time
+                let base = out.len();
+                out.resize(base + f.count * nch, Iq32::default());
+                for (j, (c, &i)) in ch.iter_mut().zip(idx).enumerate() {
+                    let Some(i) = i.filter(|_| c.tuned.is_some()) else {
+                        continue;
+                    };
+                    let (mut rot, step) = (c.rot, c.step);
+                    for k in 0..f.count {
+                        let s = f.iq[k * n + i];
+                        out[base + k * nch + j] = to_iq32(C32::new(s.i as f32, s.q as f32) * rot);
+                        rot *= step;
+                    }
+                    c.rot = rot;
                 }
                 continue;
             };
-            for (c, &i) in ch.iter_mut().zip(idx) {
-                if let Some(x) = shifted(c, i) {
+            for k in 0..f.count {
+                let row = f.frame(k);
+                for (c, &i) in ch.iter_mut().zip(idx) {
+                    if c.tuned.is_none() {
+                        continue;
+                    }
+                    let x = i.map_or(C32::new(0.0, 0.0), |i| {
+                        let s = row[i];
+                        let v = C32::new(s.i as f32, s.q as f32) * c.rot;
+                        c.rot *= c.step;
+                        v
+                    });
                     c.hist.push(x);
                 }
+                rs.step(|h| {
+                    out.extend(ch.iter().map(|c| {
+                        if c.tuned.is_none() {
+                            Iq32::default()
+                        } else {
+                            to_iq32(c.hist.dot(h))
+                        }
+                    }))
+                });
             }
-            rs.step(|h| {
-                out.extend(ch.iter().map(|c| {
-                    if c.tuned.is_none() {
-                        Iq32::default()
-                    } else {
-                        to_iq32(c.hist.dot(h))
-                    }
-                }))
-            });
         }
         // keep the rotators on the unit circle
         for c in ch.iter_mut() {

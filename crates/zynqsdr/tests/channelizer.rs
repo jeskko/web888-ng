@@ -4,7 +4,7 @@
 //! words and frames.
 
 use std::io;
-use web888_radio::bins::{BinFrame, BinRadio};
+use web888_radio::bins::{BinFrames, BinRadio};
 use web888_radio::*;
 use web888_zynqsdr::abi::*;
 use web888_zynqsdr::dev::Device;
@@ -161,17 +161,18 @@ fn bins_follow_the_selection_and_its_generation() {
     assert_eq!(g1, 1);
     assert_eq!(r.device().masks, vec![(1, vec![5, 300])]);
     assert_eq!(r.device().starts, vec![(PFB_BINS, 1)]);
-    let mut out: Vec<BinFrame> = vec![];
+    let mut out: Vec<BinFrames> = vec![];
     let mut n = 0;
     while n < 6 {
         n += r.read_bins(&mut out).unwrap();
     }
-    for f in &out {
+    let split = web888_radio::bins::split(&out);
+    for f in &split {
         assert_eq!(f.generation, 1);
         assert_eq!(&*f.bins, &[5, 300]);
         assert_eq!(f.iq, vec![Iq32 { i: 5, q: -5 }, Iq32 { i: 300, q: -300 }]);
     }
-    assert!(out.windows(2).all(|w| w[1].frame == w[0].frame + 1));
+    assert!(split.windows(2).all(|w| w[1].frame == w[0].frame + 1));
 
     // 70 bins: the lowest 64; generations cycle 1..=15
     let many: Vec<usize> = (100..170).collect();
@@ -179,10 +180,16 @@ fn bins_follow_the_selection_and_its_generation() {
     assert_eq!(g2, 2);
     assert_eq!(r.device().masks[1].1, (100..164).collect::<Vec<_>>());
     out.clear();
-    while out.iter().filter(|f| f.generation == 2).count() < 3 {
+    let gen2 = |out: &[BinFrames]| {
+        web888_radio::bins::split(out)
+            .into_iter()
+            .filter(|f| f.generation == 2)
+            .collect::<Vec<_>>()
+    };
+    while gen2(&out).len() < 3 {
         r.read_bins(&mut out).unwrap();
     }
-    let f = out.iter().find(|f| f.generation == 2).unwrap();
+    let f = gen2(&out)[0].clone();
     assert_eq!(f.iq.len(), 64);
     assert_eq!(f.iq[63], Iq32 { i: 163, q: -163 });
     let gens: Vec<u8> = (0..15).map(|_| r.set_bins(&[1]).unwrap()).collect();

@@ -8,7 +8,7 @@
 use std::sync::Arc;
 use std::time::Instant;
 use web888_dsp::binrx::BinRx;
-use web888_radio::bins::{BinCaps, BinFrame, BinRadio, selection};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio, selection};
 use web888_radio::*;
 
 struct Src {
@@ -31,15 +31,17 @@ impl BinRadio for Src {
         self.sel = Arc::from(selection(bins, 2047, 64));
         Ok(1)
     }
-    fn read_bins(&mut self, out: &mut Vec<BinFrame>) -> Result<usize> {
+    fn read_bins(&mut self, out: &mut Vec<BinFrames>) -> Result<usize> {
         for _ in 0..600 {
             let x = (self.frame as i32).wrapping_mul(2654435761u32 as i32) >> 4;
-            out.push(BinFrame {
-                frame: self.frame,
-                generation: 1,
-                bins: self.sel.clone(),
-                iq: vec![Iq32 { i: x, q: -x }; self.sel.len()],
-            });
+            let n = self.sel.len();
+            BinFrames::append(
+                out,
+                self.frame,
+                1,
+                &self.sel,
+                std::iter::repeat_n(Iq32 { i: x, q: -x }, n),
+            );
             self.frame += 1;
         }
         Ok(600)
