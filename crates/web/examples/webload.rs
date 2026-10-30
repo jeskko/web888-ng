@@ -8,7 +8,7 @@
 //!   cargo run --release -p web888-web --example webload -- \
 //!       ws://HOST:8073/ws [--sessions 13] [--secs 10] \
 //!       [--views mixed|same|distinct] [--base 7000000] [--bins 1024] \
-//!       [--zoom 256]
+//!       [--zoom 256] [--warmup 1.5]
 //!
 //! Views: `same`: everyone on the default full view (one shared capture);
 //! `distinct`: everyone 480 kHz around their own dial (as many captures
@@ -17,6 +17,8 @@
 //! and a 1.92 MHz view shared by all who have it.
 //! `--bins`: waterfall bins the views ask for (not the default full view).
 //! `--zoom`: the distinct views' decimation (256: 480 kHz, 512: 240 kHz).
+//! `--warmup`: seconds not counted after the sessions start (with many
+//! sessions at once, the start has its own gaps: setups, queueing).
 //! The server must allow the sessions from one address (`limits.per_ip`).
 
 use futures_util::{SinkExt, StreamExt};
@@ -28,7 +30,6 @@ const KIND_AUDIO: u8 = 1;
 const KIND_WF: u8 = 2;
 const FLAG_GAP: u8 = 2;
 const FLAG_STALE: u8 = 4;
-const WARMUP: Duration = Duration::from_millis(1500);
 
 #[derive(Clone, Copy, PartialEq)]
 enum Views {
@@ -67,15 +68,26 @@ fn plan(k: usize, views: Views, base: f64, zoom: u16) -> (f64, Option<(f64, u16)
     }
 }
 
-async fn session(
-    url: String,
-    k: usize,
+/// The run's options, as every session uses them.
+#[derive(Clone, Copy)]
+struct Opts {
     views: Views,
     base: f64,
     secs: f64,
     bins: u32,
     zoom: u16,
-) -> Stats {
+    warmup: f64,
+}
+
+async fn session(url: String, k: usize, o: Opts) -> Stats {
+    let Opts {
+        views,
+        base,
+        secs,
+        bins,
+        zoom,
+        warmup,
+    } = o;
     let (dial, view, what) = plan(k, views, base, zoom);
     let mut st = Stats {
         label: format!("{:>10.3} kHz  {what}", dial / 1e3),
@@ -101,7 +113,7 @@ async fn session(
         }
     }
     let t0 = Instant::now();
-    let start = t0 + WARMUP;
+    let start = t0 + Duration::from_secs_f64(warmup);
     let end = start + Duration::from_secs_f64(secs);
     while let Ok(Some(m)) = tokio::time::timeout_at(end, ws.next()).await {
         let m = match m {
@@ -154,6 +166,7 @@ async fn main() {
     let (mut n, mut secs, mut views, mut base) = (13usize, 10.0f64, Views::Mixed, 7e6f64);
     let mut bins = 1024u32;
     let mut zoom = 256u16;
+    let mut warmup = 1.5f64;
     while let Some(a) = args.next() {
         let mut val = || args.next().expect("option value");
         match a.as_str() {
@@ -162,6 +175,7 @@ async fn main() {
             "--base" => base = val().parse().expect("--base HZ"),
             "--bins" => bins = val().parse().expect("--bins N"),
             "--zoom" => zoom = val().parse().expect("--zoom DECIM"),
+            "--warmup" => warmup = val().parse().expect("--warmup SECS"),
             "--views" => {
                 views = match val().as_str() {
                     "same" => Views::Same,
@@ -175,8 +189,16 @@ async fn main() {
         }
     }
     let url = url.expect("usage: webload ws://HOST:PORT/ws [options]");
+    let o = Opts {
+        views,
+        base,
+        secs,
+        bins,
+        zoom,
+        warmup,
+    };
     let tasks: Vec<_> = (0..n)
-        .map(|k| tokio::spawn(session(url.clone(), k, views, base, secs, bins, zoom)))
+        .map(|k| tokio::spawn(session(url.clone(), k, o)))
         .collect();
     println!(
         "{:>3}  {:<34} {:>9} {:>5} {:>7} {:>9} {:>11} {:>13}",
