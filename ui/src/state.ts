@@ -11,6 +11,7 @@ import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
+import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 
 export const conn = signal<ConnState>("connecting");
@@ -207,6 +208,7 @@ export function connect(): void {
       rssi.value = f.rssi;
       if (f.flags & FLAG_OVERLOAD) overloadAt.value = performance.now();
       if (f.flags & FLAG_GAP) audioGaps.value++;
+      jttyAudio(f); // first: the player hands the samples to the worklet
       player.push(f.pcm, f.rate, f.stereo);
     },
     onWf(l) {
@@ -337,6 +339,76 @@ effect(() => {
   stereoKey = key;
   player.setStereo(spec ? design(spec) : null);
 });
+
+// ---------------------------------------------------------------- JTTY
+
+/** JTTY decoding of this receiver's audio, in this browser (remembered). */
+export const jttyOn = signal(load("jtty") === "1");
+export const jttyRows = signal<JttyRow[]>([]);
+export const jttyError = signal("");
+let jttyWorker: Worker | null = null;
+const jttyFeed = new JttyFeed();
+/** Dial, mode and listen-along of the decoder's stream; a change resets it
+ * (`jttyGen` tells its late results from the new stream's). */
+let jttyKey = "";
+let jttyDial = 0;
+let jttyFed = 0;
+let jttyGen = 0;
+
+function jttyStart(): Worker {
+  const w = new Worker("jtty-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { decodes?: JttyDecode[]; gen?: number; error?: string };
+    if (d.error) jttyError.value = d.error;
+    if (!d.decodes || d.gen !== jttyGen) return;
+    const rows = toRows(d.decodes, jttyDial, jttyFed, Date.now() / 1000);
+    const all = jttyRows.value.concat(rows);
+    jttyRows.value = all.length > JTTY_KEEP ? all.slice(all.length - JTTY_KEEP) : all;
+  };
+  return w;
+}
+
+function jttyAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!jttyOn.value || !s) return;
+  jttyWorker ??= jttyStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== jttyKey) {
+    jttyKey = key;
+    jttyDial = s.hz;
+    jttyFed = 0;
+    jttyGen++;
+    jttyWorker.postMessage({ reset: true });
+  }
+  // the signal's tones go up in frequency in USB only
+  if (s.mode !== "usb") return;
+  const pcm = jttyFeed.push(f.pcm, f.rate, f.stereo);
+  jttyFed += pcm.length;
+  jttyWorker.postMessage({ pcm, gen: jttyGen }, [pcm.buffer]);
+}
+
+export function setJtty(on: boolean): void {
+  jttyOn.value = on;
+  save("jtty", on ? "1" : "0");
+  if (!on && jttyWorker) {
+    jttyWorker.terminate();
+    jttyWorker = null;
+    jttyKey = "";
+  }
+}
+
+/** A JTTY dial frequency was picked: USB with the decoder's passband, the
+ * signals in view. */
+export function pickJtty(dial: number): void {
+  if (st.value?.mode !== "usb") setMode("usb");
+  tune(dial);
+  setPassband(JTTY_PASSBAND.lo, JTTY_PASSBAND.hi);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  if (Math.abs(dial + 1600 - v.center_hz) > 0.45 * span - 1600) setView({ ...v, center_hz: dial + 1600 });
+}
 
 export function showSpots(on: boolean): void {
   spotsOpen.value = on;

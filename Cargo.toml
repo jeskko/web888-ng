@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr"]
+members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm"]
 
 [workspace.package]
 version = "0.5.0"
@@ -22,6 +22,7 @@ web888-web = { path = "crates/web" }
 web888-ftx = { path = "crates/ftx" }
 web888-skim = { path = "crates/skim" }
 web888-wspr = { path = "crates/wspr" }
+web888-jtty = { path = "crates/jtty" }
 libc = "0.2.190"
 num-complex = "0.4.6"
 rustfft = "6.4.1"

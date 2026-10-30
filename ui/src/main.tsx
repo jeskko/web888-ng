@@ -20,6 +20,7 @@ import {
   ZoomCtl,
 } from "./ctl/controls.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
+import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
 import { stepTo } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
 import {
@@ -139,6 +140,7 @@ function App() {
           <Overlay />
         </div>
         <SpotPanel />
+        <JttyPanel />
       </main>
       <footer>
         <div class="controls">
@@ -148,6 +150,7 @@ function App() {
           <ContrastCtl />
           <ShareCtl />
           <SpotsCtl />
+          <JttyCtl />
         </div>
         <StatusBar />
       </footer>

@@ -1837,6 +1837,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-jtty"
+version = "0.5.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+]
+
+[[package]]
+name = "web888-jtty-wasm"
+version = "0.5.0"
+dependencies = [
+ "web888-jtty",
+]
+
+[[package]]
 name = "web888-radio"
 version = "0.5.0"
 

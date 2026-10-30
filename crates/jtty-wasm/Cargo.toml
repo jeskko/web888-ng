@@ -1,0 +1,13 @@
+[package]
+name = "web888-jtty-wasm"
+description = "The JTTY receiver for the web UI (WebAssembly, plain C ABI)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+web888-jtty.workspace = true

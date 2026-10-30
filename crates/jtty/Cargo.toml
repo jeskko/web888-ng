@@ -1,0 +1,11 @@
+[package]
+name = "web888-jtty"
+description = "JTTY (WSJT-X keyboard mode) receiver and encoder, after jtty-cuf"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true
