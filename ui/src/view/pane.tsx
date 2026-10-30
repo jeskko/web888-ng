@@ -2,15 +2,16 @@
 // Spectrum + waterfall pane: canvases, redraw loop, and the pointer
 // interactions: wheel zooms around the cursor, drag pans, click tunes,
 // shift+wheel steps the dial, a click on a user marker picks that user,
-// a click on a spot label tunes to it. Hovering shows where a click would
-// tune: the frequency and the passband there.
+// a click on a spot label tunes to it, two fingers pinch to zoom. Hovering
+// shows where a click would tune: the frequency and the passband there.
 
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
-import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
+import type { Mode, SkimMark, Spot, UserMark, WfLine } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
 import { followable, lease, limits, myName, onLine, pickSkimmer, pickSpot, pickUser, radio, range, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { pick } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
 
@@ -18,6 +19,7 @@ import { Waterfall } from "./waterfall.ts";
 const auto = { min: NaN, max: NaN, n: 0 };
 
 function trackRange(floor: number): void {
+  if (!Number.isFinite(floor)) return;
   const want = { min: floor - 8, max: floor + 50 };
   if (Number.isNaN(auto.min)) Object.assign(auto, want);
   auto.min += 0.1 * (want.min - auto.min);
@@ -30,7 +32,8 @@ function trackRange(floor: number): void {
 
 function currentRange(): { min: number; max: number } {
   const r = range.value;
-  return r.auto && !Number.isNaN(auto.min) ? auto : r;
+  // whatever is wrong with one, the others still draw
+  return r.auto ? pick(auto, r) : pick(r, auto);
 }
 
 export function Pane() {
@@ -39,6 +42,7 @@ export function Pane() {
   const boxRef = useRef<HTMLDivElement>(null);
   const errRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
+  const hudRef = useRef<HTMLPreElement>(null);
 
   useEffect(() => {
     const sc = specRef.current!;
@@ -55,7 +59,9 @@ export function Pane() {
     let dirty = true;
     let dpr = window.devicePixelRatio || 1;
 
+    let lastLine: WfLine | null = null;
     onLine((l) => {
+      lastLine = l;
       wf?.push(l);
       spec.push(l);
       trackRange(noiseFloor(l));
@@ -132,6 +138,42 @@ export function Pane() {
     const unsubRange = range.subscribe(() => {
       dirty = true;
     });
+
+    // ?debug=1: the numbers the drawing uses, for a bug that comes and goes
+    let hud: number | undefined;
+    if (new URLSearchParams(location.search).has("debug") && hudRef.current) {
+      const out = hudRef.current;
+      let gpu = "?";
+      try {
+        const gl = document.createElement("canvas").getContext("webgl2");
+        const ext = gl?.getExtension("WEBGL_debug_renderer_info");
+        if (gl && ext) gpu = String(gl.getParameter(ext.UNMASKED_RENDERER_WEBGL));
+      } catch {
+        // no WebGL info: fine
+      }
+      let nlines = 0;
+      onLine(() => nlines++);
+      const f = (x: number | undefined) => (x === undefined ? "-" : Number.isFinite(x) ? String(Math.round(x * 100) / 100) : String(x));
+      hud = window.setInterval(() => {
+        const s = st.value;
+        const r = range.value;
+        const c = currentRange();
+        const v = view();
+        const l = lastLine;
+        out.textContent = [
+          `gpu ${gpu}`,
+          `dpr ${dpr} box ${box.clientWidth}x${box.clientHeight} spec ${sc.width}x${sc.height} wf ${wc.width}x${wc.height}`,
+          `range stored ${f(r.min)}..${f(r.max)} auto=${r.auto}`,
+          `tracker ${f(auto.min)}..${f(auto.max)} n=${auto.n}`,
+          `drawn ${f(c.min)}..${f(c.max)}`,
+          `view ${v ? `${f(v.start)} span ${f(v.span)}` : "-"} wf ${s ? `${s.wf.decim}/${s.wf.bins}/${s.wf.fps}` : "-"}`,
+          `mode ${s?.mode} lo/hi ${f(s?.lo)}/${f(s?.hi)}`,
+          l
+            ? `line #${nlines} f0 ${f(l.f0)} df ${f(l.df)} n ${l.levels.length} db0 ${f(l.db0)} step ${f(l.dbStep)} flags ${l.flags} floor ${f(noiseFloor(l))}`
+            : "no line yet",
+        ].join("\n");
+      }, 500);
+    }
 
     // pointer interaction (on both canvases)
     let drag: { x: number; center: number; moved: boolean; id: number } | null = null;
@@ -214,9 +256,42 @@ export function Pane() {
       const h = spec.spotHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
       return h ? (h.item as Spot) : null;
     };
+    /** Zoom to `decim` keeping the frequency under `clientX` in place. */
+    const zoomAt = (clientX: number, decim: number) => {
+      const s = st.value;
+      const r = radio.value;
+      const v = view();
+      if (!s || !r || !v || decim < r.wf_decim_min || decim > r.wf_decim_max) return false;
+      const rect = box.getBoundingClientRect();
+      const t = (clientX - rect.left) / rect.width;
+      const fc = v.start + t * v.span;
+      const span = wfSpan(r.adc_hz, decim);
+      setView({ ...s.wf, decim, center_hz: fc - t * span + span / 2 });
+      return true;
+    };
+    // two fingers: the distance between them sets the zoom, a step (x2)
+    // each time it has changed by PINCH_STEP
+    const PINCH_STEP = 1.5;
+    const fingers = new Map<number, { x: number; y: number }>();
+    let pinch: { d: number } | null = null;
+    const spread = () => {
+      const [a, b] = [...fingers.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2 };
+    };
     const down = (e: PointerEvent) => {
       const s = st.value;
       if (!s || e.button !== 0) return;
+      if (e.pointerType === "touch") {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size === 2) {
+          // the first finger's pan or tap is over
+          drag = null;
+          showGhost(null);
+          pinch = { d: spread().d };
+          return;
+        }
+        if (fingers.size > 2) return;
+      }
       const k = skimAt(e);
       if (k) {
         pickSkimmer(k);
@@ -236,6 +311,18 @@ export function Pane() {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
+      if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && fingers.size === 2) {
+        const s = st.value;
+        const { d, x } = spread();
+        if (s && pinch.d > 0) {
+          const k = d / pinch.d;
+          // fingers apart: zoom in (a larger decimation is a narrower span)
+          if (k >= PINCH_STEP && zoomAt(x, s.wf.decim * 2)) pinch.d = d;
+          else if (k <= 1 / PINCH_STEP && zoomAt(x, s.wf.decim / 2)) pinch.d = d;
+        }
+        return;
+      }
       if (!drag) {
         const k = skimAt(e);
         const m = k ? null : markAt(e);
@@ -262,6 +349,8 @@ export function Pane() {
       setView({ ...s.wf, center_hz: center });
     };
     const up = (e: PointerEvent) => {
+      fingers.delete(e.pointerId);
+      if (fingers.size < 2) pinch = null;
       const s = st.value;
       if (drag && !drag.moved && s) {
         const f = freqAt(e.clientX);
@@ -279,25 +368,24 @@ export function Pane() {
         tune(stepTo(s.hz, stepOf(s.mode), e.deltaY < 0 || e.deltaX < 0 ? 1 : -1));
         return;
       }
-      const decim = e.deltaY < 0 ? s.wf.decim * 2 : s.wf.decim / 2;
-      if (decim < r.wf_decim_min || decim > r.wf_decim_max) return;
-      const rect = box.getBoundingClientRect();
-      const t = (e.clientX - rect.left) / rect.width;
-      const fc = v.start + t * v.span;
-      const span = wfSpan(r.adc_hz, decim);
-      setView({ ...s.wf, decim, center_hz: fc - t * span + span / 2 });
+      zoomAt(e.clientX, e.deltaY < 0 ? s.wf.decim * 2 : s.wf.decim / 2);
     };
     for (const c of [sc, wc]) {
       c.addEventListener("pointerdown", down);
       c.addEventListener("pointermove", move);
       c.addEventListener("pointerup", up);
-      c.addEventListener("pointercancel", () => (drag = null));
+      c.addEventListener("pointercancel", (e) => {
+        drag = null;
+        fingers.delete(e.pointerId);
+        if (fingers.size < 2) pinch = null;
+      });
       c.addEventListener("pointerleave", () => showGhost(null));
       c.addEventListener("wheel", wheel, { passive: false });
     }
 
     return () => {
       cancelAnimationFrame(raf);
+      clearInterval(hud);
       ro.disconnect();
       unsub();
       unsubBins();
@@ -315,6 +403,7 @@ export function Pane() {
       <canvas class="spectrum" ref={specRef} />
       <canvas class="waterfall" ref={wfRef} />
       <div class="pane-error" ref={errRef} />
+      {new URLSearchParams(location.search).has("debug") && <pre class="hud" ref={hudRef} />}
       <div class="ghost" ref={ghostRef} style={{ display: "none" }}>
         <span />
       </div>

@@ -4,6 +4,7 @@
 
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
+import { setFloor, setTop } from "../view/range.ts";
 import { bandwidths, formatKhz, parseFreq, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
@@ -504,7 +505,7 @@ export function ContrastCtl() {
           min={-170}
           max={-20}
           value={r.min}
-          onInput={(e) => (range.value = { ...r, min: Number(e.currentTarget.value), auto: false })}
+          onInput={(e) => (range.value = { ...setFloor(r, Number(e.currentTarget.value)), auto: false })}
         />
       </label>
       <label>
@@ -514,7 +515,7 @@ export function ContrastCtl() {
           min={-150}
           max={0}
           value={r.max}
-          onInput={(e) => (range.value = { ...r, max: Number(e.currentTarget.value), auto: false })}
+          onInput={(e) => (range.value = { ...setTop(r, Number(e.currentTarget.value)), auto: false })}
         />
       </label>
       <span class="num">

@@ -123,6 +123,13 @@ synchronous AM, both sidebands, the lower or upper alone (the channel
 filter removes the other), or stereo with the lower sideband left. The
 tuning step (auto per mode, or 1 Hz to 10 kHz; 9 kHz for MW) applies to
 the arrows, the wheel and click-tuning, all to its grid.
+On a phone (a window up to 640 px wide, or a touch device held sideways;
+`?ui=mobile` / `?ui=desktop` force one) the page is laid out for the
+thumb: the waterfall fills the screen, tap tunes, two fingers pinch to
+zoom, and a dock at the bottom has the modes, steps, passband, a band
+picker, a VFO wheel (its centre picks 0.1 to 100 kHz per click) and a
+keypad of its own for the frequency; the rest is under *More*
+(`doc/m7-mobile-ui.md`).
 The view is kept in the URL (`#f=7074&m=usb&z=256&c=7100`). The scale
 shows other users' frequencies (click to listen along) and each
 skimmer's range. A callsign or nickname (8 characters, kept in the
