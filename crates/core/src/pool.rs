@@ -17,7 +17,8 @@
 //! behind). More than [`BEHIND`] waiting raises its shed level (jobs see
 //! it in [`Ctx`]; waterfalls halve their FFT budget per level, then their
 //! rate), at most every [`RAISE_GAP`]; a second with never more than
-//! [`CAUGHT_UP`] waiting, [`CALM`] after the last raise, lowers it. Audio
+//! [`CAUGHT_UP`] waiting, [`CALM`] after the last raise ([`LOSS_CALM`]
+//! after a lost block), lowers it. Audio
 //! is never shed. (Busy wall time slowed the views with the CPU a third
 //! idle at 32 clients on the unit: preemption counted as load; the
 //! workers' CPU time let them saturate the box at 16, and audio broke up.)
@@ -69,6 +70,9 @@ pub const CAUGHT_UP: u64 = 16;
 /// after a raise before a lowering.
 pub const RAISE_GAP: Duration = Duration::from_millis(250);
 pub const CALM: Duration = Duration::from_secs(2);
+/// Calm time after a lost block before a lowering (audio broke: the
+/// level that stopped it holds longer).
+pub const LOSS_CALM: Duration = Duration::from_secs(10);
 const MAX_SHED: u32 = 8;
 
 #[derive(Default)]
@@ -216,6 +220,7 @@ struct RxIn {
 struct Shedding {
     level: u32,
     last_raise: Option<Instant>,
+    last_loss: Option<Instant>,
     window: Instant,
     /// Most blocks waiting in this window, and in the last.
     max: u64,
@@ -228,6 +233,7 @@ impl Shedding {
         Shedding {
             level: 0,
             last_raise: None,
+            last_loss: None,
             window: now,
             max: 0,
             last_max: 0,
@@ -239,6 +245,9 @@ impl Shedding {
     fn observe(&mut self, waiting: u64, lost: u64, now: Instant) -> u32 {
         let lost_new = lost > self.lost_seen;
         self.lost_seen = lost;
+        if lost_new {
+            self.last_loss = Some(now);
+        }
         self.max = self.max.max(waiting);
         let since = self.last_raise.map(|t| now.duration_since(t));
         if (waiting > BEHIND || lost_new)
@@ -249,7 +258,11 @@ impl Shedding {
             self.last_raise = Some(now);
         }
         if now.duration_since(self.window) >= Duration::from_secs(1) {
-            if self.max <= CAUGHT_UP && self.level > 0 && since.is_none_or(|d| d >= CALM) {
+            let calm = since.is_none_or(|d| d >= CALM)
+                && self
+                    .last_loss
+                    .is_none_or(|t| now.duration_since(t) >= LOSS_CALM);
+            if self.max <= CAUGHT_UP && self.level > 0 && calm {
                 self.level -= 1;
             }
             self.last_max = self.max;
@@ -450,14 +463,15 @@ mod tests {
         assert_eq!(s.observe(BEHIND + 1, 0, at(300)), 2);
         // a lost block counts as behind
         assert_eq!(s.observe(0, 3, at(600)), 3);
-        // caught up: down a level a calm second, not before CALM
+        // caught up: down a level a calm second, not before LOSS_CALM
+        // (the last raise was for a lost block)
         let mut lv = Vec::new();
-        for ms in (700..8000).step_by(100) {
+        for ms in (700..20000).step_by(100) {
             let l = s.observe(0, 3, at(ms));
             if lv.last() != Some(&l) {
                 lv.push(l);
                 if l < 3 {
-                    assert!(ms >= 600 + CALM.as_millis() as u64, "{ms}");
+                    assert!(ms >= 600 + LOSS_CALM.as_millis() as u64, "{ms}");
                 }
             }
         }

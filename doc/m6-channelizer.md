@@ -226,7 +226,7 @@ the metrics instead:
   how far a worker is behind (RX blocks waiting: more than 32, half the
   queue, about 160 ms, or a block lost raises the level at most every
   250 ms; a second with never more than 16 waiting, 2 s after the last
-  raise, lowers it; 8 and 2 kept the views at 4 lines/s with 16
+  raise, 10 s after a lost block, lowers it; 8 and 2 kept the views at 4 lines/s with 16
   clients: a round drawing many views' lines leaves 10 or so waiting;
   metric `pool_backlog_blocks`), a worker admits one new job a round,
   and FFT plans are shared process-wide (`dsp::fft_plan`), so a crowd of
