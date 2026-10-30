@@ -231,6 +231,13 @@ the metrics instead:
   metric `pool_backlog_blocks`), a worker admits one new job a round,
   and FFT plans are shared process-wide (`dsp::fft_plan`), so a crowd of
   new sessions costs less and doesn't stall a worker.
+  On the unit (123aec4, 240 kHz views, the skimmers on): 16 clients
+  11 972-11 990 S/s, 1.1 gaps a client in a minute, views 17.5 lines/s
+  (by wall time: 10-11); 32 clients, all with a receiver, steady state
+  11 982-12 002 S/s, no gaps, views 5.9 lines/s (2.5); counting the start,
+  7.6 gaps a client, as the 32 connect. Shedding at 8/2 blocks kept the
+  views at 4.3 lines/s with 16 clients; without the 10 s hold after a
+  lost block, 32 clients lost blocks in steady state.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed
