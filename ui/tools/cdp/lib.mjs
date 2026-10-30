@@ -23,6 +23,9 @@ export async function launch({ width = 1400, height = 900, dpr = 1, autoplay = f
     `--window-size=${width},${height}`,
   ];
   if (autoplay) args.push("--autoplay-policy=no-user-gesture-required");
+  // e.g. "--host-resolver-rules=MAP web888.test 127.0.0.1": a plain-HTTP
+  // page that isn't localhost (no secure context: the audio fallback)
+  if (process.env.CHROME_ARGS) args.push(...process.env.CHROME_ARGS.split("|"));
   const proc = spawn(chrome, [...args, "about:blank"], { stdio: "ignore" });
   let list;
   for (let i = 0; i < 50 && !list; i++) {

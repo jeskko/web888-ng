@@ -29,6 +29,7 @@ import {
   latencyMs,
   muted,
   overloadAt,
+  player,
   radio,
   range,
   rssi,
@@ -563,6 +564,12 @@ export function StatusBar() {
       {audioOn.value && a && (
         <span title="Audio buffer, underruns, playback trim">
           buf {a.fillMs.toFixed(0)} ms · {a.underruns} underruns · {((a.trim - 1) * 1e6).toFixed(0)} ppm
+        </span>
+      )}
+      {audioOn.value && player.fallback && (
+        <span title="Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay.">
+          http audio (+delay):{" "}
+          <a href={`https://${location.host}${location.pathname}${location.search}${location.hash}`}>https</a>
         </span>
       )}
       {s && (

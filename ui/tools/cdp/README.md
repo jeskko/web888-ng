@@ -9,6 +9,11 @@ checks for UI work, not CI tests.
 * Always muted (`lib.mjs` passes `--mute-audio`), so nothing plays on
   the machine's speakers.
 * `CDP_PORT` (default 9333) if the default DevTools port is taken.
+* `CHROME_ARGS`: more Chromium arguments, separated by `|`. To see the
+  page as over plain HTTP from another machine (no secure context: the
+  audio fallback), map a made-up name to the local server:
+  `CHROME_ARGS='--host-resolver-rules=MAP web888.test 127.0.0.1'` and open
+  `http://web888.test:28175/`.
 
 Run a throwaway server on its own port with the simulated radio. Stop it
 by the PID you started, never by name: other web888d or browser
