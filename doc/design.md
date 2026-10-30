@@ -308,7 +308,7 @@ to a common spot bus: the UI, PSKReporter, WSPRnet, syslog and MQTT
 | M3 ✅ | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth (`doc/m3-multi-user.md`, v0.2.0/v0.2.1); the 12-user load test on a board is left | 13 users + time-shared waterfalls |
 | M4 ✅ | skimmers and spot reporting (`doc/m4-skimmers.md`, v0.3.0): FT8/FT4/WSPR decoders (91–92 % / 89 % of jt9, 64/64 of wsprd on the corpus), runtime with yielding leases, PSKReporter and WSPRnet uploads (accepted live), spots and skimmer ranges in the UI, syslog/MQTT/gpsd; A9: FT8 on 8 bands at 84 % busy (FST4W left) | spots uploaded |
 | M5 | Kiwi protocol (feature `kiwi`) ported from upstream | kiwirecorder/SuperSDR work |
-| M6 🚧 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver); core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`): model and Verilog datapath bit-exact in simulation, synthesis for timing in progress (2026-10-28) | GPS-timestamped IQ |
+| M6 🚧 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver ✅, IRQ-driven); core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`, released in hw v0.3.0) ✅ and web888d's bins mode (`doc/m6-channelizer.md`, v0.4.0/v0.5.0): 32 tuner receivers, full-band waterfall and zooms from the bins, on a Web-888 since 2026-10-29; open: GPS timestamps | GPS-timestamped IQ |
 
 The order after M3 is being revisited against the stock firmware,
 KiwiSDR and OpenWebRX+: `doc/feature-gap.md` (proposal).

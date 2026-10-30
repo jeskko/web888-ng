@@ -3,13 +3,26 @@
 A Rust server for the Web-888 receiver: its own web UI, standard SDR
 protocols (HPSDR, rtl_tcp, IQ), decoders, and KiwiSDR protocol
 compatibility. It runs on the stock firmware (stock or open bitstream) and
-later on the open driver from [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
+on [web888-ng-os](https://github.com/jeskko/web888-ng-os), the open SD card
+image, with the open driver and bitstreams from
+[web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR, **M2** web UI, **M3** multi-user and **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet, syslog, MQTT) are done. The stock-driver backend has run on a production unit, with the stock and with the open bitstream (2026-10-28). Next: a channelizer bitstream (M6, `hw/docs/channelizer.md` in web888-ng-hw).
+Status (see `doc/design.md` §11), release v0.5.0:
+
+* **Done:** **M1** stock-driver backend and HPSDR, **M2** web UI, **M3**
+  multi-user, **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet,
+  syslog, MQTT).
+* **Mostly done: M6**, bins mode for the channelizer bitstream (30 kHz
+  bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
+  Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
+  on ten bands.
+* **Not released yet:** JTTY decoding in the browser (`crates/jtty`,
+  ported from jtty-cuf).
 
 | crate | content |
 |---|---|
 | `crates/radio` | `Radio` trait, sample types, channel math (NCO words, rates, CIC response) |
+| `crates/config` | the configuration file (`web888d.toml`): every option, defaults, validation |
 | `crates/sim` | simulated Web-888: RF scene → real channel model (NCO quantisation, clock error, CIC response, aliasing, noise), real-time or free-running, ring overrun and PPS |
 | `crates/dsp` | Kaiser FIR, droop-compensated channel design, overlap-save filter, shifter, SSB/AM demod |
 | `crates/zynqsdr` | backend for the stock kernel driver (`/dev/zynqsdr` ioctls), bitstream loading |
@@ -19,8 +32,9 @@ Status (see `doc/design.md` §11): **M1** stock-driver backend and HPSDR, **M2**
 | `crates/web` | web UI server: HTTPS/HTTP on one port, WebSocket sessions (audio + waterfall) |
 | `crates/ftx` | FT8 and FT4 decoders |
 | `crates/wspr` | WSPR-2 decoder (a port of wsprd) |
+| `crates/jtty` | JTTY receiver (4-GFSK keyboard mode; a port of jtty-cuf, MIT); `crates/jtty-wasm` runs it in the browser |
 | `crates/skim` | skimmers: band jobs, decoder threads, the spot bus, PSKReporter, WSPRnet, syslog, MQTT, gpsd |
-| `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet) |
+| `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet; JTTY decoding in a Web Worker) |
 | `crates/iq` | backend fed by real signals: wideband IQ from an SDR (SoapySDR, e.g. HackRF) or a recording, channelized like the FPGA |
 | `crates/web888d` | the daemon: `serve` (radio + HPSDR + web UI), `sim` (one channel to stdout) |
 
@@ -76,7 +90,9 @@ Behind a reverse proxy, list it in `[web] trusted_proxies` (addresses or
 networks): web888d then takes the client's address from
 `X-Forwarded-For` (and `https` from `X-Forwarded-Proto`), so per-address
 limits and logins count real clients, not the proxy.
-Browsers only play audio over HTTPS or from `localhost`. Web users and
+Browsers allow the AudioWorklet only over HTTPS or from `localhost`; over
+plain HTTP the page plays audio through a fallback with about a quarter
+second more delay, and its status bar links to the HTTPS address. Web users and
 HPSDR receivers share the RX channels through leases (`[limits]`:
 `per_ip` sessions per address, default 4; `hpsdr_channels`); a web user
 who finds them all taken gets the waterfall only, until one frees. Users
@@ -88,6 +104,7 @@ The UI lives in `ui/` (TypeScript + Preact, built with esbuild; needs
 Node 24 and pnpm):
 
 ```
+scripts/build-wasm.sh                    # the JTTY decoder -> ui/wasm/jtty.wasm (rust wasm32 target, or podman)
 cd ui && pnpm install && pnpm build      # -> ui/dist (pnpm dev: rebuild on change)
 cargo run --release -p web888d -- serve --backend iq --iq file:hf.cs8 --iq-freq 8.6e6 --iq-loop \
   --ui-dir ui/dist --state-dir /tmp/web888d
@@ -113,7 +130,10 @@ browser) shows by the dial marker and to others; the Users button lists
 everyone (frequencies of those who share) and the skimmers. The status
 bar shows the device's CPU load and temperature. **Stereo** (USB, LSB,
 CW; headphones) places signals left or right of the passband's middle,
-as on the waterfall (`doc/stereo-cw.md`).
+as on the waterfall (`doc/stereo-cw.md`). **JTTY** (the footer's JTTY
+button) decodes JTTY from the receiver's audio in the browser: pick a
+dial from the list of common frequencies; messages come with their UTC
+time and RF frequency.
 The protocol is version 2: `doc/m3-multi-user.md` §8 (version 1, M2's,
 in `doc/m2-web-ui.md` §4).
 
