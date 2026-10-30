@@ -222,9 +222,13 @@ the metrics instead:
 * **The views' rate is the pool's shedding:** a worker's busy wall time
   (preemption included) passes 70 % although it uses about 40 % of a
   core, so the views drop to 2-3 lines/s. Shedding by CPU time instead
-  saturated the box at 16 clients (a5f872d). Next: shed by how far a
-  worker is behind (RX blocks waiting), which is what audio needs, and
-  stagger the setups when many sessions arrive at once.
+  saturated the box at 16 clients (a5f872d). So the pool now sheds by
+  how far a worker is behind (RX blocks waiting: more than 8, about 40
+  ms, or a block lost raises the level at most every 250 ms; a second
+  with never more than 2 waiting, 3 s after the last raise, lowers it;
+  metric `pool_backlog_blocks`), a worker admits one new job a round,
+  and FFT plans are shared process-wide (`dsp::fft_plan`), so a crowd of
+  new sessions costs less and doesn't stall a worker.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed

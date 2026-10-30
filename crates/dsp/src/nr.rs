@@ -12,7 +12,7 @@
 //! which keeps the "musical noise" of plain subtraction down.
 
 use crate::C32;
-use rustfft::{Fft, FftPlanner};
+use rustfft::Fft;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
@@ -60,9 +60,8 @@ impl NoiseReduction {
 
     /// `strength` 0..1 (0 passes the audio unchanged, but delayed).
     pub fn new(strength: f32) -> Self {
-        let mut p = FftPlanner::new();
-        let fft = p.plan_fft_forward(N);
-        let ifft = p.plan_fft_inverse(N);
+        let fft = crate::fft_plan(N, false);
+        let ifft = crate::fft_plan(N, true);
         let scratch_len = fft
             .get_inplace_scratch_len()
             .max(ifft.get_inplace_scratch_len());
@@ -204,7 +203,7 @@ mod tests {
     /// Power in `lo..hi` Hz (Hann-windowed 1024-point FFTs, averaged).
     fn band(x: &[f32], lo: f32, hi: f32) -> f32 {
         let n = 1024;
-        let fft = FftPlanner::new().plan_fft_forward(n);
+        let fft = rustfft::FftPlanner::new().plan_fft_forward(n);
         let mut acc = 0.0;
         for c in x.chunks_exact(n) {
             let mut b: Vec<C32> = c

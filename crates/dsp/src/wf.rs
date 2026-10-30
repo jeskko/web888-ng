@@ -18,7 +18,7 @@
 
 use crate::chan::Droop;
 use crate::{C32, rx_to_c32};
-use rustfft::{Fft, FftPlanner};
+use rustfft::Fft;
 use std::sync::Arc;
 use web888_radio::{Iq16, Iq32, WF_SINE_FULL_SCALE};
 
@@ -103,7 +103,7 @@ impl WfEngine {
         assert!(spec.bins.is_power_of_two() && spec.bins <= 8192);
         assert!(spec.budget >= 1);
         assert!(n.is_power_of_two() && n >= spec.bins);
-        let fft = FftPlanner::new().plan_fft_forward(n);
+        let fft = crate::fft_plan(n, false);
         // 4-term Blackman-Harris
         let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);
         let window: Vec<f32> = (0..n)

@@ -12,13 +12,18 @@
 //! (its session is gone); jobs aren't migrated when others leave, so new
 //! ones fill the lighter worker first.
 //!
-//! Load shedding: a worker busy more than [`SHED_ABOVE`] of a second
-//! raises its shed level (jobs see it in [`Ctx`]; waterfalls halve their
-//! FFT budget per level, then their rate), and lowers it again below
-//! [`SHED_BELOW`]. Audio is never shed. Busy is wall time, preemption
-//! included, on purpose: it is the contention that makes audio late. (By
-//! the workers' CPU time the views kept their rate with 16 clients on the
-//! unit, the box saturated and every client's audio broke up.)
+//! Load shedding goes by what audio needs: how far a worker is behind,
+//! in RX blocks waiting (about 5 ms each; a block lost counts as far
+//! behind). More than [`BEHIND`] waiting raises its shed level (jobs see
+//! it in [`Ctx`]; waterfalls halve their FFT budget per level, then their
+//! rate), at most every [`RAISE_GAP`]; a second with never more than
+//! [`CAUGHT_UP`] waiting, [`CALM`] after the last raise, lowers it. Audio
+//! is never shed. (Busy wall time slowed the views with the CPU a third
+//! idle at 32 clients on the unit: preemption counted as load; the
+//! workers' CPU time let them saturate the box at 16, and audio broke up.)
+//!
+//! A worker admits one new job a round: many sessions arriving at once
+//! (their first ticks set up filters and FFTs) don't stall it.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -55,10 +60,14 @@ const DEPTH: usize = 64;
 const WF_DEPTH: usize = 256;
 /// Longest time between ticks.
 pub const TICK: Duration = Duration::from_millis(10);
-/// Busy share of a second above which a worker sheds load, and below
-/// which it stops.
-pub const SHED_ABOVE: f64 = 0.7;
-pub const SHED_BELOW: f64 = 0.4;
+/// RX blocks waiting above which a worker sheds load (about 40 ms), and
+/// at or below which it may stop.
+pub const BEHIND: u64 = 8;
+pub const CAUGHT_UP: u64 = 2;
+/// Least time between two raises (the last one's effect), and calm time
+/// after a raise before a lowering.
+pub const RAISE_GAP: Duration = Duration::from_millis(250);
+pub const CALM: Duration = Duration::from_secs(3);
 const MAX_SHED: u32 = 8;
 
 #[derive(Default)]
@@ -67,6 +76,8 @@ struct Load {
     /// Time spent in jobs, ns.
     busy_ns: AtomicU64,
     shed: std::sync::atomic::AtomicU32,
+    /// Most RX blocks waiting in the last second.
+    backlog: AtomicU64,
 }
 
 struct Worker {
@@ -92,6 +103,8 @@ pub struct WorkerStats {
     pub rx_dropped: u64,
     pub wf_dropped: u64,
     pub shed: u32,
+    /// Most RX blocks waiting in the last second.
+    pub backlog: u64,
 }
 
 pub struct DspPool {
@@ -109,13 +122,18 @@ impl DspPool {
             let (jobs, jobs_rx) = channel();
             let load = Arc::new(Load::default());
             let l = load.clone();
+            let rx = RxIn {
+                blocks,
+                sent: sub.sent(),
+                lost: rx_dropped.clone(),
+            };
             std::thread::Builder::new()
                 .name(format!("dsp{k}"))
                 .spawn(move || {
                     if pin {
                         pin_to_cpu(k);
                     }
-                    run(blocks, wf_blocks, jobs_rx, l)
+                    run(rx, wf_blocks, jobs_rx, l)
                 })?;
             let _ = hw.send(HwCmd::SubscribeRx(sub));
             let _ = hw.send(HwCmd::SubscribeWf(wf_sub));
@@ -129,7 +147,6 @@ impl DspPool {
         Ok(DspPool { workers })
     }
 
-    /// One worker per available CPU.
     /// A worker per CPU, pinned unless `WEB888_POOL_PIN=0`.
     pub fn per_cpu(hw: &Sender<HwCmd>) -> std::io::Result<Self> {
         let n = std::thread::available_parallelism().map_or(1, |n| n.get());
@@ -169,6 +186,7 @@ impl DspPool {
                 rx_dropped: w.rx_dropped.load(Ordering::Relaxed),
                 wf_dropped: w.wf_dropped.load(Ordering::Relaxed),
                 shed: w.load.shed.load(Ordering::Relaxed),
+                backlog: w.load.backlog.load(Ordering::Relaxed),
             })
             .collect()
     }
@@ -185,30 +203,88 @@ pub fn thread_cpu() -> Duration {
     Duration::new(t.tv_sec as u64, t.tv_nsec as u32)
 }
 
-fn run(
+/// A worker's RX blocks and how far behind it is.
+struct RxIn {
     blocks: Receiver<Arc<RxBlock>>,
+    /// Blocks queued for it, and lost (its queue was full).
+    sent: Arc<AtomicU64>,
+    lost: Arc<AtomicU64>,
+}
+
+/// A worker's shed level from how far behind it is (see the module docs).
+struct Shedding {
+    level: u32,
+    last_raise: Option<Instant>,
+    window: Instant,
+    /// Most blocks waiting in this window, and in the last.
+    max: u64,
+    last_max: u64,
+    lost_seen: u64,
+}
+
+impl Shedding {
+    fn new(now: Instant) -> Self {
+        Shedding {
+            level: 0,
+            last_raise: None,
+            window: now,
+            max: 0,
+            last_max: 0,
+            lost_seen: 0,
+        }
+    }
+
+    /// `waiting` RX blocks, `lost` in all so far, at `now`: the level.
+    fn observe(&mut self, waiting: u64, lost: u64, now: Instant) -> u32 {
+        let lost_new = lost > self.lost_seen;
+        self.lost_seen = lost;
+        self.max = self.max.max(waiting);
+        let since = self.last_raise.map(|t| now.duration_since(t));
+        if (waiting > BEHIND || lost_new)
+            && self.level < MAX_SHED
+            && since.is_none_or(|d| d >= RAISE_GAP)
+        {
+            self.level += 1;
+            self.last_raise = Some(now);
+        }
+        if now.duration_since(self.window) >= Duration::from_secs(1) {
+            if self.max <= CAUGHT_UP && self.level > 0 && since.is_none_or(|d| d >= CALM) {
+                self.level -= 1;
+            }
+            self.last_max = self.max;
+            self.max = 0;
+            self.window = now;
+        }
+        self.level
+    }
+}
+
+fn run(
+    rx_in: RxIn,
     wf_blocks: Receiver<Arc<WfBlock>>,
     new: Receiver<Box<dyn Job>>,
     load: Arc<Load>,
 ) {
     let mut jobs: Vec<Box<dyn Job>> = Vec::new();
     let mut ctx = Ctx::default();
-    let mut window = Instant::now();
-    let mut busy = Duration::ZERO;
+    let mut shedding = Shedding::new(Instant::now());
+    let mut taken = 0u64;
     loop {
-        loop {
-            match new.try_recv() {
-                Ok(j) => jobs.push(j),
-                Err(TryRecvError::Empty) => break,
-                // the pool is gone: finish
-                Err(TryRecvError::Disconnected) => return,
-            }
+        // one new job a round: a crowd of sessions doesn't stall the rest
+        match new.try_recv() {
+            Ok(j) => jobs.push(j),
+            Err(TryRecvError::Empty) => {}
+            // the pool is gone: finish
+            Err(TryRecvError::Disconnected) => return,
         }
         let before = jobs.len();
-        let rx = blocks.recv_timeout(TICK);
+        let rx = rx_in.blocks.recv_timeout(TICK);
         let t = Instant::now();
         match rx {
-            Ok(b) => jobs.retain_mut(|j| j.rx(&b)),
+            Ok(b) => {
+                taken += 1;
+                jobs.retain_mut(|j| j.rx(&b));
+            }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
@@ -218,25 +294,15 @@ fn run(
         let now = Instant::now();
         jobs.retain_mut(|j| j.tick(now, ctx));
         let spent = t.elapsed();
-        busy += spent;
         load.busy_ns
             .fetch_add(spent.as_nanos() as u64, Ordering::Relaxed);
         if jobs.len() != before {
             load.jobs.fetch_sub(before - jobs.len(), Ordering::Relaxed);
         }
-        // shedding, judged once a second
-        let span = now.duration_since(window);
-        if span >= Duration::from_secs(1) {
-            let f = busy.as_secs_f64() / span.as_secs_f64();
-            if f > SHED_ABOVE && ctx.shed < MAX_SHED {
-                ctx.shed += 1;
-            } else if f < SHED_BELOW && ctx.shed > 0 {
-                ctx.shed -= 1;
-            }
-            load.shed.store(ctx.shed, Ordering::Relaxed);
-            window = now;
-            busy = Duration::ZERO;
-        }
+        let waiting = rx_in.sent.load(Ordering::Relaxed).saturating_sub(taken);
+        ctx.shed = shedding.observe(waiting, rx_in.lost.load(Ordering::Relaxed), now);
+        load.shed.store(ctx.shed, Ordering::Relaxed);
+        load.backlog.store(shedding.last_max, Ordering::Relaxed);
     }
 }
 
@@ -342,31 +408,64 @@ mod tests {
         assert_eq!(p.add(Box::new(Count { seen: s, limit: 1 })).worker, 0);
     }
 
-    /// Keeps its worker ~90 % busy; records the shed level it's told.
+    /// Takes 20 ms a tick; records the shed level it's told.
     struct Hog(Arc<std::sync::atomic::AtomicU32>);
 
     impl Job for Hog {
         fn tick(&mut self, _: Instant, ctx: Ctx) -> bool {
             self.0.store(ctx.shed, Ordering::Relaxed);
-            // CPU, not sleep: shedding goes by the worker's CPU time
-            let t = Instant::now();
-            while t.elapsed() < TICK * 9 {
-                std::hint::black_box(0u64);
-            }
+            std::thread::sleep(Duration::from_millis(20));
             true
         }
     }
 
     #[test]
-    fn a_busy_worker_sheds_load() {
-        let (p, _hw, _) = pool(1);
+    fn a_worker_behind_sheds_load() {
+        let (p, mut hw, _) = pool(1);
         let level = Arc::new(std::sync::atomic::AtomicU32::new(0));
         p.add(Box::new(Hog(level.clone())));
+        // blocks every 2 ms, a round takes 20: it falls behind
         let t = Instant::now();
+        let mut k = 0;
         while level.load(Ordering::Relaxed) == 0 {
             assert!(t.elapsed() < Duration::from_secs(4), "no shedding");
-            std::thread::sleep(Duration::from_millis(50));
+            hw.send(block(k));
+            k += 1;
+            std::thread::sleep(Duration::from_millis(2));
         }
         assert!(p.stats()[0].shed >= 1);
+    }
+
+    #[test]
+    fn shedding_follows_the_backlog() {
+        let t0 = Instant::now();
+        let at = |ms: u64| t0 + Duration::from_millis(ms);
+        let mut s = Shedding::new(t0);
+        // caught up: nothing
+        assert_eq!(s.observe(1, 0, at(10)), 0);
+        // behind: up at once, then not before the gap
+        assert_eq!(s.observe(BEHIND + 1, 0, at(20)), 1);
+        assert_eq!(s.observe(BEHIND + 1, 0, at(100)), 1);
+        assert_eq!(s.observe(BEHIND + 1, 0, at(300)), 2);
+        // a lost block counts as behind
+        assert_eq!(s.observe(0, 3, at(600)), 3);
+        // caught up: down a level a calm second, not before CALM
+        let mut lv = Vec::new();
+        for ms in (700..8000).step_by(100) {
+            let l = s.observe(0, 3, at(ms));
+            if lv.last() != Some(&l) {
+                lv.push(l);
+                if l < 3 {
+                    assert!(ms >= 600 + CALM.as_millis() as u64, "{ms}");
+                }
+            }
+        }
+        assert_eq!(lv, vec![3, 2, 1, 0]);
+        // a busy second (more than CAUGHT_UP waiting) holds the level
+        let mut s = Shedding::new(t0);
+        s.observe(BEHIND + 1, 0, at(0));
+        for ms in (100..6000).step_by(100) {
+            assert_eq!(s.observe(CAUGHT_UP + 1, 0, at(ms)), 1);
+        }
     }
 }

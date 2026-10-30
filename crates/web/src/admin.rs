@@ -806,6 +806,12 @@ async fn metrics(State(sh): State<Arc<Shared>>) -> Response {
         &per(&|w| w.shed as f64),
     );
     put(
+        "pool_backlog_blocks",
+        "gauge",
+        "Most RX blocks a DSP worker had waiting in the last second.",
+        &per(&|w| w.backlog as f64),
+    );
+    put(
         "pool_rx_dropped_total",
         "counter",
         "RX blocks a DSP worker lost.",

@@ -2,7 +2,7 @@
 //! Streaming overlap-save FIR filter (complex taps, complex data).
 
 use crate::C32;
-use rustfft::{Fft, FftPlanner};
+use rustfft::Fft;
 use std::sync::Arc;
 
 pub struct OverlapSave {
@@ -29,9 +29,8 @@ impl OverlapSave {
     pub fn with_fft_size(taps: &[C32], n: usize) -> Self {
         let m = taps.len();
         assert!(n.is_power_of_two() && n > m);
-        let mut planner = FftPlanner::new();
-        let fwd = planner.plan_fft_forward(n);
-        let inv = planner.plan_fft_inverse(n);
+        let fwd = crate::fft_plan(n, false);
+        let inv = crate::fft_plan(n, true);
         let mut hf = vec![C32::new(0.0, 0.0); n];
         hf[..m].copy_from_slice(taps);
         fwd.process(&mut hf);

@@ -21,6 +21,24 @@ pub mod wf;
 
 pub use num_complex::Complex32 as C32;
 
+/// An FFT plan of size `n` (`inverse`: the inverse), from one planner
+/// for the process: plans are shared, and a new session's filters or a
+/// new view's FFTs don't plan again (on the A9 that is noticeable work
+/// for a pool worker, with many sessions starting at once).
+pub fn fft_plan(n: usize, inverse: bool) -> std::sync::Arc<dyn rustfft::Fft<f32>> {
+    use std::sync::{Mutex, OnceLock};
+    static PLANNER: OnceLock<Mutex<rustfft::FftPlanner<f32>>> = OnceLock::new();
+    let mut p = PLANNER
+        .get_or_init(|| Mutex::new(rustfft::FftPlanner::new()))
+        .lock()
+        .unwrap();
+    if inverse {
+        p.plan_fft_inverse(n)
+    } else {
+        p.plan_fft_forward(n)
+    }
+}
+
 /// Convert hardware RX samples to f32, scaled so that a full-scale ADC sine
 /// has |z| = 1 (before any CIC droop).
 pub fn rx_to_c32(s: web888_radio::Iq32) -> C32 {

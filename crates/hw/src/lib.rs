@@ -43,6 +43,9 @@ pub enum HwCmd {
 pub struct Subscriber<T> {
     tx: SyncSender<Arc<T>>,
     dropped: Arc<AtomicU64>,
+    /// Blocks queued for it (its receiver counts what it took: the
+    /// difference is how far behind it is).
+    sent: Arc<AtomicU64>,
 }
 
 impl<T> Subscriber<T> {
@@ -55,10 +58,16 @@ impl<T> Subscriber<T> {
             Subscriber {
                 tx,
                 dropped: dropped.clone(),
+                sent: Arc::new(AtomicU64::new(0)),
             },
             rx,
             dropped,
         )
+    }
+
+    /// The count of blocks queued for this subscriber.
+    pub fn sent(&self) -> Arc<AtomicU64> {
+        self.sent.clone()
     }
 }
 
@@ -84,7 +93,10 @@ impl<T> Fanout<T> {
         }
         let b = Arc::new(block);
         self.subs.retain(|s| match s.tx.try_send(b.clone()) {
-            Ok(()) => true,
+            Ok(()) => {
+                s.sent.fetch_add(1, Ordering::Relaxed);
+                true
+            }
             Err(TrySendError::Full(_)) => {
                 s.dropped.fetch_add(1, Ordering::Relaxed);
                 true
