@@ -2,8 +2,8 @@
 // Spectrum + waterfall pane: canvases, redraw loop, and the pointer
 // interactions: wheel zooms around the cursor, drag pans, click tunes,
 // shift+wheel steps the dial, a click on a user marker picks that user,
-// a click on a spot label tunes to it. Hovering shows where a click would
-// tune: the frequency and the passband there.
+// a click on a spot label tunes to it, two fingers pinch to zoom. Hovering
+// shows where a click would tune: the frequency and the passband there.
 
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
@@ -214,9 +214,42 @@ export function Pane() {
       const h = spec.spotHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
       return h ? (h.item as Spot) : null;
     };
+    /** Zoom to `decim` keeping the frequency under `clientX` in place. */
+    const zoomAt = (clientX: number, decim: number) => {
+      const s = st.value;
+      const r = radio.value;
+      const v = view();
+      if (!s || !r || !v || decim < r.wf_decim_min || decim > r.wf_decim_max) return false;
+      const rect = box.getBoundingClientRect();
+      const t = (clientX - rect.left) / rect.width;
+      const fc = v.start + t * v.span;
+      const span = wfSpan(r.adc_hz, decim);
+      setView({ ...s.wf, decim, center_hz: fc - t * span + span / 2 });
+      return true;
+    };
+    // two fingers: the distance between them sets the zoom, a step (x2)
+    // each time it has changed by PINCH_STEP
+    const PINCH_STEP = 1.5;
+    const fingers = new Map<number, { x: number; y: number }>();
+    let pinch: { d: number } | null = null;
+    const spread = () => {
+      const [a, b] = [...fingers.values()];
+      return { d: Math.hypot(a.x - b.x, a.y - b.y), x: (a.x + b.x) / 2 };
+    };
     const down = (e: PointerEvent) => {
       const s = st.value;
       if (!s || e.button !== 0) return;
+      if (e.pointerType === "touch") {
+        fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+        if (fingers.size === 2) {
+          // the first finger's pan or tap is over
+          drag = null;
+          showGhost(null);
+          pinch = { d: spread().d };
+          return;
+        }
+        if (fingers.size > 2) return;
+      }
       const k = skimAt(e);
       if (k) {
         pickSkimmer(k);
@@ -236,6 +269,18 @@ export function Pane() {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
+      if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (pinch && fingers.size === 2) {
+        const s = st.value;
+        const { d, x } = spread();
+        if (s && pinch.d > 0) {
+          const k = d / pinch.d;
+          // fingers apart: zoom in (a larger decimation is a narrower span)
+          if (k >= PINCH_STEP && zoomAt(x, s.wf.decim * 2)) pinch.d = d;
+          else if (k <= 1 / PINCH_STEP && zoomAt(x, s.wf.decim / 2)) pinch.d = d;
+        }
+        return;
+      }
       if (!drag) {
         const k = skimAt(e);
         const m = k ? null : markAt(e);
@@ -262,6 +307,8 @@ export function Pane() {
       setView({ ...s.wf, center_hz: center });
     };
     const up = (e: PointerEvent) => {
+      fingers.delete(e.pointerId);
+      if (fingers.size < 2) pinch = null;
       const s = st.value;
       if (drag && !drag.moved && s) {
         const f = freqAt(e.clientX);
@@ -279,19 +326,17 @@ export function Pane() {
         tune(stepTo(s.hz, stepOf(s.mode), e.deltaY < 0 || e.deltaX < 0 ? 1 : -1));
         return;
       }
-      const decim = e.deltaY < 0 ? s.wf.decim * 2 : s.wf.decim / 2;
-      if (decim < r.wf_decim_min || decim > r.wf_decim_max) return;
-      const rect = box.getBoundingClientRect();
-      const t = (e.clientX - rect.left) / rect.width;
-      const fc = v.start + t * v.span;
-      const span = wfSpan(r.adc_hz, decim);
-      setView({ ...s.wf, decim, center_hz: fc - t * span + span / 2 });
+      zoomAt(e.clientX, e.deltaY < 0 ? s.wf.decim * 2 : s.wf.decim / 2);
     };
     for (const c of [sc, wc]) {
       c.addEventListener("pointerdown", down);
       c.addEventListener("pointermove", move);
       c.addEventListener("pointerup", up);
-      c.addEventListener("pointercancel", () => (drag = null));
+      c.addEventListener("pointercancel", (e) => {
+        drag = null;
+        fingers.delete(e.pointerId);
+        if (fingers.size < 2) pinch = null;
+      });
       c.addEventListener("pointerleave", () => showGhost(null));
       c.addEventListener("wheel", wheel, { passive: false });
     }

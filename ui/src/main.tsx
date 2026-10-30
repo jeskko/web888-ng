@@ -19,8 +19,10 @@ import {
   UsersCtl,
   ZoomCtl,
 } from "./ctl/controls.tsx";
+import { MobileApp, PlayIcon } from "./ctl/mobile.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
+import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
 import {
@@ -114,7 +116,7 @@ function Overlay() {
   return (
     <div class="overlay small">
       <button class="start" onClick={startAudio}>
-        ▶ Start audio
+        <PlayIcon /> Start audio
       </button>
       {audioError.value && <p class="warn">{audioError.value}</p>}
     </div>
@@ -123,6 +125,7 @@ function Overlay() {
 
 function App() {
   useKeys();
+  if (isMobile.value) return <MobileApp overlay={<Overlay />} />;
   return (
     <>
       <header>
