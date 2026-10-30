@@ -60,14 +60,15 @@ const DEPTH: usize = 64;
 const WF_DEPTH: usize = 256;
 /// Longest time between ticks.
 pub const TICK: Duration = Duration::from_millis(10);
-/// RX blocks waiting above which a worker sheds load (about 40 ms), and
-/// at or below which it may stop.
-pub const BEHIND: u64 = 8;
-pub const CAUGHT_UP: u64 = 2;
+/// RX blocks waiting above which a worker sheds load (half its queue,
+/// about 160 ms), and at or below which it may stop. A round that draws
+/// many views' lines leaves 10 or so waiting: normal, harmless.
+pub const BEHIND: u64 = 32;
+pub const CAUGHT_UP: u64 = 16;
 /// Least time between two raises (the last one's effect), and calm time
 /// after a raise before a lowering.
 pub const RAISE_GAP: Duration = Duration::from_millis(250);
-pub const CALM: Duration = Duration::from_secs(3);
+pub const CALM: Duration = Duration::from_secs(2);
 const MAX_SHED: u32 = 8;
 
 #[derive(Default)]
