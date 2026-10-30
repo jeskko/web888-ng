@@ -202,6 +202,29 @@ at 20 lines/s, the box saturated, 35-120 gaps a client: reverted.)
 `skimmers_yield`), audio 11 600-11 750 S/s with 13-21 gaps, views
 1.8-4.6 lines/s, the CPU 152 % of 200 % (web thread 45 %): the service
 stayed up.
+
+**Profile at 32 clients (0b37894, 2026-10-30).** No sampling profiler on
+the unit (perf would need a foreign binary); measured from `/proc` and
+the metrics instead:
+
+* **Steady state is fine.** With the first 15 s left out (`webload
+  --warmup 15`): the 31 clients with a receiver 11 988-12 000 S/s, no
+  gaps. The workers lose RX blocks only at the start (in one run 30 in
+  the first 20 s, none after): 32 sessions set up their jobs on two
+  workers at once, and some wait for a receiver until the skimmers
+  yield theirs. The "audio drops" `webload` shows are mostly these (the
+  session counts its worker's lost blocks).
+* **Not the network:** the unit's TCP send queues stay at most 1500
+  bytes a connection; RTT 17 ms.
+* **Not CPU, not locks:** the system is 65 % of 200 % idle (user 90,
+  sys 28, softirq 9); each worker waits only on its own queue's futex;
+  unpinned workers (`WEB888_POOL_PIN=0`) did the same as pinned.
+* **The views' rate is the pool's shedding:** a worker's busy wall time
+  (preemption included) passes 70 % although it uses about 40 % of a
+  core, so the views drop to 2-3 lines/s. Shedding by CPU time instead
+  saturated the box at 16 clients (a5f872d). Next: shed by how far a
+  worker is behind (RX blocks waiting), which is what audio needs, and
+  stagger the setups when many sessions arrive at once.
 2. **The ring mapped into web888d** (driver): `mmap` of the bins ring
    (cached, read-only) and an ioctl that invalidates the new part and
    returns the write position, and one that releases what was parsed
