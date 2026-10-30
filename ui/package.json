@@ -1,7 +1,7 @@
 {
   "name": "web888d-ui",
   "private": true,
-  "version": "0.5.0",
+  "version": "0.6.0",
   "description": "web888d web UI",
   "license": "GPL-3.0-or-later",
   "type": "module",
