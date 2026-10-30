@@ -95,3 +95,17 @@ test("a late answer to an earlier tune doesn't put the dial back", () => {
   // old tunes are forgotten after two seconds
   assert.equal(t.settle(7_075_000, 2_500), 7_075_000);
 });
+
+test("colour range: a bad one doesn't blank the view", async () => {
+  const { pick, setFloor, setTop, DEFAULT_RANGE } = await import("../src/view/range.ts");
+  const good = { min: -120, max: -60 };
+  assert.deepEqual(pick(good), good);
+  assert.deepEqual(pick({ min: NaN, max: -60 }, good), good);
+  assert.deepEqual(pick({ min: -60, max: -120 }, good), good); // floor above top
+  assert.deepEqual(pick({ min: -100, max: -100 }, good), good); // nothing between
+  assert.deepEqual(pick({ min: -Infinity, max: 0 }, { min: NaN, max: NaN }), DEFAULT_RANGE);
+  // the sliders push each other along
+  assert.deepEqual(setFloor({ min: -120, max: -60 }, -50), { min: -50, max: -40 });
+  assert.deepEqual(setTop({ min: -120, max: -60 }, -130), { min: -140, max: -130 });
+  assert.deepEqual(setFloor({ min: -120, max: -60 }, -100), { min: -100, max: -60 });
+});
