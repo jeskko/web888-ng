@@ -53,15 +53,28 @@ export const player = new Player();
 export const audioOn = signal(false);
 export const audioStats = signal<PlayerStats | null>(null);
 export const audioError = signal("");
-export const volume = signal(0.7);
-export const muted = signal(false);
+export const volume = signal(load("vol") !== null ? Number(load("vol")) : 0.7);
+export const muted = signal(load("mute") === "1");
 /** Pseudo-stereo in USB, LSB and CW (remembered in this browser). */
 export const stereo = signal(load("stereo") === "1");
-/** Tuning step (Hz; 0: the mode's own), remembered in this browser. */
-export const tuneStep = signal(Number(load("step")) || 0);
+/** Tuning step (Hz; 0: the mode's own), remembered in this browser (default 1 kHz). */
+export const tuneStep = signal(load("step") !== null ? Number(load("step")) : 1000);
 let audioRate = 12000;
 /** Waterfall colour range (dB); `auto` follows the noise floor. */
-export const range = signal({ min: -130, max: -60, auto: true });
+export const range = signal<{ min: number; max: number; auto: boolean }>(
+  (() => {
+    try {
+      const w = JSON.parse(load("wf_range") || "null") as { min?: number; max?: number; auto?: boolean } | null;
+      if (w && typeof w.min === "number" && typeof w.max === "number") {
+        return { min: w.min, max: w.max, auto: !!w.auto };
+      }
+    } catch {
+      // ignore
+    }
+    return { min: -130, max: -60, auto: true };
+  })(),
+);
+range.subscribe((r) => save("wf_range", JSON.stringify(r)));
 
 /** Waterfall consumers (canvas views) register here. */
 type LineSink = (l: WfLine) => void;
@@ -71,14 +84,14 @@ export function onLine(f: LineSink): void {
 }
 
 /** A per-browser setting, when the browser lets us keep one. */
-function load(key: string): string | null {
+export function load(key: string): string | null {
   try {
     return localStorage.getItem(`web888.${key}`);
   } catch {
     return null;
   }
 }
-function save(key: string, v: string): void {
+export function save(key: string, v: string): void {
   try {
     localStorage.setItem(`web888.${key}`, v);
   } catch {
@@ -89,6 +102,81 @@ function save(key: string, v: string): void {
 let link: Conn | null = null;
 /** Hash state to apply once the server said hello. */
 let pendingHash = parseHash(location.hash);
+
+interface SavedRadioState {
+  wfV?: number;
+  hz?: number;
+  mode?: Mode;
+  lo?: number;
+  hi?: number;
+  pitch?: number;
+  decim?: number;
+  centerHz?: number;
+  audio?: AudioReq;
+  share?: boolean;
+}
+
+let restoreDone = false;
+let lastTuneTs = 0;
+let lastTuneHz: number | undefined;
+let lastWfTs = 0;
+let lastWf: WfReq | undefined;
+let lastModeTs = 0;
+let lastMode: { mode?: Mode; lo?: number; hi?: number; pitch?: number } | undefined;
+let lastAudioTs = 0;
+let lastAudio: AudioReq | undefined;
+
+function loadRadioState(): SavedRadioState {
+  try {
+    const sv = (JSON.parse(load("radio_state") || "{}") || {}) as SavedRadioState;
+    if (sv.wfV !== 2 && (!sv.decim || sv.decim <= 2)) {
+      delete sv.decim;
+      delete sv.centerHz;
+    }
+    return sv;
+  } catch {
+    return {};
+  }
+}
+
+function defaultDecim(): number {
+  const r = radio.value;
+  return r && r.adc_hz ? Math.max(r.wf_decim_min || 1, Math.round(r.adc_hz / 1_920_000)) : 32;
+}
+
+export function saveRadioState(): void {
+  if (!restoreDone) return;
+  const s = st.value;
+  if (!s) return;
+  const payload: SavedRadioState = {
+    wfV: 2,
+    hz: s.hz,
+    mode: s.mode,
+    lo: s.lo,
+    hi: s.hi,
+    pitch: s.pitch,
+    decim: s.wf?.decim,
+    centerHz: s.wf?.center_hz,
+    audio: {
+      agc: s.agc,
+      agc_speed: s.agc_speed,
+      gain_db: s.gain_db,
+      nb: s.nb,
+      nr: s.nr,
+      squelch: s.squelch,
+      squelch_db: s.squelch_db,
+    },
+    share: s.share,
+  };
+  save("radio_state", JSON.stringify(payload));
+}
+
+if (typeof window !== "undefined") {
+  window.addEventListener("beforeunload", saveRadioState);
+  document.addEventListener("visibilitychange", () => {
+    if (document.visibilityState === "hidden") saveRadioState();
+  });
+}
 
 /** URL of a server path next to the page. */
 function api(path: string): string {
@@ -172,6 +260,41 @@ export function connect(): void {
         case "state": {
           const { type: _, ...s } = m;
           const first = st.value === null;
+          if (first) {
+            const sv = loadRadioState();
+            const defDecim = defaultDecim();
+            const initHz = sv.hz ?? pendingHash.hz ?? s.hz;
+            const initDecim = sv.decim ?? pendingHash.decim ?? defDecim;
+            const initCenter = sv.centerHz ?? pendingHash.centerHz ?? initHz;
+            s.hz = initHz;
+            if (sv.mode) s.mode = sv.mode;
+            if (sv.lo !== undefined) s.lo = sv.lo;
+            if (sv.hi !== undefined) s.hi = sv.hi;
+            if (sv.pitch !== undefined) s.pitch = sv.pitch;
+            if (s.wf) {
+              s.wf = { ...s.wf, decim: initDecim, center_hz: initCenter };
+            }
+            if (sv.audio && typeof sv.audio === "object") Object.assign(s, sv.audio);
+            if (sv.share !== undefined) s.share = sv.share;
+          } else {
+            const now = performance.now();
+            if (lastTuneTs && now - lastTuneTs < 800 && lastTuneHz !== undefined) {
+              s.hz = lastTuneHz;
+            }
+            if (lastWfTs && now - lastWfTs < 800 && lastWf) {
+              s.wf = {
+                ...s.wf,
+                decim: lastWf.decim ?? s.wf.decim,
+                center_hz: lastWf.center_hz ?? s.wf.center_hz,
+              };
+            }
+            if (lastModeTs && now - lastModeTs < 800 && lastMode) {
+              Object.assign(s, lastMode);
+            }
+            if (lastAudioTs && now - lastAudioTs < 800 && lastAudio) {
+              Object.assign(s, lastAudio);
+            }
+          }
           st.value = s;
           if (first) applyHash();
           saveHash();
@@ -229,12 +352,42 @@ export function reconnect(): void {
 function applyHash(): void {
   const h = pendingHash;
   pendingHash = {};
-  if (h.mode) setMode(h.mode);
-  if (h.hz !== undefined) tune(h.hz);
+  const saved = loadRadioState();
+  const defDecim = defaultDecim();
   const s = st.value;
-  if (s && (h.decim !== undefined || h.centerHz !== undefined)) {
-    setView({ ...s.wf, decim: h.decim ?? s.wf.decim, center_hz: h.centerHz ?? s.wf.center_hz });
+  const mode = saved.mode ?? h.mode;
+  const hz = saved.hz ?? h.hz;
+  const decim = saved.decim ?? h.decim ?? defDecim;
+  const centerHz = saved.centerHz ?? h.centerHz ?? hz ?? s?.hz;
+  if (mode) {
+    if (saved.mode && saved.lo !== undefined && saved.hi !== undefined) {
+      const mObj = {
+        mode,
+        lo: saved.lo,
+        hi: saved.hi,
+        ...(saved.pitch !== undefined ? { pitch: saved.pitch } : {}),
+      };
+      lastModeTs = performance.now();
+      lastMode = mObj;
+      update(mObj);
+      link?.send({ type: "mode", ...mObj });
+    } else {
+      setMode(mode);
+    }
   }
+  if (hz !== undefined) tune(hz);
+  const cur = st.value;
+  if (cur && (decim !== undefined || centerHz !== undefined)) {
+    setView({ ...cur.wf, decim: decim ?? cur.wf.decim, center_hz: centerHz ?? cur.wf.center_hz });
+  }
+  if (saved.audio && typeof saved.audio === "object") {
+    setAudio(saved.audio);
+  }
+  if (saved.share !== undefined) {
+    setShare(saved.share);
+  }
+  restoreDone = true;
+  saveRadioState();
 }
 
 let hashTimer: number | undefined;
@@ -245,11 +398,15 @@ function saveHash(): void {
     if (!s) return;
     history.replaceState(null, "", formatHash({ hz: s.hz, mode: s.mode, decim: s.wf.decim, centerHz: s.wf.center_hz }));
     document.title = `${formatKhz(s.hz)} kHz ${s.mode.toUpperCase()} - web888d`;
+    saveRadioState();
   }, 300);
 }
 
-function update(p: Partial<State>): void {
-  if (st.value) st.value = { ...st.value, ...p };
+export function update(p: Partial<State>): void {
+  if (st.value) {
+    st.value = { ...st.value, ...p };
+    saveRadioState();
+  }
 }
 
 let noticeTimer: number | undefined;
@@ -259,13 +416,71 @@ function showNotice(msg: string): void {
   noticeTimer = window.setTimeout(() => (notice.value = ""), 6000);
 }
 
+/** Smoothly pan the waterfall when the dial moves past the visible edges,
+ * while keeping the waterfall stationary inside the visible span. */
+export function panWfToFollow(hz: number): void {
+  const s = st.value;
+  const r = radio.value;
+  if (!s || !s.wf || !r) return;
+  const span = wfSpan(r.adc_hz, s.wf.decim);
+  if (!(span > 0)) return;
+  const lo = s.lo ?? -1500;
+  const hi = s.hi ?? 1500;
+  const pad = Math.min(span * 0.2, Math.max(span * 0.03, Math.abs(lo), Math.abs(hi)));
+  const half = span / 2;
+  const minHz = s.wf.center_hz - half + pad;
+  const maxHz = s.wf.center_hz + half - pad;
+  if (hz < minHz) {
+    setView({ ...s.wf, center_hz: Math.round(hz + half - pad) });
+  } else if (hz > maxHz) {
+    setView({ ...s.wf, center_hz: Math.round(hz - half + pad) });
+  }
+}
+
 /** Tune our own receiver (this ends listening along). */
 export function tune(hz: number): void {
   const r = radio.value;
   if (r) hz = clamp(hz, r.rf_lo, r.rf_hi);
   hz = Math.round(hz);
+  lastTuneTs = performance.now();
+  lastTuneHz = hz;
   update({ hz, listen: null });
   link?.send({ type: "tune", hz });
+  panWfToFollow(hz);
+}
+
+/** Throttled tune helper used by the mobile Flywheel VFO during continuous drag/coast. */
+let flywheelTimer: number | undefined;
+let flywheelPendingHz: number | null = null;
+export function tuneFlywheel(hz: number, forceNow = false): void {
+  const r = radio.value;
+  if (r) hz = clamp(hz, r.rf_lo, r.rf_hi);
+  hz = Math.round(hz);
+  lastTuneTs = performance.now();
+  lastTuneHz = hz;
+  update({ hz, listen: null });
+  panWfToFollow(hz);
+  flywheelPendingHz = hz;
+  if (forceNow) {
+    if (flywheelTimer !== undefined) {
+      clearTimeout(flywheelTimer);
+      flywheelTimer = undefined;
+    }
+    link?.send({ type: "tune", hz: flywheelPendingHz });
+    flywheelPendingHz = null;
+  } else if (flywheelTimer === undefined) {
+    link?.send({ type: "tune", hz: flywheelPendingHz });
+    flywheelPendingHz = null;
+    flywheelTimer = window.setTimeout(() => {
+      flywheelTimer = undefined;
+      if (flywheelPendingHz !== null) {
+        lastTuneTs = performance.now();
+        lastTuneHz = flywheelPendingHz;
+        link?.send({ type: "tune", hz: flywheelPendingHz });
+        flywheelPendingHz = null;
+      }
+    }, 45);
+  }
 }
 
 /** Show our frequency to others and let them listen along, or not. */
@@ -441,6 +656,9 @@ export function pickSkimmer(k: SkimMark): void {
 }
 
 export function setMode(mode: Mode): void {
+  lastModeTs = performance.now();
+  lastMode = { mode };
+  update({ mode });
   link?.send({ type: "mode", mode });
 }
 
@@ -455,6 +673,8 @@ export function cycleAm(): void {
 export function setPassband(lo: number, hi: number): void {
   const s = st.value;
   if (!s) return;
+  lastModeTs = performance.now();
+  lastMode = { mode: s.mode, lo, hi };
   update({ lo, hi });
   link?.send({ type: "mode", mode: s.mode, lo, hi, pitch: s.pitch });
 }
@@ -465,6 +685,8 @@ export function setAgc(agc: boolean, gain_db?: number): void {
 
 /** AGC, noise blanker, noise reduction, squelch. */
 export function setAudio(p: AudioReq): void {
+  lastAudioTs = performance.now();
+  lastAudio = { ...(lastAudio || {}), ...p };
   update(p);
   link?.send({ type: "audio", ...p });
 }
@@ -489,6 +711,8 @@ export function setView(w: WfReq): void {
       center_hz: clampCenter(w.center_hz, w.decim, r),
     };
   }
+  lastWfTs = performance.now();
+  lastWf = w;
   update({ wf: w });
   viewPending = w;
   if (viewTimer === undefined) {
@@ -518,5 +742,7 @@ export async function startAudio(): Promise<void> {
 export function setVolume(v: number, mute = muted.value): void {
   volume.value = v;
   muted.value = mute;
+  save("vol", String(v));
+  save("mute", mute ? "1" : "0");
   player.setVolume(mute ? 0 : v);
 }

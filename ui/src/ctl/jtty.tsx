@@ -14,7 +14,7 @@ const ROWS = 300;
 export function JttyCtl() {
   const on = jttyOn.value;
   return (
-    <div class="group">
+    <div class="group misc-ctl">
       <button class={on ? "on" : ""} onClick={() => setJtty(!on)} title="Decode JTTY (WSJT-X's keyboard mode) from this receiver's audio, in this browser">
         JTTY
       </button>

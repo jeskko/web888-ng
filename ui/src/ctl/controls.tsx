@@ -4,7 +4,7 @@
 
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
-import { bandwidths, formatKhz, parseFreq, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
+import { bandwidths, clamp, formatKhz, parseFreq, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
@@ -47,6 +47,7 @@ import {
   stepOf,
   stereo,
   tune,
+  tuneFlywheel,
   tuneStep,
   volume,
 } from "../state.ts";
@@ -109,7 +110,7 @@ export function StepCtl() {
   if (!s) return null;
   const step = stepOf(s.mode);
   return (
-    <div class="group" title="Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it">
+    <div class="group tuning-step" title="Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it">
       <button onClick={() => tune(stepTo(s.hz, step, -1))}>◀</button>
       <select value={tuneStep.value} onChange={(e) => setTuneStep(Number(e.currentTarget.value))}>
         {STEPS.map((v) => (
@@ -170,51 +171,55 @@ export function AudioCtl() {
   const s = st.value;
   if (!s) return null;
   return (
-    <div class="group">
-      <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control (AM: follows the carrier)">
-        AGC
-      </button>
-      {s.agc && !isAm(s.mode) && (
-        <span class="seg" title="AGC recovery: fast, medium, slow">
-          {(["fast", "medium", "slow"] as AgcSpeed[]).map((v) => (
-            <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
-              {v[0].toUpperCase()}
-            </button>
-          ))}
-        </span>
-      )}
-      <label title={s.agc ? "Maximum AGC gain" : "Fixed gain"}>
-        {s.agc ? "max" : "gain"}
+    <div class="group do-group">
+      <div class="sub-group agc-ctl">
+        <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control (AM: follows the carrier)">
+          AGC
+        </button>
+        {s.agc && !isAm(s.mode) && (
+          <span class="seg" title="AGC recovery: fast, medium, slow">
+            {(["fast", "medium", "slow"] as AgcSpeed[]).map((v) => (
+              <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
+                {v[0].toUpperCase()}
+              </button>
+            ))}
+          </span>
+        )}
+        <label title={s.agc ? "Maximum AGC gain" : "Fixed gain"}>
+          {s.agc ? "max" : "gain"}
+          <input
+            type="range"
+            min={0}
+            max={100}
+            value={s.gain_db}
+            onInput={(e) => setAgc(s.agc, Number(e.currentTarget.value))}
+          />
+          <span class="num">{s.gain_db.toFixed(0)} dB</span>
+        </label>
+      </div>
+      <div class="sub-group vol-ctl">
+        <button class={muted.value ? "on" : ""} onClick={() => setVolume(volume.value, !muted.value)} title="Mute">
+          {muted.value ? "Muted" : "Vol"}
+        </button>
         <input
           type="range"
           min={0}
-          max={100}
-          value={s.gain_db}
-          onInput={(e) => setAgc(s.agc, Number(e.currentTarget.value))}
+          max={1}
+          step={0.01}
+          value={volume.value}
+          onInput={(e) => setVolume(Number(e.currentTarget.value), false)}
+          title="Volume"
         />
-        <span class="num">{s.gain_db.toFixed(0)} dB</span>
-      </label>
-      {!isAm(s.mode) && (
-        <button
-          class={stereo.value ? "on" : ""}
-          onClick={() => setStereo(!stereo.value)}
-          title="Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
-        >
-          Stereo
-        </button>
-      )}
-      <button class={muted.value ? "on" : ""} onClick={() => setVolume(volume.value, !muted.value)} title="Mute">
-        {muted.value ? "Muted" : "Vol"}
-      </button>
-      <input
-        type="range"
-        min={0}
-        max={1}
-        step={0.01}
-        value={volume.value}
-        onInput={(e) => setVolume(Number(e.currentTarget.value), false)}
-        title="Volume"
-      />
+        {!isAm(s.mode) && (
+          <button
+            class={stereo.value ? "on" : ""}
+            onClick={() => setStereo(!stereo.value)}
+            title="Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
+          >
+            Stereo
+          </button>
+        )}
+      </div>
     </div>
   );
 }
@@ -231,7 +236,7 @@ export function DspCtl() {
   if (s.nb > 0) nbLevel.v = s.nb;
   if (s.nr > 0) nrLevel.v = s.nr;
   return (
-    <div class="group">
+    <div class="group nr-ctl">
       <button
         class={s.nb > 0 ? "on" : ""}
         onClick={() => setAudio({ nb: s.nb > 0 ? 0 : nbLevel.v })}
@@ -306,7 +311,7 @@ export function ZoomCtl() {
   };
   const span = wfSpan(r.adc_hz, s.wf.decim);
   return (
-    <div class="group">
+    <div class="group wf-zoom-ctl">
       <button onClick={() => zoom(s.wf.decim / 2)} disabled={s.wf.decim <= r.wf_decim_min} title="Zoom out (wheel)">
         −
       </button>
@@ -436,7 +441,7 @@ export function ShareCtl() {
   const s = st.value;
   if (!s) return null;
   return (
-    <div class="group">
+    <div class="group misc-ctl">
       <button
         class={s.share ? "on" : ""}
         onClick={() => setShare(!s.share)}
@@ -493,7 +498,7 @@ export function LeaseBanner() {
 export function ContrastCtl() {
   const r = range.value;
   return (
-    <div class="group" title="Waterfall colour range (dBFS)">
+    <div class="group wf-range-ctl" title="Waterfall colour range (dBFS)">
       <button class={r.auto ? "on" : ""} onClick={() => (range.value = { ...r, auto: !r.auto })}>
         Auto
       </button>
@@ -589,6 +594,331 @@ export function StatusBar() {
       <span class="right">
         {server.value} · <a href="#/admin">admin</a>
       </span>
+    </div>
+  );
+}
+
+export function FlywheelVFO() {
+  const canvasRef = useRef<HTMLCanvasElement>(null);
+  const touchState = useRef<{
+    active: boolean;
+    dragging: boolean;
+    lastX: number;
+    velocity: number;
+    raf: number | null;
+    virtualHz: number;
+    lastSentHz: number;
+    samples: { x: number; t: number }[];
+  }>({
+    active: false,
+    dragging: false,
+    lastX: 0,
+    velocity: 0,
+    raf: null,
+    virtualHz: 7_074_000,
+    lastSentHz: 7_074_000,
+    samples: [],
+  });
+
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+
+    const STEP_PX = 18;
+    const state = touchState.current;
+
+    const draw = () => {
+      const w = canvas.width;
+      const h = canvas.height;
+      if (w === 0 || h === 0) return;
+      const dpr = window.devicePixelRatio || 1;
+      const rState = st.value;
+      const mode: Mode = rState ? rState.mode : "usb";
+      const step = stepOf(mode) || 1000;
+      const hz = state.active ? state.virtualHz : rState ? rState.hz : 7_074_000;
+
+      ctx.clearRect(0, 0, w, h);
+
+      const bgGrad = ctx.createLinearGradient(0, 0, 0, h);
+      bgGrad.addColorStop(0, "#080b13");
+      bgGrad.addColorStop(0.25, "#131b2a");
+      bgGrad.addColorStop(0.5, "#1c283d");
+      bgGrad.addColorStop(0.75, "#131b2a");
+      bgGrad.addColorStop(1, "#080b13");
+      ctx.fillStyle = bgGrad;
+      ctx.fillRect(0, 0, w, h);
+
+      const cx = w / 2;
+      const pxPerStep = STEP_PX * dpr;
+      const hzPerPx = step / pxPerStep;
+
+      const minHz = hz - cx * hzPerPx;
+      const maxHz = hz + cx * hzPerPx;
+      const firstTick = Math.floor(minHz / step) * step;
+
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+
+      for (let t = firstTick; t <= maxHz + step; t += step) {
+        const x = cx + (t - hz) / hzPerPx;
+        if (x < -30 * dpr || x > w + 30 * dpr) continue;
+
+        const stepUnits = Math.round(t / step);
+        const isMajor = stepUnits % 10 === 0;
+        const isMid = stepUnits % 5 === 0;
+
+        if (isMajor) {
+          ctx.strokeStyle = "#94a3b8";
+          ctx.lineWidth = 2 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(x, 2 * dpr);
+          ctx.lineTo(x, 19 * dpr);
+          ctx.stroke();
+
+          ctx.fillStyle = "#cbd5e1";
+          ctx.font = `600 ${11 * dpr}px ui-monospace, Consolas, monospace`;
+          const khz = (t / 1000).toFixed(step < 100 ? 2 : step < 1000 ? 1 : 0);
+          ctx.fillText(khz, x, h - 14 * dpr);
+        } else if (isMid) {
+          ctx.strokeStyle = "#64748b";
+          ctx.lineWidth = 1.5 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(x, 2 * dpr);
+          ctx.lineTo(x, 13 * dpr);
+          ctx.stroke();
+        } else {
+          ctx.strokeStyle = "#475569";
+          ctx.lineWidth = 1 * dpr;
+          ctx.beginPath();
+          ctx.moveTo(x, 2 * dpr);
+          ctx.lineTo(x, 8 * dpr);
+          ctx.stroke();
+        }
+      }
+
+      const vigW = Math.min(100 * dpr, w * 0.28);
+      const leftVig = ctx.createLinearGradient(0, 0, vigW, 0);
+      leftVig.addColorStop(0, "rgba(8, 11, 19, 0.98)");
+      leftVig.addColorStop(1, "rgba(8, 11, 19, 0)");
+      ctx.fillStyle = leftVig;
+      ctx.fillRect(0, 0, vigW, h);
+
+      const rightVig = ctx.createLinearGradient(w - vigW, 0, w, 0);
+      rightVig.addColorStop(0, "rgba(8, 11, 19, 0)");
+      rightVig.addColorStop(1, "rgba(8, 11, 19, 0.98)");
+      ctx.fillStyle = rightVig;
+      ctx.fillRect(w - vigW, 0, vigW, h);
+
+      ctx.fillStyle = "#334155";
+      ctx.fillRect(0, 0, w, 1 * dpr);
+      ctx.fillRect(0, h - 1 * dpr, w, 1 * dpr);
+
+      ctx.strokeStyle = "#ff3b30";
+      ctx.lineWidth = 2 * dpr;
+      ctx.beginPath();
+      ctx.moveTo(cx, 0);
+      ctx.lineTo(cx, h);
+      ctx.stroke();
+
+      ctx.fillStyle = "#ff3b30";
+      ctx.beginPath();
+      ctx.moveTo(cx - 5 * dpr, 0);
+      ctx.lineTo(cx + 5 * dpr, 0);
+      ctx.lineTo(cx, 7 * dpr);
+      ctx.closePath();
+      ctx.fill();
+
+      ctx.beginPath();
+      ctx.moveTo(cx - 5 * dpr, h);
+      ctx.lineTo(cx + 5 * dpr, h);
+      ctx.lineTo(cx, h - 7 * dpr);
+      ctx.closePath();
+      ctx.fill();
+    };
+
+    const resize = () => {
+      const rect = canvas.getBoundingClientRect();
+      const dpr = window.devicePixelRatio || 1;
+      const w = Math.round(rect.width * dpr);
+      const h = Math.round(rect.height * dpr);
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      draw();
+    };
+
+    resize();
+    const ro = new ResizeObserver(resize);
+    ro.observe(canvas);
+
+    const unsubS = st.subscribe(() => {
+      if (!state.active) draw();
+    });
+
+    const stopRaf = () => {
+      if (state.raf !== null) {
+        cancelAnimationFrame(state.raf);
+        state.raf = null;
+      }
+    };
+
+    const applyVirtualHz = (newVirtualHz: number, forceNow: boolean) => {
+      const rState = st.value;
+      if (!rState) return;
+      const lim = radio.value;
+      if (lim) newVirtualHz = clamp(newVirtualHz, lim.rf_lo, lim.rf_hi);
+      state.virtualHz = newVirtualHz;
+
+      const step = stepOf(rState.mode) || 1000;
+      let steppedHz = Math.round(state.virtualHz / step) * step;
+      if (lim) steppedHz = clamp(steppedHz, lim.rf_lo, lim.rf_hi);
+
+      if (steppedHz !== state.lastSentHz || forceNow) {
+        state.lastSentHz = steppedHz;
+        tuneFlywheel(steppedHz, forceNow);
+      }
+      draw();
+    };
+
+    const onPointerDown = (e: PointerEvent) => {
+      stopRaf();
+      const rState = st.value;
+      const curHz = rState ? rState.hz : 7_074_000;
+      const step = stepOf(rState ? rState.mode : "usb") || 1000;
+      state.active = true;
+      state.dragging = true;
+      state.lastX = e.clientX;
+      state.velocity = 0;
+      state.virtualHz = Math.round(curHz / step) * step;
+      state.lastSentHz = state.virtualHz;
+      const now = performance.now();
+      state.samples = [{ x: e.clientX, t: now }];
+      try {
+        canvas.setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      draw();
+    };
+
+    const onPointerMove = (e: PointerEvent) => {
+      if (!state.dragging) return;
+      const now = performance.now();
+      const dx = e.clientX - state.lastX;
+      state.lastX = e.clientX;
+
+      state.samples.push({ x: e.clientX, t: now });
+      while (state.samples.length > 1 && now - state.samples[0].t > 100) {
+        state.samples.shift();
+      }
+
+      const rState = st.value;
+      if (!rState) return;
+      const step = stepOf(rState.mode) || 1000;
+      const hzPerCssPx = step / STEP_PX;
+
+      applyVirtualHz(state.virtualHz - dx * hzPerCssPx, false);
+    };
+
+    const onPointerUp = (e: PointerEvent) => {
+      if (!state.dragging) return;
+      state.dragging = false;
+      try {
+        canvas.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+
+      const now = performance.now();
+      while (state.samples.length > 1 && now - state.samples[0].t > 100) {
+        state.samples.shift();
+      }
+
+      let v = 0;
+      if (state.samples.length >= 2) {
+        const first = state.samples[0];
+        const last = state.samples[state.samples.length - 1];
+        const dt = last.t - first.t;
+        if (dt >= 8 && now - last.t < 80) {
+          v = (last.x - first.x) / dt;
+        }
+      }
+
+      if (Math.abs(v) > 0.18) {
+        let speed = Math.abs(v);
+        if (speed > 0.7) speed = 0.7 + (speed - 0.7) * 1.45;
+        state.velocity = Math.sign(v) * Math.min(speed, 5.5);
+
+        let lastT = performance.now();
+        const anim = () => {
+          const curNow = performance.now();
+          const dt = Math.min(32, Math.max(1, curNow - lastT));
+          lastT = curNow;
+
+          state.velocity *= Math.pow(0.955, dt / 16.67);
+          const curV = state.velocity;
+
+          const rState = st.value;
+          const step = stepOf(rState ? rState.mode : "usb") || 1000;
+          const hzPerCssPx = step / STEP_PX;
+          const dPx = curV * dt;
+
+          if (Math.abs(curV) > 0.02) {
+            applyVirtualHz(state.virtualHz - dPx * hzPerCssPx, false);
+            state.raf = requestAnimationFrame(anim);
+          } else {
+            state.raf = null;
+            const finalStep = Math.round(state.virtualHz / step) * step;
+            state.virtualHz = finalStep;
+            state.active = false;
+            applyVirtualHz(finalStep, true);
+          }
+        };
+        state.raf = requestAnimationFrame(anim);
+      } else {
+        const rState = st.value;
+        const step = stepOf(rState ? rState.mode : "usb") || 1000;
+        const finalStep = Math.round(state.virtualHz / step) * step;
+        state.virtualHz = finalStep;
+        state.active = false;
+        applyVirtualHz(finalStep, true);
+      }
+    };
+
+    canvas.addEventListener("pointerdown", onPointerDown);
+    canvas.addEventListener("pointermove", onPointerMove);
+    canvas.addEventListener("pointerup", onPointerUp);
+    canvas.addEventListener("pointercancel", onPointerUp);
+
+    return () => {
+      stopRaf();
+      ro.disconnect();
+      unsubS();
+      canvas.removeEventListener("pointerdown", onPointerDown);
+      canvas.removeEventListener("pointermove", onPointerMove);
+      canvas.removeEventListener("pointerup", onPointerUp);
+      canvas.removeEventListener("pointercancel", onPointerUp);
+    };
+  }, []);
+
+  return (
+    <div class="flywheel-wrapper">
+      <canvas ref={canvasRef} class="flywheel-canvas" />
+      <div class="flywheel-label">◀ TUNE VFO ▶</div>
+    </div>
+  );
+}
+
+export function MobileTuner() {
+  return (
+    <div class="mobile-tuner">
+      <div class="mobile-tune-bar">
+        <StepCtl />
+      </div>
+      <FlywheelVFO />
     </div>
   );
 }

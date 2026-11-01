@@ -5,14 +5,119 @@
 // a click on a spot label tunes to it. Hovering shows where a click would
 // tune: the frequency and the passband there.
 
+import { useSignal } from "@preact/signals";
+import type { RefObject } from "preact";
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { followable, lease, limits, myName, onLine, pickSkimmer, pickSpot, pickUser, radio, range, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { followable, lease, limits, load, myName, onLine, pickSkimmer, pickSpot, pickUser, radio, range, save, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
+
+let syncPaneSize: (() => void) | null = null;
+
+function SpecResizer(props: { paneRef: RefObject<HTMLDivElement | null>; specRef: RefObject<HTMLCanvasElement | null> }) {
+  const btnRef = useRef<HTMLButtonElement>(null);
+  const collapsed = useSignal(false);
+  const dragState = useRef({ active: false, startY: 0, startH: 90, lastExpandedH: 0, moved: false });
+
+  useEffect(() => {
+    const pane = props.paneRef.current;
+    const spec = props.specRef.current;
+    const btn = btnRef.current;
+    if (!pane || !spec || !btn) return;
+
+    const stDrag = dragState.current;
+    const saved = Number(load("spec_h"));
+    const initMaxH = Math.max(120, Math.round((pane.clientHeight || 400) * 0.6));
+    if (saved >= 22 && saved <= initMaxH) {
+      pane.style.setProperty("--spec-h", `${saved}px`);
+      collapsed.value = saved <= 26;
+      if (saved > 36) stDrag.lastExpandedH = saved;
+      syncPaneSize?.();
+    }
+
+    const setSpecH = (h: number, persist: boolean) => {
+      const maxH = Math.max(100, Math.round((pane.clientHeight || 400) * 0.65));
+      const clamped = Math.max(22, Math.min(maxH, Math.round(h)));
+      pane.style.setProperty("--spec-h", `${clamped}px`);
+      collapsed.value = clamped <= 26;
+      if (clamped > 36) stDrag.lastExpandedH = clamped;
+      syncPaneSize?.();
+      if (persist) save("spec_h", String(clamped));
+    };
+
+    const onDown = (e: PointerEvent) => {
+      e.stopPropagation();
+      e.preventDefault();
+      stDrag.active = true;
+      stDrag.moved = false;
+      stDrag.startY = e.clientY;
+      stDrag.startH = spec.clientHeight || Math.round((pane.clientHeight || 300) * 0.28);
+      try {
+        btn.setPointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+    };
+
+    const onMove = (e: PointerEvent) => {
+      if (!stDrag.active) return;
+      const dy = e.clientY - stDrag.startY;
+      if (!stDrag.moved && Math.abs(dy) < 4) return;
+      stDrag.moved = true;
+      setSpecH(stDrag.startH + dy, false);
+    };
+
+    const onUp = (e: PointerEvent) => {
+      if (!stDrag.active) return;
+      stDrag.active = false;
+      try {
+        btn.releasePointerCapture(e.pointerId);
+      } catch {
+        // ignore
+      }
+      if (!stDrag.moved) {
+        const curH = spec.clientHeight || 90;
+        if (curH > 26) {
+          stDrag.lastExpandedH = curH;
+          setSpecH(22, true);
+        } else {
+          const defH = Math.round((pane.clientHeight || 350) * 0.28);
+          setSpecH(stDrag.lastExpandedH > 36 ? stDrag.lastExpandedH : defH, true);
+        }
+      } else {
+        setSpecH(spec.clientHeight || 90, true);
+      }
+    };
+
+    btn.addEventListener("pointerdown", onDown);
+    btn.addEventListener("pointermove", onMove);
+    btn.addEventListener("pointerup", onUp);
+    btn.addEventListener("pointercancel", onUp);
+
+    return () => {
+      btn.removeEventListener("pointerdown", onDown);
+      btn.removeEventListener("pointermove", onMove);
+      btn.removeEventListener("pointerup", onUp);
+      btn.removeEventListener("pointercancel", onUp);
+    };
+  }, []);
+
+  return (
+    <div class="spec-divider">
+      <button
+        ref={btnRef}
+        class={collapsed.value ? "spec-handle collapsed" : "spec-handle"}
+        title="Drag up/down or click to collapse spectrum"
+      >
+        {collapsed.value ? "▼ Slide" : "▲ Slide"}
+      </button>
+    </div>
+  );
+}
 
 /** Auto colour range: follows the noise floor of recent lines. */
 const auto = { min: NaN, max: NaN, n: 0 };
@@ -79,16 +184,46 @@ export function Pane() {
       if (bins !== s.wf.bins) setView({ ...s.wf, bins });
     };
 
+    const drawNow = () => {
+      dirty = false;
+      const v = view();
+      const s = st.value;
+      if (!v || !s) return;
+      const { min, max } = currentRange();
+      wf?.draw(v.start, v.span, min, max);
+      const marks = users.value.filter(followable).map((u) => ({ hz: u.hz, on: u.id === s.listen, name: u.name }));
+      const shown = latest(spots.value, Date.now() / 1000).map((p) => ({
+        hz: p.hz,
+        text: p.call ?? p.msg,
+        other: p.mode !== "FT8",
+        wspr: p.mode === "WSPR",
+        item: p,
+      }));
+      const bars = skimmers.value.map((k) => ({ lo: k.lo, hi: k.hi, colour: modeColour(k.mode), waiting: !k.on }));
+      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars);
+    };
+
     const resize = () => {
       dpr = window.devicePixelRatio || 1;
+      let changed = false;
       for (const c of [sc, wc]) {
-        c.width = Math.round(c.clientWidth * dpr);
-        c.height = Math.round(c.clientHeight * dpr);
+        const w = Math.round(c.clientWidth * dpr);
+        const h = Math.round(c.clientHeight * dpr);
+        if (c.width !== w) {
+          c.width = w;
+          changed = true;
+        }
+        if (c.height !== h) {
+          c.height = h;
+          changed = true;
+        }
       }
       wantBins();
-      dirty = true;
+      if (changed) drawNow();
+      else dirty = true;
     };
     const ro = new ResizeObserver(resize);
+    syncPaneSize = resize;
     ro.observe(box);
     const unsub = st.subscribe(() => {
       dirty = true;
@@ -111,22 +246,7 @@ export function Pane() {
     const frame = () => {
       raf = requestAnimationFrame(frame);
       if (!dirty) return;
-      dirty = false;
-      const v = view();
-      const s = st.value;
-      if (!v || !s) return;
-      const { min, max } = currentRange();
-      wf?.draw(v.start, v.span, min, max);
-      const marks = users.value.filter(followable).map((u) => ({ hz: u.hz, on: u.id === s.listen, name: u.name }));
-      const shown = latest(spots.value, Date.now() / 1000).map((p) => ({
-        hz: p.hz,
-        text: p.call ?? p.msg,
-        other: p.mode !== "FT8",
-        wspr: p.mode === "WSPR",
-        item: p,
-      }));
-      const bars = skimmers.value.map((k) => ({ lo: k.lo, hi: k.hi, colour: modeColour(k.mode), waiting: !k.on }));
-      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars);
+      drawNow();
     };
     raf = requestAnimationFrame(frame);
     const unsubRange = range.subscribe(() => {
@@ -313,6 +433,7 @@ export function Pane() {
   return (
     <div class="pane" ref={boxRef}>
       <canvas class="spectrum" ref={specRef} />
+      <SpecResizer paneRef={boxRef} specRef={specRef} />
       <canvas class="waterfall" ref={wfRef} />
       <div class="pane-error" ref={errRef} />
       <div class="ghost" ref={ghostRef} style={{ display: "none" }}>

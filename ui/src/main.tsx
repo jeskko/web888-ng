@@ -18,6 +18,7 @@ import {
   StatusBar,
   UsersCtl,
   ZoomCtl,
+  MobileTuner,
 } from "./ctl/controls.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
@@ -142,6 +143,7 @@ function App() {
         <SpotPanel />
         <JttyPanel />
       </main>
+      <MobileTuner />
       <footer>
         <div class="controls">
           <AudioCtl />

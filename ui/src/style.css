@@ -150,3 +150,515 @@ table.wide { width: 100%; }
 @media (max-width: 640px) {
   .config .field { grid-template-columns: 1fr; }
 }
+
+
+
+/* --- MOBILE CUSTOMIZATIONS --- */
+
+.mobile-tuner {
+  display: none !important;
+}
+
+.sub-group {
+  display: contents;
+}
+
+/* Fix Chrome Flexbox canvas intrinsic aspect-ratio expansion on wide screens (e.g. 2560x1080)
+   and enable smooth spectrum height Slide on both Desktop & Mobile */
+.pane .spectrum {
+  flex: 0 0 var(--spec-h, 30%) !important;
+  height: var(--spec-h, 30%) !important;
+  min-height: 22px !important;
+  max-height: var(--spec-h, 30%) !important;
+}
+
+.spec-divider {
+  display: block !important;
+  position: relative !important;
+  height: 0 !important;
+  width: 100% !important;
+  z-index: 6 !important;
+}
+
+.spec-handle {
+  position: absolute !important;
+  right: 8px !important;
+  top: -21px !important;
+  height: 20px !important;
+  padding: 0 8px !important;
+  font-size: 10px !important;
+  font-weight: 700 !important;
+  letter-spacing: 0.04em !important;
+  color: #e2e8f0 !important;
+  background: rgba(25, 35, 54, 0.92) !important;
+  border: none !important;
+  border-radius: 10px !important;
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.6) !important;
+  display: inline-flex !important;
+  align-items: center !important;
+  justify-content: center !important;
+  cursor: ns-resize !important;
+  touch-action: none !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
+}
+
+.spec-handle.collapsed {
+  background: rgba(29, 58, 102, 0.95) !important;
+  border: none !important;
+  color: #fff !important;
+}
+
+@media (max-width: 768px) {
+  html, body, #app {
+    overflow-x: hidden !important;
+    max-width: 100vw !important;
+  }
+
+  .pane .spectrum {
+    flex: 0 0 var(--spec-h, 25%) !important;
+    height: var(--spec-h, 25%) !important;
+    min-height: 22px !important;
+    max-height: var(--spec-h, 25%) !important;
+  }
+
+  header {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    justify-content: center !important;
+    padding: 4px 6px 6px !important;
+    gap: 4px 6px !important;
+  }
+
+  /* 1. Frequency Display Large at the very top */
+  header .freq {
+    order: 1 !important;
+    flex: 0 0 100% !important;
+    font-size: 34px !important;
+    line-height: 1.05 !important;
+    text-align: center !important;
+    margin: 1px auto 2px auto !important;
+    display: flex !important;
+    justify-content: center !important;
+    align-items: baseline !important;
+    width: 100% !important;
+  }
+  header .freq .unit {
+    font-size: 14px !important;
+    margin-left: 5px !important;
+    color: var(--dim) !important;
+  }
+  header .freq input {
+    font-size: 30px !important;
+    text-align: center !important;
+  }
+
+  /* 2. S-meter prominent directly below frequency */
+  header .smeter {
+    order: 2 !important;
+    flex: 0 0 100% !important;
+    margin: 0 auto 3px auto !important;
+    width: 100% !important;
+    max-width: 380px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    gap: 8px !important;
+  }
+  header .smeter .bar {
+    flex: 1 !important;
+    width: auto !important;
+    height: 16px !important;
+    border-radius: 4px !important;
+    background: #080c14 !important;
+    border: 1px solid #2e3b50 !important;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.7) !important;
+    overflow: hidden !important;
+  }
+  header .smeter .fill {
+    height: 100% !important;
+    border-radius: 3px !important;
+    background: linear-gradient(90deg, #10b981 0%, #22c55e 55%, #eab308 80%, #ef4444 100%) !important;
+  }
+  header .smeter .num {
+    font-family: ui-monospace, Consolas, monospace !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    min-width: 72px !important;
+    text-align: right !important;
+    color: #cbd5e1 !important;
+  }
+  header .smeter .lamp {
+    font-size: 10px !important;
+    padding: 1px 4px !important;
+  }
+
+  /* 3. Hide frequency step arrows and select from header */
+  header .tuning-step {
+    display: none !important;
+  }
+
+  /* 4. Mode, Passband, and Callsign/Users compactly side-by-side on 1-2 rows */
+  header > .group:not(.tuning-step) {
+    order: 3 !important;
+    flex: 0 1 auto !important;
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 0 !important;
+  }
+  header > .group:not(.tuning-step):not(.users-ctl) button {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    min-height: 28px !important;
+    border-radius: 0 !important;
+    margin-left: -1px !important;
+  }
+  header > .group:not(.tuning-step):not(.users-ctl) button:first-child {
+    border-radius: 5px 0 0 5px !important;
+    margin-left: 0 !important;
+  }
+  header > .group:not(.tuning-step):not(.users-ctl) button:last-child {
+    border-radius: 0 5px 5px 0 !important;
+  }
+  header > .group:not(.tuning-step):not(.users-ctl) button.on {
+    position: relative !important;
+    z-index: 1 !important;
+  }
+
+  header > .users-ctl {
+    order: 3 !important;
+    flex: 0 1 auto !important;
+    display: inline-flex !important;
+    flex-wrap: nowrap !important;
+    align-items: center !important;
+    gap: 3px !important;
+  }
+  header > .users-ctl input.name {
+    width: 62px !important;
+    height: 28px !important;
+    padding: 2px 5px !important;
+    font-size: 12px !important;
+  }
+  header > .users-ctl button {
+    padding: 4px 6px !important;
+    font-size: 12px !important;
+    min-height: 28px !important;
+  }
+
+  /* Fix Users Popup overflowing right edge on mobile */
+  .users-pop {
+    position: fixed !important;
+    top: 102px !important;
+    left: 8px !important;
+    right: 8px !important;
+    width: auto !important;
+    max-width: calc(100vw - 16px) !important;
+    max-height: 55vh !important;
+    overflow-y: auto !important;
+    overflow-x: auto !important;
+    z-index: 1000 !important;
+    box-sizing: border-box !important;
+    box-shadow: 0 10px 28px rgba(0, 0, 0, 0.75) !important;
+  }
+  .users-pop table {
+    width: 100% !important;
+  }
+
+  /* 5. Mobile Tuner below waterfall */
+  .mobile-tuner {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    padding: 6px 8px !important;
+    background: #0c101a !important;
+    border-top: 1px solid var(--line) !important;
+    flex-shrink: 0 !important;
+    box-sizing: border-box !important;
+    user-select: none !important;
+    -webkit-user-select: none !important;
+  }
+
+  .mobile-tune-bar {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    width: 100% !important;
+  }
+
+  .mobile-tune-bar .tuning-step {
+    display: flex !important;
+    width: 100% !important;
+    max-width: 440px !important;
+    align-items: center !important;
+    gap: 8px !important;
+  }
+
+  .mobile-tune-bar .tuning-step button {
+    flex: 0 0 54px !important;
+    height: 38px !important;
+    font-size: 18px !important;
+    font-weight: bold !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    background: #192233 !important;
+    border: 1px solid #33425b !important;
+    border-radius: 6px !important;
+    color: #f1f5f9 !important;
+    cursor: pointer !important;
+    touch-action: manipulation !important;
+  }
+
+  .mobile-tune-bar .tuning-step button:active {
+    background: #273752 !important;
+    border-color: var(--accent) !important;
+    transform: scale(0.97) !important;
+  }
+
+  .mobile-tune-bar .tuning-step select {
+    flex: 1 !important;
+    height: 38px !important;
+    font-size: 14px !important;
+    font-weight: 600 !important;
+    background: #192233 !important;
+    color: #f1f5f9 !important;
+    border: 1px solid #33425b !important;
+    border-radius: 6px !important;
+    padding: 0 10px !important;
+    text-align: center !important;
+    cursor: pointer !important;
+  }
+
+  /* Flywheel VFO container & canvas */
+  .flywheel-wrapper {
+    position: relative !important;
+    width: 100% !important;
+    max-width: 440px !important;
+    margin: 0 auto !important;
+    height: 56px !important;
+    border-radius: 8px !important;
+    overflow: hidden !important;
+    border: 1px solid #33425b !important;
+    box-shadow: inset 0 2px 8px rgba(0,0,0,0.7), 0 1px 3px rgba(0,0,0,0.4) !important;
+    background: #080b13 !important;
+    touch-action: none !important;
+  }
+
+  .flywheel-canvas {
+    display: block !important;
+    width: 100% !important;
+    height: 100% !important;
+    cursor: grab !important;
+    touch-action: none !important;
+  }
+
+  .flywheel-canvas:active {
+    cursor: grabbing !important;
+  }
+
+  .flywheel-label {
+    position: absolute !important;
+    bottom: 3px !important;
+    left: 50% !important;
+    transform: translateX(-50%) !important;
+    font-size: 9px !important;
+    font-weight: 700 !important;
+    letter-spacing: 0.18em !important;
+    color: rgba(148, 163, 184, 0.4) !important;
+    pointer-events: none !important;
+    text-transform: uppercase !important;
+  }
+
+  /* 6. Clean, structured Footer Controls on Mobile */
+  footer .controls {
+    display: flex !important;
+    flex-direction: row !important;
+    flex-wrap: wrap !important;
+    gap: 5px !important;
+    padding: 5px 8px !important;
+    align-items: stretch !important;
+  }
+
+  footer .do-group {
+    display: contents !important;
+  }
+
+  /* Row 1: Waterfall Zoom & Center/Full bar — big, clear, easy-to-press buttons */
+  footer .wf-zoom-ctl {
+    order: 1 !important;
+    flex: 0 0 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: space-between !important;
+    gap: 6px !important;
+    background: #0f1624 !important;
+    padding: 4px 6px !important;
+    border: 1px solid #28354c !important;
+    border-radius: 6px !important;
+  }
+  footer .wf-zoom-ctl button {
+    height: 36px !important;
+    font-size: 13px !important;
+    font-weight: 600 !important;
+    background: #192336 !important;
+    border: 1px solid #354766 !important;
+    border-radius: 5px !important;
+    color: #f1f5f9 !important;
+    flex: 1 !important;
+    padding: 0 8px !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    touch-action: manipulation !important;
+  }
+  footer .wf-zoom-ctl button:first-of-type,
+  footer .wf-zoom-ctl button:nth-of-type(2) {
+    flex: 0 0 46px !important;
+    font-size: 20px !important;
+    font-weight: 700 !important;
+  }
+  footer .wf-zoom-ctl .num {
+    font-family: ui-monospace, Consolas, monospace !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+    color: #cbd5e1 !important;
+    min-width: 68px !important;
+    text-align: center !important;
+  }
+
+  /* Row 2: Volume + Stereo (left) and NB/NR/SQL (right) side-by-side */
+  footer .vol-ctl {
+    order: 2 !important;
+    flex: 1 1 175px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    background: #0f1624 !important;
+    padding: 4px 6px !important;
+    border: 1px solid #222c40 !important;
+    border-radius: 6px !important;
+  }
+  footer .vol-ctl button {
+    height: 28px !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+  }
+  footer .vol-ctl input[type="range"] {
+    flex: 1 !important;
+    width: auto !important;
+    min-width: 55px !important;
+  }
+
+  footer .nr-ctl {
+    order: 2 !important;
+    flex: 0 1 auto !important;
+    display: flex !important;
+    flex-wrap: wrap !important;
+    align-items: center !important;
+    gap: 3px !important;
+    background: #0f1624 !important;
+    padding: 4px 6px !important;
+    border: 1px solid #222c40 !important;
+    border-radius: 6px !important;
+  }
+  footer .nr-ctl button {
+    height: 28px !important;
+    padding: 2px 8px !important;
+    font-size: 12px !important;
+    font-weight: 600 !important;
+  }
+  footer .nr-ctl input[type="range"] {
+    width: 68px !important;
+  }
+
+  /* Row 3: AGC + F/M/S + Gain slider spanning full width */
+  footer .agc-ctl {
+    order: 3 !important;
+    flex: 0 0 100% !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    background: #0f1624 !important;
+    padding: 4px 6px !important;
+    border: 1px solid #222c40 !important;
+    border-radius: 6px !important;
+  }
+  footer .agc-ctl button {
+    height: 28px !important;
+    padding: 2px 7px !important;
+    font-size: 12px !important;
+  }
+  footer .agc-ctl label {
+    flex: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 5px !important;
+    font-size: 12px !important;
+  }
+  footer .agc-ctl label input[type="range"] {
+    flex: 1 !important;
+    width: auto !important;
+    min-width: 50px !important;
+  }
+  footer .agc-ctl label .num {
+    min-width: 36px !important;
+    text-align: right !important;
+    font-size: 12px !important;
+  }
+
+  /* Row 4: Waterfall Auto/Floor/Top + Shared/Spots/JTTY */
+  footer .wf-range-ctl {
+    order: 4 !important;
+    flex: 1 1 220px !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 4px !important;
+    background: #0f1624 !important;
+    padding: 4px 6px !important;
+    border: 1px solid #222c40 !important;
+    border-radius: 6px !important;
+    font-size: 11px !important;
+  }
+  footer .wf-range-ctl button {
+    height: 28px !important;
+    padding: 2px 7px !important;
+    font-size: 12px !important;
+  }
+  footer .wf-range-ctl label {
+    flex: 1 !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 3px !important;
+  }
+  footer .wf-range-ctl label input[type="range"] {
+    flex: 1 !important;
+    width: 40px !important;
+    min-width: 32px !important;
+  }
+  footer .wf-range-ctl .num {
+    font-size: 11px !important;
+    min-width: auto !important;
+  }
+
+  footer .misc-ctl {
+    order: 5 !important;
+    flex: 1 1 auto !important;
+    display: flex !important;
+  }
+  footer .misc-ctl button {
+    flex: 1 !important;
+    height: 28px !important;
+    font-size: 12px !important;
+    padding: 2px 8px !important;
+  }
+
+  footer .status {
+    padding: 3px 8px !important;
+    font-size: 11px !important;
+    gap: 2px 10px !important;
+    justify-content: center !important;
+  }
+}

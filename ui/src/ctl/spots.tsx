@@ -14,7 +14,7 @@ export function SpotsCtl() {
   if (!spotsAvail.value) return null;
   const open = spotsOpen.value;
   return (
-    <div class="group">
+    <div class="group misc-ctl">
       <button class={open ? "on" : ""} onClick={() => showSpots(!open)} title="Decodes of this receiver's skimmers">
         Spots
       </button>
