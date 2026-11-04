@@ -160,6 +160,7 @@ export class Spectrum {
 
     ctx.fillStyle = "#0b0e16";
     ctx.fillRect(0, 0, w, h);
+    if (!(Number.isFinite(lo) && Number.isFinite(hi) && hi > lo)) return;
 
     // dB grid
     ctx.font = `${10 * dpr}px system-ui, sans-serif`;

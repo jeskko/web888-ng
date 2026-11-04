@@ -5,14 +5,17 @@
 
 import { batch, effect, signal } from "@preact/signals";
 import { Player, type PlayerStats } from "./audio/player.ts";
+import { bandOf, type Band } from "./bands.ts";
 import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
-import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, NAME_MAX, wfSpan } from "./proto.ts";
+import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
+import { TuneSync } from "./tunesync.ts";
+import { WHEEL_STEPS } from "./wheel.ts";
 
 export const conn = signal<ConnState>("connecting");
 /** The receiver wants its listener password (and we have no login). */
@@ -59,6 +62,8 @@ export const muted = signal(false);
 export const stereo = signal(load("stereo") === "1");
 /** Tuning step (Hz; 0: the mode's own), remembered in this browser. */
 export const tuneStep = signal(Number(load("step")) || 0);
+/** The phone's VFO wheel resolution (Hz), remembered in this browser. */
+export const wheelStep = signal(WHEEL_STEPS.includes(Number(load("wheel"))) ? Number(load("wheel")) : 1000);
 let audioRate = 12000;
 /** Waterfall colour range (dB); `auto` follows the noise floor. */
 export const range = signal({ min: -130, max: -60, auto: true });
@@ -172,6 +177,8 @@ export function connect(): void {
         case "state": {
           const { type: _, ...s } = m;
           const first = st.value === null;
+          // an answer to an earlier tune must not put the dial back
+          s.hz = tunes.settle(s.hz, performance.now());
           st.value = s;
           if (first) applyHash();
           saveHash();
@@ -259,12 +266,15 @@ function showNotice(msg: string): void {
   noticeTimer = window.setTimeout(() => (notice.value = ""), 6000);
 }
 
+const tunes = new TuneSync();
+
 /** Tune our own receiver (this ends listening along). */
 export function tune(hz: number): void {
   const r = radio.value;
   if (r) hz = clamp(hz, r.rf_lo, r.rf_hi);
   hz = Math.round(hz);
   update({ hz, listen: null });
+  tunes.note(hz, performance.now());
   link?.send({ type: "tune", hz });
 }
 
@@ -313,6 +323,42 @@ export function setName(name: string): void {
 export function setTuneStep(step: number): void {
   tuneStep.value = step;
   save("step", String(step));
+}
+
+export function setWheelStep(step: number): void {
+  wheelStep.value = step;
+  save("wheel", String(step));
+}
+
+/** The phone's band picker: where we were on the band we leave is
+ * remembered (frequency and mode), and the band we go to comes back
+ * as it was left, or at its usual place. */
+export function goBand(b: Band): void {
+  const s = st.value;
+  if (s) {
+    const here = bandOf(s.hz);
+    if (here) save(`band.${here.name}`, `${Math.round(s.hz)}:${s.mode}`);
+  }
+  const [hz, mode] = (load(`band.${b.name}`) ?? "").split(":");
+  const f = Number(hz);
+  const known = f >= b.lo && f <= b.hi && (MODES as string[]).includes(mode);
+  const to = known ? f : b.hz;
+  setMode(known ? (mode as Mode) : b.mode);
+  tune(to);
+  // from a wide view (a band is a few hundred kHz) to one around the dial
+  const w = st.value?.wf;
+  if (w) setView({ ...w, decim: w.decim < 128 ? 512 : w.decim, center_hz: to });
+}
+
+/** Tune, and bring the waterfall along when the dial is leaving its
+ * view (the phone's wheel, steps and keypad). */
+export function tuneInView(hz: number): void {
+  tune(hz);
+  const s = st.value;
+  const r = radio.value;
+  if (!s || !r) return;
+  const span = wfSpan(r.adc_hz, s.wf.decim);
+  if (Math.abs(s.hz - s.wf.center_hz) > 0.4 * span) setView({ ...s.wf, center_hz: s.hz });
 }
 
 /** The keys' and wheel's step, and where a click lands, for `mode`. */
