@@ -16,6 +16,7 @@ import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyR
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { TuneSync } from "./tunesync.ts";
 import { WHEEL_STEPS } from "./wheel.ts";
+import { covered, fetchRange, LABEL_MAX_SPAN, parseSources, tuneTo, type BandPlan, type FreqMarker } from "./markers.ts";
 
 export const conn = signal<ConnState>("connecting");
 /** The receiver wants its listener password (and we have no login). */
@@ -566,3 +567,91 @@ export function setVolume(v: number, mute = muted.value): void {
   muted.value = mute;
   player.setVolume(mute ? 0 : v);
 }
+
+// -------------------------------------------------------------- labels
+
+/** The label sources shown, the band ribbon, and the IARU region (0: the
+ * receiver's), remembered in this browser. */
+export const labelSources = signal<string[]>(parseSources(load("labels")));
+export const ribbonOn = signal(load("ribbon") !== "0");
+export const region = signal([1, 2, 3].includes(Number(load("region"))) ? Number(load("region")) : 0);
+/** The labels around the view, and the region's band plan. */
+export const freqMarkers = signal<FreqMarker[]>([]);
+export const bandPlan = signal<BandPlan | null>(null);
+
+export function setLabelSources(ids: string[]): void {
+  labelSources.value = ids;
+  save("labels", ids.join(","));
+}
+
+export function setRibbon(on: boolean): void {
+  ribbonOn.value = on;
+  save("ribbon", on ? "1" : "0");
+}
+
+export function setRegion(r: number): void {
+  region.value = r;
+  save("region", String(r));
+}
+
+/** A label was picked: its mode, then its dial (brought into view). */
+export function pickMarker(m: FreqMarker): void {
+  const t = tuneTo(m);
+  if (st.value?.mode !== t.mode) setMode(t.mode);
+  tuneInView(t.hz);
+}
+
+/** Bumped every 5 minutes: what is on the air changes with the schedule. */
+const labelTick = signal(0);
+window.setInterval(() => labelTick.value++, 5 * 60_000);
+
+let fetched: { range: [number, number]; key: string } | null = null;
+let labelTimer: number | undefined;
+effect(() => {
+  const s = st.value;
+  const r = radio.value;
+  const src = labelSources.value;
+  const key = `${src.join(",")} ${region.value} ${labelTick.value}`;
+  if (!s || !r) return;
+  const span = wfSpan(r.adc_hz, s.wf.decim);
+  const lo = s.wf.center_hz - span / 2;
+  const hi = lo + span;
+  if (span > LABEL_MAX_SPAN || !src.length) {
+    fetched = null;
+    if (freqMarkers.peek().length) freqMarkers.value = [];
+    return;
+  }
+  if (fetched && fetched.key === key && covered(lo, hi, fetched.range)) return;
+  const range = fetchRange(lo, hi);
+  fetched = { range, key };
+  // the view settles first (a drag sends many)
+  window.clearTimeout(labelTimer);
+  labelTimer = window.setTimeout(() => void loadLabels(range, src, region.peek()), 250);
+});
+
+async function loadLabels(range: [number, number], src: string[], reg: number): Promise<void> {
+  const q = new URLSearchParams({ lo: String(Math.round(range[0])), hi: String(Math.round(range[1])), src: src.join(",") });
+  if (reg) q.set("region", String(reg));
+  try {
+    const r = await fetch(api(`api/markers?${q}`));
+    if (!r.ok) return;
+    freqMarkers.value = ((await r.json()) as { markers: FreqMarker[] }).markers;
+  } catch {
+    // the next view change or tick tries again
+    fetched = null;
+  }
+}
+
+// the band plan, when the ribbon is on and the region changes
+effect(() => {
+  const reg = region.value;
+  if (!ribbonOn.value || !radio.value) return;
+  void (async () => {
+    try {
+      const r = await fetch(api(reg ? `api/bandplan?region=${reg}` : "api/bandplan"));
+      if (r.ok) bandPlan.value = (await r.json()) as BandPlan;
+    } catch {
+      // drawn without a ribbon until the next change
+    }
+  })();
+});

@@ -6,14 +6,15 @@
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
-import { call, get, loggedOut, type Auth, type LeaseRow, type Session, type Skimmers, type Stats } from "./api.ts";
+import { call, get, href, loggedOut, putText, type Auth, type LeaseRow, type Session, type Skimmers, type Stats } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
-type Tab = "status" | "sessions" | "config" | "passwords";
+type Tab = "status" | "sessions" | "config" | "labels" | "passwords";
 const TABS: { id: Tab; name: string }[] = [
   { id: "status", name: "Status" },
   { id: "sessions", name: "Sessions" },
   { id: "config", name: "Configuration" },
+  { id: "labels", name: "Labels" },
   { id: "passwords", name: "Passwords" },
 ];
 
@@ -457,6 +458,82 @@ function SessionsPage() {
   );
 }
 
+interface LabelInfo {
+  region: number;
+  eibi_season: string;
+  sources: { id: string; count: number }[];
+}
+
+/** The station's own label list: download, upload (checked by the server
+ * before it is saved), and what the bundled lists hold. */
+function LabelsPage() {
+  const [info, setInfo] = useState<LabelInfo | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const load = () => get<LabelInfo>("api/markers/info").then(setInfo);
+  useEffect(() => void load(), []);
+  const count = (id: string) => info?.sources.find((s) => s.id === id)?.count ?? 0;
+  const upload = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    setMsg(null);
+    try {
+      const r = await putText<{ count: number }>("api/admin/markers", await file.text(), "text/csv");
+      setMsg({ ok: true, text: `Saved: ${r.count} labels from ${file.name}.` });
+      await load();
+    } catch (err) {
+      setMsg({ ok: false, text: `${file.name}: ${(err as Error).message}. The list was not changed.` });
+    }
+  };
+  return (
+    <div class="cards">
+      <section class="card">
+        <h3>The station's labels</h3>
+        <p>{count("own")} labels. Listeners see them in yellow (Labels: Station).</p>
+        <p>
+          <a href={href("api/admin/markers")} download="markers.csv">
+            Download markers.csv
+          </a>
+          {" · "}
+          <label class="file">
+            Upload a new list <input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => void upload(e)} />
+          </label>
+        </p>
+        {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+        <p class="dim">
+          A CSV file, as a spreadsheet saves it (comma or semicolon). The first line names the columns: <code>khz</code> and <code>name</code>{" "}
+          are needed; <code>mode</code> (usb, lsb, cw or am; default am), <code>note</code>, <code>category</code>, <code>emission</code>,{" "}
+          <code>schedule</code> and <code>dial_khz</code> may follow. An upload replaces the whole list.
+        </p>
+      </section>
+      <section class="card">
+        <h3>Bundled lists</h3>
+        <table>
+          <tbody>
+            <tr>
+              <td>Broadcast (EiBi {info?.eibi_season})</td>
+              <td class="num">{count("eibi")}</td>
+            </tr>
+            <tr>
+              <td>Utility</td>
+              <td class="num">{count("utility")}</td>
+            </tr>
+            <tr>
+              <td>Amateur</td>
+              <td class="num">{count("amateur")}</td>
+            </tr>
+          </tbody>
+        </table>
+        <p class="dim">
+          Listeners choose what they see. The band ribbon and the amateur frequencies follow IARU region {info?.region ?? "?"} (Configuration:
+          markers.region) until a listener picks another.
+        </p>
+      </section>
+    </div>
+  );
+}
+
 function PasswordsPage() {
   const [auth, setAuth] = useState<Auth | null>(null);
   const [a1, setA1] = useState("");
@@ -566,6 +643,7 @@ export function AdminApp() {
         {tab.value === "status" && <StatusPage />}
         {tab.value === "sessions" && <SessionsPage />}
         {tab.value === "config" && <ConfigPage onRestart={() => void restart()} />}
+        {tab.value === "labels" && <LabelsPage />}
         {tab.value === "passwords" && <PasswordsPage />}
       </div>
     </div>

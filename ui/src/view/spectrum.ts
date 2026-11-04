@@ -2,11 +2,14 @@
 // Spectrum (Canvas 2D) above the waterfall: the newest line (peak of the
 // bins under each pixel), a slow average, dB grid, the frequency scale,
 // the receiver's passband and dial marker, other users' markers, the
-// skimmers' ranges, and their latest spots as labels above the scale.
+// skimmers' ranges, their latest spots as labels above the scale,
+// frequency labels (stations, activity) along the top, and the band
+// ribbon between the plot and the scale.
 
 import { FLAG_NEW_GEN, type WfLine } from "../proto.ts";
 import { tickLabel, tickStep } from "../fmt.ts";
 import { placeLabels } from "../spots.ts";
+import type { RibbonPiece } from "../markers.ts";
 
 export const SCALE_PX = 20;
 
@@ -65,6 +68,30 @@ export interface SpotHit<T = unknown> {
 const SPOT_ROWS = 3;
 const SPOT_ROW_PX = 13;
 
+/** A frequency label along the top. */
+export interface FreqLabel<T = unknown> {
+  hz: number;
+  text: string;
+  colour: string;
+  item: T;
+}
+
+/** Frequency label rows, row height, and the first row's top (below the
+ * users' names) (CSS px). */
+const LABEL_ROWS = 3;
+const LABEL_ROW_PX = 14;
+const LABEL_TOP_PX = 18;
+
+/** Height of the band ribbon (CSS px). */
+export const RIBBON_PX = 12;
+
+/** Where a ribbon piece was drawn (device px), for hover texts. */
+export interface RibbonHit {
+  x0: number;
+  x1: number;
+  piece: RibbonPiece;
+}
+
 /** Bins wider than this many device pixels are interpolated between their
  * centres (the waterfall's shader does the same). */
 export const COARSE_PX = 3;
@@ -92,6 +119,11 @@ export class Spectrum {
   private avg: Float32Array | null = null;
   /** The spot labels of the last draw. */
   spotHits: SpotHit[] = [];
+  /** The frequency labels of the last draw. */
+  labelHits: SpotHit[] = [];
+  /** The ribbon of the last draw, top pieces last; and its rows. */
+  ribbonHits: RibbonHit[] = [];
+  ribbonY: [number, number] = [0, 0];
 
   constructor(canvas: HTMLCanvasElement) {
     this.canvas = canvas;
@@ -146,12 +178,16 @@ export class Spectrum {
     marks: Marker[] = [],
     spots: SpotLabel[] = [],
     skims: SkimBar[] = [],
+    labels: FreqLabel[] = [],
+    ribbon: RibbonPiece[] = [],
   ): void {
     const { ctx, canvas } = this;
     const w = canvas.width;
     const h = canvas.height;
     const sh = SCALE_PX * dpr;
-    const ph = h - sh; // plot height
+    const rb = ribbon.length ? RIBBON_PX * dpr : 0;
+    const ph = h - sh - rb; // plot height
+    const sy = ph + rb; // the scale's top
     // show a little below the waterfall floor and well above its top
     const lo = minDb - 10;
     const hi = maxDb + 20;
@@ -284,9 +320,65 @@ export class Spectrum {
       if (u.name && xx >= 0 && xx <= w) this.tag(u.name, xx, 2 * dpr, u.on ? "#ffd25a" : "#5ad17a", dpr, false, true);
     }
 
+    // frequency labels in rows along the top, a tick at each frequency
+    this.labelHits = [];
+    if (labels.length) {
+      ctx.font = `${10 * dpr}px system-ui, sans-serif`;
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "center";
+      const rowH = LABEL_ROW_PX * dpr;
+      const top = LABEL_TOP_PX * dpr;
+      const items = labels.map((l) => ({ item: l, x: x(l.hz), width: ctx.measureText(l.text).width })).filter((l) => l.x >= 0 && l.x <= w);
+      for (const p of placeLabels(items, LABEL_ROWS, 4 * dpr)) {
+        const l = p.item;
+        const y0 = top + Math.max(p.row, 0) * rowH;
+        ctx.fillStyle = l.colour;
+        if (p.row < 0) {
+          // no room: a tick under the rows
+          ctx.fillRect(Math.round(p.x), top + LABEL_ROWS * rowH, dpr, 3 * dpr);
+          continue;
+        }
+        const tw = ctx.measureText(l.text).width;
+        ctx.fillStyle = "rgba(11, 14, 22, 0.7)";
+        ctx.fillRect(p.x - tw / 2 - dpr, y0, tw + 2 * dpr, rowH - 2 * dpr);
+        ctx.fillStyle = l.colour;
+        ctx.fillText(l.text, p.x, y0 + rowH - 5 * dpr);
+        ctx.fillRect(Math.round(p.x), y0 + rowH - 2 * dpr, dpr, 3 * dpr);
+        this.labelHits.push({ x0: p.x - tw / 2, x1: p.x + tw / 2, y0, y1: y0 + rowH, item: l.item });
+      }
+      ctx.textAlign = "start";
+      ctx.textBaseline = "middle";
+    }
+
+    // band ribbon between the plot and the scale; band names where they fit
+    this.ribbonHits = [];
+    this.ribbonY = [ph, sy];
+    if (rb) {
+      ctx.fillStyle = "#0e121b";
+      ctx.fillRect(0, ph, w, rb);
+      ctx.font = `${9 * dpr}px system-ui, sans-serif`;
+      ctx.textBaseline = "middle";
+      for (const r of ribbon) {
+        const x0 = Math.max(0, x(r.lo));
+        const x1 = Math.min(w, x(r.hi));
+        if (x1 <= x0) continue;
+        ctx.fillStyle = r.colour;
+        ctx.fillRect(x0, ph + dpr, Math.max(dpr, x1 - x0), rb - 2 * dpr);
+        this.ribbonHits.push({ x0, x1, piece: r });
+      }
+      for (const r of ribbon) {
+        if (!r.label) continue;
+        const x0 = Math.max(0, x(r.lo));
+        const tw = ctx.measureText(r.label).width;
+        if (Math.min(w, x(r.hi)) - x0 < tw + 6 * dpr) continue;
+        ctx.fillStyle = "#e8edf5";
+        ctx.fillText(r.label, x0 + 3 * dpr, ph + rb / 2 + dpr / 2);
+      }
+    }
+
     // frequency scale
     ctx.fillStyle = "#121722";
-    ctx.fillRect(0, ph, w, sh);
+    ctx.fillRect(0, sy, w, sh);
     const step = tickStep(span, w / (90 * dpr));
     ctx.strokeStyle = "#5d6b82";
     ctx.fillStyle = "#aab4c5";
@@ -295,10 +387,10 @@ export class Spectrum {
     for (let f = Math.ceil(start / step) * step; f <= start + span; f += step) {
       const xx = Math.round(x(f)) + 0.5;
       ctx.beginPath();
-      ctx.moveTo(xx, ph);
-      ctx.lineTo(xx, ph + 4 * dpr);
+      ctx.moveTo(xx, sy);
+      ctx.lineTo(xx, sy + 4 * dpr);
       ctx.stroke();
-      ctx.fillText(tickLabel(f, step), xx, ph + sh / 2 + 2 * dpr);
+      ctx.fillText(tickLabel(f, step), xx, sy + sh / 2 + 2 * dpr);
     }
     ctx.textAlign = "start";
 
@@ -322,9 +414,9 @@ export class Spectrum {
       if (xx < -m || xx > w + m) continue;
       ctx.fillStyle = u.on ? "#ffd25a" : "#5ad17a";
       ctx.beginPath();
-      ctx.moveTo(xx - m / 2, ph);
-      ctx.lineTo(xx + m / 2, ph);
-      ctx.lineTo(xx, ph + m);
+      ctx.moveTo(xx - m / 2, sy);
+      ctx.lineTo(xx + m / 2, sy);
+      ctx.lineTo(xx, sy + m);
       ctx.closePath();
       ctx.fill();
     }

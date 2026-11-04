@@ -33,6 +33,7 @@ import {
 } from "../state.ts";
 import { angleDelta, nextWheelStep, takeClicks, wheelLabel, wheelTarget, CLICKS_PER_TURN } from "../wheel.ts";
 import { JttyCtl, JttyPanel } from "./jtty.tsx";
+import { LabelsCtl } from "./labels.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
 import { AudioCtl, ContrastCtl, DspCtl, LeaseBanner, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
 
@@ -285,6 +286,8 @@ function More({ close }: { close: () => void }) {
       <h4>Waterfall</h4>
       <ZoomCtl />
       <ContrastCtl />
+      <h4>Labels</h4>
+      <LabelsCtl inline />
       <h4>You</h4>
       <UsersCtl />
       <div class="m-row">

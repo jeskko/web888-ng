@@ -144,6 +144,40 @@ time and RF frequency.
 The protocol is version 2: `doc/m3-multi-user.md` §8 (version 1, M2's,
 in `doc/m2-web-ui.md` §4).
 
+### Frequency labels and the band ribbon
+
+The Labels button (in the phone layout, under More) chooses what the
+spectrum shows along its top when the view is 3 MHz wide or narrower;
+click a label to tune there, in its mode:
+
+* **Broadcast**: EiBi's shortwave schedule, only what is on the air now;
+* **Utility**: time signals, maritime safety (DSC, NAVTEX, distress
+  voice), aeronautical (VOLMET, North Atlantic, SAR), weather fax, DWD
+  RTTY, the NCDXF beacons;
+* **Amateur**: digital-mode dials (FT8, FT4, WSPR, JS8...), calling, QRP,
+  SSTV and emergency frequencies of the IARU region;
+* **Station**: the receiver's own list (yellow).
+
+The **band ribbon** between the spectrum and the scale shows the IARU
+region's amateur band plan (CW, narrow-band digital, all-mode segments)
+and the other services' bands (broadcast, maritime, aero, time
+signals...); hover for details. A listener can pick another region.
+
+```toml
+[markers]
+region = 1             # IARU region of the ribbon and the amateur frequencies
+file = "markers.csv"   # the station's own list, next to this file
+```
+
+All data is compiled into web888d, nothing is fetched at runtime:
+`crates/markers/data/README.md` lists every file's sources and terms
+(EiBi's schedule is free to use and distribute; the rest is compiled from
+the IARU, ITU and operators' own publications). The own list is a CSV
+file (`khz,name,mode,note,...`, comma or semicolon) that the admin pages
+upload and download (Labels tab). Each label also carries its signal's
+kind (`emission`: am, cw, rtty, fax, ft8...) and published parameters,
+for decoders to come.
+
 ### Passwords, admin API, metrics
 
 ```

@@ -186,29 +186,35 @@ async fn own_get(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Response {
 /// place of the old one (a copy, then a rename).
 async fn own_put(_: AdminOnly, State(sh): State<Arc<Shared>>, body: Bytes) -> Response {
     let Some(path) = own_path(&sh) else {
-        return (
+        return error(
             StatusCode::NOT_IMPLEMENTED,
             "this server has no configuration file to keep the list next to",
-        )
-            .into_response();
+        );
     };
     let Ok(text) = std::str::from_utf8(&body) else {
-        return (StatusCode::BAD_REQUEST, "the file is not UTF-8 text").into_response();
+        return error(
+            StatusCode::BAD_REQUEST,
+            "the file is not UTF-8 text (save the CSV as UTF-8)",
+        );
     };
     let list = match own::parse(text) {
         Ok(l) => l,
-        Err(e) => return (StatusCode::BAD_REQUEST, e).into_response(),
+        Err(e) => return error(StatusCode::BAD_REQUEST, e),
     };
     let tmp = path.with_extension("csv.new");
     let saved = std::fs::write(&tmp, own::to_csv(&list)).and_then(|_| std::fs::rename(&tmp, &path));
     if let Err(e) = saved {
         let _ = std::fs::remove_file(&tmp);
-        return (
+        return error(
             StatusCode::INTERNAL_SERVER_ERROR,
             format!("{}: {e}", path.display()),
-        )
-            .into_response();
+        );
     }
     *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
     Json(serde_json::json!({ "count": list.len() })).into_response()
+}
+
+/// An error answer as the admin API gives them.
+fn error(code: StatusCode, msg: impl Into<String>) -> Response {
+    (code, Json(serde_json::json!({ "error": msg.into() }))).into_response()
 }

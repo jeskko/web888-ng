@@ -10,7 +10,8 @@ import { formatKhz, snap, stepTo } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { followable, lease, limits, myName, onLine, pickSkimmer, pickSpot, pickUser, radio, range, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { bandPlan, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { markerColour, markerTitle, ribbon, type FreqMarker, type RibbonPiece } from "../markers.ts";
 import { pick } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
@@ -109,6 +110,11 @@ export function Pane() {
     const unsubSkims = skimmers.subscribe(() => {
       dirty = true;
     });
+    const unsubLabels = [freqMarkers, bandPlan, ribbonOn].map((sig) =>
+      sig.subscribe(() => {
+        dirty = true;
+      }),
+    );
 
     let raf = 0;
     const frame = () => {
@@ -129,7 +135,10 @@ export function Pane() {
         item: p,
       }));
       const bars = skimmers.value.map((k) => ({ lo: k.lo, hi: k.hi, colour: modeColour(k.mode), waiting: !k.on }));
-      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars);
+      const labels = freqMarkers.value.map((m) => ({ hz: m.hz, text: m.name, colour: markerColour(m), item: m }));
+      const plan = ribbonOn.value ? bandPlan.value : null;
+      const rib = plan ? ribbon(plan, v.start, v.start + v.span) : [];
+      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars, labels, rib);
     };
     raf = requestAnimationFrame(frame);
     const unsubRange = range.subscribe(() => {
@@ -217,6 +226,29 @@ export function Pane() {
       const h = spec.spotHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
       return h ? (h.item as Spot) : null;
     };
+    /** The frequency label under a pointer on the spectrum, if any. */
+    const labelAt = (e: PointerEvent): FreqMarker | null => {
+      if (e.currentTarget !== sc) return null;
+      const rect = sc.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * dpr;
+      const py = (e.clientY - rect.top) * dpr;
+      const h = spec.labelHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
+      return h ? (h.item as FreqMarker) : null;
+    };
+    /** The band ribbon's piece under a pointer (the topmost), if any. */
+    const ribbonAt = (e: PointerEvent): RibbonPiece | null => {
+      if (e.currentTarget !== sc) return null;
+      const rect = sc.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * dpr;
+      const py = (e.clientY - rect.top) * dpr;
+      const [y0, y1] = spec.ribbonY;
+      if (py < y0 || py > y1) return null;
+      for (let i = spec.ribbonHits.length - 1; i >= 0; i--) {
+        const h = spec.ribbonHits[i];
+        if (px >= h.x0 && px <= h.x1) return h.piece;
+      }
+      return null;
+    };
     /** Zoom to `decim` keeping the frequency under `clientX` in place. */
     const zoomAt = (clientX: number, decim: number) => {
       const s = st.value;
@@ -268,6 +300,11 @@ export function Pane() {
         pickSpot(p);
         return;
       }
+      const l = labelAt(e);
+      if (l) {
+        pickMarker(l);
+        return;
+      }
       drag = { x: e.clientX, center: s.wf.center_hz, moved: false, id: e.pointerId };
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
@@ -288,6 +325,8 @@ export function Pane() {
         const k = skimAt(e);
         const m = k ? null : markAt(e);
         const p = k || m ? null : spotAt(e);
+        const l = k || m || p ? null : labelAt(e);
+        const rp = k || m || p || l ? null : ribbonAt(e);
         const own = lease.value?.granted;
         sc.title = k
           ? `${k.mode} skimmer, dial ${formatKhz(k.dial)} kHz${k.on ? "" : " (waiting for a channel)"}: click to tune there`
@@ -295,9 +334,13 @@ export function Pane() {
             ? `${m.name ? `${m.name}: ` : ""}${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
             : p
               ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
-              : "";
-        sc.style.cursor = k || m || p ? "pointer" : "";
-        showGhost(k || m || p ? null : e.clientX);
+              : l
+                ? markerTitle(l)
+                : rp
+                  ? rp.title
+                  : "";
+        sc.style.cursor = k || m || p || l ? "pointer" : "";
+        showGhost(k || m || p || l ? null : e.clientX);
       }
       const s = st.value;
       const v = view();
@@ -353,6 +396,7 @@ export function Pane() {
       unsubName();
       unsubSpots();
       unsubSkims();
+      for (const u of unsubLabels) u();
       unsubRange();
       unsubGhost();
     };

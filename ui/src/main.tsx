@@ -22,6 +22,7 @@ import {
 import { MobileApp, PlayIcon } from "./ctl/mobile.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
+import { LabelsCtl } from "./ctl/labels.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
@@ -153,6 +154,7 @@ function App() {
           <ContrastCtl />
           <ShareCtl />
           <SpotsCtl />
+          <LabelsCtl />
           <JttyCtl />
         </div>
         <StatusBar />

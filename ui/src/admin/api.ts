@@ -37,6 +37,20 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
 
 export const get = <T>(path: string) => call<T>("GET", path);
 
+/** PUT a text file (`ctype`), the answer as JSON. */
+export async function putText<T>(path: string, text: string, ctype: string): Promise<T> {
+  const r = await fetch(url(path), { method: "PUT", headers: { "Content-Type": ctype }, body: text });
+  const data = (await r.json().catch(() => ({}))) as T & { error?: string };
+  if (!r.ok) {
+    if (r.status === 401) loggedOut.value = true;
+    throw new ApiError(r.status, data.error ?? `PUT ${path}: ${r.status}`);
+  }
+  return data;
+}
+
+/** URL of a server path, for links (downloads). */
+export const href = url;
+
 export interface Auth {
   role: "admin" | "listener" | null;
   admin_password: boolean;
