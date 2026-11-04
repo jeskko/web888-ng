@@ -1,0 +1,1851 @@
+{
+ "title": "Utility stations",
+ "sources": [
+  {
+   "id": "bipm-ts",
+   "title": "BIPM Annual Report on Time Activities 2025: Time signals (tables based on information received from the responsible authorities, Feb-Mar 2026)",
+   "url": "https://webtai.bipm.org/ftp/pub/tai/annual-reports/bipm-annual-report/TIMESIGNALS/timesignals_2025.pdf"
+  },
+  {
+   "id": "nist-wwv",
+   "title": "NIST: Radio Station WWV",
+   "url": "https://www.nist.gov/pml/time-and-frequency-division/time-distribution/radio-station-wwv"
+  },
+  {
+   "id": "itu-rr-ap15",
+   "title": "ITU Radio Regulations (2024), Appendix 15 (Rev.WRC-23), Table 15-1: GMDSS distress and safety frequencies below 30 MHz",
+   "url": "https://www.itu.int/pub/R-REG-RR-2024"
+  },
+  {
+   "id": "itu-m493",
+   "title": "Recommendation ITU-R M.493-16: Digital selective-calling system for use in the maritime mobile service",
+   "url": "https://www.itu.int/rec/R-REC-M.493/en"
+  },
+  {
+   "id": "itu-m625",
+   "title": "Recommendation ITU-R M.625-4: Direct-printing telegraph equipment employing automatic identification in the maritime mobile service",
+   "url": "https://www.itu.int/rec/R-REC-M.625/en"
+  },
+  {
+   "id": "nws-rfax",
+   "title": "NOAA/NWS: Worldwide Marine Radiofacsimile Broadcast Schedules (March 7, 2025)",
+   "url": "https://www.weather.gov/media/marine/rfax.pdf"
+  },
+  {
+   "id": "dwd-fax",
+   "title": "Deutscher Wetterdienst: Facsimile transmission for shipping (09/2023)",
+   "url": "https://www.dwd.de/EN/specialusers/shipping/broadcast_en/broadcast_fax_092023.pdf?__blob=publicationFile"
+  },
+  {
+   "id": "dwd-rtty",
+   "title": "Deutscher Wetterdienst: RTTY broadcast for shipping, programmes 1 and 2 (09/2023)",
+   "url": "https://www.dwd.de/EN/specialusers/shipping/broadcast_en/_node.html"
+  },
+  {
+   "id": "ncdxf",
+   "title": "NCDXF/IARU International Beacon Project",
+   "url": "https://www.ncdxf.org/beacon/"
+  },
+  {
+   "id": "airnav-ie",
+   "title": "AirNav Ireland: North Atlantic Communications frequencies",
+   "url": "https://airnav.ie/what-we-do/north-atlantic-communications/frequencies"
+  },
+  {
+   "id": "aip-th",
+   "title": "AIP Thailand GEN 3.5, Table GEN 3.5.7 VOLMET service (CAAT, AIRAC 2024-02-22)",
+   "url": "https://aip.caat.or.th/2024-02-22-AIRAC/pdf/VT-GEN-3.5-en-GB.pdf"
+  }
+ ],
+ "markers": [
+  {
+   "hz": 20500,
+   "name": "Beta RJH/RAB",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "Russian VLF time signals (RAB-99, RJH-63/69/77/86/90), one of five carriers stepped in sequence",
+   "schedule": "RAB-99 0206-0236, 0606-0636; RJH-63 1106-1140; RJH-69 0706-0747; RJH-77 0906-0947; RJH-86 0406-0447, 1006-1047; RJH-90 0806-0847",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 23000,
+   "name": "Beta RJH/RAB",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "Russian VLF time signals (RAB-99, RJH-63/69/77/86/90), one of five carriers stepped in sequence",
+   "schedule": "RAB-99 0206-0236, 0606-0636; RJH-63 1106-1140; RJH-69 0706-0747; RJH-77 0906-0947; RJH-86 0406-0447, 1006-1047; RJH-90 0806-0847",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 25000,
+   "name": "Beta RJH/RAB",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "Russian VLF time signals (RAB-99, RJH-63/69/77/86/90), one of five carriers stepped in sequence",
+   "schedule": "RAB-99 0206-0236, 0606-0636; RJH-63 1106-1140; RJH-69 0706-0747; RJH-77 0906-0947; RJH-86 0406-0447, 1006-1047; RJH-90 0806-0847",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 25100,
+   "name": "Beta RJH/RAB",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "Russian VLF time signals (RAB-99, RJH-63/69/77/86/90), one of five carriers stepped in sequence",
+   "schedule": "RAB-99 0206-0236, 0606-0636; RJH-63 1106-1140; RJH-69 0706-0747; RJH-77 0906-0947; RJH-86 0406-0447, 1006-1047; RJH-90 0806-0847",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 25500,
+   "name": "Beta RJH/RAB",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "Russian VLF time signals (RAB-99, RJH-63/69/77/86/90), one of five carriers stepped in sequence",
+   "schedule": "RAB-99 0206-0236, 0606-0636; RJH-63 1106-1140; RJH-69 0706-0747; RJH-77 0906-0947; RJH-86 0406-0447, 1006-1047; RJH-90 0806-0847",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 40000,
+   "name": "JJY 40",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "NICT time code, Ohtakadoya-yama (Fukushima), Japan",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 50000,
+   "name": "RTZ",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "VNIIFTRI time code, Irkutsk, Russia",
+   "schedule": "0000-1900, 2000-2400",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 60000,
+   "name": "JJY 60",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "NICT time code, Hagane-yama (Saga), Japan",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 60000,
+   "name": "MSF",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "NPL time code, Anthorn, UK",
+   "schedule": "H24 except announced maintenance",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 60000,
+   "name": "WWVB",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "NIST time code (AM/PM/BPSK), Fort Collins, Colorado",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 66667,
+   "name": "RBU",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "VNIIFTRI time code, Moscow; carrier is 200/3 kHz (66 666.67 Hz)",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 68500,
+   "name": "BPC",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "NTSC time code, Shangqiu, China",
+   "schedule": "0000-2100",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 77500,
+   "name": "DCF77",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "PTB time code, Mainflingen, Germany; AM second marks plus pseudo-random phase keying",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 100000,
+   "name": "BPL",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "NTSC Loran-C-type pulsed time service, Pucheng, China",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 147300,
+   "name": "DWD DDH47",
+   "mode": "usb",
+   "category": "rtty",
+   "emission": "rtty",
+   "dial": 145600,
+   "params": {
+    "baud": 50,
+    "shift": 85
+   },
+   "note": "Deutscher Wetterdienst marine weather RTTY, programme 2 (German)",
+   "schedule": "H24",
+   "source": "dwd-rtty"
+  },
+  {
+   "hz": 162000,
+   "name": "ALS162",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "French time code (formerly TDF), Allouis; phase-modulated carrier",
+   "schedule": "H24 except Tuesdays 08-12 French legal time",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 225000,
+   "name": "PCSK225",
+   "mode": "cw",
+   "category": "time",
+   "emission": "time",
+   "note": "GUM time code on Polish Radio long-wave carrier, Solec Kujawski",
+   "schedule": "H24 except maintenance",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 490000,
+   "name": "NAVTEX 490",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 488300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "Maritime safety information, NAVTEX on 490 kHz (often national-language service); 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 518000,
+   "name": "NAVTEX 518",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 516300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "International NAVTEX: maritime safety information in English; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 2054000,
+   "name": "NOJ Kodiak",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 2052100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Kodiak, NWS charts for Alaska and North Pacific",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 2182000,
+   "name": "2182 distress",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "voice",
+   "note": "MF radiotelephony distress and safety traffic (J3E)",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 2187500,
+   "name": "DSC 2187.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "dsc",
+   "dial": 2185800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "MF GMDSS digital selective calling, distress and safety; 100 Bd, 170 Hz shift per ITU-R M.493",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 2500000,
+   "name": "BPM",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NTSC time and frequency, Pucheng, China",
+   "schedule": "0730-0100",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 2500000,
+   "name": "WWV",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Fort Collins, Colorado",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 2500000,
+   "name": "WWVH",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Kauai, Hawaii",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 2618500,
+   "name": "GYA Northwood",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 2616600,
+   "note": "UK Met Office/Royal Navy (JOMOC) North Atlantic charts",
+   "schedule": "2200-0500",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 2628000,
+   "name": "VMC Charleville",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 2626100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "schedule": "0900-1900",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 2872000,
+   "name": "Shanwick NAT-C",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family C (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 2890000,
+   "name": "Shanwick NAT-I",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family I (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 2899000,
+   "name": "Shanwick NAT-B",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family B (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 2965000,
+   "name": "Bangkok VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET for aircraft, at H+10 to H+15 and H+40 to H+45",
+   "schedule": "1210-2245",
+   "source": "aip-th"
+  },
+  {
+   "hz": 2971000,
+   "name": "Shanwick NAT-D",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family D (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 3016000,
+   "name": "Shanwick NAT-A",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family A (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 3023000,
+   "name": "SAR 3023",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "Aeronautical carrier frequency for coordinated search and rescue",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 3330000,
+   "name": "CHU",
+   "mode": "usb",
+   "category": "time",
+   "emission": "usb",
+   "note": "NRC Canada time signal, Ottawa; USB with reinserted carrier, voice announcements and 300 bps time code",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 3413000,
+   "name": "Shannon VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET weather broadcast for aircraft, AirNav Ireland",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 3446000,
+   "name": "Shanwick NAT-J",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family J (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 3476000,
+   "name": "Shanwick NAT-F",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family F (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 3491000,
+   "name": "Shanwick NAT-H",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family H (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 3622500,
+   "name": "JMH Tokyo",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 3620600,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "JMA weather charts, Tokyo",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 3855000,
+   "name": "DWD Pinneberg",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 3853100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Deutscher Wetterdienst marine charts (F1C, white +425 Hz, black -425 Hz)",
+   "source": "dwd-fax"
+  },
+  {
+   "hz": 4125000,
+   "name": "4125 distress",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "voice",
+   "note": "HF radiotelephony distress and safety traffic (carrier frequency)",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 4199750,
+   "name": "XSQ Guangzhou",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4197850,
+   "note": "South China Sea weather charts, Guangzhou Coast Radio (F3C)",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4207500,
+   "name": "DSC 4207.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "dsc",
+   "dial": 4205800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF GMDSS digital selective calling, distress and safety; 100 Bd, 170 Hz shift per ITU-R M.493",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 4209500,
+   "name": "NAVTEX 4209.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 4207800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF NAVTEX-type maritime safety information; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 4210000,
+   "name": "MSI 4210",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 4208300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 4235000,
+   "name": "NMF Boston",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4233100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Boston, NWS Atlantic charts",
+   "schedule": "0230-1039",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4274000,
+   "name": "JFX Kagoshima",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4272100,
+   "note": "Kagoshima fishery radio: weather, sea temperature and fishery charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4298000,
+   "name": "NOJ Kodiak",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4296100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Kodiak, NWS charts for Alaska and North Pacific",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4317900,
+   "name": "NMG New Orleans",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4316000,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG New Orleans, NWS Gulf/tropical charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4346000,
+   "name": "NMC Point Reyes",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4344100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Pt. Reyes, NWS Pacific charts",
+   "schedule": "0140-1608",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4583000,
+   "name": "DWD DDK2",
+   "mode": "usb",
+   "category": "rtty",
+   "emission": "rtty",
+   "dial": 4581300,
+   "params": {
+    "baud": 50,
+    "shift": 450
+   },
+   "note": "Deutscher Wetterdienst marine weather RTTY, programme 1 (English)",
+   "schedule": "H24",
+   "source": "dwd-rtty"
+  },
+  {
+   "hz": 4610000,
+   "name": "GYA Northwood",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 4608100,
+   "note": "UK Met Office/Royal Navy (JOMOC) North Atlantic charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 4675000,
+   "name": "Shanwick NAT-D",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family D (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 4996000,
+   "name": "RWM",
+   "mode": "cw",
+   "category": "time",
+   "emission": "cw",
+   "note": "VNIIFTRI time and frequency, Moscow; keyed carrier pulses",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 5000000,
+   "name": "BPM",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NTSC time and frequency, Pucheng, China",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 5000000,
+   "name": "HLA",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "KRISS time and frequency, Daejeon, Korea",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 5000000,
+   "name": "WWV",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Fort Collins, Colorado",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 5000000,
+   "name": "WWVH",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Kauai, Hawaii",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 5100000,
+   "name": "VMC Charleville",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 5098100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 5505000,
+   "name": "Shannon VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET weather broadcast for aircraft, AirNav Ireland",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 5598000,
+   "name": "Shanwick NAT-A",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family A (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 5616000,
+   "name": "Shanwick NAT-B",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family B (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 5649000,
+   "name": "Shanwick NAT-C",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family C (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 5680000,
+   "name": "SAR 5680",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "Aeronautical carrier frequency for coordinated search and rescue",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 5755000,
+   "name": "VMW Wiluna",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 5753100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "schedule": "1100-2100",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 6215000,
+   "name": "6215 distress",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "voice",
+   "note": "HF radiotelephony distress and safety traffic (carrier frequency)",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 6312000,
+   "name": "DSC 6312",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "dsc",
+   "dial": 6310300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF GMDSS digital selective calling, distress and safety; 100 Bd, 170 Hz shift per ITU-R M.493",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 6314000,
+   "name": "MSI 6314",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 6312300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 6340500,
+   "name": "NMF Boston",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 6338600,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Boston, NWS Atlantic charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 6547000,
+   "name": "Shanwick NAT-J",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family J (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 6595000,
+   "name": "Shanwick NAT-I",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family I (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 6622000,
+   "name": "Shanwick NAT-F",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family F (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 6667000,
+   "name": "Shanwick NAT-H",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family H (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 6676000,
+   "name": "Bangkok VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET for aircraft, at H+10 to H+15 and H+40 to H+45",
+   "schedule": "H24",
+   "source": "aip-th"
+  },
+  {
+   "hz": 7535000,
+   "name": "VMW Wiluna",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 7533100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 7646000,
+   "name": "DWD DDH7",
+   "mode": "usb",
+   "category": "rtty",
+   "emission": "rtty",
+   "dial": 7644300,
+   "params": {
+    "baud": 50,
+    "shift": 450
+   },
+   "note": "Deutscher Wetterdienst marine weather RTTY, programme 1 (English)",
+   "schedule": "H24",
+   "source": "dwd-rtty"
+  },
+  {
+   "hz": 7795000,
+   "name": "JMH Tokyo",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 7793100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "JMA weather charts, Tokyo",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 7850000,
+   "name": "CHU",
+   "mode": "usb",
+   "category": "time",
+   "emission": "usb",
+   "note": "NRC Canada time signal, Ottawa; USB with reinserted carrier, voice announcements and 300 bps time code",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 7880000,
+   "name": "DWD Pinneberg",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 7878100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Deutscher Wetterdienst marine charts (F1C, white +425 Hz, black -425 Hz)",
+   "source": "dwd-fax"
+  },
+  {
+   "hz": 8040000,
+   "name": "GYA Northwood",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 8038100,
+   "note": "UK Met Office/Royal Navy (JOMOC) North Atlantic charts",
+   "schedule": "alternative H24",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 8291000,
+   "name": "8291 distress",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "voice",
+   "note": "HF radiotelephony distress and safety traffic (carrier frequency)",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 8412500,
+   "name": "XSQ Guangzhou",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 8410600,
+   "note": "South China Sea weather charts, Guangzhou Coast Radio (F3C)",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 8414500,
+   "name": "DSC 8414.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "dsc",
+   "dial": 8412800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF GMDSS digital selective calling, distress and safety; 100 Bd, 170 Hz shift per ITU-R M.493",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 8416500,
+   "name": "MSI 8416.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 8414800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 8459000,
+   "name": "NOJ Kodiak",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 8457100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Kodiak, NWS charts for Alaska and North Pacific",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 8503900,
+   "name": "NMG New Orleans",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 8502000,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG New Orleans, NWS Gulf/tropical charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 8658000,
+   "name": "JFX Kagoshima",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 8656100,
+   "note": "Kagoshima fishery radio: weather, sea temperature and fishery charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 8682000,
+   "name": "NMC Point Reyes",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 8680100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Pt. Reyes, NWS Pacific charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 8831000,
+   "name": "Shanwick NAT-F",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family F (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 8864000,
+   "name": "Shanwick NAT-B",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family B (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 8879000,
+   "name": "Shanwick NAT-C",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family C (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 8891000,
+   "name": "Shanwick NAT-D",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family D (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 8906000,
+   "name": "Shanwick NAT-A",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family A (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 8957000,
+   "name": "Shannon VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET weather broadcast for aircraft, AirNav Ireland",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 9110000,
+   "name": "NMF Boston",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 9108100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Boston, NWS Atlantic charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 9982500,
+   "name": "KVM70 Honolulu",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 9980600,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "NWS Honolulu Pacific charts",
+   "schedule": "0519-1556",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 9996000,
+   "name": "RWM",
+   "mode": "cw",
+   "category": "time",
+   "emission": "cw",
+   "note": "VNIIFTRI time and frequency, Moscow; keyed carrier pulses",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 10000000,
+   "name": "BPM",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NTSC time and frequency, Pucheng, China",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 10000000,
+   "name": "LOL",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "Argentine Naval Observatory time signal, Buenos Aires",
+   "schedule": "1100-1200 Mon-Fri except national holidays",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 10000000,
+   "name": "WWV",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Fort Collins, Colorado",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 10000000,
+   "name": "WWVH",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Kauai, Hawaii",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 10021000,
+   "name": "Shanwick NAT-H",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family H (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 10100800,
+   "name": "DWD DDK9",
+   "mode": "usb",
+   "category": "rtty",
+   "emission": "rtty",
+   "dial": 10099100,
+   "params": {
+    "baud": 50,
+    "shift": 450
+   },
+   "note": "Deutscher Wetterdienst marine weather RTTY, programme 1 (English)",
+   "schedule": "H24",
+   "source": "dwd-rtty"
+  },
+  {
+   "hz": 10555000,
+   "name": "VMW Wiluna",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 10553100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 11030000,
+   "name": "VMC Charleville",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 11028100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 11039000,
+   "name": "DWD DDH9",
+   "mode": "usb",
+   "category": "rtty",
+   "emission": "rtty",
+   "dial": 11037300,
+   "params": {
+    "baud": 50,
+    "shift": 450
+   },
+   "note": "Deutscher Wetterdienst marine weather RTTY, programme 2 (German)",
+   "schedule": "H24",
+   "source": "dwd-rtty"
+  },
+  {
+   "hz": 11086500,
+   "name": "GYA Northwood",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 11084600,
+   "note": "UK Met Office/Royal Navy (JOMOC) North Atlantic charts",
+   "schedule": "0600-2000",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 11090000,
+   "name": "KVM70 Honolulu",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 11088100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "NWS Honolulu Pacific charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 11336000,
+   "name": "Shanwick NAT-C",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family C (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 11387000,
+   "name": "Bangkok VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET for aircraft, at H+10 to H+15 and H+40 to H+45",
+   "schedule": "2310-1145",
+   "source": "aip-th"
+  },
+  {
+   "hz": 12290000,
+   "name": "12290 distress",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "voice",
+   "note": "HF radiotelephony distress and safety traffic (carrier frequency)",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 12412500,
+   "name": "NOJ Kodiak",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 12410600,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Kodiak, NWS charts for Alaska and North Pacific",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 12577000,
+   "name": "DSC 12577",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "dsc",
+   "dial": 12575300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF GMDSS digital selective calling, distress and safety; 100 Bd, 170 Hz shift per ITU-R M.493",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 12579000,
+   "name": "MSI 12579",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 12577300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 12629250,
+   "name": "XSQ Guangzhou",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 12627350,
+   "note": "South China Sea weather charts, Guangzhou Coast Radio (F3C)",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 12750000,
+   "name": "NMF Boston",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 12748100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Boston, NWS Atlantic charts",
+   "schedule": "1400-2239",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 12786000,
+   "name": "NMC Point Reyes",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 12784100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Pt. Reyes, NWS Pacific charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 12789900,
+   "name": "NMG New Orleans",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 12788000,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG New Orleans, NWS Gulf/tropical charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 13074000,
+   "name": "JFX Kagoshima",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 13072100,
+   "note": "Kagoshima fishery radio: weather, sea temperature and fishery charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 13264000,
+   "name": "Shannon VOLMET",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "HF VOLMET weather broadcast for aircraft, AirNav Ireland",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 13291000,
+   "name": "Shanwick NAT-B/D/F",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, shared by families B, D and F",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 13306000,
+   "name": "Shanwick NAT-A",
+   "mode": "usb",
+   "category": "aero",
+   "emission": "voice",
+   "note": "North Atlantic oceanic air-ground HF, family A (also used by other NAT stations)",
+   "source": "airnav-ie"
+  },
+  {
+   "hz": 13882500,
+   "name": "DWD Pinneberg",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 13880600,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Deutscher Wetterdienst marine charts (F1C, white +425 Hz, black -425 Hz)",
+   "source": "dwd-fax"
+  },
+  {
+   "hz": 13920000,
+   "name": "VMC Charleville",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 13918100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 13988500,
+   "name": "JMH Tokyo",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 13986600,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "JMA weather charts, Tokyo",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 14100000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "note": "18 beacons take turns: callsign at 22 wpm then four 1 s dashes at 100 W, 10 W, 1 W, 0.1 W",
+   "schedule": "each beacon 10 s every 3 min",
+   "source": "ncdxf"
+  },
+  {
+   "hz": 14467300,
+   "name": "DWD DDH8",
+   "mode": "usb",
+   "category": "rtty",
+   "emission": "rtty",
+   "dial": 14465600,
+   "params": {
+    "baud": 50,
+    "shift": 450
+   },
+   "note": "Deutscher Wetterdienst marine weather RTTY, programme 2 (German)",
+   "schedule": "H24",
+   "source": "dwd-rtty"
+  },
+  {
+   "hz": 14670000,
+   "name": "CHU",
+   "mode": "usb",
+   "category": "time",
+   "emission": "usb",
+   "note": "NRC Canada time signal, Ottawa; USB with reinserted carrier, voice announcements and 300 bps time code",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 14996000,
+   "name": "RWM",
+   "mode": "cw",
+   "category": "time",
+   "emission": "cw",
+   "note": "VNIIFTRI time and frequency, Moscow; keyed carrier pulses",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 15000000,
+   "name": "BPM",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NTSC time and frequency, Pucheng, China",
+   "schedule": "0100-0900",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 15000000,
+   "name": "LOL",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "Argentine Naval Observatory time signal, Buenos Aires",
+   "schedule": "1100-1200 Mon-Fri except national holidays",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 15000000,
+   "name": "WWV",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Fort Collins, Colorado",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 15000000,
+   "name": "WWVH",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Kauai, Hawaii",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 15615000,
+   "name": "VMW Wiluna",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 15613100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 16135000,
+   "name": "KVM70 Honolulu",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 16133100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "NWS Honolulu Pacific charts",
+   "schedule": "1719-0356",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 16420000,
+   "name": "16420 distress",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "voice",
+   "note": "HF radiotelephony distress and safety traffic (carrier frequency)",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 16804500,
+   "name": "DSC 16804.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "dsc",
+   "dial": 16802800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF GMDSS digital selective calling, distress and safety; 100 Bd, 170 Hz shift per ITU-R M.493",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 16806500,
+   "name": "MSI 16806.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 16804800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 16826250,
+   "name": "XSQ Guangzhou",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 16824350,
+   "note": "South China Sea weather charts, Guangzhou Coast Radio (F3C)",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 16907500,
+   "name": "JFX Kagoshima",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 16905600,
+   "note": "Kagoshima fishery radio: weather, sea temperature and fishery charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 17146400,
+   "name": "NMG New Orleans",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 17144500,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG New Orleans, NWS Gulf/tropical charts",
+   "schedule": "1200-2045",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 17151200,
+   "name": "NMC Point Reyes",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 17149300,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Pt. Reyes, NWS Pacific charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 18060000,
+   "name": "VMW Wiluna",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 18058100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "schedule": "2100-1100",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 18110000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "note": "18 beacons take turns: callsign at 22 wpm then four 1 s dashes at 100 W, 10 W, 1 W, 0.1 W",
+   "schedule": "each beacon 10 s every 3 min",
+   "source": "ncdxf"
+  },
+  {
+   "hz": 19680500,
+   "name": "MSI 19680.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 19678800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 20000000,
+   "name": "WWV",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Fort Collins, Colorado",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 20469000,
+   "name": "VMC Charleville",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 20467100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "Bureau of Meteorology, Australia",
+   "schedule": "1900-0900",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 21150000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "note": "18 beacons take turns: callsign at 22 wpm then four 1 s dashes at 100 W, 10 W, 1 W, 0.1 W",
+   "schedule": "each beacon 10 s every 3 min",
+   "source": "ncdxf"
+  },
+  {
+   "hz": 22376000,
+   "name": "MSI 22376",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 22374300,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 22527000,
+   "name": "NMC Point Reyes",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 22525100,
+   "params": {
+    "lpm": 120,
+    "ioc": 576
+   },
+   "note": "USCG Pt. Reyes, NWS Pacific charts",
+   "schedule": "1840-2356",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 22559600,
+   "name": "JFX Kagoshima",
+   "mode": "usb",
+   "category": "fax",
+   "emission": "fax",
+   "dial": 22557700,
+   "note": "Kagoshima fishery radio: weather, sea temperature and fishery charts",
+   "source": "nws-rfax"
+  },
+  {
+   "hz": 24930000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "note": "18 beacons take turns: callsign at 22 wpm then four 1 s dashes at 100 W, 10 W, 1 W, 0.1 W",
+   "schedule": "each beacon 10 s every 3 min",
+   "source": "ncdxf"
+  },
+  {
+   "hz": 25000000,
+   "name": "MIKES",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "VTT MIKES time signal, Espoo, Finland; DCF77-style code with 1 kHz AM",
+   "schedule": "H24",
+   "source": "bipm-ts"
+  },
+  {
+   "hz": 25000000,
+   "name": "WWV",
+   "mode": "am",
+   "category": "time",
+   "emission": "am",
+   "note": "NIST time and frequency, Fort Collins; 25 MHz is an experimental broadcast that may be interrupted",
+   "schedule": "H24 (experimental)",
+   "source": "nist-wwv"
+  },
+  {
+   "hz": 26100500,
+   "name": "MSI 26100.5",
+   "mode": "usb",
+   "category": "marine",
+   "emission": "sitor-b",
+   "dial": 26098800,
+   "params": {
+    "baud": 100,
+    "shift": 170
+   },
+   "note": "HF maritime safety information by narrow-band direct printing; 100 Bd, 170 Hz shift per ITU-R M.625",
+   "source": "itu-rr-ap15"
+  },
+  {
+   "hz": 28200000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "note": "18 beacons take turns: callsign at 22 wpm then four 1 s dashes at 100 W, 10 W, 1 W, 0.1 W",
+   "schedule": "each beacon 10 s every 3 min",
+   "source": "ncdxf"
+  }
+ ]
+}

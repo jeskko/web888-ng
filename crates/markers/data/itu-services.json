@@ -1,0 +1,1400 @@
+{
+ "title": "ITU service bands, 10 kHz - 62 MHz",
+ "sources": [
+  {
+   "title": "ITU Radio Regulations, Vol. 1 Art. 5 (Table of Frequency Allocations) and Art. 23; Vol. 2 Appendix 17",
+   "version": "Edition of 2024 (WRC-23)",
+   "url": "https://www.itu.int/pub/R-REG-RR-2024"
+  },
+  {
+   "title": "Final Acts of the Regional Administrative LF/MF Broadcasting Conference (Regions 1 and 3), Geneva, 1975",
+   "version": "ITU, 1976",
+   "url": "https://www.itu.int/pub/R-ACT-RRC.3-1975"
+  },
+  {
+   "title": "FCC Online Table of Frequency Allocations, 47 CFR 2.106",
+   "version": "revised July 1, 2022",
+   "url": "https://transition.fcc.gov/oet/spectrum/table/fcctable.pdf"
+  },
+  {
+   "title": "47 CFR 73.14 (AM broadcast definitions) and 95.963 (CB channels)",
+   "version": "eCFR, retrieved 2026-11-04",
+   "url": "https://www.ecfr.gov/current/title-47"
+  },
+  {
+   "title": "ECC Decision (11)03: harmonised use of frequencies for CB radio equipment",
+   "version": "approved 24 June 2011, amended 17 June 2016",
+   "url": "https://docdb.cept.org/document/430"
+  }
+ ],
+ "bands": [
+  {
+   "name": "20 kHz time",
+   "service": "time",
+   "lo": 19950,
+   "hi": 20050,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "LW",
+   "service": "broadcast",
+   "lo": 148500,
+   "hi": 283500,
+   "regions": [
+    1
+   ],
+   "note": "Region 1 only; 255-283.5 kHz shared with aeronautical radionavigation; GE75 plan carriers on 9 kHz multiples (153-279 kHz)",
+   "verify": true
+  },
+  {
+   "name": "Maritime MF",
+   "service": "maritime",
+   "lo": 415000,
+   "hi": 495000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "radiotelegraphy and NAVDAT; NAVTEX 490 and 518 kHz; aeronautical radionavigation co-primary 415-435 kHz in Region 1, secondary elsewhere; amateur secondary 472-479 kHz"
+  },
+  {
+   "name": "Maritime 500 kHz",
+   "service": "maritime",
+   "lo": 495000,
+   "hi": 505000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "international NAVDAT (500 kHz)"
+  },
+  {
+   "name": "Maritime MF",
+   "service": "maritime",
+   "lo": 505000,
+   "hi": 525000,
+   "regions": [
+    2
+   ],
+   "note": "NAVTEX 518 kHz; 510-525 kHz shared with aeronautical radionavigation"
+  },
+  {
+   "name": "Maritime MF",
+   "service": "maritime",
+   "lo": 505000,
+   "hi": 526500,
+   "regions": [
+    1,
+    3
+   ],
+   "note": "NAVTEX 518 kHz; shared with aeronautical radionavigation"
+  },
+  {
+   "name": "MW",
+   "service": "broadcast",
+   "lo": 525000,
+   "hi": 1705000,
+   "regions": [
+    2
+   ],
+   "note": "525-535 kHz low power, shared with aeronautical radionavigation; 1605-1705 kHz under the Rio 1988 plan; US carriers 540-1700 kHz every 10 kHz (47 CFR 73.14)"
+  },
+  {
+   "name": "MW",
+   "service": "broadcast",
+   "lo": 526500,
+   "hi": 1606500,
+   "regions": [
+    1,
+    3
+   ],
+   "note": "GE75 plan: carriers on multiples of 9 kHz, 531-1602 kHz"
+  },
+  {
+   "name": "Maritime 2 MHz",
+   "service": "maritime",
+   "lo": 2065000,
+   "hi": 2107000,
+   "regions": [
+    2,
+    3
+   ],
+   "note": "Region 2: J3E, max 1 kW PEP"
+  },
+  {
+   "name": "Maritime 2 MHz",
+   "service": "maritime",
+   "lo": 2170000,
+   "hi": 2173500,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "2182 kHz distress",
+   "service": "maritime",
+   "lo": 2173500,
+   "hi": 2190500,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "allocated to MOBILE (distress and calling); 2182 kHz voice, 2187.5 kHz DSC"
+  },
+  {
+   "name": "Maritime 2 MHz",
+   "service": "maritime",
+   "lo": 2190500,
+   "hi": 2194000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "120 m",
+   "service": "broadcast",
+   "lo": 2300000,
+   "hi": 2495000,
+   "regions": [
+    2,
+    3
+   ],
+   "note": "tropical zone only (RR 23.6); shared with fixed and mobile"
+  },
+  {
+   "name": "120 m",
+   "service": "broadcast",
+   "lo": 2300000,
+   "hi": 2498000,
+   "regions": [
+    1
+   ],
+   "note": "tropical zone only (RR 23.6); shared with fixed and mobile"
+  },
+  {
+   "name": "2.5 MHz time",
+   "service": "time",
+   "lo": 2495000,
+   "hi": 2505000,
+   "regions": [
+    2,
+    3
+   ],
+   "note": "2501-2502 kHz shared with space research (secondary)"
+  },
+  {
+   "name": "2.5 MHz time",
+   "service": "time",
+   "lo": 2498000,
+   "hi": 2502000,
+   "regions": [
+    1
+   ],
+   "note": "2501-2502 kHz shared with space research (secondary)"
+  },
+  {
+   "name": "Maritime 2 MHz",
+   "service": "maritime",
+   "lo": 2625000,
+   "hi": 2650000,
+   "regions": [
+    1
+   ],
+   "note": "with maritime radionavigation"
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 2850000,
+   "hi": 3025000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "90 m",
+   "service": "broadcast",
+   "lo": 3200000,
+   "hi": 3400000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "tropical zone only (RR 23.6); shared with fixed and mobile"
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 3400000,
+   "hi": 3500000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "75 m",
+   "service": "broadcast",
+   "lo": 3900000,
+   "hi": 4000000,
+   "regions": [
+    3
+   ],
+   "note": "not limited to the tropical zone; 3900-3950 shared with aeronautical mobile, 3950-4000 with fixed"
+  },
+  {
+   "name": "75 m",
+   "service": "broadcast",
+   "lo": 3950000,
+   "hi": 4000000,
+   "regions": [
+    1
+   ],
+   "note": "not limited to the tropical zone; shared with fixed"
+  },
+  {
+   "name": "Maritime 4 MHz ship voice",
+   "service": "maritime",
+   "lo": 4000000,
+   "hi": 4063000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "shared with fixed; maritime use limited to ship radiotelephony"
+  },
+  {
+   "name": "Maritime 4 MHz",
+   "service": "maritime",
+   "lo": 4063000,
+   "hi": 4438000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "4 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 4065000,
+   "hi": 4146000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "4 MHz ship DSC",
+   "service": "maritime",
+   "lo": 4207250,
+   "hi": 4209250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "4 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 4209250,
+   "hi": 4216250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "4 MHz coast DSC",
+   "service": "maritime",
+   "lo": 4219250,
+   "hi": 4221000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "4 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 4351000,
+   "hi": 4438000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 4650000,
+   "hi": 4700000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "60 m",
+   "service": "broadcast",
+   "lo": 4750000,
+   "hi": 4995000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "tropical zone only (RR 23.6); shared with fixed and mobile"
+  },
+  {
+   "name": "5 MHz time",
+   "service": "time",
+   "lo": 4995000,
+   "hi": 5005000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "60 m",
+   "service": "broadcast",
+   "lo": 5005000,
+   "hi": 5060000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "tropical zone only (RR 23.6); shared with fixed"
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 5450000,
+   "hi": 5480000,
+   "regions": [
+    2
+   ],
+   "note": "Region 2 only"
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 5480000,
+   "hi": 5680000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "49 m",
+   "service": "broadcast",
+   "lo": 5900000,
+   "hi": 6200000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "5900-5950 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "6 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 6200000,
+   "hi": 6224000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 6 MHz",
+   "service": "maritime",
+   "lo": 6200000,
+   "hi": 6525000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "6 MHz ship DSC",
+   "service": "maritime",
+   "lo": 6311750,
+   "hi": 6313750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "6 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 6313750,
+   "hi": 6321750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "6 MHz coast DSC",
+   "service": "maritime",
+   "lo": 6330750,
+   "hi": 6332500,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "6 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 6501000,
+   "hi": 6525000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 6525000,
+   "hi": 6685000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "ISM 6.78 MHz",
+   "service": "ism",
+   "lo": 6765000,
+   "hi": 6795000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "ISM designation (RR 5.138); radio services must accept interference"
+  },
+  {
+   "name": "41 m",
+   "service": "broadcast",
+   "lo": 7200000,
+   "hi": 7450000,
+   "regions": [
+    1,
+    3
+   ],
+   "note": "7300-7350 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "41 m",
+   "service": "broadcast",
+   "lo": 7300000,
+   "hi": 7400000,
+   "regions": [
+    2
+   ],
+   "note": "7300-7350 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged; 7200-7300 is amateur in Region 2"
+  },
+  {
+   "name": "Maritime 8 MHz ship voice",
+   "service": "maritime",
+   "lo": 8100000,
+   "hi": 8195000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "shared with fixed"
+  },
+  {
+   "name": "8 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 8195000,
+   "hi": 8294000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 8 MHz",
+   "service": "maritime",
+   "lo": 8195000,
+   "hi": 8815000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "8 MHz ship DSC",
+   "service": "maritime",
+   "lo": 8414000,
+   "hi": 8416250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "8 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 8416250,
+   "hi": 8423750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "8 MHz coast DSC",
+   "service": "maritime",
+   "lo": 8436250,
+   "hi": 8438000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "8 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 8707000,
+   "hi": 8815000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 8815000,
+   "hi": 8965000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "31 m",
+   "service": "broadcast",
+   "lo": 9400000,
+   "hi": 9900000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "9400-9500 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "10 MHz time",
+   "service": "time",
+   "lo": 9995000,
+   "hi": 10005000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 10005000,
+   "hi": 10100000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 11275000,
+   "hi": 11400000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "25 m",
+   "service": "broadcast",
+   "lo": 11600000,
+   "hi": 12100000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "11600-11650 and 12050-12100 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "12 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 12230000,
+   "hi": 12353000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 12 MHz",
+   "service": "maritime",
+   "lo": 12230000,
+   "hi": 13200000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "12 MHz ship DSC",
+   "service": "maritime",
+   "lo": 12576750,
+   "hi": 12578750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "12 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 12578750,
+   "hi": 12624750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "12 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 12654750,
+   "hi": 12656750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd)",
+   "sub": true
+  },
+  {
+   "name": "12 MHz coast DSC",
+   "service": "maritime",
+   "lo": 12656750,
+   "hi": 12658500,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "12 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 13077000,
+   "hi": 13200000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 13260000,
+   "hi": 13360000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "ISM 13.56 MHz",
+   "service": "ism",
+   "lo": 13553000,
+   "hi": 13567000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "ISM designation (RR 5.150); radio services must accept interference"
+  },
+  {
+   "name": "22 m",
+   "service": "broadcast",
+   "lo": 13570000,
+   "hi": 13870000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "13570-13600 and 13800-13870 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "15 MHz time",
+   "service": "time",
+   "lo": 14990000,
+   "hi": 15010000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "19 m",
+   "service": "broadcast",
+   "lo": 15100000,
+   "hi": 15800000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "15600-15800 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "16 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 16360000,
+   "hi": 16528000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 16 MHz",
+   "service": "maritime",
+   "lo": 16360000,
+   "hi": 17410000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "16 MHz ship DSC",
+   "service": "maritime",
+   "lo": 16804000,
+   "hi": 16806250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "16 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 16806250,
+   "hi": 16821750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "16 MHz coast DSC",
+   "service": "maritime",
+   "lo": 16902750,
+   "hi": 16904500,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "16 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 17242000,
+   "hi": 17410000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "16 m",
+   "service": "broadcast",
+   "lo": 17480000,
+   "hi": 17900000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "17480-17550 kHz: WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 17900000,
+   "hi": 17970000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "18/19 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 18780000,
+   "hi": 18825000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 18 MHz",
+   "service": "maritime",
+   "lo": 18780000,
+   "hi": 18900000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "18/19 MHz ship DSC",
+   "service": "maritime",
+   "lo": 18898250,
+   "hi": 18899750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "15 m",
+   "service": "broadcast",
+   "lo": 18900000,
+   "hi": 19020000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "WRC-07 band (RR 5.134): broadcasting use under Art. 12; digital emissions encouraged"
+  },
+  {
+   "name": "Maritime 19 MHz",
+   "service": "maritime",
+   "lo": 19680000,
+   "hi": 19800000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "18/19 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 19680250,
+   "hi": 19680750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "18/19 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 19683750,
+   "hi": 19691250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd)",
+   "sub": true
+  },
+  {
+   "name": "18/19 MHz coast DSC",
+   "service": "maritime",
+   "lo": 19703250,
+   "hi": 19705000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "18/19 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 19755000,
+   "hi": 19800000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "20 MHz time",
+   "service": "time",
+   "lo": 19990000,
+   "hi": 20010000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "13 m",
+   "service": "broadcast",
+   "lo": 21450000,
+   "hi": 21850000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "Aero (R)",
+   "service": "aero",
+   "lo": 21924000,
+   "hi": 22000000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "22 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 22000000,
+   "hi": 22159000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 22 MHz",
+   "service": "maritime",
+   "lo": 22000000,
+   "hi": 22855000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "22 MHz ship DSC",
+   "service": "maritime",
+   "lo": 22374250,
+   "hi": 22375750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "22 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 22375750,
+   "hi": 22376250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "22 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 22382250,
+   "hi": 22389250,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd)",
+   "sub": true
+  },
+  {
+   "name": "22 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 22443250,
+   "hi": 22443750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd)",
+   "sub": true
+  },
+  {
+   "name": "22 MHz coast DSC",
+   "service": "maritime",
+   "lo": 22443750,
+   "hi": 22445500,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "22 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 22696000,
+   "hi": 22855000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "25 MHz time",
+   "service": "time",
+   "lo": 24990000,
+   "hi": 25010000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "25/26 MHz ship voice duplex",
+   "service": "maritime",
+   "lo": 25070000,
+   "hi": 25100000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; ship SSB telephony, paired with coast duplex",
+   "sub": true
+  },
+  {
+   "name": "Maritime 25 MHz",
+   "service": "maritime",
+   "lo": 25070000,
+   "hi": 25210000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "25/26 MHz ship DSC",
+   "service": "maritime",
+   "lo": 25208250,
+   "hi": 25210000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "11 m",
+   "service": "broadcast",
+   "lo": 25670000,
+   "hi": 26100000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "Maritime 26 MHz",
+   "service": "maritime",
+   "lo": 26100000,
+   "hi": 26175000,
+   "regions": [
+    1,
+    2,
+    3
+   ]
+  },
+  {
+   "name": "25/26 MHz coast NBDP",
+   "service": "maritime",
+   "lo": 26100250,
+   "hi": 26102750,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast NBDP and data (FSK <=100 Bd, PSK <=200 Bd); includes MSI frequency",
+   "sub": true
+  },
+  {
+   "name": "25/26 MHz coast DSC",
+   "service": "maritime",
+   "lo": 26120750,
+   "hi": 26122500,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band",
+   "sub": true
+  },
+  {
+   "name": "25/26 MHz coast voice duplex",
+   "service": "maritime",
+   "lo": 26145000,
+   "hi": 26175000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "RR Appendix 17 sub-band; coast SSB telephony",
+   "sub": true
+  },
+  {
+   "name": "ISM 27.12 MHz",
+   "service": "ism",
+   "lo": 26957000,
+   "hi": 27283000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "ISM designation (RR 5.150); radio services must accept interference"
+  },
+  {
+   "name": "CB",
+   "service": "cb",
+   "lo": 26960000,
+   "hi": 27410000,
+   "regions": [
+    1
+   ],
+   "note": "national, not ITU: CEPT ECC/DEC/(11)03, 10 kHz channels, 5 channels excluded"
+  },
+  {
+   "name": "CB",
+   "service": "cb",
+   "lo": 26960000,
+   "hi": 27410000,
+   "regions": [
+    2
+   ],
+   "note": "national, not ITU: USA, 40 channels 26.965-27.405 MHz (47 CFR 95.963)"
+  },
+  {
+   "name": "ISM 40.68 MHz",
+   "service": "ism",
+   "lo": 40660000,
+   "hi": 40700000,
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "ISM designation (RR 5.150); radio services must accept interference"
+  },
+  {
+   "name": "VHF broadcasting",
+   "service": "broadcast",
+   "lo": 47000000,
+   "hi": 50000000,
+   "regions": [
+    3
+   ],
+   "note": "shared with fixed and mobile"
+  },
+  {
+   "name": "VHF broadcasting",
+   "service": "broadcast",
+   "lo": 47000000,
+   "hi": 68000000,
+   "regions": [
+    1
+   ],
+   "note": "extends past 62 MHz; 50-52 MHz also amateur (secondary)"
+  },
+  {
+   "name": "VHF broadcasting",
+   "service": "broadcast",
+   "lo": 54000000,
+   "hi": 68000000,
+   "regions": [
+    3
+   ],
+   "note": "extends past 62 MHz; shared with fixed and mobile"
+  },
+  {
+   "name": "VHF broadcasting",
+   "service": "broadcast",
+   "lo": 54000000,
+   "hi": 72000000,
+   "regions": [
+    2
+   ],
+   "note": "extends past 62 MHz; 54-68 and 68-72 MHz cells"
+  }
+ ]
+}

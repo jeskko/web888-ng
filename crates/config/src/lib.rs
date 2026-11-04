@@ -65,6 +65,8 @@ pub struct Config {
     pub syslog: Syslog,
     /// The same to an MQTT broker (apply at once).
     pub mqtt: Mqtt,
+    /// Frequency labels and the band ribbon (apply at once).
+    pub markers: Markers,
 }
 
 /// What the skimmers log, for choosing what goes to syslog and MQTT.
@@ -393,6 +395,27 @@ pub struct Station {
     /// gpsd to take the locator from, `host` or `host:port` (port 2947),
     /// e.g. `127.0.0.1`; empty: off.
     pub gpsd: String,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Markers {
+    /// IARU region (1-3) of the band ribbon and the amateur frequencies,
+    /// until a listener picks another.
+    #[schemars(range(min = 1, max = 3))]
+    pub region: u8,
+    /// The station's own labels (CSV; the admin pages upload and download
+    /// it). A relative path is next to this configuration file.
+    pub file: PathBuf,
+}
+
+impl Default for Markers {
+    fn default() -> Self {
+        Markers {
+            region: 1,
+            file: "markers.csv".into(),
+        }
+    }
 }
 
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]

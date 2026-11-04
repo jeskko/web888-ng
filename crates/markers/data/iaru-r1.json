@@ -1,0 +1,961 @@
+{
+ "region": 1,
+ "title": "IARU Region 1 HF band plan",
+ "sources": [
+  {
+   "title": "IARU Region 1 HF Band Plan",
+   "version": "effective 16 October 2020 (Novi Sad), file dated June 2021",
+   "url": "https://www.iaru-r1.org/wp-content/uploads/2021/06/hf_r1_bandplan.pdf"
+  },
+  {
+   "title": "IARU Region 1 VHF Handbook (50-54 MHz band plan)",
+   "version": "10.03, February 2026",
+   "url": "https://www.iaru-r1.org/wp-content/uploads/2026/02/VHF_Handbook_V10_03_final.pdf"
+  }
+ ],
+ "bands": [
+  {
+   "name": "2200 m",
+   "lo": 135700,
+   "hi": 137800,
+   "segments": [
+    {
+     "lo": 135700,
+     "hi": 137800,
+     "use": "digi",
+     "note": "CW, QRSS and narrow-band data; max 200 Hz",
+     "modes": [
+      "cw",
+      "qrss"
+     ]
+    }
+   ]
+  },
+  {
+   "name": "630 m",
+   "lo": 472000,
+   "hi": 479000,
+   "segments": [
+    {
+     "lo": 472000,
+     "hi": 475000,
+     "use": "cw",
+     "note": "max 200 Hz; plan marks 630 m usage as proposed; mind radionavigation NDBs",
+     "modes": [
+      "cw"
+     ]
+    },
+    {
+     "lo": 475000,
+     "hi": 479000,
+     "use": "digi",
+     "note": "CW and digimodes; bandwidth not set (500 Hz suggested); proposed usage; mind NDBs"
+    }
+   ]
+  },
+  {
+   "name": "160 m",
+   "lo": 1810000,
+   "hi": 2000000,
+   "note": "Region 1 plan starts at 1810 kHz",
+   "segments": [
+    {
+     "lo": 1810000,
+     "hi": 1838000,
+     "use": "cw",
+     "note": "max 200 Hz"
+    },
+    {
+     "lo": 1838000,
+     "hi": 1840000,
+     "use": "digi",
+     "note": "narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 1840000,
+     "hi": 1843000,
+     "use": "all",
+     "note": "digimodes here; lowest LSB voice dial setting 1843 kHz"
+    },
+    {
+     "lo": 1843000,
+     "hi": 2000000,
+     "use": "all"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 1836000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    }
+   ]
+  },
+  {
+   "name": "80 m",
+   "lo": 3500000,
+   "hi": 3800000,
+   "note": "Region 1 plan covers 3500-3800 kHz; national allocations may differ",
+   "segments": [
+    {
+     "lo": 3500000,
+     "hi": 3510000,
+     "use": "cw",
+     "note": "priority for intercontinental operation"
+    },
+    {
+     "lo": 3510000,
+     "hi": 3560000,
+     "use": "cw",
+     "note": "CW contest preferred"
+    },
+    {
+     "lo": 3560000,
+     "hi": 3570000,
+     "use": "cw"
+    },
+    {
+     "lo": 3570000,
+     "hi": 3580000,
+     "use": "digi",
+     "note": "digimodes, max 200 Hz"
+    },
+    {
+     "lo": 3580000,
+     "hi": 3590000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 3590000,
+     "hi": 3600000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 3600000,
+     "hi": 3620000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations; SSB contest preferred (3600-3650); lowest LSB voice dial 3603 kHz"
+    },
+    {
+     "lo": 3620000,
+     "hi": 3650000,
+     "use": "all",
+     "note": "SSB contest preferred (3600-3650)"
+    },
+    {
+     "lo": 3650000,
+     "hi": 3700000,
+     "use": "all"
+    },
+    {
+     "lo": 3700000,
+     "hi": 3775000,
+     "use": "all",
+     "note": "SSB contest preferred"
+    },
+    {
+     "lo": 3775000,
+     "hi": 3800000,
+     "use": "all",
+     "note": "SSB contest preferred; priority for intercontinental operation"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 3555000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 3560000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 3630000,
+     "name": "Digital voice",
+     "mode": "lsb",
+     "emission": "dv"
+    },
+    {
+     "hz": 3690000,
+     "name": "QRP SSB",
+     "mode": "lsb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 3735000,
+     "name": "Image",
+     "mode": "lsb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    },
+    {
+     "hz": 3760000,
+     "name": "Emergency",
+     "mode": "lsb",
+     "emission": "ssb",
+     "note": "Region 1 emergency centre of activity"
+    }
+   ]
+  },
+  {
+   "name": "60 m",
+   "lo": 5351500,
+   "hi": 5366500,
+   "note": "WRC-15 band; the plan's usage is proposed. Use only if no domestic 5 MHz frequencies are available; no local nets or long ragchews; national rules differ. No contests",
+   "segments": [
+    {
+     "lo": 5351500,
+     "hi": 5354000,
+     "use": "digi",
+     "note": "CW and narrow-band modes, max 200 Hz"
+    },
+    {
+     "lo": 5354000,
+     "hi": 5366000,
+     "use": "all",
+     "note": "USB for voice; highest USB dial setting 5363 kHz"
+    },
+    {
+     "lo": 5366000,
+     "hi": 5366500,
+     "use": "digi",
+     "note": "weak-signal narrow-band modes, max 20 Hz"
+    }
+   ]
+  },
+  {
+   "name": "40 m",
+   "lo": 7000000,
+   "hi": 7200000,
+   "segments": [
+    {
+     "lo": 7000000,
+     "hi": 7040000,
+     "use": "cw"
+    },
+    {
+     "lo": 7040000,
+     "hi": 7047000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 7047000,
+     "hi": 7050000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 7050000,
+     "hi": 7053000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations; lowest LSB voice dial 7053 kHz"
+    },
+    {
+     "lo": 7053000,
+     "hi": 7060000,
+     "use": "all",
+     "note": "digimodes"
+    },
+    {
+     "lo": 7060000,
+     "hi": 7100000,
+     "use": "all",
+     "note": "SSB contest preferred"
+    },
+    {
+     "lo": 7100000,
+     "hi": 7130000,
+     "use": "all"
+    },
+    {
+     "lo": 7130000,
+     "hi": 7175000,
+     "use": "all",
+     "note": "SSB contest preferred"
+    },
+    {
+     "lo": 7175000,
+     "hi": 7200000,
+     "use": "all",
+     "note": "SSB contest preferred; priority for intercontinental operation"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 7030000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 7070000,
+     "name": "Digital voice",
+     "mode": "lsb",
+     "emission": "dv"
+    },
+    {
+     "hz": 7090000,
+     "name": "QRP SSB",
+     "mode": "lsb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 7110000,
+     "name": "Emergency",
+     "mode": "lsb",
+     "emission": "ssb",
+     "note": "Region 1 emergency centre of activity"
+    },
+    {
+     "hz": 7165000,
+     "name": "Image",
+     "mode": "lsb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    }
+   ]
+  },
+  {
+   "name": "30 m",
+   "lo": 10100000,
+   "hi": 10150000,
+   "note": "no contests on this band",
+   "segments": [
+    {
+     "lo": 10100000,
+     "hi": 10130000,
+     "use": "cw"
+    },
+    {
+     "lo": 10130000,
+     "hi": 10150000,
+     "use": "digi",
+     "note": "narrow-band modes and digimodes, max 500 Hz"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 10116000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    }
+   ]
+  },
+  {
+   "name": "20 m",
+   "lo": 14000000,
+   "hi": 14350000,
+   "segments": [
+    {
+     "lo": 14000000,
+     "hi": 14060000,
+     "use": "cw",
+     "note": "CW contest preferred"
+    },
+    {
+     "lo": 14060000,
+     "hi": 14070000,
+     "use": "cw"
+    },
+    {
+     "lo": 14070000,
+     "hi": 14089000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 14089000,
+     "hi": 14099000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 14099000,
+     "hi": 14101000,
+     "use": "beacon",
+     "note": "International Beacon Project, beacons only"
+    },
+    {
+     "lo": 14101000,
+     "hi": 14112000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations"
+    },
+    {
+     "lo": 14112000,
+     "hi": 14125000,
+     "use": "all"
+    },
+    {
+     "lo": 14125000,
+     "hi": 14300000,
+     "use": "all",
+     "note": "SSB contest preferred"
+    },
+    {
+     "lo": 14300000,
+     "hi": 14350000,
+     "use": "all"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 14055000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 14060000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 14130000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 14195000,
+     "name": "DXpeditions",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "priority for DXpeditions, 14195 kHz +/- 5 kHz"
+    },
+    {
+     "hz": 14230000,
+     "name": "Image",
+     "mode": "usb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    },
+    {
+     "hz": 14285000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 14300000,
+     "name": "Global emergency",
+     "mode": "usb",
+     "emission": "ssb"
+    }
+   ]
+  },
+  {
+   "name": "17 m",
+   "lo": 18068000,
+   "hi": 18168000,
+   "note": "no contests on this band",
+   "segments": [
+    {
+     "lo": 18068000,
+     "hi": 18095000,
+     "use": "cw"
+    },
+    {
+     "lo": 18095000,
+     "hi": 18105000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 18105000,
+     "hi": 18109000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 18109000,
+     "hi": 18111000,
+     "use": "beacon",
+     "note": "International Beacon Project, beacons only"
+    },
+    {
+     "lo": 18111000,
+     "hi": 18120000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations"
+    },
+    {
+     "lo": 18120000,
+     "hi": 18168000,
+     "use": "all"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 18086000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 18130000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 18150000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 18160000,
+     "name": "Emergency",
+     "mode": "usb",
+     "emission": "ssb"
+    }
+   ]
+  },
+  {
+   "name": "15 m",
+   "lo": 21000000,
+   "hi": 21450000,
+   "segments": [
+    {
+     "lo": 21000000,
+     "hi": 21070000,
+     "use": "cw"
+    },
+    {
+     "lo": 21070000,
+     "hi": 21090000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 21090000,
+     "hi": 21110000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 21110000,
+     "hi": 21120000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations; not SSB"
+    },
+    {
+     "lo": 21120000,
+     "hi": 21149000,
+     "use": "digi",
+     "note": "narrow-band modes, max 500 Hz; satellites may use 21125-21450 (non-exclusive)"
+    },
+    {
+     "lo": 21149000,
+     "hi": 21151000,
+     "use": "beacon",
+     "note": "International Beacon Project, beacons only"
+    },
+    {
+     "lo": 21151000,
+     "hi": 21450000,
+     "use": "all",
+     "note": "satellites may use 21125-21450 non-exclusively, preferably above 21400"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 21055000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 21060000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 21180000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 21285000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 21340000,
+     "name": "Image",
+     "mode": "usb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    },
+    {
+     "hz": 21360000,
+     "name": "Global emergency",
+     "mode": "usb",
+     "emission": "ssb"
+    }
+   ]
+  },
+  {
+   "name": "12 m",
+   "lo": 24890000,
+   "hi": 24990000,
+   "note": "no contests on this band",
+   "segments": [
+    {
+     "lo": 24890000,
+     "hi": 24915000,
+     "use": "cw"
+    },
+    {
+     "lo": 24915000,
+     "hi": 24925000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 24925000,
+     "hi": 24929000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 24929000,
+     "hi": 24931000,
+     "use": "beacon",
+     "note": "International Beacon Project, beacons only"
+    },
+    {
+     "lo": 24931000,
+     "hi": 24940000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations"
+    },
+    {
+     "lo": 24940000,
+     "hi": 24990000,
+     "use": "all"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 24906000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 24950000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 24960000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    }
+   ]
+  },
+  {
+   "name": "10 m",
+   "lo": 28000000,
+   "hi": 29700000,
+   "segments": [
+    {
+     "lo": 28000000,
+     "hi": 28070000,
+     "use": "cw"
+    },
+    {
+     "lo": 28070000,
+     "hi": 28120000,
+     "use": "digi",
+     "note": "digimodes, max 500 Hz"
+    },
+    {
+     "lo": 28120000,
+     "hi": 28150000,
+     "use": "digi",
+     "note": "digimodes; unattended automatically controlled data stations"
+    },
+    {
+     "lo": 28150000,
+     "hi": 28190000,
+     "use": "digi",
+     "note": "narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 28190000,
+     "hi": 28199000,
+     "use": "beacon",
+     "note": "IBP regional time-shared beacons only"
+    },
+    {
+     "lo": 28199000,
+     "hi": 28201000,
+     "use": "beacon",
+     "note": "IBP worldwide time-shared beacons only"
+    },
+    {
+     "lo": 28201000,
+     "hi": 28225000,
+     "use": "beacon",
+     "note": "IBP continuous-duty beacons only"
+    },
+    {
+     "lo": 28225000,
+     "hi": 28300000,
+     "use": "all",
+     "note": "beacons also"
+    },
+    {
+     "lo": 28300000,
+     "hi": 28320000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations"
+    },
+    {
+     "lo": 28320000,
+     "hi": 29000000,
+     "use": "all"
+    },
+    {
+     "lo": 29000000,
+     "hi": 29100000,
+     "use": "all",
+     "note": "no bandwidth limit"
+    },
+    {
+     "lo": 29100000,
+     "hi": 29200000,
+     "use": "fm",
+     "note": "FM simplex, 10 kHz channels (plan: all modes)"
+    },
+    {
+     "lo": 29200000,
+     "hi": 29300000,
+     "use": "all",
+     "note": "digimodes and unattended automatically controlled data stations"
+    },
+    {
+     "lo": 29300000,
+     "hi": 29510000,
+     "use": "sat",
+     "note": "satellite links"
+    },
+    {
+     "lo": 29510000,
+     "hi": 29520000,
+     "use": "other",
+     "note": "guard channel"
+    },
+    {
+     "lo": 29520000,
+     "hi": 29590000,
+     "use": "fm",
+     "note": "FM repeater inputs RH1-RH8, max 6 kHz"
+    },
+    {
+     "lo": 29590000,
+     "hi": 29620000,
+     "use": "fm",
+     "note": "29600 kHz FM calling channel; 29610 kHz FM simplex repeater (parrot)",
+     "verify": true
+    },
+    {
+     "lo": 29620000,
+     "hi": 29700000,
+     "use": "fm",
+     "note": "FM repeater outputs RH1-RH8, max 6 kHz"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 28055000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 28060000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 28330000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 28360000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 28680000,
+     "name": "Image",
+     "mode": "usb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    }
+   ]
+  },
+  {
+   "name": "6 m",
+   "lo": 50000000,
+   "hi": 54000000,
+   "note": "from the Region 1 VHF band plan; national allocations vary, many countries have only part of 50-54 MHz",
+   "segments": [
+    {
+     "lo": 50000000,
+     "hi": 50030000,
+     "use": "beacon",
+     "note": "Synchronised Beacon Project: 50.000-50.010 R1, 50.010-50.020 R2, 50.020-50.030 R3"
+    },
+    {
+     "lo": 50030000,
+     "hi": 50100000,
+     "use": "cw",
+     "note": "CW only, max 500 Hz"
+    },
+    {
+     "lo": 50100000,
+     "hi": 50130000,
+     "use": "all",
+     "note": "SSB and CW, intercontinental section, max 2700 Hz",
+     "modes": [
+      "ssb",
+      "cw"
+     ]
+    },
+    {
+     "lo": 50130000,
+     "hi": 50200000,
+     "use": "all",
+     "note": "SSB and CW, international section",
+     "modes": [
+      "ssb",
+      "cw"
+     ]
+    },
+    {
+     "lo": 50200000,
+     "hi": 50300000,
+     "use": "all",
+     "note": "SSB and CW, general use; 50.285 MHz crossband",
+     "modes": [
+      "ssb",
+      "cw"
+     ]
+    },
+    {
+     "lo": 50300000,
+     "hi": 50400000,
+     "use": "digi",
+     "note": "machine-generated (MGM) and narrow-band modes, CW; 50.310-50.320 EME, 50.320-50.380 meteor scatter"
+    },
+    {
+     "lo": 50400000,
+     "hi": 50500000,
+     "use": "beacon",
+     "note": "beacons only (MGM and CW), max 1 kHz"
+    },
+    {
+     "lo": 50500000,
+     "hi": 50700000,
+     "use": "all",
+     "note": "50.540-50.580 FM/DV internet voice gateways; 50.600-50.700 digital communications; 50.630 DV calling"
+    },
+    {
+     "lo": 50700000,
+     "hi": 50900000,
+     "use": "fm",
+     "note": "FM/DV repeater outputs 50.710-50.890 MHz, 12 kHz",
+     "modes": [
+      "fm",
+      "dv"
+     ]
+    },
+    {
+     "lo": 50900000,
+     "hi": 51200000,
+     "use": "all",
+     "note": "wideband digital experiments"
+    },
+    {
+     "lo": 51200000,
+     "hi": 51400000,
+     "use": "fm",
+     "note": "FM/DV repeater inputs 51.210-51.390 MHz, 12 kHz",
+     "modes": [
+      "fm",
+      "dv"
+     ]
+    },
+    {
+     "lo": 51400000,
+     "hi": 52000000,
+     "use": "all",
+     "note": "51.410-51.590 FM/DV simplex, 51.510 FM calling; 51.810-51.990 FM/DV repeater outputs (older +600 kHz option); wideband digital experiments"
+    },
+    {
+     "lo": 52000000,
+     "hi": 54000000,
+     "use": "all",
+     "note": "only where nationally allocated; planned as 500 kHz blocks"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 50050000,
+     "name": "CW international (future)",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 50090000,
+     "name": "CW intercontinental",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 50110000,
+     "name": "Intercontinental DX calling",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "not for calling within Europe"
+    },
+    {
+     "hz": 50150000,
+     "name": "International",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 50305000,
+     "name": "PSK",
+     "mode": "usb",
+     "emission": "psk"
+    }
+   ]
+  }
+ ]
+}

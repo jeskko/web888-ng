@@ -1,0 +1,995 @@
+{
+ "region": 3,
+ "title": "IARU Region 3 HF band plan",
+ "sources": [
+  {
+   "title": "IARU Region 3 Band Plan (Document R3-004)",
+   "version": "Rev. 2, November 2024 (19th Region 3 Conference, Bangkok)",
+   "url": "https://www.iaru-r3.org/wp-content/uploads/2025/01/R3-004-Band-Plans-IARU-Region-3.pdf"
+  }
+ ],
+ "bands": [
+  {
+   "name": "2200 m",
+   "lo": 135700,
+   "hi": 137800,
+   "note": "secondary allocation",
+   "segments": [
+    {
+     "lo": 135700,
+     "hi": 137800,
+     "use": "digi",
+     "note": "CW, QRSS and digimodes, max 500 Hz",
+     "modes": [
+      "cw",
+      "qrss"
+     ]
+    }
+   ],
+   "centres": [
+    {
+     "hz": 136000,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 136130,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    }
+   ]
+  },
+  {
+   "name": "630 m",
+   "lo": 472000,
+   "hi": 479000,
+   "note": "secondary allocation",
+   "segments": [
+    {
+     "lo": 472000,
+     "hi": 479000,
+     "use": "digi",
+     "note": "CW and digimodes, max 500 Hz"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 474200,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    }
+   ]
+  },
+  {
+   "name": "160 m",
+   "lo": 1800000,
+   "hi": 2000000,
+   "segments": [
+    {
+     "lo": 1800000,
+     "hi": 1830000,
+     "use": "cw"
+    },
+    {
+     "lo": 1830000,
+     "hi": 1840000,
+     "use": "digi",
+     "note": "CW and narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 1840000,
+     "hi": 2000000,
+     "use": "all"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 1836000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 1836600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 1838000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 1840000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    }
+   ]
+  },
+  {
+   "name": "80 m",
+   "lo": 3500000,
+   "hi": 3900000,
+   "note": "Region 3 plan covers 3500-3900 kHz; national rules prevail where they differ",
+   "segments": [
+    {
+     "lo": 3500000,
+     "hi": 3510000,
+     "use": "cw",
+     "note": "CW DX"
+    },
+    {
+     "lo": 3510000,
+     "hi": 3535000,
+     "use": "cw"
+    },
+    {
+     "lo": 3535000,
+     "hi": 3600000,
+     "use": "all",
+     "note": "CW, phone and digimodes"
+    },
+    {
+     "lo": 3600000,
+     "hi": 3775000,
+     "use": "all",
+     "note": "CW, digimodes and phone"
+    },
+    {
+     "lo": 3775000,
+     "hi": 3800000,
+     "use": "all",
+     "note": "CW and phone; DX"
+    },
+    {
+     "lo": 3800000,
+     "hi": 3900000,
+     "use": "all",
+     "note": "CW, phone and digimodes"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 3560000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 3568600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 3570000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 3573000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 3600000,
+     "name": "Emergency",
+     "mode": "lsb",
+     "emission": "ssb",
+     "note": "emergency centre, all modes +/- 5 kHz"
+    },
+    {
+     "hz": 3690000,
+     "name": "Digital voice",
+     "mode": "lsb",
+     "emission": "dv"
+    },
+    {
+     "hz": 3690000,
+     "name": "QRP SSB",
+     "mode": "lsb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 3735000,
+     "name": "Image",
+     "mode": "lsb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    },
+    {
+     "hz": 3795000,
+     "name": "DX phone",
+     "mode": "lsb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 3845000,
+     "name": "Image",
+     "mode": "lsb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    }
+   ]
+  },
+  {
+   "name": "60 m",
+   "lo": 5351500,
+   "hi": 5366500,
+   "note": "secondary allocation; national rules prevail where they differ; contest-free band",
+   "segments": [
+    {
+     "lo": 5351500,
+     "hi": 5354000,
+     "use": "digi",
+     "note": "CW and narrow-band modes/digimodes, max 500 Hz"
+    },
+    {
+     "lo": 5354000,
+     "hi": 5366000,
+     "use": "all",
+     "note": "USB for phone"
+    },
+    {
+     "lo": 5366000,
+     "hi": 5366500,
+     "use": "digi",
+     "note": "weak-signal modes, max 20 Hz suggested"
+    }
+   ]
+  },
+  {
+   "name": "40 m",
+   "lo": 7000000,
+   "hi": 7200000,
+   "note": "national rules prevail where they differ; Region 3 is reviewing this plan (2026 proposal, not adopted)",
+   "segments": [
+    {
+     "lo": 7000000,
+     "hi": 7030000,
+     "use": "cw"
+    },
+    {
+     "lo": 7030000,
+     "hi": 7040000,
+     "use": "all",
+     "note": "CW, narrow-band modes and phone, max 2700 Hz"
+    },
+    {
+     "lo": 7040000,
+     "hi": 7060000,
+     "use": "all",
+     "note": "narrow-band modes and phone"
+    },
+    {
+     "lo": 7060000,
+     "hi": 7100000,
+     "use": "all"
+    },
+    {
+     "lo": 7100000,
+     "hi": 7200000,
+     "use": "all"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 7030000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 7038600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 7040000,
+     "name": "RTTY DX",
+     "mode": "lsb",
+     "emission": "rtty",
+     "note": "listed in the plan's footnote",
+     "verify": true
+    },
+    {
+     "hz": 7070000,
+     "name": "Digital voice",
+     "mode": "lsb",
+     "emission": "dv"
+    },
+    {
+     "hz": 7074000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 7076000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 7090000,
+     "name": "QRP SSB",
+     "mode": "lsb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 7095000,
+     "name": "DX phone",
+     "mode": "lsb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 7110000,
+     "name": "Emergency",
+     "mode": "lsb",
+     "emission": "ssb",
+     "note": "emergency centre, all modes +/- 5 kHz"
+    },
+    {
+     "hz": 7165000,
+     "name": "Image",
+     "mode": "lsb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    }
+   ]
+  },
+  {
+   "name": "30 m",
+   "lo": 10100000,
+   "hi": 10150000,
+   "note": "secondary allocation; some administrations allow phone in 10115-10140 kHz; contest-free band",
+   "segments": [
+    {
+     "lo": 10110000,
+     "hi": 10130000,
+     "use": "cw",
+     "note": "the plan's table starts at 10110 kHz, so 10100-10110 kHz is not covered",
+     "verify": true
+    },
+    {
+     "lo": 10130000,
+     "hi": 10150000,
+     "use": "digi",
+     "note": "CW and narrow-band digimodes, max 500 Hz"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 10116000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 10136000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 10138000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 10138600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    }
+   ]
+  },
+  {
+   "name": "20 m",
+   "lo": 14000000,
+   "hi": 14350000,
+   "segments": [
+    {
+     "lo": 14000000,
+     "hi": 14070000,
+     "use": "cw"
+    },
+    {
+     "lo": 14070000,
+     "hi": 14099500,
+     "use": "digi",
+     "note": "CW and narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 14099500,
+     "hi": 14100500,
+     "use": "beacon",
+     "note": "International Beacon 14100 kHz with 500 Hz guard band",
+     "verify": true
+    },
+    {
+     "lo": 14100500,
+     "hi": 14112000,
+     "use": "all",
+     "note": "CW, narrow-band digimodes and phone; the plan's rows overlap here (14070-14110 at 500 Hz, 14100-14112 at 2700 Hz)",
+     "verify": true
+    },
+    {
+     "lo": 14112000,
+     "hi": 14250000,
+     "use": "all",
+     "note": "CW and phone"
+    },
+    {
+     "lo": 14250000,
+     "hi": 14350000,
+     "use": "all",
+     "note": "CW and phone"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 14055000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 14060000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 14074000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 14076000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 14095600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 14130000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 14195000,
+     "name": "DX phone",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 14230000,
+     "name": "Image",
+     "mode": "usb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    },
+    {
+     "hz": 14285000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 14300000,
+     "name": "Global emergency",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "all modes +/- 5 kHz"
+    }
+   ]
+  },
+  {
+   "name": "17 m",
+   "lo": 18068000,
+   "hi": 18168000,
+   "note": "contest-free band",
+   "segments": [
+    {
+     "lo": 18068000,
+     "hi": 18095000,
+     "use": "cw"
+    },
+    {
+     "lo": 18095000,
+     "hi": 18109500,
+     "use": "digi",
+     "note": "CW and narrow-band digimodes (row bandwidth 2700 Hz)"
+    },
+    {
+     "lo": 18109500,
+     "hi": 18110500,
+     "use": "beacon",
+     "note": "International Beacon 18110 kHz with 500 Hz guard band",
+     "verify": true
+    },
+    {
+     "lo": 18110500,
+     "hi": 18120000,
+     "use": "all",
+     "note": "CW, narrow-band modes and phone"
+    },
+    {
+     "lo": 18120000,
+     "hi": 18168000,
+     "use": "all",
+     "note": "CW and phone"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 18086000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 18100000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 18102000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 18104600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 18130000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 18160000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 18160000,
+     "name": "Emergency",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "all modes +/- 5 kHz"
+    }
+   ]
+  },
+  {
+   "name": "15 m",
+   "lo": 21000000,
+   "hi": 21450000,
+   "segments": [
+    {
+     "lo": 21000000,
+     "hi": 21070000,
+     "use": "cw"
+    },
+    {
+     "lo": 21070000,
+     "hi": 21110000,
+     "use": "digi",
+     "note": "CW and narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 21110000,
+     "hi": 21125000,
+     "use": "digi",
+     "note": "CW and narrow-band digimodes (row bandwidth 2700 Hz)"
+    },
+    {
+     "lo": 21125000,
+     "hi": 21149500,
+     "use": "digi",
+     "note": "CW and narrow-band digimodes; satellite uplinks"
+    },
+    {
+     "lo": 21149500,
+     "hi": 21150500,
+     "use": "beacon",
+     "note": "International Beacon 21150 kHz with 500 Hz guard band",
+     "verify": true
+    },
+    {
+     "lo": 21150500,
+     "hi": 21450000,
+     "use": "all",
+     "note": "CW and phone; satellite uplinks"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 21055000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 21060000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 21074000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 21076000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 21094600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "the plan prints 21.0946 kHz; read as 21094.6 kHz",
+     "verify": true
+    },
+    {
+     "hz": 21180000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 21295000,
+     "name": "DX phone",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 21340000,
+     "name": "Image",
+     "mode": "usb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    },
+    {
+     "hz": 21360000,
+     "name": "Global emergency",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "all modes +/- 5 kHz"
+    }
+   ]
+  },
+  {
+   "name": "12 m",
+   "lo": 24890000,
+   "hi": 24990000,
+   "note": "contest-free band",
+   "segments": [
+    {
+     "lo": 24890000,
+     "hi": 24915000,
+     "use": "cw"
+    },
+    {
+     "lo": 24915000,
+     "hi": 24929500,
+     "use": "digi",
+     "note": "CW and narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 24929500,
+     "hi": 24930500,
+     "use": "beacon",
+     "note": "International Beacon 24930 kHz with 500 Hz guard band",
+     "verify": true
+    },
+    {
+     "lo": 24930500,
+     "hi": 24940000,
+     "use": "all",
+     "note": "CW, narrow-band modes, DX and phone"
+    },
+    {
+     "lo": 24940000,
+     "hi": 24990000,
+     "use": "all",
+     "note": "CW and phone"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 24906000,
+     "name": "QRP CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 24915000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 24917000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 24924600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 24950000,
+     "name": "QRP SSB",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 24960000,
+     "name": "Digital",
+     "mode": "usb",
+     "emission": "digital",
+     "note": "the plan says only Digital CoA",
+     "verify": true
+    }
+   ]
+  },
+  {
+   "name": "10 m",
+   "lo": 28000000,
+   "hi": 29700000,
+   "note": "FM calling 29600 kHz (international calling channel)",
+   "segments": [
+    {
+     "lo": 28000000,
+     "hi": 28070000,
+     "use": "cw"
+    },
+    {
+     "lo": 28070000,
+     "hi": 28150000,
+     "use": "digi",
+     "note": "CW and narrow-band modes, max 500 Hz"
+    },
+    {
+     "lo": 28150000,
+     "hi": 28190000,
+     "use": "digi",
+     "note": "CW and narrow-band modes, DX"
+    },
+    {
+     "lo": 28190000,
+     "hi": 28201000,
+     "use": "beacon",
+     "note": "beacons; International Beacon 28200 kHz with 500 Hz guard band"
+    },
+    {
+     "lo": 28201000,
+     "hi": 28225000,
+     "use": "beacon",
+     "note": "continuous-duty beacons"
+    },
+    {
+     "lo": 28225000,
+     "hi": 29100000,
+     "use": "all"
+    },
+    {
+     "lo": 29100000,
+     "hi": 29300000,
+     "use": "all",
+     "note": "max 6 kHz"
+    },
+    {
+     "lo": 29300000,
+     "hi": 29510000,
+     "use": "sat",
+     "note": "satellite uplink and downlink"
+    },
+    {
+     "lo": 29510000,
+     "hi": 29590000,
+     "use": "fm",
+     "note": "FM repeater inputs (plan: all modes)",
+     "verify": true
+    },
+    {
+     "lo": 29590000,
+     "hi": 29620000,
+     "use": "fm",
+     "note": "FM simplex; the plan's simplex row reads 29520-29620 and overlaps the repeater-input row",
+     "verify": true
+    },
+    {
+     "lo": 29620000,
+     "hi": 29700000,
+     "use": "fm",
+     "note": "FM repeater outputs (plan: all modes)"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 28055000,
+     "name": "QRS CW",
+     "mode": "cw",
+     "emission": "cw"
+    },
+    {
+     "hz": 28074000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 28076000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 28124600,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 28330000,
+     "name": "Digital voice",
+     "mode": "usb",
+     "emission": "dv"
+    },
+    {
+     "hz": 28360000,
+     "name": "QRP",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "plan says only QRP; SSB assumed",
+     "verify": true
+    },
+    {
+     "hz": 28495000,
+     "name": "DX",
+     "mode": "usb",
+     "emission": "ssb",
+     "note": "plan says only DX CoA; SSB assumed",
+     "verify": true
+    },
+    {
+     "hz": 28680000,
+     "name": "Image",
+     "mode": "usb",
+     "emission": "image",
+     "note": "image modes (e.g. SSTV, fax)"
+    }
+   ]
+  },
+  {
+   "name": "6 m",
+   "lo": 50000000,
+   "hi": 54000000,
+   "note": "in some administrations other services are primary; national rules prevail where they differ",
+   "segments": [
+    {
+     "lo": 50000000,
+     "hi": 50020000,
+     "use": "cw",
+     "note": "CW, max 200 Hz"
+    },
+    {
+     "lo": 50020000,
+     "hi": 50080000,
+     "use": "beacon",
+     "note": "international beacons"
+    },
+    {
+     "lo": 50080000,
+     "hi": 50100000,
+     "use": "cw",
+     "note": "CW, max 200 Hz"
+    },
+    {
+     "lo": 50100000,
+     "hi": 50500000,
+     "use": "all",
+     "note": "CW, phone, narrow-band and digimodes, max 2700 Hz"
+    },
+    {
+     "lo": 50500000,
+     "hi": 54000000,
+     "use": "all",
+     "note": "all modes incl. wideband (bandwidth limit removed in 2024)"
+    }
+   ],
+   "centres": [
+    {
+     "hz": 50110000,
+     "name": "DX",
+     "mode": "usb",
+     "emission": "ssb"
+    },
+    {
+     "hz": 50276000,
+     "name": "JT65",
+     "mode": "usb",
+     "emission": "jt65",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 50293700,
+     "name": "WSPR",
+     "mode": "usb",
+     "emission": "wspr",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    },
+    {
+     "hz": 50313000,
+     "name": "FT8",
+     "mode": "usb",
+     "emission": "ft8",
+     "note": "common frequency from the plan's footnote (USB dial setting by common practice)"
+    }
+   ]
+  }
+ ]
+}

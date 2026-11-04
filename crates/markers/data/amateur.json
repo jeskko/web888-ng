@@ -1,0 +1,1787 @@
+{
+ "title": "Amateur activity frequencies",
+ "sources": [
+  {
+   "id": "wsjtx",
+   "title": "WSJT-X models/FrequencyList.cpp (default frequency list)",
+   "version": "wsjtx-2.7.0 (d2d9c46a; identical at master b4f9a431)",
+   "url": "https://sourceforge.net/p/wsjt/wsjtx/ci/wsjtx-2.7.0/tree/models/FrequencyList.cpp"
+  },
+  {
+   "id": "js8call",
+   "title": "JS8Call FrequencyList.cpp (default frequency list)",
+   "version": "v2.3.1 (fd721e8b; identical at HEAD a7ff1be0)",
+   "url": "https://github.com/js8call/js8call/blob/v2.3.1/FrequencyList.cpp"
+  },
+  {
+   "id": "iaru-r1",
+   "title": "IARU Region 1 HF Band Plan",
+   "version": "effective 16 Oct 2020 (PDF of June 2021)",
+   "url": "https://www.iaru-r1.org/wp-content/uploads/2021/06/hf_r1_bandplan.pdf"
+  },
+  {
+   "id": "iaru-r1-vhf",
+   "title": "IARU Region 1 VHF Handbook, 50-54 MHz band plan",
+   "version": "10.03, February 2026",
+   "url": "https://www.iaru-r1.org/wp-content/uploads/2026/02/VHF_Handbook_V10_03_final.pdf"
+  },
+  {
+   "id": "iaru-r2",
+   "title": "IARU Region 2 Band Plan",
+   "version": "September 2020",
+   "url": "https://www.iaru-r2.org/wp-content/uploads/2020/02/IARU-Region-2-Band-plan.pdf"
+  },
+  {
+   "id": "iaru-r3",
+   "title": "IARU Region 3 Band Plans, Document R3-004",
+   "version": "Rev. 2, November 2024",
+   "url": "https://iaru-r3.org/wp-content/uploads/2025/01/R3-004-Band-Plans-IARU-Region-3.pdf"
+  },
+  {
+   "id": "arrl",
+   "title": "ARRL Band Plan",
+   "version": "retrieved 2026-11-04",
+   "url": "https://www.arrl.org/band-plan"
+  }
+ ],
+ "markers": [
+  {
+   "hz": 136000,
+   "name": "FST4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "fst4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 136000,
+   "name": "FST4W",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "fst4w",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 136000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 136000,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 474200,
+   "name": "FST4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "fst4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 474200,
+   "name": "FST4W",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "fst4w",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 474200,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 474200,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1810000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    2
+   ],
+   "note": "ARRL lists 1810; the R2 plan lists 1812",
+   "source": "arrl"
+  },
+  {
+   "hz": 1812000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    2
+   ],
+   "note": "the R2 plan lists 1812; ARRL lists 1810",
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 1836000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 1836600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1836800,
+   "name": "FST4W",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "fst4w",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1838000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1839000,
+   "name": "FST4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "fst4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1839000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1840000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 1842000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 1910000,
+   "name": "QRP SSB",
+   "mode": "lsb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2",
+   "also": [
+    "arrl"
+   ]
+  },
+  {
+   "hz": 3560000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 3568000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    3
+   ],
+   "note": "WSJT-X lists this one for Region 3 only",
+   "source": "wsjtx"
+  },
+  {
+   "hz": 3568600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 3570000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 3572000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 3573000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 3575000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 3578000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 3590000,
+   "name": "RTTY DX",
+   "mode": "cw",
+   "category": "digital",
+   "emission": "rtty",
+   "regions": [
+    2
+   ],
+   "note": "ARRL: RTTY/data DX; frequency is the signal, tuning mode provisional",
+   "source": "arrl",
+   "verify": true
+  },
+  {
+   "hz": 3600000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    3
+   ],
+   "source": "iaru-r3"
+  },
+  {
+   "hz": 3690000,
+   "name": "QRP SSB",
+   "mode": "lsb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 3735000,
+   "name": "SSTV",
+   "mode": "lsb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 3750000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 3760000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    1
+   ],
+   "source": "iaru-r1"
+  },
+  {
+   "hz": 3845000,
+   "name": "SSTV",
+   "mode": "lsb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    2,
+    3
+   ],
+   "source": "iaru-r2",
+   "also": [
+    "iaru-r3",
+    "arrl"
+   ]
+  },
+  {
+   "hz": 3885000,
+   "name": "AM calling",
+   "mode": "am",
+   "category": "phone",
+   "emission": "am",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2",
+   "also": [
+    "arrl"
+   ]
+  },
+  {
+   "hz": 3985000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 7030000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 7038600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 7040000,
+   "name": "RTTY DX",
+   "mode": "cw",
+   "category": "digital",
+   "emission": "rtty",
+   "regions": [
+    2,
+    3
+   ],
+   "note": "ARRL: RTTY/data DX; R3 plan footnote: RTTY DX; frequency is the signal, tuning mode provisional",
+   "source": "arrl",
+   "also": [
+    "iaru-r3"
+   ],
+   "verify": true
+  },
+  {
+   "hz": 7047500,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 7060000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 7074000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 7076000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 7078000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 7078000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 7090000,
+   "name": "QRP SSB",
+   "mode": "lsb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 7110000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    1,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 7165000,
+   "name": "SSTV",
+   "mode": "lsb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 7171000,
+   "name": "SSTV",
+   "mode": "lsb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    2
+   ],
+   "note": "ARRL (US) SSTV frequency; IARU plans use 7165",
+   "source": "arrl"
+  },
+  {
+   "hz": 7240000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 7275000,
+   "name": "Emergency",
+   "mode": "lsb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 7285000,
+   "name": "QRP SSB",
+   "mode": "lsb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2"
+  },
+  {
+   "hz": 7290000,
+   "name": "AM calling",
+   "mode": "am",
+   "category": "phone",
+   "emission": "am",
+   "regions": [
+    2
+   ],
+   "source": "iaru-r2",
+   "also": [
+    "arrl"
+   ]
+  },
+  {
+   "hz": 10116000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 10130000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 10136000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 10138000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 10138700,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 10140000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 10140000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 14060000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 14074000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 14076000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 14078000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 14078000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 14080000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 14095600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 14100000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 14230000,
+   "name": "SSTV",
+   "mode": "usb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3",
+    "arrl"
+   ]
+  },
+  {
+   "hz": 14285000,
+   "name": "QRP SSB",
+   "mode": "usb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 14286000,
+   "name": "AM calling",
+   "mode": "am",
+   "category": "phone",
+   "emission": "am",
+   "regions": [
+    2
+   ],
+   "note": "ARRL lists 14286; the R2 plan lists 14285",
+   "source": "arrl"
+  },
+  {
+   "hz": 14300000,
+   "name": "Emergency",
+   "mode": "usb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "global centre of activity",
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 18086000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 18100000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 18102000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 18104000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 18104000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 18104000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 18104600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 18110000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 18130000,
+   "name": "QRP SSB",
+   "mode": "usb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 18160000,
+   "name": "Emergency",
+   "mode": "usb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "global centre of activity",
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 21060000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 21074000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 21076000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 21078000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 21078000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 21094600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 21140000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 21150000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 21285000,
+   "name": "QRP SSB",
+   "mode": "usb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2"
+   ]
+  },
+  {
+   "hz": 21340000,
+   "name": "SSTV",
+   "mode": "usb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3",
+    "arrl"
+   ]
+  },
+  {
+   "hz": 21360000,
+   "name": "Emergency",
+   "mode": "usb",
+   "category": "emergency",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "global centre of activity",
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 24906000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 24915000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 24917000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 24919000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 24919000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 24922000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 24924600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 24930000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 24950000,
+   "name": "QRP SSB",
+   "mode": "usb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 28060000,
+   "name": "QRP CW",
+   "mode": "cw",
+   "category": "qrp",
+   "emission": "cw",
+   "regions": [
+    1,
+    2
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2"
+   ]
+  },
+  {
+   "hz": 28074000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 28076000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 28078000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 28078000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 28124600,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 28180000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 28200000,
+   "name": "NCDXF/IARU beacons",
+   "mode": "cw",
+   "category": "beacon",
+   "emission": "cw",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 28360000,
+   "name": "QRP SSB",
+   "mode": "usb",
+   "category": "qrp",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 28680000,
+   "name": "SSTV",
+   "mode": "usb",
+   "category": "sstv",
+   "emission": "sstv",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "iaru-r1",
+   "also": [
+    "iaru-r2",
+    "iaru-r3",
+    "arrl"
+   ]
+  },
+  {
+   "hz": 50090000,
+   "name": "CW DX",
+   "mode": "cw",
+   "category": "cw",
+   "emission": "cw",
+   "regions": [
+    1
+   ],
+   "note": "R1 CW intercontinental centre of activity",
+   "source": "iaru-r1-vhf"
+  },
+  {
+   "hz": 50110000,
+   "name": "DX calling",
+   "mode": "usb",
+   "category": "phone",
+   "emission": "ssb",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "intercontinental calling; R1 asks Europeans not to call here",
+   "source": "iaru-r1-vhf",
+   "also": [
+    "iaru-r2",
+    "iaru-r3"
+   ]
+  },
+  {
+   "hz": 50125000,
+   "name": "SSB calling",
+   "mode": "usb",
+   "category": "phone",
+   "emission": "ssb",
+   "regions": [
+    2
+   ],
+   "source": "arrl"
+  },
+  {
+   "hz": 50150000,
+   "name": "SSB calling",
+   "mode": "usb",
+   "category": "phone",
+   "emission": "ssb",
+   "regions": [
+    1
+   ],
+   "note": "R1 international centre of activity",
+   "source": "iaru-r1-vhf"
+  },
+  {
+   "hz": 50276000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    2,
+    3
+   ],
+   "note": "WSJT-X lists this one for Regions 2 and 3",
+   "source": "wsjtx"
+  },
+  {
+   "hz": 50293000,
+   "name": "WSPR",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "wspr",
+   "regions": [
+    2,
+    3
+   ],
+   "note": "WSJT-X lists this one for Regions 2 and 3",
+   "source": "wsjtx"
+  },
+  {
+   "hz": 50305000,
+   "name": "PSK",
+   "mode": "cw",
+   "category": "digital",
+   "emission": "psk31",
+   "regions": [
+    1,
+    2
+   ],
+   "note": "band plans say 'PSK' centre of activity, not PSK31 specifically; frequency is the signal, not a USB dial",
+   "source": "iaru-r1-vhf",
+   "also": [
+    "iaru-r2"
+   ],
+   "verify": true
+  },
+  {
+   "hz": 50310000,
+   "name": "JT65",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt65",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 50312000,
+   "name": "JT9",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "jt9",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 50313000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 50318000,
+   "name": "FT4",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft4",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "wsjtx"
+  },
+  {
+   "hz": 50318000,
+   "name": "JS8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "js8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "source": "js8call"
+  },
+  {
+   "hz": 50323000,
+   "name": "FT8",
+   "mode": "usb",
+   "category": "digital",
+   "emission": "ft8",
+   "regions": [
+    1,
+    2,
+    3
+   ],
+   "note": "second 6 m FT8 dial in the WSJT-X list",
+   "source": "wsjtx"
+  }
+ ]
+}

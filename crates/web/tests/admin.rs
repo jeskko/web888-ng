@@ -141,8 +141,21 @@ async fn http_h(
     body: Option<Value>,
     extra: &[(&str, &str)],
 ) -> Resp {
-    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
     let body = body.map(|b| b.to_string()).unwrap_or_default();
+    http_raw(addr, method, path, token, &body, "application/json", extra).await
+}
+
+/// One request with a body of `ctype`.
+async fn http_raw(
+    addr: std::net::SocketAddr,
+    method: &str,
+    path: &str,
+    token: Option<&str>,
+    body: &str,
+    ctype: &str,
+    extra: &[(&str, &str)],
+) -> Resp {
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
     let mut req = format!("{method} {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n");
     for (k, v) in extra {
         req += &format!("{k}: {v}\r\n");
@@ -151,7 +164,7 @@ async fn http_h(
         req += &format!("Cookie: {}={t}\r\n", auth::COOKIE);
     }
     if !body.is_empty() {
-        req += "Content-Type: application/json\r\n";
+        req += &format!("Content-Type: {ctype}\r\n");
     }
     req += &format!("Content-Length: {}\r\n\r\n{body}", body.len());
     s.write_all(req.as_bytes()).await.unwrap();
@@ -361,7 +374,8 @@ async fn admin_api() {
     assert_eq!(
         keys,
         [
-            "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt"
+            "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt",
+            "markers"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());
@@ -551,6 +565,170 @@ async fn listener_password_gates_the_receiver() {
         Some(ServerMsg::Hello { .. })
     ));
 
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+/// Labels, band plans and the station's own list (`markers`).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn markers_api() {
+    let path = temp("markers");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    let (addr, stop) = start(c, path.clone()).await;
+
+    let info = http(addr, "GET", "/api/markers/info", None, None)
+        .await
+        .json();
+    assert_eq!(
+        (info["region"].as_u64(), info["eibi_season"].as_str()),
+        (Some(1), Some("B26")),
+        "{info}"
+    );
+    let count = |id: &str| {
+        info["sources"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|s| s["id"] == id)
+            .unwrap()["count"]
+            .as_u64()
+            .unwrap()
+    };
+    assert!(
+        count("eibi") > 1000 && count("amateur") > 50 && count("own") == 0,
+        "{info}"
+    );
+
+    // band plans per region: 40 m ends at 7.2 MHz in region 1, 7.3 in 2
+    let edge = |p: &Value| {
+        p["amateur"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .find(|b| b["name"] == "40 m")
+            .unwrap()["hi"]
+            .as_f64()
+            .unwrap()
+    };
+    let r1 = http(addr, "GET", "/api/bandplan", None, None).await.json();
+    let r2 = http(addr, "GET", "/api/bandplan?region=2", None, None)
+        .await
+        .json();
+    assert_eq!((r1["region"].as_u64(), edge(&r1)), (Some(1), 7_200_000.0));
+    assert_eq!((r2["region"].as_u64(), edge(&r2)), (Some(2), 7_300_000.0));
+
+    // EiBi on 49 m on a Wednesday afternoon (2026-11-04 15:30 UTC)
+    let m = http(
+        addr,
+        "GET",
+        "/api/markers?lo=5900000&hi=6200000&src=eibi&t=1793806200",
+        None,
+        None,
+    )
+    .await
+    .json();
+    let m = m["markers"].as_array().unwrap().clone();
+    assert!(m.len() > 10, "{}", m.len());
+    assert!(
+        m.iter()
+            .all(|x| x["src"] == "eibi" && (5.9e6..=6.2e6).contains(&x["hz"].as_f64().unwrap()))
+    );
+    // the amateur list: FT8 on 20 m
+    let a = http(
+        addr,
+        "GET",
+        "/api/markers?lo=14000000&hi=14350000&src=amateur",
+        None,
+        None,
+    )
+    .await
+    .json();
+    assert!(
+        a["markers"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .any(|x| x["hz"] == 14_074_000.0 && x["emission"] == "ft8"),
+        "{a}"
+    );
+    assert_eq!(
+        http(addr, "GET", "/api/markers?lo=2&hi=1", None, None)
+            .await
+            .status,
+        400
+    );
+
+    // the own list: admin only, checked, kept next to the config file
+    let csv = "khz,name,mode,note\n4625,The Buzzer,usb,UVB-76\n";
+    assert_eq!(
+        http_raw(
+            addr,
+            "PUT",
+            "/api/admin/markers",
+            None,
+            csv,
+            "text/csv",
+            &[]
+        )
+        .await
+        .status,
+        401
+    );
+    let admin = http(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password": ADMIN_PW, "admin": true})),
+    )
+    .await
+    .token();
+    let bad = http_raw(
+        addr,
+        "PUT",
+        "/api/admin/markers",
+        Some(&admin),
+        "khz,name\nx,y\n",
+        "text/csv",
+        &[],
+    )
+    .await;
+    assert_eq!(bad.status, 400);
+    assert!(bad.body.contains("line 2"), "{}", bad.body);
+    let ok = http_raw(
+        addr,
+        "PUT",
+        "/api/admin/markers",
+        Some(&admin),
+        csv,
+        "text/csv",
+        &[],
+    )
+    .await;
+    assert_eq!(
+        (ok.status, ok.json()["count"].as_u64()),
+        (200, Some(1)),
+        "{}",
+        ok.body
+    );
+    assert!(path.with_file_name("markers.csv").exists());
+    let own = http(
+        addr,
+        "GET",
+        "/api/markers?lo=4000000&hi=5000000&src=own",
+        None,
+        None,
+    )
+    .await
+    .json();
+    assert_eq!(own["markers"][0]["name"], "The Buzzer", "{own}");
+    let down = http(addr, "GET", "/api/admin/markers", Some(&admin), None).await;
+    assert!(
+        down.body.contains("4625,The Buzzer,usb,UVB-76"),
+        "{}",
+        down.body
+    );
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
