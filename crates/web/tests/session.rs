@@ -155,8 +155,20 @@ async fn session_streams_audio_and_waterfall() {
     let ServerMsg::State(st) = json(&ws.next().await.unwrap().unwrap()).unwrap() else {
         panic!()
     };
-    assert_eq!(st.hz, 7_074_000.0);
-    assert_eq!(st.wf.decim, 2, "full view of 0..61.44 MHz");
+    assert_eq!(st.hz, 7_066_000.0);
+    assert_eq!(st.mode, proto::Mode::Lsb, "LSB below 10 MHz");
+    assert_eq!(
+        (st.wf.decim, st.wf.center_hz),
+        (128, 7_066_000.0),
+        "960 kHz around the dial"
+    );
+    // the checks below listen on 7.074 MHz, USB
+    ws.send(Message::Text(r#"{"type":"mode","mode":"usb"}"#.into()))
+        .await
+        .unwrap();
+    ws.send(Message::Text(r#"{"type":"tune","hz":7074000}"#.into()))
+        .await
+        .unwrap();
 
     // a second user gets in too
     let (mut ws2, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
@@ -328,7 +340,7 @@ async fn session_waits_for_a_channel() {
         .unwrap();
     assert_eq!(web.state, LeaseState::Waiting { position: 1 });
     assert!(web.label.starts_with("web 127.0.0.1"), "{}", web.label);
-    assert_eq!(web.hz, 7_074_000.0);
+    assert_eq!(web.hz, 7_066_000.0);
 
     // one frees: the session gets that channel, tuned to its dial
     drop(held);
@@ -345,7 +357,13 @@ async fn narrow_view_comes_from_the_channel() {
     let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
         .await
         .unwrap();
-    // 30 kHz around the dial (7.074 MHz): inside the RX channel
+    // 30 kHz around the dial (7.074 MHz, USB): inside the RX channel
+    ws.send(Message::Text(r#"{"type":"mode","mode":"usb"}"#.into()))
+        .await
+        .unwrap();
+    ws.send(Message::Text(r#"{"type":"tune","hz":7074000}"#.into()))
+        .await
+        .unwrap();
     let req = r#"{"type":"wf","center_hz":7074000,"decim":4096,"bins":1024,"fps":20}"#;
     ws.send(Message::Text(req.into())).await.unwrap();
     let mut lines = 0;

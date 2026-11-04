@@ -362,7 +362,7 @@
           "default": "/var/lib/web888d"
         },
         "default_freq": {
-          "description": "Initial dial frequency (Hz; default 7.074 MHz if in range).",
+          "description": "Initial dial frequency (Hz; default 7.066 MHz if in range).",
           "type": [
             "number",
             "null"

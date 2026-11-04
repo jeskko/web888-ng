@@ -209,6 +209,8 @@ async fn the_thirteenth_listens_along_then_gets_a_receiver() {
             },
             "user {k}"
         );
+        // the tones are above the dials (a new session below 10 MHz is LSB)
+        c.send(r#"{"type":"mode","mode":"usb"}"#.into()).await;
         c.send(format!(r#"{{"type":"tune","hz":{}}}"#, dial(k)))
             .await;
         if k == 3 {
@@ -228,6 +230,7 @@ async fn the_thirteenth_listens_along_then_gets_a_receiver() {
             position: 1
         }
     );
+    last.send(r#"{"type":"mode","mode":"usb"}"#.into()).await;
     last.send(format!(r#"{{"type":"tune","hz":{}}}"#, dial(12)))
         .await;
     // the others (not itself), the ones who share with their frequency
@@ -317,6 +320,7 @@ async fn the_thirteenth_listens_along_then_gets_a_receiver() {
 async fn listening_ends_when_the_user_opts_out_or_leaves() {
     let (url, stop) = start(1, 2).await;
     let mut a = Client::connect(&url).await;
+    a.send(r#"{"type":"mode","mode":"usb"}"#.into()).await;
     a.send(format!(r#"{{"type":"tune","hz":{}}}"#, dial(0)))
         .await;
     a.until(is_state).await;

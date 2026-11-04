@@ -295,7 +295,7 @@ pub struct Web {
     pub tls_key: Option<PathBuf>,
     /// Where web888d keeps state (the self-signed certificate).
     pub state_dir: PathBuf,
-    /// Initial dial frequency (Hz; default 7.074 MHz if in range).
+    /// Initial dial frequency (Hz; default 7.066 MHz if in range).
     pub default_freq: Option<f64>,
     /// Most FFTs averaged per waterfall line (CPU budget; default 30, 6 on
     /// 32-bit ARM, where an FFT costs ~100x more: `doc/m3-multi-user.md` §4).

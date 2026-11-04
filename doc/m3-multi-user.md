@@ -102,8 +102,9 @@ slots. Three mechanisms, applied in order:
 
 1. **Shared views.** Sessions with the same (centre, decimation) share one
    stream and one FFT engine (`WfEngine` per view, lines fanned out to
-   its sessions, re-binned per session's `bins`). The default full view is
-   the common case, so most new users cost nothing extra.
+   its sessions, re-binned per session's `bins`). The default view (the
+   full band until 2026-11; now 960 kHz around the default dial) is the
+   common case, so most new users cost nothing extra.
 2. **Narrow views from the user's own RX channel.** A view whose span is
    ≤ 40 kHz (inside the ±24 kHz of a 48 kS/s channel) and contains the
    user's audio channel is computed from that channel's IQ, so it needs no

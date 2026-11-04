@@ -140,14 +140,20 @@ impl Timeouts {
     }
 }
 
+/// A new session's dial (if in range; `[web] default_freq` overrides) and
+/// waterfall span: the 40 m SSB band in view. The idea is from PR #2
+/// (jorksx).
+const START_HZ: f64 = 7_066_000.0;
+const START_SPAN_HZ: f64 = 960_000.0;
+
 impl Shared {
-    /// Initial dial frequency: the configured one, else 7.074 MHz if in
+    /// Initial dial frequency: the configured one, else 7.066 MHz if in
     /// range, else the middle of the range.
     pub fn default_hz(&self) -> f64 {
         let r = &self.radio;
         let want = self.live.borrow().web.default_freq.unwrap_or(
-            if (r.rf_lo..=r.rf_hi).contains(&7_074_000.0) {
-                7_074_000.0
+            if (r.rf_lo..=r.rf_hi).contains(&START_HZ) {
+                START_HZ
             } else {
                 (r.rf_lo + r.rf_hi) / 2.0
             },
@@ -175,6 +181,22 @@ impl Shared {
             },
             spots: self.skim.is_some() && self.live.borrow().skimmer.iter().any(|s| s.enabled),
         }
+    }
+
+    /// A new session's waterfall: START_SPAN_HZ around the dial (or the
+    /// nearest span the hardware has), kept inside the range.
+    pub fn start_view(&self, hz: f64) -> WfReq {
+        let r = &self.radio;
+        let mut decim = r.wf_decim_min;
+        while decim < r.wf_decim_max && r.adc_hz / (decim as f64) > START_SPAN_HZ {
+            decim *= 2;
+        }
+        self.clamp_wf(WfReq {
+            center_hz: hz,
+            decim,
+            bins: 1024,
+            fps: 20.0,
+        })
     }
 
     /// The widest waterfall: the whole tunable range, or if the widest
@@ -638,9 +660,10 @@ pub async fn run(
     };
     let id = adm.id;
 
-    let mode = Mode::Usb;
-    let defaults = AudioSpec::new(mode.into());
     let hz = sh.default_hz();
+    // the amateur convention: LSB below 10 MHz
+    let mode = if hz < 10e6 { Mode::Lsb } else { Mode::Usb };
+    let defaults = AudioSpec::new(mode.into());
     let mut st = State {
         hz,
         mode,
@@ -654,7 +677,7 @@ pub async fn run(
         nr: 0.0,
         squelch: false,
         squelch_db: -100.0,
-        wf: sh.full_view(hz),
+        wf: sh.start_view(hz),
         share: sh.live.borrow().limits.share_default,
         listen: None,
         name: String::new(),
