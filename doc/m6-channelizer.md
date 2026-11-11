@@ -315,6 +315,32 @@ the metrics instead:
   meets the build's 0.4 ns guardband too (WNS +0.058 ns, as the stock
   HF build), not yet run on the unit.
 
+* **What a distinct zoomed view costs (2026-11-11, the unit, v0.8.0,
+  hw a6e1f68).** `webload`, 8 sessions for 75 s, each its own USB
+  receiver (dials 25 kHz apart on 40 m), the ten FT8 skimmers running
+  (SCHED_IDLE; they shed bands under the load); CPU per thread over 60 s,
+  % of a core; audio 11 994-12 003 S/s, no gaps, 20 fresh lines/s in
+  all three:
+
+  | views | pool | hw thread | web |
+  |---|---|---|---|
+  | none (no sessions) | 11.1 | 12.9 | 0.1 |
+  | the shared full view | 35.1 | 21.1 | 17.0 |
+  | 480 kHz each (`--zoom 256`) | 88.4 | 31.4 | 21.1 |
+  | 240 kHz each (`--zoom 512`) | 104.3 | 25.7 | 21.1 |
+
+  A session with the shared view costs about 3 % on the pool, 1 % on the
+  hw thread and 2 % on the web threads; **its own zoomed view adds 7-9 %
+  on the pool**, 0.6-1.3 % on the hw thread and 0.5 % on the web
+  threads: two to three times the session's audio. (These views overlap,
+  the dials being 25 kHz apart, so they share bins; views on separate
+  bands cost the hw thread more: +5 to 7 % measured for one on
+  2026-10-30.) The earlier estimate for spectra in the FPGA (about 22 %
+  of a core at 30 zoomed sessions, from the bench's 0.74 % a view) was
+  low by an order of magnitude: at 16 distinct views the pool alone
+  spends over a core on them. The device now has the room (hw
+  `docs/channelizer.md` §3.8: LUT 65 %, BRAM 54.5 of 60, 15 DSP free).
+
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
   sooner.
