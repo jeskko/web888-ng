@@ -17,9 +17,9 @@ Status (see `doc/design.md` §11), release v0.7.0:
   bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
   on ten bands.
-* **In progress: M5**, the KiwiSDR protocol (`doc/m5-kiwi.md`): Kiwi
-  clients (kiwirecorder, SuperSDR) get audio (PCM, ADPCM, IQ) and the
-  waterfall; kiwirecorder works. Not released yet.
+* **Done, not released yet: M5**, the KiwiSDR protocol
+  (`doc/m5-kiwi.md`): kiwirecorder and SuperSDR get audio (PCM, ADPCM,
+  IQ) and the waterfall.
 * **Not done yet:** a JTTY skimmer on the unit. On the A9 the receiver
   runs about four times slower than real time, so it needs to get faster
   first.

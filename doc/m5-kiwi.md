@@ -1,10 +1,11 @@
 # M5 Kiwi protocol
 
-Status: implemented 2026-11-11 (`crates/web/src/kiwi/`, feature `kiwi`,
-on by default). **kiwirecorder works** (§6): kiwiclient 4eb733e against
-web888d on the sim backend and on the Web-888 with real signals. SuperSDR (a GUI) hasn't been tried yet. The
-end-to-end tests (`crates/web/tests/kiwi.rs`) use a client that sends what
-kiwirecorder sends.
+Status: done 2026-11-11 (`crates/web/src/kiwi/`, feature `kiwi`, on by
+default). kiwirecorder works (§6: kiwiclient 4eb733e against the sim and
+against the Web-888 with real signals), and SuperSDR works against the
+unit (tried by the project's owner). The end-to-end tests
+(`crates/web/tests/kiwi.rs`) use a client that sends what kiwirecorder
+sends. Left: a measured dBm calibration (§6).
 
 ## 1. What it is
 
@@ -194,7 +195,9 @@ reads the same at any zoom; the noise floor rises with the bin width), so
 only the dBm offset differs. It needs a measurement with a known signal
 (a generator through a known attenuator); until then Kiwi clients see dBFS.
 Daytime 40 m noise of about -95 dBFS in 2.4 kHz suggests an offset of
-roughly -10 to -15 dB, but that is a guess, not a calibration.
+roughly -10 to -15 dB. The unit runs with `smeter_offset_db = -12.0` as
+a provisional value (7150 kHz then reads -107 dBm) until a measurement
+replaces it.
 
 `/status` counted the skimmers' leases as users (`users=10` on an idle
 receiver); it counts people now.
@@ -207,5 +210,5 @@ receiver); it counts people now.
 * GPS timestamps in IQ packets (wait for M6's timestamps), TDoA.
 * NBFM, de-emphasis, the Kiwi squelch, and the noise reduction algorithms
   by number.
-* SuperSDR (needs a person at the GUI).
-* The dBm calibration (`smeter_offset_db`).
+* A measured dBm calibration (`smeter_offset_db`; -12 dB provisional on
+  the unit).
