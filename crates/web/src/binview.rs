@@ -49,6 +49,12 @@ pub const ZOOM_BINS: usize = 257;
 /// the power line, its bins the display's or finer.
 pub const ENGINE_BINS: usize = 1025;
 
+/// Most FFT points a line of a view on the engine's jobs sums (its
+/// spectra a line times its bins' points; one spectrum at least): what
+/// the view costs the pool. A 480 kHz view's six spectra are under it; a
+/// 15.36 MHz view gets four, a 30.72 MHz one two.
+const LINE_POINTS: usize = 8400;
+
 /// Most bins a zoomed view shows while the pool sheds load (960 kHz).
 pub const LIGHT_BINS: usize = 33;
 
@@ -156,8 +162,9 @@ struct Jobs {
     a: usize,
     start: Instant,
     period: Duration,
-    /// Each view bin's last levels and when they came.
-    held: Vec<Option<(Vec<f32>, Instant)>>,
+    /// Each view bin's last levels (n/2 each) and when they came.
+    held: Vec<f32>,
+    held_at: Vec<Option<Instant>>,
     /// Shift added after a saturated result, and when.
     extra: u8,
     sat: Instant,
@@ -176,7 +183,8 @@ impl Jobs {
             a: 1,
             start: now,
             period: Duration::from_millis(50),
-            held: vec![None; view.len()],
+            held: vec![0.0; view.len() << (logn - 1)],
+            held_at: vec![None; view.len()],
             extra: 0,
             sat: now,
         }
@@ -389,11 +397,13 @@ impl BinViewJob {
             self.want.clear();
             self.tap.want(Vec::new(), fps);
             self.tap.burst(Vec::new(), 0, true);
+            let logn = (n.trailing_zeros() as u8).max(zc.min_logn);
+            let points = self.view.len() << (logn - 1);
             self.tap.zoom_demand(Some(Demand {
                 runs: runs(&self.caps, &self.view),
-                logn: (n.trailing_zeros() as u8).max(zc.min_logn),
+                logn,
                 fps,
-                max_a: self.budget,
+                max_a: self.budget.min(LINE_POINTS / points).max(1),
             }));
             self.plan_jobs(Instant::now());
             return;
@@ -458,10 +468,21 @@ impl BinViewJob {
             new.period = old.period;
             new.a = old.a;
             if old.logn == g.logn {
-                for (h, b) in new.held.iter_mut().zip(&self.view) {
-                    if let Some(i) = old.bins.iter().position(|x| x == b) {
-                        *h = old.held[i].clone();
-                    }
+                let keep = 1usize << (g.logn - 1);
+                // both by frequency: the old view's bins from where the
+                // new one's first is
+                let off = old.bins.iter().position(|x| Some(x) == self.view.first());
+                for (k, b) in self.view.iter().enumerate() {
+                    let i = match off {
+                        Some(o) if old.bins.get(o + k) == Some(b) => o + k,
+                        _ => match old.bins.iter().position(|x| x == b) {
+                            Some(i) => i,
+                            None => continue,
+                        },
+                    };
+                    new.held_at[k] = old.held_at[i];
+                    new.held[k * keep..(k + 1) * keep]
+                        .copy_from_slice(&old.held[i * keep..(i + 1) * keep]);
                 }
             }
         }
@@ -634,14 +655,16 @@ impl BinViewJob {
         let mut any = power.is_some();
         for i in 0..self.view.len() {
             let at = db.len();
+            let h = &mut j.held[i * keep..(i + 1) * keep];
             if j.acc.bin_db(i, &mut db) {
-                j.held[i] = Some((db[at..].to_vec(), now));
+                h.copy_from_slice(&db[at..]);
+                j.held_at[i] = Some(now);
                 fresh = true;
                 any = true;
                 continue;
             }
-            match &j.held[i] {
-                Some((h, t)) if now < *t + HOLD => {
+            match j.held_at[i] {
+                Some(t) if now < t + HOLD => {
                     db.extend_from_slice(h);
                     any = true;
                 }

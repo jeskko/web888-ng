@@ -21,7 +21,8 @@
 //! sessions at once, the start has its own gaps: setups, queueing).
 //! The server must allow the sessions from one address (`limits.per_ip`).
 //! With `WEBLOAD_DUMP=FILE`, session 0's fresh waterfall lines, averaged
-//! (power), go to FILE as `Hz dB` lines.
+//! (power), go to FILE as `Hz dB sd` lines (sd: the bin's standard
+//! deviation over the lines, dB).
 
 use futures_util::{SinkExt, StreamExt};
 use std::time::Duration;
@@ -54,6 +55,8 @@ struct Stats {
     /// Fresh lines summed (power per bin), their count, the first bin's
     /// frequency and the spacing.
     spec: (Vec<f64>, usize, f64, f64),
+    /// Each bin's sum of dB and of dB squared over those lines.
+    spec_db: Vec<(f64, f64)>,
 }
 
 /// Session k's dial and view request (none: the default full view).
@@ -147,9 +150,13 @@ async fn session(url: String, k: usize, o: Opts) -> Stats {
                         let lv = &b[40..];
                         if st.spec.0.len() != lv.len() {
                             st.spec = (vec![0.0; lv.len()], 0, f64at(8), f64at(16));
+                            st.spec_db = vec![(0.0, 0.0); lv.len()];
                         }
-                        for (a, &v) in st.spec.0.iter_mut().zip(lv.iter()) {
-                            *a += 10f64.powf((db0 + v as f64 * step) / 10.0);
+                        for ((a, d), &v) in st.spec.0.iter_mut().zip(&mut st.spec_db).zip(lv) {
+                            let db = db0 + v as f64 * step;
+                            *a += 10f64.powf(db / 10.0);
+                            d.0 += db;
+                            d.1 += db * db;
                         }
                         st.spec.1 += 1;
                     }
@@ -234,14 +241,17 @@ async fn main() {
             && let Some(path) = std::env::var_os("WEBLOAD_DUMP")
         {
             let (sum, n, f0, df) = &s.spec;
+            let nf = *n as f64;
             let text: String = sum
                 .iter()
+                .zip(&s.spec_db)
                 .enumerate()
-                .map(|(i, p)| {
+                .map(|(i, (p, d))| {
                     format!(
-                        "{:.1} {:.2}\n",
+                        "{:.1} {:.2} {:.2}\n",
                         f0 + i as f64 * df,
-                        10.0 * (p / *n as f64).log10()
+                        10.0 * (p / nf).log10(),
+                        (d.1 / nf - (d.0 / nf).powi(2)).max(0.0).sqrt()
                     )
                 })
                 .collect();
