@@ -393,7 +393,8 @@ async fn status(
         .channels
         .leases()
         .iter()
-        .filter(|l| l.state.channel().is_some())
+        // people: the skimmers' leases aren't users
+        .filter(|l| l.state.channel().is_some() && l.class != web888_core::leases::Class::Skimmer)
         .count()
         .min(n);
     let up = sh.kiwi.started.elapsed().as_secs();

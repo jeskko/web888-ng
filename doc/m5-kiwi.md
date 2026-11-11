@@ -2,7 +2,7 @@
 
 Status: implemented 2026-11-11 (`crates/web/src/kiwi/`, feature `kiwi`,
 on by default). **kiwirecorder works** (§6): kiwiclient 4eb733e against
-web888d on the sim backend. SuperSDR (a GUI) hasn't been tried yet. The
+web888d on the sim backend and on the Web-888 with real signals. SuperSDR (a GUI) hasn't been tried yet. The
 end-to-end tests (`crates/web/tests/kiwi.rs`) use a client that sends what
 kiwirecorder sends.
 
@@ -175,6 +175,30 @@ Found on the way:
   and ours) puts them at the start. Its compressed waterfalls are
   therefore 10 pixels off on any Kiwi; uncompressed ones are fine.
 
+### On the Web-888 with real signals (2026-11-11)
+
+The project's unit (channelizer bitstream, 32 channels, FT8 skimmers on
+ten bands, a 160 m OCFD), server 2f72451, kiwirecorder through an SSH
+relay:
+
+| run | result |
+|---|---|
+| 40 m FT8, `-m usb -L 200 -H 3000`, 47 s, ADPCM and PCM at once | decoded with `ft8wav`: 11 and 13 messages in the two whole slots, the same from both; the unit's own 40 m skimmer had 11 and 10 in the same slots, the strong ones identical |
+| 20 m `-m iq` | stereo, the FT8 band at +0.2..+3 kHz |
+| 6070 kHz `-m am` | audio, AGC on the carrier |
+| `--wf -z 5 --wf-auto` around 7.1 MHz | the band as in the web UI; `-z 0` with kiwirecorder's fixed -155..-30 dB scale is all hot (uncalibrated levels, below) |
+| `--S-meter=20` | 7150 kHz USB -94.7, 7074 kHz -94.0, 6070 kHz AM -91.0, 26 MHz -103.9: dBFS, since `smeter_offset_db` = 0 |
+
+**Levels.** A Kiwi's waterfall, like ours, is power in the bin (a sine
+reads the same at any zoom; the noise floor rises with the bin width), so
+only the dBm offset differs. It needs a measurement with a known signal
+(a generator through a known attenuator); until then Kiwi clients see dBFS.
+Daytime 40 m noise of about -95 dBFS in 2.4 kHz suggests an offset of
+roughly -10 to -15 dB, but that is a guess, not a calibration.
+
+`/status` counted the skimmers' leases as users (`users=10` on an idle
+receiver); it counts people now.
+
 ## 7. Not done
 
 * Camping (`?camp`): answered with `camp_disconnect`.
@@ -183,5 +207,5 @@ Found on the way:
 * GPS timestamps in IQ packets (wait for M6's timestamps), TDoA.
 * NBFM, de-emphasis, the Kiwi squelch, and the noise reduction algorithms
   by number.
-* SuperSDR (needs a person at the GUI), and a run on a Web-888 with
-  real signals.
+* SuperSDR (needs a person at the GUI).
+* The dBm calibration (`smeter_offset_db`).
