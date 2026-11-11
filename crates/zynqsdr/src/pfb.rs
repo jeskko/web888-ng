@@ -40,9 +40,9 @@ const CHUNK_WORDS: usize = 64;
 /// bins read 2^24 for it.
 const POWER_FULL_SCALE: f64 = (1u64 << 48) as f64;
 
-/// A zoom point's |X|² for a full-scale sine's samples (the 25-bit bins,
-/// 2^24) through a window of peak 1: the engine's output over this is
-/// [`ZoomResult`]'s scale.
+/// The engine's points are |X|² of the 25-bit bins (a full-scale sine's
+/// reads 2^24: the bins ring's 2^29 >> 5) through a window of peak 1;
+/// over this, [`ZoomResult`]'s scale (a full-scale sine |z| = 1).
 const ZOOM_FULL_SCALE: f64 = (1u64 << 48) as f64;
 
 /// `(type, sub, number)` of a header word.
@@ -299,9 +299,28 @@ impl PowerParser {
         }
     }
 
-    /// Tag `tag`'s job has `points` points (bins · n/2; 0: none).
+    /// Tag `tag`'s job has `points` points (bins · n/2; 0: none). A
+    /// result takes its tag's registration; one that never came (a chunk
+    /// dropped) is replaced when the tag is given again.
     pub fn expect_zoom(&mut self, tag: u8, points: usize) {
         self.zoom_points[tag as usize & 63] = points.min(u16::MAX as usize) as u16;
+    }
+
+    /// Lines of `frames` frames from now: the lines in progress and not
+    /// yet taken dropped (the old scale); the zoom jobs kept.
+    pub fn set_frames(&mut self, frames: u16) {
+        self.frames = frames.max(1);
+        self.cur = None;
+        self.ready.clear();
+    }
+
+    /// The ring restarted: whatever was in progress dropped (the
+    /// engine's queue with it); the registrations kept.
+    pub fn restart(&mut self) {
+        self.w = Words::default();
+        self.cur = None;
+        self.ready.clear();
+        self.zoom = None;
     }
 
     /// The oldest zoom result not yet taken.
@@ -438,6 +457,7 @@ impl PowerParser {
         if z.next == chunks {
             let mut z = self.zoom.take().expect("set");
             z.power.truncate(points);
+            self.zoom_points[tag as usize] = 0;
             if self.zoom_ready.len() == Self::KEEP_ZOOM {
                 self.zoom_ready.pop_front();
             }
@@ -723,6 +743,54 @@ mod tests {
             .map(|r| (r.tag, r.frame, r.power[r.power.len() - 1]))
             .collect();
         assert_eq!(got, vec![(9, 2, 2.0), (5, 3, 3.0)]);
+        assert_eq!(p.zoom_broken, 1);
+    }
+
+    #[test]
+    fn a_full_scale_tone_reads_the_traits_scale() {
+        // a full-scale sine: the bins ring's 2^29, the 25-bit bin's 2^24;
+        // on an FFT point of the window (peak 1, Σw = 0.35875 n) |X| =
+        // 2^24 Σw, which the trait reads as (Σw)²
+        let bin = ((1u64 << 29) >> 5) as f64;
+        for n in [8, 128, 2048] {
+            let sw = 0.35875 * n as f64;
+            let hw = ((bin * sw).powi(2) / ZOOM_FULL_SCALE) as f32;
+            let w = zoom_job(1, false, 0, 4, |_| hw);
+            let mut p = PowerParser::new(1);
+            p.expect_zoom(1, 4);
+            p.push(&bytes(&w[0]));
+            let r = p.pop_zoom().unwrap();
+            assert!((r.power[0] as f64 / sw.powi(2) - 1.0).abs() < 1e-6, "n {n}");
+        }
+    }
+
+    #[test]
+    fn a_tag_given_again_after_a_lost_result() {
+        let mut p = PowerParser::new(1);
+        // tag 5's result lost whole (its chunks dropped): given again for
+        // a job of another length, that one's result is whole
+        p.expect_zoom(5, 1088);
+        p.expect_zoom(5, 4);
+        let mut w = power_line(1, |_| 1.0);
+        w.extend(zoom_job(5, false, 2, 4, |i| i as f32).concat());
+        // a result taken frees its tag: a stray one after it is dropped
+        w.extend(zoom_job(5, false, 3, 4, |_| 1.0).concat());
+        w.extend(power_line(2, |_| 1.0));
+        p.push(&bytes(&w));
+        let r = p.pop_zoom().unwrap();
+        assert_eq!((r.tag, r.frame, r.power), (5, 2, vec![0.0, 1.0, 2.0, 3.0]));
+        assert!(p.pop_zoom().is_none());
+        assert_eq!(p.zoom_broken, 1);
+        // the frames changed: lines dropped, a job in flight kept
+        p.expect_zoom(7, 1088);
+        let j = zoom_job(7, false, 4, 1088, |_| 1.0);
+        p.push(&bytes(&j[..3].concat()));
+        p.set_frames(20);
+        p.push(&bytes(&j[3..].concat()));
+        assert_eq!(
+            p.pop_zoom().map(|r| (r.tag, r.power.len())),
+            Some((7, 1088))
+        );
         assert_eq!(p.zoom_broken, 1);
     }
 

@@ -30,6 +30,14 @@ pub const PFB_START: u32 = 0x4008_5A23; // PfbStart
 pub const PFB_READ: u32 = 0xC010_5A24; // PfbRead
 pub const PFB_STATUS: u32 = 0x801C_5A25; // -> PfbStatus
 
+/// The zoom engine (open driver): `PFB_ZOOM` fails with EOPNOTSUPP
+/// without it, ENXIO while the power stream isn't running; a driver
+/// before it knows neither (ENOTTY).
+pub const PFB_ZOOM: u32 = 0xC048_5A26; // PfbZoom
+pub const PFB_ZOOM_INFO: u32 = 0x8014_5A27; // -> PfbZoomInfo
+/// Jobs a `PFB_ZOOM` call carries at most.
+pub const PFB_ZOOM_MAX: usize = 16;
+
 /// `PfbStart::streams`, `PfbRead::stream`.
 pub const PFB_BINS: u32 = 1 << 0;
 pub const PFB_POWER: u32 = 1 << 1;
@@ -150,6 +158,30 @@ pub struct PfbStatus {
     pub power_dropped: u32,
 }
 
+/// The first `accepted` of `count` jobs queued (as many as the queue had
+/// room for).
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PfbZoom {
+    pub count: u32,
+    pub accepted: u32,
+    pub jobs: [u32; PFB_ZOOM_MAX],
+}
+
+#[repr(C)]
+#[derive(Clone, Copy, Debug, Default)]
+pub struct PfbZoomInfo {
+    pub size: u32,
+    /// The queue's depth; 0: no engine.
+    pub queue: u32,
+    /// Places free now.
+    pub free: u32,
+    /// Jobs done (16 bits, wraps).
+    pub done: u32,
+    /// Bit 0 the queue overflowed, 1 a job out of range was dropped.
+    pub flags: u32,
+}
+
 /// The size field of an ioctl number (bits 29:16).
 pub const fn ioc_size(cmd: u32) -> usize {
     ((cmd >> 16) & 0x3fff) as usize
@@ -186,6 +218,11 @@ mod tests {
         assert_eq!(size_of::<PfbStart>(), ioc_size(PFB_START));
         assert_eq!(size_of::<PfbRead>(), ioc_size(PFB_READ));
         assert_eq!(size_of::<PfbStatus>(), ioc_size(PFB_STATUS));
+        assert_eq!(size_of::<PfbZoom>(), 72);
+        assert_eq!(size_of::<PfbZoom>(), ioc_size(PFB_ZOOM));
+        assert_eq!(std::mem::offset_of!(PfbZoom, jobs), 8);
+        assert_eq!(size_of::<PfbZoomInfo>(), 20);
+        assert_eq!(size_of::<PfbZoomInfo>(), ioc_size(PFB_ZOOM_INFO));
         // _IOR/_IOW/_IOWR('Z', nr, size): direction, size, type, number
         for (cmd, dir, nr) in [
             (PFB_INFO, 2, 0x21),
@@ -193,6 +230,8 @@ mod tests {
             (PFB_START, 1, 0x23),
             (PFB_READ, 3, 0x24),
             (PFB_STATUS, 2, 0x25),
+            (PFB_ZOOM, 3, 0x26),
+            (PFB_ZOOM_INFO, 2, 0x27),
         ] {
             assert_eq!((cmd >> 30, (cmd >> 8) & 0xff, cmd & 0xff), (dir, 0x5a, nr));
         }

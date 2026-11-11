@@ -1,10 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! ZynqsdrRadio as a BinRadio against a fake channelizer driver: the mask
 //! and gen it is given, frames and power lines in short reads that split
-//! words and frames.
+//! words and frames, the zoom engine's jobs and their results between the
+//! power lines' chunks.
 
+use std::collections::VecDeque;
 use std::io;
-use web888_radio::bins::{BinFrames, BinRadio};
+use web888_dsp::binrx::{BinRx, TapMsg};
+use web888_radio::bins::{BinFrames, BinRadio, ZoomCaps, ZoomJob, ZoomResult};
 use web888_radio::*;
 use web888_zynqsdr::abi::*;
 use web888_zynqsdr::dev::Device;
@@ -27,6 +30,13 @@ struct FakePfb {
     line: u32,
     bins_q: Vec<u8>,
     power_q: Vec<u8>,
+    /// The zoom engine's queue depth (0: none); `None`: a driver before
+    /// the engine (its ioctls unknown).
+    zoom: Option<usize>,
+    /// Job words queued.
+    jobs: VecDeque<u32>,
+    /// `PFB_ZOOM` calls: (count, accepted).
+    zoom_calls: Vec<(usize, usize)>,
 }
 
 impl FakePfb {
@@ -44,8 +54,17 @@ impl FakePfb {
             line: 0,
             bins_q: vec![],
             power_q: vec![],
+            zoom: Some(4),
+            jobs: VecDeque::new(),
+            zoom_calls: vec![],
         }
     }
+}
+
+/// A zoom job's point i, as the engine writes it: (i + 1) times a
+/// full-scale sine's (2^48).
+fn zoom_point(i: usize) -> f32 {
+    (i as f64 + 1.0) as f32 * 2f32.powi(48)
 }
 
 fn hdr(t: u64, sub: u64, num: u32) -> u64 {
@@ -67,7 +86,8 @@ impl FakePfb {
             self.frame += 1;
         }
         if self.streams & PFB_POWER != 0 {
-            // a line: bin k's sum is k (full scale is 2^48 a frame)
+            // a line: bin k's sum is k (full scale is 2^48 a frame); a
+            // queued job's result after its chunk 3, another's after it
             for c in 0..16u64 {
                 self.power_q.extend(hdr(2, c, self.line).to_le_bytes());
                 for j in 0..64u64 {
@@ -75,8 +95,39 @@ impl FakePfb {
                     let w = ((k + 1.0).to_bits() as u64) << 32 | k.to_bits() as u64;
                     self.power_q.extend(w.to_le_bytes());
                 }
+                if c == 3 {
+                    self.zoom_result();
+                }
             }
+            self.zoom_result();
             self.line += 1;
+        }
+    }
+
+    /// The oldest queued job's result: `{tag, shift, logn, B - 1, k0}`;
+    /// saturated if its shift is 0, its frame the current one.
+    fn zoom_result(&mut self) {
+        let Some(w) = self.jobs.pop_front() else {
+            return;
+        };
+        let tag = (w >> 26) as u64 & 0x3f;
+        let shift = w >> 23 & 7;
+        let n = 1usize << (w >> 19 & 0xf);
+        let bins = (w >> 11 & 0xff) as usize + 1;
+        let points = bins * n / 2;
+        let words = points.div_ceil(2);
+        let chunks = words.div_ceil(64);
+        let number =
+            ((shift == 0) as u32) << 31 | ((chunks - 1) as u32) << 16 | self.frame & 0xffff;
+        for c in 0..chunks {
+            let h = hdr(3, c as u64, number) | tag << 32;
+            self.power_q.extend(h.to_le_bytes());
+            for j in 0..(words - 64 * c).min(64) {
+                let i = 2 * (64 * c + j);
+                let v = |i: usize| if i < points { zoom_point(i) } else { 0.0 };
+                let w = (v(i + 1).to_bits() as u64) << 32 | v(i).to_bits() as u64;
+                self.power_q.extend(w.to_le_bytes());
+            }
         }
     }
 }
@@ -138,7 +189,19 @@ impl Device for FakePfb {
         Ok(())
     }
     fn pfb_read(&mut self, stream: u32, dst: &mut [u8]) -> io::Result<usize> {
-        if self.bins_q.is_empty() && self.power_q.is_empty() {
+        // the streams not read lose their data, as a ring lapped
+        let empty = if stream == PFB_BINS {
+            self.bins_q.is_empty()
+        } else {
+            self.power_q.is_empty()
+        };
+        if empty {
+            if self.streams & PFB_BINS == 0 {
+                self.bins_q.clear();
+            }
+            if self.streams & PFB_POWER == 0 {
+                self.power_q.clear();
+            }
             self.produce();
         }
         let q = if stream == PFB_BINS {
@@ -151,6 +214,34 @@ impl Device for FakePfb {
         dst[..n].copy_from_slice(&q[..n]);
         q.drain(..n);
         Ok(n)
+    }
+    fn pfb_zoom(&mut self, jobs: &[u32]) -> io::Result<usize> {
+        let depth = match self.zoom {
+            None => return Err(io::Error::from_raw_os_error(libc::ENOTTY)),
+            Some(0) => return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP)),
+            Some(d) => d,
+        };
+        if jobs.len() > PFB_ZOOM_MAX {
+            return Err(io::Error::from_raw_os_error(libc::EINVAL));
+        }
+        if self.streams & PFB_POWER == 0 {
+            return Err(io::Error::from_raw_os_error(libc::ENXIO));
+        }
+        let k = jobs.len().min(depth - self.jobs.len());
+        self.jobs.extend(&jobs[..k]);
+        self.zoom_calls.push((jobs.len(), k));
+        Ok(k)
+    }
+    fn pfb_zoom_info(&mut self) -> io::Result<PfbZoomInfo> {
+        let Some(depth) = self.zoom else {
+            return Err(io::Error::from_raw_os_error(libc::ENOTTY));
+        };
+        Ok(PfbZoomInfo {
+            size: 20,
+            queue: depth as u32,
+            free: (depth - self.jobs.len()) as u32,
+            ..Default::default()
+        })
     }
 }
 
@@ -269,4 +360,207 @@ fn power_lines_scaled_and_stopped() {
     r.set_bins(&[7]).unwrap();
     r.set_power(0).unwrap();
     assert_eq!(r.device().starts.last(), Some(&(PFB_BINS, 1)));
+}
+
+fn zjob(tag: u8, shift: u8, logn: u8, bins: u16, k0: u16) -> ZoomJob {
+    ZoomJob {
+        tag,
+        shift,
+        logn,
+        bins,
+        k0,
+    }
+}
+
+/// Read until `n` results came (or give up).
+fn results(r: &mut ZynqsdrRadio<FakePfb>, n: usize) -> Vec<ZoomResult> {
+    let mut out = vec![];
+    for _ in 0..1000 {
+        if out.len() >= n {
+            break;
+        }
+        r.read_zoom(&mut out).unwrap();
+    }
+    out
+}
+
+#[test]
+fn the_zoom_engine_where_the_driver_has_one() {
+    // the driver's queue (the fake's a short one), the bitstream's limits
+    let short = ZoomCaps {
+        queue: 4,
+        ..ZoomCaps::ENGINE
+    };
+    assert_eq!(radio().zoom_caps(), Some(short));
+    let mut dev = FakePfb::new();
+    dev.zoom = Some(0); // a bitstream without the engine
+    let mut r = ZynqsdrRadio::new(dev, ZynqConfig::default()).unwrap();
+    assert_eq!(r.zoom_caps(), None);
+    assert!(matches!(
+        r.submit_zoom(&[zjob(1, 3, 7, 17, 228)]),
+        Err(Error::Unsupported(_))
+    ));
+    assert_eq!(r.read_zoom(&mut vec![]).unwrap(), 0);
+    // nothing started for it
+    assert!(r.device().starts.is_empty());
+}
+
+#[test]
+fn zoom_jobs_queued_as_far_as_there_is_room() {
+    let mut r = radio();
+    let jobs: Vec<ZoomJob> = (0..6).map(|t| zjob(t, 3, 3, 1, 100 + t as u16)).collect();
+    // the power stream started for the results, at the slowest line rate
+    assert_eq!(r.submit_zoom(&jobs).unwrap(), 4);
+    assert_eq!(r.device().starts, vec![(PFB_POWER, 65535)]);
+    assert_eq!(r.submit_zoom(&jobs[4..]).unwrap(), 0);
+    let words: Vec<u32> = r.device().jobs.iter().copied().collect();
+    assert_eq!(
+        words,
+        jobs[..4].iter().map(|j| j.word()).collect::<Vec<_>>()
+    );
+    // more than a call carries: in calls of 16, stopping at the first short
+    let many = vec![zjob(9, 3, 3, 1, 5); 40];
+    r.device().zoom = Some(64);
+    r.device().jobs.clear();
+    r.device().zoom_calls.clear();
+    assert_eq!(r.submit_zoom(&many).unwrap(), 40);
+    assert_eq!(r.device().zoom_calls, vec![(16, 16), (16, 16), (8, 8)]);
+    r.device().jobs.clear();
+    r.device().zoom_calls.clear();
+    r.device().zoom = Some(20);
+    assert_eq!(r.submit_zoom(&many).unwrap(), 20);
+    assert_eq!(r.device().zoom_calls, vec![(16, 16), (16, 4)]);
+}
+
+#[test]
+fn zoom_results_assembled_and_scaled() {
+    let mut r = radio();
+    // 17 bins of 128 (1088 points, 9 chunks), 1 of 8 (4 points), saturated
+    let jobs = [zjob(5, 3, 7, 17, 228), zjob(6, 0, 3, 1, 900)];
+    assert_eq!(r.submit_zoom(&jobs).unwrap(), 2);
+    let got = results(&mut r, 2);
+    assert_eq!(got.len(), 2);
+    assert_eq!(
+        (got[0].tag, got[0].saturated, got[0].power.len()),
+        (5, false, 1088)
+    );
+    assert_eq!(
+        (got[1].tag, got[1].saturated, got[1].power.len()),
+        (6, true, 4)
+    );
+    // the trait's scale: a full-scale sine's 2^48 reads 1
+    for r in &got {
+        for (i, &x) in r.power.iter().enumerate() {
+            assert!(
+                (x / (i as f32 + 1.0) - 1.0).abs() < 1e-6,
+                "{} {i} {x}",
+                r.tag
+            );
+        }
+    }
+    // no lines wanted: none handed out
+    assert_eq!(r.read_power(&mut vec![]).unwrap(), None);
+    // each result taken once
+    assert!(results(&mut r, 1).is_empty());
+}
+
+#[test]
+fn power_lines_and_zoom_results_together() {
+    let mut r = radio();
+    r.set_power(20).unwrap();
+    assert_eq!(r.submit_zoom(&[zjob(1, 3, 7, 17, 228)]).unwrap(), 1);
+    // already running: not restarted
+    assert_eq!(r.device().starts, vec![(PFB_POWER, 20)]);
+    let mut line = vec![];
+    let mut zoom = vec![];
+    let mut lines = 0;
+    for _ in 0..100 {
+        while r.read_power(&mut line).unwrap().is_some() {
+            assert!((line[1000] as f64 * 20.0 * 2f64.powi(48) / 1000.0 - 1.0).abs() < 1e-6);
+            lines += 1;
+        }
+        r.read_zoom(&mut zoom).unwrap();
+        if lines >= 3 && !zoom.is_empty() {
+            break;
+        }
+    }
+    assert!(lines >= 3);
+    assert_eq!(zoom.len(), 1);
+    // no lines wanted any more: the stream stays for the engine
+    r.set_power(0).unwrap();
+    assert_eq!(r.device().starts.last(), Some(&(PFB_POWER, 65535)));
+    assert_eq!(r.read_power(&mut line).unwrap(), None);
+}
+
+#[test]
+fn set_power_keeps_the_jobs_in_flight() {
+    let mut r = radio();
+    r.set_power(20).unwrap();
+    let jobs = [zjob(1, 3, 7, 17, 228), zjob(2, 3, 3, 1, 5)];
+    assert_eq!(r.submit_zoom(&jobs).unwrap(), 2);
+    // another line rate before the results came
+    r.set_power(60).unwrap();
+    let got = results(&mut r, 2);
+    let tags: Vec<(u8, usize)> = got.iter().map(|z| (z.tag, z.power.len())).collect();
+    assert_eq!(tags, vec![(1, 1088), (2, 4)]);
+    // the lines at the new scale
+    let mut line = vec![];
+    let fs = 60.0 * 2f64.powi(48);
+    let mut n = 0;
+    while n < 2 {
+        if r.read_power(&mut line).unwrap().is_some() {
+            assert!((line[1000] as f64 * fs / 1000.0 - 1.0).abs() < 1e-6);
+            n += 1;
+        }
+    }
+}
+
+#[test]
+fn an_old_driver_has_no_engine_and_views_use_bursts() {
+    let mut dev = FakePfb::new();
+    dev.zoom = None;
+    let r = ZynqsdrRadio::new(dev, ZynqConfig::default()).unwrap();
+    assert_eq!(r.zoom_caps(), None);
+    let mut rx = BinRx::tap_only(r).unwrap();
+    let tap = rx.tap();
+    // no engine on the tap: views read bursts of frames and run the FFTs
+    assert_eq!(tap.zoom_caps(), None);
+    let (h, _rx) = tap.subscribe();
+    assert!(h.submit_zoom(&[zjob(0, 3, 7, 17, 228)], false).is_empty());
+    assert!(rx.inner().device().zoom_calls.is_empty());
+}
+
+#[test]
+fn the_server_runs_the_power_stream_for_the_engine() {
+    let mut dev = FakePfb::new();
+    dev.sig = SIG_TUNER;
+    let r = ZynqsdrRadio::new(dev, ZynqConfig::default()).unwrap();
+    let mut rx = BinRx::tap_only(r).unwrap();
+    let tap = rx.tap();
+    assert_eq!(tap.zoom_caps().map(|z| z.queue), Some(4));
+    // a view wanting no power line, only jobs
+    let (h, hrx) = tap.subscribe();
+    let tags = h.submit_zoom(&[zjob(0, 3, 7, 17, 228), zjob(0, 3, 3, 2, 50)], false);
+    assert_eq!(tags, vec![0, 1]);
+    let mut buf = vec![Iq32::default(); 32 * 4];
+    let mut got = vec![];
+    for _ in 0..200 {
+        rx.read_rx(&mut buf).unwrap();
+        while let Ok(m) = hrx.try_recv() {
+            match m {
+                TapMsg::Zoom(z) => got.push((z.tag, z.power.len(), z.power[0])),
+                TapMsg::Power(_) => panic!("no lines wanted"),
+                TapMsg::Frames(_) => {}
+            }
+        }
+        if got.len() == 2 {
+            break;
+        }
+    }
+    assert_eq!(got, vec![(0, 1088, 1.0), (1, 8, 1.0)]);
+    let starts = &rx.inner().device().starts;
+    assert!(
+        starts.contains(&(PFB_BINS | PFB_POWER, 65535)),
+        "{starts:?}"
+    );
 }

@@ -12,3 +12,4 @@ libc.workspace = true
 
 [dev-dependencies]
 web888-sim.workspace = true
+web888-dsp.workspace = true

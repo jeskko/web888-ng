@@ -14,7 +14,10 @@
 //!   next block is started as soon as one is read, with a gap between
 //!   blocks. A continuous stream that stalls anyway is restarted.
 //! * The channelizer bitstream (signature 0x0E5D0010, open driver): no RX
-//!   or WF channels; the bins and the power line through [`BinRadio`].
+//!   or WF channels; the bins and the power line through [`BinRadio`], and
+//!   its zoom engine where the driver reports one (`PFB_ZOOM_INFO`). The
+//!   results come on the power ring: once a job is submitted the power
+//!   stream stays on, at its slowest line rate when no lines are wanted.
 
 pub mod abi;
 pub mod bitstream;
@@ -26,7 +29,7 @@ use abi::*;
 use dev::Device;
 use std::sync::Arc;
 use std::time::{Duration, Instant};
-use web888_radio::bins::{BinCaps, BinFrames, BinRadio, selection};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio, ZoomCaps, ZoomJob, ZoomResult, selection};
 use web888_radio::*;
 
 /// Static facts the driver can't tell us.
@@ -83,10 +86,60 @@ pub struct ZynqsdrRadio<D: Device> {
 struct Pfb {
     generation: u8,
     streams: u32,
+    /// Frames a power line wanted (0: no lines).
     power_frames: u16,
     bins: pfb::BinsParser,
     power: pfb::PowerParser,
     buf: Vec<u8>,
+    /// The zoom engine, if the driver reports one.
+    zoom: Option<ZoomCaps>,
+    /// Jobs submitted: the power stream (their results' ring) stays on.
+    zoom_on: bool,
+}
+
+impl Pfb {
+    fn power_on(&self) -> bool {
+        self.power_frames > 0 || self.zoom_on
+    }
+
+    /// `PFB_START`'s line length for `streams`: the lines wanted, the
+    /// fewest lines when only the engine needs the ring.
+    fn start_frames(&self, streams: u32) -> u32 {
+        match self.power_frames {
+            0 if streams & PFB_POWER != 0 => u16::MAX as u32,
+            f => f.max(1) as u32,
+        }
+    }
+
+    /// (Re)start the streams in `streams`; a power ring started anew
+    /// starts its parser anew.
+    fn start<D: Device>(&mut self, dev: &mut D, streams: u32) -> Result<()> {
+        dev.pfb_start(streams, self.start_frames(streams))
+            .map_err(io)?;
+        if streams & PFB_POWER == 0 || self.streams & PFB_POWER == 0 {
+            self.power.restart();
+        }
+        self.streams = streams;
+        Ok(())
+    }
+
+    /// The power ring's bytes to the parser; lines nobody wants dropped.
+    fn pump_power<D: Device>(&mut self, dev: &mut D) -> Result<()> {
+        if self.streams & PFB_POWER == 0 {
+            return Ok(());
+        }
+        loop {
+            let got = dev.pfb_read(PFB_POWER, &mut self.buf).map_err(io)?;
+            self.power.push(&self.buf[..got]);
+            if got < self.buf.len() {
+                break;
+            }
+        }
+        if self.power_frames == 0 {
+            while self.power.pop().is_some() {}
+        }
+        Ok(())
+    }
 }
 
 /// The signature's channelizer field ([7:4] = 1, open bitstream).
@@ -128,6 +181,15 @@ impl<D: Device> ZynqsdrRadio<D> {
         let dna = dev.get_dna().map_err(io)?;
         let gpio = dev.get_u32(GET_GPIO_MASK).map_err(io)?;
         let stats = dev.stats().map_err(io)?;
+        // a driver before the engine doesn't know the ioctl: no engine
+        let zoom = channelizer
+            .then(|| dev.pfb_zoom_info().ok())
+            .flatten()
+            .filter(|z| z.queue > 0)
+            .map(|z| ZoomCaps {
+                queue: z.queue as usize,
+                ..ZoomCaps::ENGINE
+            });
         dev.set(PPS_START, 1).map_err(io)?;
         let adc = cfg.adc_hz;
         let mut r = ZynqsdrRadio {
@@ -163,6 +225,8 @@ impl<D: Device> ZynqsdrRadio<D> {
                 bins: pfb::BinsParser::default(),
                 power: pfb::PowerParser::new(1),
                 buf: vec![0; 256 * 1024],
+                zoom,
+                zoom_on: false,
             }),
         };
         if channelizer {
@@ -461,10 +525,7 @@ impl<D: Device> BinRadio for ZynqsdrRadio<D> {
         p.bins.set_selection(generation, Arc::from(sel));
         p.generation = generation;
         if p.streams & PFB_BINS == 0 {
-            p.streams |= PFB_BINS;
-            self.dev
-                .pfb_start(p.streams, p.power_frames.max(1) as u32)
-                .map_err(io)?;
+            p.start(&mut self.dev, p.streams | PFB_BINS)?;
         }
         Ok(generation)
     }
@@ -486,37 +547,83 @@ impl<D: Device> BinRadio for ZynqsdrRadio<D> {
 
     fn set_power(&mut self, frames: u16) -> Result<()> {
         let p = pfb_mut(&mut self.pfb)?;
-        let streams = if frames == 0 {
-            p.streams & !PFB_POWER
-        } else {
-            p.streams | PFB_POWER
-        };
-        self.dev
-            .pfb_start(streams, frames.max(1) as u32)
-            .map_err(io)?;
-        if frames != p.power_frames || streams & PFB_POWER == 0 {
-            p.power = pfb::PowerParser::new(frames);
-        }
-        p.streams = streams;
+        let old = p.power_frames;
         p.power_frames = frames;
+        let streams = if p.power_on() {
+            p.streams | PFB_POWER
+        } else {
+            p.streams & !PFB_POWER
+        };
+        if let Err(e) = p.start(&mut self.dev, streams) {
+            p.power_frames = old;
+            return Err(e);
+        }
+        // the zoom jobs in flight stay registered
+        if frames != old {
+            p.power.set_frames(frames);
+        }
         Ok(())
     }
 
     fn read_power(&mut self, line: &mut Vec<f32>) -> Result<Option<u32>> {
         let p = pfb_mut(&mut self.pfb)?;
-        if p.streams & PFB_POWER != 0 {
-            loop {
-                let got = self.dev.pfb_read(PFB_POWER, &mut p.buf).map_err(io)?;
-                p.power.push(&p.buf[..got]);
-                if got < p.buf.len() {
-                    break;
-                }
-            }
-        }
+        p.pump_power(&mut self.dev)?;
         Ok(p.power.pop().map(|(n, l)| {
             *line = l;
             n
         }))
+    }
+
+    fn zoom_caps(&self) -> Option<ZoomCaps> {
+        self.pfb.as_ref().and_then(|p| p.zoom)
+    }
+
+    fn submit_zoom(&mut self, jobs: &[ZoomJob]) -> Result<usize> {
+        let p = pfb_mut(&mut self.pfb)?;
+        if p.zoom.is_none() {
+            return Err(Error::Unsupported("no zoom engine"));
+        }
+        if !p.zoom_on {
+            // the results come on the power ring: it runs from now on
+            p.zoom_on = true;
+            if p.streams & PFB_POWER == 0
+                && let Err(e) = p.start(&mut self.dev, p.streams | PFB_POWER)
+            {
+                p.zoom_on = false;
+                return Err(e);
+            }
+        }
+        let mut n = 0;
+        for part in jobs.chunks(PFB_ZOOM_MAX) {
+            let mut words = [0u32; PFB_ZOOM_MAX];
+            for (w, j) in words.iter_mut().zip(part) {
+                *w = j.word();
+            }
+            let k = self
+                .dev
+                .pfb_zoom(&words[..part.len()])
+                .map_err(io)?
+                .min(part.len());
+            // registered before the ring is read again
+            for j in &part[..k] {
+                p.power.expect_zoom(j.tag, j.points());
+            }
+            n += k;
+            if k < part.len() {
+                break;
+            }
+        }
+        Ok(n)
+    }
+
+    fn read_zoom(&mut self, out: &mut Vec<ZoomResult>) -> Result<usize> {
+        let Some(p) = self.pfb.as_mut().filter(|p| p.zoom_on) else {
+            return Ok(0);
+        };
+        p.pump_power(&mut self.dev)?;
+        let before = out.len();
+        out.extend(std::iter::from_fn(|| p.power.pop_zoom()));
+        Ok(out.len() - before)
     }
 }
 

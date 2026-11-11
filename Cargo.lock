@@ -1932,6 +1932,7 @@ name = "web888-zynqsdr"
 version = "0.8.0"
 dependencies = [
  "libc",
+ "web888-dsp",
  "web888-radio",
  "web888-sim",
 ]

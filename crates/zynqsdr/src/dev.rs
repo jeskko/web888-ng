@@ -41,6 +41,14 @@ pub trait Device: Send {
     fn pfb_status(&mut self) -> io::Result<PfbStatus> {
         Err(io::ErrorKind::Unsupported.into())
     }
+    /// Queue job words (at most `PFB_ZOOM_MAX`); returns how many the
+    /// queue took.
+    fn pfb_zoom(&mut self, _jobs: &[u32]) -> io::Result<usize> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
+    fn pfb_zoom_info(&mut self) -> io::Result<PfbZoomInfo> {
+        Err(io::ErrorKind::Unsupported.into())
+    }
 }
 
 /// The real `/dev/zynqsdr`. Only works on 32-bit ARM: the driver takes user
@@ -195,6 +203,23 @@ impl Device for ZynqsdrDev {
         let mut s = PfbStatus::default();
         self.ioctl_ptr(PFB_STATUS, &mut s)?;
         Ok(s)
+    }
+
+    fn pfb_zoom(&mut self, jobs: &[u32]) -> io::Result<usize> {
+        let mut z = PfbZoom {
+            count: jobs.len().min(PFB_ZOOM_MAX) as u32,
+            ..Default::default()
+        };
+        let n = z.count as usize;
+        z.jobs[..n].copy_from_slice(&jobs[..n]);
+        self.ioctl_ptr(PFB_ZOOM, &mut z)?;
+        Ok((z.accepted as usize).min(n))
+    }
+
+    fn pfb_zoom_info(&mut self) -> io::Result<PfbZoomInfo> {
+        let mut v = PfbZoomInfo::default();
+        self.ioctl_ptr(PFB_ZOOM_INFO, &mut v)?;
+        Ok(v)
     }
 
     fn stats(&mut self) -> io::Result<Option<Stats>> {

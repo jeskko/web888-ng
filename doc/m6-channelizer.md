@@ -368,8 +368,11 @@ the metrics instead:
     spectra a line at 4 views, 2 at 8, 1 at 16; 32 views take n one step
     lower (64) with 2;
   * the power ring's parser assembles type 3 chunks into results (a job
-    with a lost chunk dropped, the power line untouched); the zynqsdr
-    backend doesn't offer the engine yet (no driver ioctl);
+    with a lost chunk dropped, the power line untouched);
+  * the zynqsdr backend offers the engine where `ZSDR_PFB_ZOOM_INFO`
+    reports a queue (an older driver: bursts as before), submits through
+    `ZSDR_PFB_ZOOM` and keeps the power stream on once it has had jobs
+    (2026-11-11; tested against a fake driver, not yet run on hardware);
   * `[radio] zoom_engine` (default on), `--no-zoom-engine`.
 
   **What a view then costs.** On the A9 (the unit, `examples/bench`,
