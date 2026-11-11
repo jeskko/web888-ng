@@ -188,6 +188,9 @@ pub struct Radio {
     /// channelizer bitstream (`bitstream = "/usr/share/web888/websdr_pfb.bit"`)
     /// and uses 32 when not set. The waterfall stays the backend's.
     pub bins: Option<usize>,
+    /// Bins mode: zoomed waterfalls from the source's zoom engine when it
+    /// has one (`hw/docs/channelizer.md` §3.9), instead of FFTs here.
+    pub zoom_engine: bool,
     /// Backend sim: the simulated scene.
     pub sim: Sim,
     /// Backend iq: the wideband IQ input.
@@ -201,6 +204,7 @@ impl Default for Radio {
             bitstream: "auto".into(),
             si5351_adc: None,
             bins: None,
+            zoom_engine: true,
             sim: Sim::default(),
             iq: Iq::default(),
         }

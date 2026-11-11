@@ -168,6 +168,142 @@ pub trait BinRadio: Send {
     /// The next power line, if one is complete: every bin's mean |X|²
     /// over the line, a full-scale sine reading 1. Returns its number.
     fn read_power(&mut self, line: &mut Vec<f32>) -> Result<Option<u32>>;
+
+    /// The zoom engine's limits; none for a source without one.
+    fn zoom_caps(&self) -> Option<ZoomCaps> {
+        None
+    }
+
+    /// Queue `jobs` in order; returns how many the queue took (the rest
+    /// wait for room).
+    fn submit_zoom(&mut self, _jobs: &[ZoomJob]) -> Result<usize> {
+        Err(crate::Error::Unsupported("no zoom engine"))
+    }
+
+    /// Append the jobs' results that came since the last call; returns
+    /// how many.
+    fn read_zoom(&mut self, _out: &mut Vec<ZoomResult>) -> Result<usize> {
+        Ok(0)
+    }
+}
+
+/// The zoom engine (`hw/docs/channelizer.md` §3.9): jobs of a few bins'
+/// FFTs, captured from the frames in a work RAM and returned as power
+/// spectra.
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct ZoomCaps {
+    /// Jobs the queue holds.
+    pub queue: usize,
+    /// Work RAM samples, in `contexts` equal parts: a job of up to one
+    /// part's samples takes one, a larger one all of them.
+    pub work_samples: usize,
+    pub contexts: usize,
+    /// Most bins a job.
+    pub max_bins: usize,
+    /// FFT lengths 2^logn.
+    pub min_logn: u8,
+    pub max_logn: u8,
+    /// Tags (jobs outstanding at most).
+    pub tags: usize,
+}
+
+impl ZoomCaps {
+    /// The bitstream's engine (and the iq backend's model of it).
+    pub const ENGINE: ZoomCaps = ZoomCaps {
+        queue: 16,
+        work_samples: 4096,
+        contexts: 2,
+        max_bins: 256,
+        min_logn: 3,
+        max_logn: 11,
+        tags: 64,
+    };
+
+    /// Samples a context holds.
+    pub fn context_samples(&self) -> usize {
+        self.work_samples / self.contexts
+    }
+
+    /// Contexts a job of `samples` takes (none if it doesn't fit).
+    pub fn contexts_for(&self, samples: usize) -> Option<usize> {
+        if samples <= self.context_samples() {
+            Some(1)
+        } else if samples <= self.work_samples {
+            Some(self.contexts)
+        } else {
+            None
+        }
+    }
+
+    /// Whether the engine takes `job`.
+    pub fn takes(&self, job: &ZoomJob) -> bool {
+        (job.tag as usize) < self.tags
+            && job.shift <= 7
+            && (self.min_logn..=self.max_logn).contains(&job.logn)
+            && (1..=self.max_bins).contains(&(job.bins as usize))
+            && job.samples() <= self.work_samples
+    }
+}
+
+/// A job: bins `k0 .. k0 + bins` (bin numbers wrap at the source's bin
+/// count, so on a complex input a job may cross bin 0), an FFT of
+/// n = 2^logn frames each, its samples the 25-bit bins shifted right by
+/// `shift` into the work RAM's 22 bits (saturating).
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub struct ZoomJob {
+    /// 0..64, the result's.
+    pub tag: u8,
+    /// 0..=7.
+    pub shift: u8,
+    /// 3..=11.
+    pub logn: u8,
+    /// 1..=256, bins · n ≤ 4096.
+    pub bins: u16,
+    pub k0: u16,
+}
+
+impl ZoomJob {
+    pub fn n(&self) -> usize {
+        1 << self.logn
+    }
+
+    /// Work RAM samples: bins · n.
+    pub fn samples(&self) -> usize {
+        self.bins as usize * self.n()
+    }
+
+    /// Points in the result: n/2 a bin.
+    pub fn points(&self) -> usize {
+        self.samples() / 2
+    }
+
+    /// The job's word in the bitstream's queue:
+    /// `{tag[5:0], shift[2:0], logn[3:0], bins - 1 [7:0], k0[10:0]}`.
+    pub fn word(&self) -> u32 {
+        (self.tag as u32 & 0x3f) << 26
+            | (self.shift as u32 & 7) << 23
+            | (self.logn as u32 & 0xf) << 19
+            | ((self.bins as u32).wrapping_sub(1) & 0xff) << 11
+            | (self.k0 as u32 & 0x7ff)
+    }
+}
+
+/// A job's power spectrum. For each of its bins, lowest first, the FFT
+/// points j = -n/4 .. n/4 - 1 (the middle 30 kHz of the bin, ascending
+/// frequency): |X|² of the n-point FFT of the bin's samples, one block of
+/// n frames, Blackman-Harris windowed (4 terms, periodic, peak 1), the
+/// samples scaled so a full-scale sine has |z| = 1. A full-scale tone on
+/// a point's frequency reads (Σw)² = (0.35875 n)² there; dividing by
+/// (Σw)² gives the waterfall's levels (`web888_dsp::wf`).
+#[derive(Clone, Debug, PartialEq)]
+pub struct ZoomResult {
+    pub tag: u8,
+    /// The capture's first frame, its low 16 bits.
+    pub frame: u16,
+    /// A sample saturated: the job wants a larger shift.
+    pub saturated: bool,
+    /// bins · n/2 points.
+    pub power: Vec<f32>,
 }
 
 /// The selection as a source keeps it: sorted, without repeats, at most

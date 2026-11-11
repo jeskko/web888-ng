@@ -192,6 +192,48 @@ fn zoom_frames(
     );
 }
 
+/// A zoomed view on the zoom engine's jobs (`web888_web::binview`), its
+/// side only: `a` results a line of `nbins` bins x `n`/2 points summed,
+/// to dB with each bin's levels held, cropped to `px` display bins and
+/// merged to them, at `fps`.
+fn zoom_jobs(nbins: usize, n: usize, fps: f64, a: usize, px: usize, secs: f64) {
+    use web888_dsp::zoom::ZoomAcc;
+    let mut r = Noise(7);
+    let result: Vec<f32> = (0..nbins * n / 2)
+        .map(|_| 1e-6 * (1.5 + r.next()))
+        .collect();
+    let mut acc = ZoomAcc::new(nbins, n);
+    let mut held: Vec<Vec<f32>> = vec![Vec::new(); nbins];
+    let span = 30e3 * (nbins - 1) as f64;
+    let df = 60e3 / n as f64;
+    let g = ((span / px as f64 / df).round() as usize).max(1);
+    let lines = (secs * fps) as usize;
+    let t = Instant::now();
+    for _ in 0..lines {
+        for _ in 0..a {
+            // a result as it comes from the tap: moved, then dropped
+            let p = black_box(result.clone());
+            acc.add(0, &p);
+        }
+        let mut db = Vec::with_capacity(nbins * n / 2);
+        for (i, h) in held.iter_mut().enumerate() {
+            let at = db.len();
+            acc.bin_db(i, &mut db);
+            *h = db[at..].to_vec();
+        }
+        acc.clear();
+        // the view's middle, as `send` crops it, merged to the display
+        let k0 = n / 4;
+        let k1 = db.len() - n / 4;
+        black_box(web888_dsp::wf::rebin_db(&db[k0..k1], g));
+    }
+    report(
+        &format!("zoom jobs {nbins} bins x {n}-pt {fps} fps x{a}"),
+        t.elapsed().as_secs_f64(),
+        secs,
+    );
+}
+
 /// `jobs` consumers each taking its channel out of `nch`-channel RX blocks
 /// at `fs` (10 ms blocks), as the pool's audio jobs do.
 fn fanout(nch: usize, jobs: usize, fs: f64, secs: f64) {
@@ -272,6 +314,7 @@ fn main() {
             zoom_frames(19, 30, 128, 20.0, 6, strided, secs);
             zoom_frames(35, 46, 64, 20.0, 6, strided, secs);
         }
+        zoom_jobs(17, 128, 20.0, 3, 1024, secs);
         return;
     }
     let fs = rx_rate(ADC_HZ_HF, r2);
@@ -325,6 +368,7 @@ fn main() {
         zoom_frames(19, 30, 128, 20.0, 6, strided, secs);
         zoom_frames(35, 46, 64, 20.0, 6, strided, secs);
     }
+    zoom_jobs(17, 128, 20.0, 3, 1024, secs);
     fanout(32, 16, 60e3, secs);
     fanout(16, 16, 60e3, secs);
     println!("kernels:");

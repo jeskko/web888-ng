@@ -110,15 +110,7 @@ pub(crate) fn shed(budget: usize, fps: f64, level: u32) -> (usize, Duration) {
 
 /// Merge display bins in groups of `g` (power average).
 pub(crate) fn rebin(db: &[f32], g: usize) -> Vec<f32> {
-    if g <= 1 {
-        return db.to_vec();
-    }
-    db.chunks(g)
-        .map(|c| {
-            let p: f32 = c.iter().map(|d| 10f32.powf(d / 10.0)).sum::<f32>() / c.len() as f32;
-            10.0 * p.max(1e-30).log10()
-        })
-        .collect()
+    web888_dsp::wf::rebin_db(db, g)
 }
 
 /// A narrow view computed from the session's RX channel.

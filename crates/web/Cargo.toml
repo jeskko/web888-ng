@@ -39,3 +39,4 @@ num-complex.workspace = true
 rustfft.workspace = true
 tokio-tungstenite = "0.30.0"
 web888-sim = { path = "../sim" }
+web888-iq.workspace = true

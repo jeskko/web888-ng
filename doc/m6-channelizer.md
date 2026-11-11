@@ -346,6 +346,40 @@ the metrics instead:
   bursts of bins. This side's part is its step 2: the job interface, the
   iq backend's software engine, views on jobs, the scheduler, and a
   bench of what a view then costs.
+  **This side done (2026-11-11)**, against a software engine:
+  * the job interface on `BinRadio` (`zoom_caps`, `submit_zoom`,
+    `read_zoom`; `ZoomJob`, `ZoomResult` in `web888-radio`); a result is
+    the windowed FFT's power with the window's peak 1 and a full-scale
+    sine 1, so dividing by (Σw)² gives `WfEngine`'s levels (tests: equal
+    within 0.1 dB on a tone and on noise);
+  * the iq backend's engine (`crates/iq/src/zoom.rs`) with the PL's
+    limits: a 16-deep queue, 4096 samples in two contexts, a job n
+    frames from a frame's start;
+  * `BinTap` hands out the 64 tags, queues the views' jobs, submits them
+    on the hw thread as the source has room and passes each result to
+    its view (no FFT, no copy there);
+  * a zoomed view with n ≤ 2048 on an engine plans jobs instead of
+    bursts (`dsp::zoom`: runs of bins, two jobs a spectrum above 4096
+    samples or 256 bins), sums a line's spectra, takes dB and rebins as
+    before; a moved view just plans again. Shift 3, 4 for a bin the
+    power line shows above −6 dBFS, one more after a saturated result;
+  * the scheduler shares 48 000 RAM-frames a second (80 % of the work
+    RAM's time): 480 kHz views at 1024 points and 20 lines/s get 4
+    spectra a line at 4 views, 2 at 8, 1 at 16; 32 views take n one step
+    lower (64) with 2;
+  * the power ring's parser assembles type 3 chunks into results (a job
+    with a lost chunk dropped, the power line untouched); the zynqsdr
+    backend doesn't offer the engine yet (no driver ioctl);
+  * `[radio] zoom_engine` (default on), `--no-zoom-engine`.
+
+  **What a view then costs.** On the A9 (the unit, `examples/bench`,
+  `ZOOM_FRAMES=1`): a 480 kHz view on jobs, 3 spectra a line at 20
+  lines/s, **0.83 % of a core**, against 8.3 % for the same view's FFTs
+  fed by frames (19 bins of 128 points, budget 6) and 8.9 % for a 960
+  kHz one. On the workstation (iq backend, 8 sessions with distinct 480
+  kHz views, audio 12 008 S/s, no gaps, 20 lines/s either way): the
+  pool 4.3 % of a core with the engine, 11.8 % without (the software
+  engine's own FFTs run on the hw thread there).
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line

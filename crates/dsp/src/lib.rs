@@ -18,6 +18,7 @@ pub mod pfbfx;
 pub mod resample;
 pub mod squelch;
 pub mod wf;
+pub mod zoom;
 
 pub use num_complex::Complex32 as C32;
 

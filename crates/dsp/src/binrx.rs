@@ -17,17 +17,27 @@
 //! A channel whose bin isn't in a frame (the selection just changed) reads
 //! zeros for it.
 //!
+//! Zoom jobs (a source with a zoom engine, `hw/docs/channelizer.md` §3.9)
+//! go the same way: views hand the tap jobs, the tap gives each a tag
+//! (64 outstanding at most) and queues it; `BinRx` submits the queue to
+//! the source as it has room and sends each result to the view that owns
+//! its tag, moved, not copied. The engine's time is shared by the views
+//! through the tap ([`TapHandle::zoom_demand`], [`crate::zoom::schedule`]).
+//!
 //! [`BinRx::tap_only`]: the radio's own RX channels (the channelizer
 //! bitstream's bins tuner, 12 kS/s receivers from the bins in the FPGA);
 //! the bins only for the tap.
 
 use crate::C32;
 use crate::resample::{History, Rational};
+use crate::zoom::{Demand, Grant, schedule};
 use std::collections::BTreeSet;
+use std::collections::VecDeque;
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::mpsc::{Receiver, SyncSender, TrySendError, sync_channel};
 use std::sync::{Arc, Mutex};
-use web888_radio::bins::{BinCaps, BinFrames, BinRadio};
+use std::time::{Duration, Instant};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio, ZoomCaps, ZoomJob, ZoomResult};
 use web888_radio::*;
 
 struct Chan {
@@ -55,6 +65,8 @@ pub enum TapMsg {
     Frames(Arc<Vec<BinFrames>>),
     /// A power line: every bin's mean |X|² (a full-scale sine reads 1).
     Power(Arc<Vec<f32>>),
+    /// A zoom job's result (the subscriber's tag).
+    Zoom(ZoomResult),
 }
 
 /// Bins the tap may add to the channels': a 960 kHz view (33 shown, one
@@ -65,6 +77,10 @@ pub const TAP_BINS: usize = 40;
 /// show the gap).
 const TAP_DEPTH: usize = 256;
 
+/// A tag sent to the source without a result this long is free again (a
+/// job takes at most 34 ms, a full queue of them about 0.6 s).
+const TAG_TIMEOUT: Duration = Duration::from_secs(2);
+
 /// Waterfalls' access to a [`BinRx`]'s bins, from other threads.
 #[derive(Clone)]
 pub struct BinTap(Arc<Tap>);
@@ -73,6 +89,49 @@ struct Tap {
     caps: BinCaps,
     subs: Mutex<TapSubs>,
     changed: AtomicBool,
+    zoom: Option<Mutex<ZoomTap>>,
+}
+
+/// A tag in use: its subscriber (none: gone, the result is dropped) and
+/// when its job went to the source.
+#[derive(Clone, Copy)]
+struct TagUse {
+    owner: Option<u64>,
+    sent: Option<Instant>,
+}
+
+/// The zoom engine's side of the tap.
+struct ZoomTap {
+    caps: ZoomCaps,
+    tags: Vec<Option<TagUse>>,
+    next_tag: usize,
+    /// Jobs not yet taken by the source, in order.
+    pending: VecDeque<ZoomJob>,
+    demands: Vec<(u64, Demand)>,
+    grants: Vec<(u64, Grant)>,
+    /// Tags freed by [`TAG_TIMEOUT`] (results lost).
+    timeouts: u64,
+}
+
+impl ZoomTap {
+    fn regrant(&mut self, frame_rate: f64) {
+        let d: Vec<Demand> = self.demands.iter().map(|(_, d)| d.clone()).collect();
+        let g = schedule(&self.caps, frame_rate, &d);
+        self.grants = self.demands.iter().map(|(id, _)| *id).zip(g).collect();
+    }
+
+    /// Drop `id`'s jobs not yet sent, freeing their tags.
+    fn unqueue(&mut self, id: u64) {
+        let tags = &mut self.tags;
+        self.pending.retain(|j| {
+            let t = &mut tags[j.tag as usize];
+            let mine = t.is_some_and(|u| u.owner == Some(id));
+            if mine {
+                *t = None;
+            }
+            !mine
+        });
+    }
 }
 
 #[derive(Default)]
@@ -117,15 +176,97 @@ impl Burst {
 impl BinTap {
     /// A tap on a source of `caps`' bins (`BinRx::tap` makes its own).
     pub fn new(caps: BinCaps) -> Self {
+        Self::with_zoom(caps, None)
+    }
+
+    /// A tap that also carries zoom jobs to an engine of `zoom`'s limits.
+    pub fn with_zoom(caps: BinCaps, zoom: Option<ZoomCaps>) -> Self {
         BinTap(Arc::new(Tap {
             caps,
             subs: Mutex::default(),
             changed: AtomicBool::new(false),
+            zoom: zoom.map(|caps| {
+                Mutex::new(ZoomTap {
+                    caps,
+                    tags: vec![None; caps.tags],
+                    next_tag: 0,
+                    pending: VecDeque::new(),
+                    demands: Vec::new(),
+                    grants: Vec::new(),
+                    timeouts: 0,
+                })
+            }),
         }))
     }
 
     pub fn caps(&self) -> BinCaps {
         self.0.caps
+    }
+
+    /// The zoom engine's limits, if views may use it.
+    pub fn zoom_caps(&self) -> Option<ZoomCaps> {
+        self.0.zoom.as_ref().map(|z| z.lock().unwrap().caps)
+    }
+
+    /// Zoom tags freed without a result.
+    pub fn zoom_timeouts(&self) -> u64 {
+        self.0
+            .zoom
+            .as_ref()
+            .map_or(0, |z| z.lock().unwrap().timeouts)
+    }
+
+    /// The source's side (`BinRx`, on the hw thread): hand the queued
+    /// jobs to `submit` (it returns how many the source took); those
+    /// leave the queue, their tags' clocks start.
+    pub fn zoom_submit(&self, submit: impl FnOnce(&[ZoomJob]) -> Result<usize>) -> Result<()> {
+        let Some(z) = &self.0.zoom else { return Ok(()) };
+        let mut z = z.lock().unwrap();
+        if z.pending.is_empty() {
+            return Ok(());
+        }
+        let k = submit(z.pending.make_contiguous())?;
+        let now = Instant::now();
+        let k = k.min(z.pending.len());
+        let ZoomTap { pending, tags, .. } = &mut *z;
+        for j in pending.drain(..k) {
+            if let Some(t) = &mut tags[j.tag as usize] {
+                t.sent = Some(now);
+            }
+        }
+        Ok(())
+    }
+
+    /// The source's side: results to their tags' owners (moved); tags
+    /// sent too long ago freed.
+    pub fn zoom_deliver(&self, results: &mut Vec<ZoomResult>) {
+        let Some(z) = &self.0.zoom else { return };
+        let mut owners = Vec::with_capacity(results.len());
+        {
+            let mut z = z.lock().unwrap();
+            for r in results.iter() {
+                let t = z.tags.get_mut(r.tag as usize).and_then(Option::take);
+                owners.push(t.and_then(|t| t.owner));
+            }
+            let now = Instant::now();
+            let mut lost = 0;
+            for t in &mut z.tags {
+                if t.is_some_and(|u| u.sent.is_some_and(|s| now > s + TAG_TIMEOUT)) {
+                    *t = None;
+                    lost += 1;
+                }
+            }
+            z.timeouts += lost;
+        }
+        if results.is_empty() {
+            return;
+        }
+        let g = self.0.subs.lock().unwrap();
+        for (r, o) in results.drain(..).zip(owners) {
+            if let Some(s) = o.and_then(|o| g.list.iter().find(|s| s.id == o)) {
+                let _ = s.tx.try_send(TapMsg::Zoom(r));
+            }
+        }
     }
 
     /// A new subscriber, wanting nothing until [`TapHandle::want`].
@@ -296,9 +437,82 @@ impl TapHandle {
     }
 }
 
+impl TapHandle {
+    /// The view's demand on the zoom engine (none: it uses none); the
+    /// grants of all are worked out again.
+    pub fn zoom_demand(&self, d: Option<Demand>) {
+        let t = &self.tap.0;
+        let Some(z) = &t.zoom else { return };
+        let mut z = z.lock().unwrap();
+        let had = z.demands.iter().position(|(id, _)| *id == self.id);
+        match (had, d) {
+            (Some(k), Some(d)) if z.demands[k].1 == d => return,
+            (Some(k), Some(d)) => z.demands[k].1 = d,
+            (None, Some(d)) => z.demands.push((self.id, d)),
+            (Some(k), None) => {
+                z.demands.remove(k);
+            }
+            (None, None) => return,
+        }
+        z.regrant(t.caps.frame_rate);
+    }
+
+    /// The view's share of the zoom engine, if it asked for one.
+    pub fn zoom_grant(&self) -> Option<Grant> {
+        let z = self.tap.0.zoom.as_ref()?.lock().unwrap();
+        z.grants.iter().find(|(id, _)| *id == self.id).map(|g| g.1)
+    }
+
+    /// Queue `jobs` (their tags are given here), after dropping this
+    /// view's jobs still queued if `replace`; returns the tags of the
+    /// ones queued, in order (fewer when the tags run out).
+    pub fn submit_zoom(&self, jobs: &[ZoomJob], replace: bool) -> Vec<u8> {
+        let Some(z) = &self.tap.0.zoom else {
+            return Vec::new();
+        };
+        let mut z = z.lock().unwrap();
+        if replace {
+            z.unqueue(self.id);
+        }
+        let ntags = z.tags.len();
+        let mut tags = Vec::with_capacity(jobs.len());
+        for j in jobs {
+            // the next free tag after the last given (the longest free)
+            let Some(t) = (0..ntags)
+                .map(|k| (z.next_tag + k) % ntags)
+                .find(|&t| z.tags[t].is_none())
+            else {
+                break;
+            };
+            z.tags[t] = Some(TagUse {
+                owner: Some(self.id),
+                sent: None,
+            });
+            z.next_tag = (t + 1) % ntags;
+            z.pending.push_back(ZoomJob { tag: t as u8, ..*j });
+            tags.push(t as u8);
+        }
+        tags
+    }
+}
+
 impl Drop for TapHandle {
     fn drop(&mut self) {
         let t = &self.tap.0;
+        if let Some(z) = &t.zoom {
+            let mut z = z.lock().unwrap();
+            z.unqueue(self.id);
+            // results of jobs sent are dropped when they come
+            for u in z.tags.iter_mut().flatten() {
+                if u.owner == Some(self.id) {
+                    u.owner = None;
+                }
+            }
+            if let Some(k) = z.demands.iter().position(|(id, _)| *id == self.id) {
+                z.demands.remove(k);
+                z.regrant(t.caps.frame_rate);
+            }
+        }
         t.subs.lock().unwrap().list.retain(|s| s.id != self.id);
         t.changed.store(true, Ordering::Relaxed);
     }
@@ -330,6 +544,9 @@ pub struct BinRx<R> {
     /// Frames per power line (0: none).
     power_frames: u16,
     power: Vec<f32>,
+    /// Views may use the source's zoom engine (if it has one).
+    zoom: bool,
+    zoom_out: Vec<ZoomResult>,
 }
 
 /// `as` saturates; round half away from zero without libm's roundf (a
@@ -372,6 +589,8 @@ impl<R: Radio + BinRadio> BinRx<R> {
             tap_only: false,
             power_frames: 0,
             power: Vec::new(),
+            zoom: true,
+            zoom_out: Vec::new(),
         };
         r.ch = (0..channels).map(|_| Chan::new(1)).collect();
         r.set_rx_rate(10)?;
@@ -401,6 +620,8 @@ impl<R: Radio + BinRadio> BinRx<R> {
             tap_only: true,
             power_frames: 0,
             power: Vec::new(),
+            zoom: true,
+            zoom_out: Vec::new(),
         })
     }
 
@@ -412,10 +633,24 @@ impl<R: Radio + BinRadio> BinRx<R> {
         self.inner.adc_hz() / (256.0 * r2 as f64)
     }
 
-    /// The tap for waterfalls from the bins.
+    /// Whether views may use the source's zoom engine (default: yes);
+    /// set before [`tap`](Self::tap).
+    pub fn set_zoom_engine(&mut self, on: bool) {
+        self.zoom = on;
+    }
+
+    /// The tap for waterfalls from the bins (with the source's zoom
+    /// engine, if it has one and it is on).
     pub fn tap(&mut self) -> BinTap {
         let caps = self.bins;
-        self.tap.get_or_insert_with(|| BinTap::new(caps)).clone()
+        let zoom = if self.zoom {
+            self.inner.zoom_caps()
+        } else {
+            None
+        };
+        self.tap
+            .get_or_insert_with(|| BinTap::with_zoom(caps, zoom))
+            .clone()
     }
 
     fn reselect(&mut self) -> Result<()> {
@@ -555,6 +790,12 @@ impl<R: Radio + BinRadio> BinRx<R> {
             while self.inner.read_power(&mut self.power)?.is_some() {
                 t.send_power(Arc::new(std::mem::take(&mut self.power)));
             }
+        }
+        if t.0.zoom.is_some() {
+            let inner = &mut self.inner;
+            t.zoom_submit(|jobs| inner.submit_zoom(jobs))?;
+            inner.read_zoom(&mut self.zoom_out)?;
+            t.zoom_deliver(&mut self.zoom_out);
         }
         if self.frames.is_empty() {
             return Ok(());

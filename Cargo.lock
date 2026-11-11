@@ -1911,6 +1911,7 @@ dependencies = [
  "web888-core",
  "web888-dsp",
  "web888-hw",
+ "web888-iq",
  "web888-markers",
  "web888-radio",
  "web888-sim",

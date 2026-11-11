@@ -64,6 +64,41 @@ pub struct WfLine {
     pub fresh: bool,
 }
 
+/// The 4-term Blackman-Harris window, periodic, of length `n` (peak 1).
+pub fn blackman_harris(n: usize) -> Vec<f32> {
+    let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);
+    (0..n)
+        .map(|k| {
+            let x = 2.0 * std::f64::consts::PI * k as f64 / n as f64;
+            (a0 - a1 * x.cos() + a2 * (2.0 * x).cos() - a3 * (3.0 * x).cos()) as f32
+        })
+        .collect()
+}
+
+fn window_sum(w: &[f32]) -> f64 {
+    w.iter().map(|&w| w as f64).sum()
+}
+
+/// 1 / (Σw)² of the `n`-point window: |X|² times this is the level a
+/// full-scale tone reads as 1 (0 dB).
+pub fn window_norm(n: usize) -> f32 {
+    let s = window_sum(&blackman_harris(n));
+    (1.0 / (s * s)) as f32
+}
+
+/// Merge levels (dB) in groups of `g` (power average).
+pub fn rebin_db(db: &[f32], g: usize) -> Vec<f32> {
+    if g <= 1 {
+        return db.to_vec();
+    }
+    db.chunks(g)
+        .map(|c| {
+            let p: f32 = c.iter().map(|d| 10f32.powf(d / 10.0)).sum::<f32>() / c.len() as f32;
+            10.0 * p.max(1e-30).log10()
+        })
+        .collect()
+}
+
 /// Quantise levels for the wire: `WF_DB0 + v * WF_DB_STEP`.
 pub fn quantize(db: &[f32]) -> Vec<u8> {
     db.iter()
@@ -104,15 +139,8 @@ impl WfEngine {
         assert!(spec.budget >= 1);
         assert!(n.is_power_of_two() && n >= spec.bins);
         let fft = crate::fft_plan(n, false);
-        // 4-term Blackman-Harris
-        let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);
-        let window: Vec<f32> = (0..n)
-            .map(|k| {
-                let x = 2.0 * std::f64::consts::PI * k as f64 / n as f64;
-                (a0 - a1 * x.cos() + a2 * (2.0 * x).cos() - a3 * (3.0 * x).cos()) as f32
-            })
-            .collect();
-        let sum_w: f64 = window.iter().map(|&w| w as f64).sum();
+        let window = blackman_harris(n);
+        let sum_w = window_sum(&window);
         let scale = (0..n)
             .map(|k| {
                 let kk = if k < n / 2 {

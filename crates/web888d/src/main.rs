@@ -96,6 +96,10 @@ struct ServeArgs {
     /// software bank; zynqsdr: the channelizer bitstream, 32 by default).
     #[arg(long)]
     bins: Option<usize>,
+    /// Bins mode: run the zoomed waterfalls' FFTs here even when the
+    /// source has a zoom engine.
+    #[arg(long)]
+    no_zoom_engine: bool,
     /// HPSDR Protocol 1 listen address [0.0.0.0:1024].
     #[arg(long)]
     hpsdr: Option<String>,
@@ -185,6 +189,7 @@ impl ServeArgs {
         if self.bins.is_some() {
             r.bins = self.bins;
         }
+        r.zoom_engine &= !self.no_zoom_engine;
         if !self.tones.is_empty() {
             r.sim.tones = self.tones.iter().map(|&(f, l)| [f, l]).collect();
         }
@@ -297,13 +302,23 @@ type Opened = (Box<dyn Radio>, Option<web888_dsp::binrx::BinTap>);
 fn bin_rx<R: Radio + web888_radio::bins::BinRadio + 'static>(
     radio: R,
     n: usize,
+    zoom: bool,
 ) -> AnyResult<Opened> {
     let mut r = web888_dsp::binrx::BinRx::new(radio, n)?;
+    r.set_zoom_engine(zoom);
     let tap = r.tap();
+    log_zoom(&tap);
     Ok((Box::new(r), Some(tap)))
 }
 
-fn open_iq(a: &web888_config::Iq, bins: Option<usize>) -> AnyResult<Opened> {
+/// Whether zoomed views use the source's zoom engine.
+fn log_zoom(tap: &web888_dsp::binrx::BinTap) {
+    if tap.zoom_caps().is_some() {
+        eprintln!("bins: zoomed waterfalls from the source's zoom engine");
+    }
+}
+
+fn open_iq(a: &web888_config::Iq, bins: Option<usize>, zoom: bool) -> AnyResult<Opened> {
     use web888_iq::source::{FileSource, Format, IqSource};
     use web888_iq::{IqConfig, IqRadio};
     let spec = a
@@ -335,7 +350,7 @@ fn open_iq(a: &web888_config::Iq, bins: Option<usize>) -> AnyResult<Opened> {
     match bins {
         Some(n) => {
             eprintln!("bins: {n} RX channels from the software bank's 30 kHz bins");
-            bin_rx(radio, n)
+            bin_rx(radio, n, zoom)
         }
         None => Ok((Box::new(radio), None)),
     }
@@ -632,7 +647,7 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
                 None,
             ))
         }
-        Backend::Iq => open_iq(&a.iq, a.bins),
+        Backend::Iq => open_iq(&a.iq, a.bins, a.zoom_engine),
         Backend::Zynqsdr => {
             use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev, si5351};
             let mut cfg = ZynqConfig::default();
@@ -689,12 +704,14 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
                     radio.caps().rx_channels
                 );
                 let mut r = web888_dsp::binrx::BinRx::tap_only(radio)?;
+                r.set_zoom_engine(a.zoom_engine);
                 let tap = r.tap();
+                log_zoom(&tap);
                 Ok((Box::new(r), Some(tap)))
             } else if web888_zynqsdr::is_channelizer(sig) {
                 let n = a.bins.unwrap_or(32);
                 eprintln!("bins: {n} RX channels from the channelizer bitstream");
-                bin_rx(radio, n)
+                bin_rx(radio, n, a.zoom_engine)
             } else if a.bins.is_some() {
                 Err(format!("bins: needs the channelizer bitstream (signature 0x{sig:08x})").into())
             } else {

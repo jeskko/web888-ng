@@ -25,6 +25,7 @@
 pub mod bins;
 pub mod ddc;
 pub mod source;
+pub mod zoom;
 
 use ddc::Ddc;
 use num_complex::{Complex32, Complex64};
@@ -611,6 +612,18 @@ impl bins_api::BinRadio for IqRadio {
 
     fn read_power(&mut self, line: &mut Vec<f32>) -> Result<Option<u32>> {
         Ok(self.bins_mut()?.read_power(line))
+    }
+
+    fn zoom_caps(&self) -> Option<bins_api::ZoomCaps> {
+        self.bins.as_ref().map(|b| b.zoom_caps())
+    }
+
+    fn submit_zoom(&mut self, jobs: &[bins_api::ZoomJob]) -> Result<usize> {
+        Ok(self.bins_mut()?.submit_zoom(jobs))
+    }
+
+    fn read_zoom(&mut self, out: &mut Vec<bins_api::ZoomResult>) -> Result<usize> {
+        Ok(self.bins_mut()?.read_zoom(out))
     }
 }
 

@@ -11,6 +11,7 @@
         "bitstream": "auto",
         "si5351_adc": null,
         "bins": null,
+        "zoom_engine": true,
         "sim": {
           "tones": [],
           "noise": false
@@ -181,6 +182,11 @@
           "format": "uint",
           "minimum": 0,
           "default": null
+        },
+        "zoom_engine": {
+          "description": "Bins mode: zoomed waterfalls from the source's zoom engine when it\nhas one (`hw/docs/channelizer.md` §3.9), instead of FFTs here.",
+          "type": "boolean",
+          "default": true
         },
         "sim": {
           "description": "Backend sim: the simulated scene.",

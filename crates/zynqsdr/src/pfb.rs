@@ -10,6 +10,11 @@
 //! * power (type 2, sub = chunk 0..15, number = line): then 64 words of two
 //!   float32 each, `{f32[2j+1], f32[2j]}`: |X|² of the 25-bit bins summed
 //!   over the line's frames.
+//! * zoom results (type 3, between a line's chunks; sub = chunk 0..15,
+//!   bits 37:32 the job's tag, number = `{saturated, 0, chunks - 1 [19:16],
+//!   frame[15:0]}`): up to 64 words of two float32 each, as the power
+//!   line's; a job's chunks are full but the last, its points (bins ·
+//!   n/2) known from its tag (`hw/docs/channelizer.md` §3.9).
 //!
 //! A frame is written whole or dropped whole, but a read can start or end
 //! inside one, and a reader a ring behind sees old and new data mixed: the
@@ -18,11 +23,12 @@
 use std::collections::VecDeque;
 use std::sync::Arc;
 use web888_radio::Iq32;
-use web888_radio::bins::BinFrames;
+use web888_radio::bins::{BinFrames, ZoomResult};
 
 const MAGIC: u64 = 0x5042;
 const T_BINS: u8 = 1;
 const T_POWER: u8 = 2;
+const T_ZOOM: u8 = 3;
 
 /// Bins in the hardware's power line (all of them; bin 2047 can't be
 /// selected for the bins stream).
@@ -34,6 +40,11 @@ const CHUNK_WORDS: usize = 64;
 /// bins read 2^24 for it.
 const POWER_FULL_SCALE: f64 = (1u64 << 48) as f64;
 
+/// A zoom point's |X|² for a full-scale sine's samples (the 25-bit bins,
+/// 2^24) through a window of peak 1: the engine's output over this is
+/// [`ZoomResult`]'s scale.
+const ZOOM_FULL_SCALE: f64 = (1u64 << 48) as f64;
+
 /// `(type, sub, number)` of a header word.
 fn header(w: u64) -> Option<(u8, u8, u32)> {
     (w >> 48 == MAGIC).then_some((((w >> 44) & 0xf) as u8, ((w >> 40) & 0xf) as u8, w as u32))
@@ -41,6 +52,11 @@ fn header(w: u64) -> Option<(u8, u8, u32)> {
 
 fn is_header(w: u64, t: u8) -> bool {
     header(w).is_some_and(|(ty, _, _)| ty == t)
+}
+
+/// A header on the power ring: a power line's chunk or a zoom result's.
+fn is_power_ring_header(w: u64) -> bool {
+    header(w).is_some_and(|(ty, _, _)| ty == T_POWER || ty == T_ZOOM)
 }
 
 /// Bytes to words, keeping a partial word for the next call.
@@ -234,7 +250,15 @@ impl BinsParser {
     }
 }
 
-/// Power lines from the power ring.
+/// A zoom result being assembled.
+struct ZoomPart {
+    tag: u8,
+    number: u32,
+    next: usize,
+    power: Vec<f32>,
+}
+
+/// Power lines and zoom results from the power ring.
 pub struct PowerParser {
     w: Words,
     /// Frames per line, for the scale.
@@ -245,11 +269,20 @@ pub struct PowerParser {
     ready: VecDeque<(u32, Vec<f32>)>,
     /// Lines given up (a chunk missing or out of order).
     pub broken: u64,
+    /// Each tag's points (0: no job).
+    zoom_points: [u16; 64],
+    zoom: Option<ZoomPart>,
+    zoom_ready: VecDeque<ZoomResult>,
+    /// Zoom results given up (a chunk missing, out of order, or not the
+    /// job's length; a tag without a job).
+    pub zoom_broken: u64,
 }
 
 impl PowerParser {
     /// Lines kept for a reader that falls behind.
     const KEEP: usize = 16;
+    /// Zoom results kept likewise.
+    const KEEP_ZOOM: usize = 64;
 
     pub fn new(frames: u16) -> Self {
         PowerParser {
@@ -259,21 +292,44 @@ impl PowerParser {
             cur: None,
             ready: VecDeque::new(),
             broken: 0,
+            zoom_points: [0; 64],
+            zoom: None,
+            zoom_ready: VecDeque::new(),
+            zoom_broken: 0,
         }
+    }
+
+    /// Tag `tag`'s job has `points` points (bins · n/2; 0: none).
+    pub fn expect_zoom(&mut self, tag: u8, points: usize) {
+        self.zoom_points[tag as usize & 63] = points.min(u16::MAX as usize) as u16;
+    }
+
+    /// The oldest zoom result not yet taken.
+    pub fn pop_zoom(&mut self) -> Option<ZoomResult> {
+        self.zoom_ready.pop_front()
     }
 
     pub fn push(&mut self, data: &[u8]) {
         self.w.push(data);
-        let w = &self.w.words;
         let scale = 1.0 / (POWER_FULL_SCALE * self.frames as f64);
         let mut p = 0;
         loop {
-            while p < w.len() && !is_header(w[p], T_POWER) {
+            let w = &self.w.words;
+            while p < w.len() && !is_power_ring_header(w[p]) {
                 p += 1;
             }
-            let Some((_, chunk, line)) = w.get(p).and_then(|&h| header(h)) else {
+            let Some((ty, chunk, line)) = w.get(p).and_then(|&h| header(h)) else {
                 break;
             };
+            if ty == T_ZOOM {
+                match self.zoom_chunk(p) {
+                    Some(next) => {
+                        p = next;
+                        continue;
+                    }
+                    None => break,
+                }
+            }
             if p + 1 + CHUNK_WORDS > w.len() {
                 break;
             }
@@ -311,6 +367,88 @@ impl PowerParser {
             p += 1 + CHUNK_WORDS;
         }
         self.w.words.drain(..p);
+    }
+
+    /// The zoom chunk whose header is at `p`; returns where the next
+    /// header may be, none if its words aren't all here yet.
+    fn zoom_chunk(&mut self, p: usize) -> Option<usize> {
+        let w = &self.w.words;
+        let h = w[p];
+        let (_, chunk, number) = header(h).expect("a header");
+        let chunk = chunk as usize;
+        let tag = ((h >> 32) & 0x3f) as u8;
+        let chunks = ((number >> 16) & 0xf) as usize + 1;
+        let points = self.zoom_points[tag as usize] as usize;
+        let total = points.div_ceil(2);
+        let known = points > 0 && total.div_ceil(CHUNK_WORDS) == chunks;
+        // a chunk's words: full but the last, the last the rest of the
+        // job's (unknown: up to the next header)
+        let len = if chunk + 1 < chunks {
+            CHUNK_WORDS
+        } else if known {
+            total
+                .saturating_sub(CHUNK_WORDS * chunk)
+                .clamp(1, CHUNK_WORDS)
+        } else {
+            let end = w.len().min(p + 1 + CHUNK_WORDS);
+            match (p + 1..end).find(|&i| is_power_ring_header(w[i])) {
+                Some(i) => i - p - 1,
+                None if end == p + 1 + CHUNK_WORDS => CHUNK_WORDS,
+                None => return None,
+            }
+        };
+        let end = p + 1 + len;
+        if end > w.len() {
+            return None;
+        }
+        // a whole chunk is followed by a header: otherwise this wasn't one
+        if end < w.len() && !is_power_ring_header(w[end]) {
+            if self.zoom.take().is_some() {
+                self.zoom_broken += 1;
+            }
+            return Some(p + 1);
+        }
+        let ok = known
+            && match &self.zoom {
+                _ if chunk == 0 => true,
+                Some(z) => z.tag == tag && z.number == number && z.next == chunk,
+                None => false,
+            };
+        if chunk == 0 && self.zoom.take().is_some() {
+            self.zoom_broken += 1; // the one before never finished
+        }
+        if !ok {
+            if self.zoom.take().is_some() || chunk == 0 {
+                self.zoom_broken += 1;
+            }
+            return Some(end);
+        }
+        let z = self.zoom.get_or_insert_with(|| ZoomPart {
+            tag,
+            number,
+            next: 0,
+            power: Vec::with_capacity(points),
+        });
+        let k = (1.0 / ZOOM_FULL_SCALE) as f32;
+        for &x in &w[p + 1..end] {
+            z.power.push(f32::from_bits(x as u32) * k);
+            z.power.push(f32::from_bits((x >> 32) as u32) * k);
+        }
+        z.next = chunk + 1;
+        if z.next == chunks {
+            let mut z = self.zoom.take().expect("set");
+            z.power.truncate(points);
+            if self.zoom_ready.len() == Self::KEEP_ZOOM {
+                self.zoom_ready.pop_front();
+            }
+            self.zoom_ready.push_back(ZoomResult {
+                tag,
+                frame: z.number as u16,
+                saturated: z.number >> 31 != 0,
+                power: z.power,
+            });
+        }
+        Some(end)
     }
 
     /// The oldest complete line not yet taken.
@@ -472,5 +610,146 @@ mod tests {
         assert_eq!(p.pop().map(|(n, _)| n), Some(9));
         assert!(p.pop().is_none());
         assert_eq!(p.broken, 1);
+    }
+
+    /// A zoom job's chunks: tag, saturated, the first frame, its points
+    /// (point i reads `value(i)` times the full scale).
+    fn zoom_job(
+        tag: u8,
+        sat: bool,
+        frame: u16,
+        points: usize,
+        value: impl Fn(usize) -> f32,
+    ) -> Vec<Vec<u64>> {
+        let words = points.div_ceil(2);
+        let chunks = words.div_ceil(CHUNK_WORDS);
+        let number = (sat as u32) << 31 | ((chunks - 1) as u32) << 16 | frame as u32;
+        let v = |i: usize| {
+            if i < points {
+                (value(i) as f64 * ZOOM_FULL_SCALE) as f32
+            } else {
+                0.0
+            }
+        };
+        (0..chunks)
+            .map(|c| {
+                let mut w = vec![hdr(3, c as u64, number) | (tag as u64) << 32];
+                let n = (words - c * CHUNK_WORDS).min(CHUNK_WORDS);
+                for j in 0..n {
+                    let i = 2 * (c * CHUNK_WORDS + j);
+                    w.push((v(i + 1).to_bits() as u64) << 32 | v(i).to_bits() as u64);
+                }
+                w
+            })
+            .collect()
+    }
+
+    /// Power line `line`'s chunks with `job`'s, in order: its first half
+    /// after the line's chunk 3, the rest after the line.
+    fn interleaved(line: u32, job: &[Vec<u64>]) -> Vec<u64> {
+        let l = power_line(line, |k| k as f32);
+        let h = job.len() / 2;
+        let mut w = l[..4 * 65].to_vec();
+        w.extend(job[..h].iter().flatten());
+        w.extend(&l[4 * 65..]);
+        w.extend(job[h..].iter().flatten());
+        w
+    }
+
+    #[test]
+    fn zoom_results_between_the_power_lines_chunks() {
+        // 17 bins of 128: 1088 points, 544 words, 9 chunks (the last 32)
+        let a = zoom_job(5, false, 0xbeef, 1088, |i| i as f32);
+        // 1 bin of 8: 4 points, one chunk of 2 words
+        let b = zoom_job(6, true, 7, 4, |i| 0.5 + i as f32);
+        assert_eq!((a.len(), a[8].len(), b[0].len()), (9, 33, 3));
+        // a job's chunks in order, the power line's around them
+        let mut w = power_line(1, |k| k as f32)[..4 * 65].to_vec();
+        for c in &a {
+            w.extend(c);
+        }
+        w.extend(&power_line(1, |k| k as f32)[4 * 65..]);
+        w.extend(&b[0]);
+        w.extend(power_line(2, |_| 3.0));
+        let bytes = bytes(&w);
+        for split in [1, 7, 8, 100, 520, 4093, bytes.len()] {
+            let mut p = PowerParser::new(1);
+            p.expect_zoom(5, 1088);
+            p.expect_zoom(6, 4);
+            for c in bytes.chunks(split) {
+                p.push(c);
+            }
+            let (n, l) = p.pop().unwrap();
+            assert_eq!(n, 1, "split {split}");
+            let want = 2047.0 / POWER_FULL_SCALE;
+            assert!((l[2047] as f64 / want - 1.0).abs() < 1e-6);
+            assert_eq!(p.pop().map(|x| x.0), Some(2));
+            let r = p.pop_zoom().unwrap();
+            assert_eq!(
+                (r.tag, r.frame, r.saturated, r.power.len()),
+                (5, 0xbeef, false, 1088)
+            );
+            assert!(
+                r.power
+                    .iter()
+                    .enumerate()
+                    .all(|(i, &x)| (x - i as f32).abs() <= i as f32 * 1e-6)
+            );
+            let r = p.pop_zoom().unwrap();
+            assert_eq!((r.tag, r.frame, r.saturated), (6, 7, true));
+            assert_eq!(r.power, vec![0.5, 1.5, 2.5, 3.5]);
+            assert!(p.pop_zoom().is_none());
+            assert_eq!((p.broken, p.zoom_broken), (0, 0), "split {split}");
+        }
+    }
+
+    #[test]
+    fn a_zoom_job_with_a_chunk_lost_is_dropped() {
+        let mut a = zoom_job(5, false, 1, 1088, |_| 1.0);
+        a.remove(4);
+        let b = zoom_job(9, false, 2, 2048, |_| 2.0);
+        let c = zoom_job(5, false, 3, 1088, |_| 3.0);
+        let mut w = interleaved(1, &a);
+        w.extend(interleaved(2, &b));
+        w.extend(interleaved(3, &c));
+        let mut p = PowerParser::new(1);
+        p.expect_zoom(5, 1088);
+        p.expect_zoom(9, 2048);
+        p.push(&bytes(&w));
+        // the lines whole; the broken job dropped, the ones after it whole
+        let lines: Vec<u32> = std::iter::from_fn(|| p.pop()).map(|x| x.0).collect();
+        assert_eq!((lines, p.broken), (vec![1, 2, 3], 0));
+        let got: Vec<(u8, u16, f32)> = std::iter::from_fn(|| p.pop_zoom())
+            .map(|r| (r.tag, r.frame, r.power[r.power.len() - 1]))
+            .collect();
+        assert_eq!(got, vec![(9, 2, 2.0), (5, 3, 3.0)]);
+        assert_eq!(p.zoom_broken, 1);
+    }
+
+    #[test]
+    fn zoom_jobs_in_order_and_unknown_tags() {
+        let a = zoom_job(5, false, 1, 1088, |_| 1.0);
+        let u = zoom_job(7, false, 2, 300, |_| 9.0); // no job for tag 7
+        let b = zoom_job(9, false, 3, 2048, |_| 2.0);
+        let mut w = power_line(1, |_| 1.0);
+        for j in [&a, &u, &b] {
+            for c in j {
+                w.extend(c);
+            }
+        }
+        w.extend(power_line(2, |_| 1.0));
+        let mut p = PowerParser::new(1);
+        p.expect_zoom(5, 1088);
+        p.expect_zoom(9, 2048);
+        p.push(&bytes(&w));
+        let got: Vec<(u8, usize)> = std::iter::from_fn(|| p.pop_zoom())
+            .map(|r| (r.tag, r.power.len()))
+            .collect();
+        assert_eq!(got, vec![(5, 1088), (9, 2048)]);
+        assert_eq!(p.zoom_broken, 1);
+        assert_eq!(
+            (p.pop().map(|x| x.0), p.pop().map(|x| x.0)),
+            (Some(1), Some(2))
+        );
     }
 }

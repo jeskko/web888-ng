@@ -5,13 +5,15 @@
 //! is `center + k · 30 kHz` (k ≥ M/2: below the centre). Selection and
 //! power lines behave as the bitstream's (`hw/docs/channelizer.md` §3.7):
 //! a new selection starts at a frame, under a new generation; a power line
-//! is the mean |X|² of every bin over N frames.
+//! is the mean |X|² of every bin over N frames. Zoom jobs as the
+//! bitstream's engine takes them (`zoom`).
 
+use crate::zoom::ZoomEngine;
 use std::collections::VecDeque;
 use std::sync::Arc;
 use web888_dsp::C32;
 use web888_dsp::pfb::{PfbComplex, PfbSpec};
-use web888_radio::bins::{BinCaps, BinFrames, selection};
+use web888_radio::bins::{BinCaps, BinFrames, ZoomCaps, ZoomJob, ZoomResult, selection};
 use web888_radio::{Iq32, RX_SINE_FULL_SCALE};
 
 /// Bin spacing, as the bitstream's.
@@ -39,6 +41,7 @@ pub struct IqBins {
     in_line: u16,
     line: u32,
     lines: VecDeque<(u32, Vec<f32>)>,
+    zoom: ZoomEngine,
 }
 
 impl IqBins {
@@ -77,6 +80,7 @@ impl IqBins {
             in_line: 0,
             line: 0,
             lines: VecDeque::new(),
+            zoom: ZoomEngine::new(ZoomCaps::ENGINE, m),
         }
     }
 
@@ -129,6 +133,7 @@ impl IqBins {
             in_line,
             line,
             lines,
+            zoom,
             ..
         } = self;
         pfb.push(x, |u| {
@@ -171,8 +176,23 @@ impl IqBins {
                     sum.iter_mut().for_each(|s| *s = 0.0);
                 }
             }
+            zoom.frame(*frame, u);
             *frame += 1;
         });
+    }
+
+    pub fn zoom_caps(&self) -> ZoomCaps {
+        self.zoom.caps()
+    }
+
+    /// Queue zoom jobs; returns how many the queue took.
+    pub fn submit_zoom(&mut self, jobs: &[ZoomJob]) -> usize {
+        self.zoom.submit(jobs)
+    }
+
+    /// The zoom jobs' results since the last call, onto `out`.
+    pub fn read_zoom(&mut self, out: &mut Vec<ZoomResult>) -> usize {
+        self.zoom.read(out)
     }
 
     /// Move the frames since the last call to `out`; returns how many.

@@ -4,7 +4,7 @@
 use std::f64::consts::PI;
 use std::sync::Arc;
 use web888_dsp::binrx::{BinRx, TapMsg};
-use web888_radio::bins::{BinCaps, BinFrames, BinRadio, selection};
+use web888_radio::bins::{BinCaps, BinFrames, BinRadio, ZoomCaps, ZoomJob, ZoomResult, selection};
 use web888_radio::*;
 
 const TONE_BIN: usize = 236; // 7.080 MHz
@@ -20,6 +20,9 @@ struct FakeBins {
     selections: Vec<Vec<usize>>,
     power_frames: u16,
     lines: u32,
+    /// A zoom engine (the iq backend's), fed zeros.
+    zoom: Option<web888_iq::zoom::ZoomEngine>,
+    submitted: Vec<ZoomJob>,
 }
 
 impl FakeBins {
@@ -31,6 +34,15 @@ impl FakeBins {
             selections: vec![],
             power_frames: 0,
             lines: 0,
+            zoom: None,
+            submitted: vec![],
+        }
+    }
+
+    fn with_zoom() -> Self {
+        FakeBins {
+            zoom: Some(web888_iq::zoom::ZoomEngine::new(ZoomCaps::ENGINE, 2047)),
+            ..Self::new()
         }
     }
 }
@@ -68,6 +80,9 @@ impl BinRadio for FakeBins {
                 }
             });
             BinFrames::append(out, self.frame, self.generation, &self.sel, iq);
+            if let Some(z) = &mut self.zoom {
+                z.frame(self.frame, &[web888_dsp::C32::default(); 2047]);
+            }
             self.frame += 1;
         }
         Ok(300)
@@ -85,6 +100,18 @@ impl BinRadio for FakeBins {
         line[TONE_BIN] = 1.0;
         self.lines += 1;
         Ok(Some(self.lines))
+    }
+    fn zoom_caps(&self) -> Option<ZoomCaps> {
+        self.zoom.as_ref().map(|z| z.caps())
+    }
+    fn submit_zoom(&mut self, jobs: &[ZoomJob]) -> Result<usize> {
+        let z = self.zoom.as_mut().ok_or(Error::Unsupported("no engine"))?;
+        let k = z.submit(jobs);
+        self.submitted.extend_from_slice(&jobs[..k]);
+        Ok(k)
+    }
+    fn read_zoom(&mut self, out: &mut Vec<ZoomResult>) -> Result<usize> {
+        Ok(self.zoom.as_mut().map_or(0, |z| z.read(out)))
     }
 }
 
@@ -270,6 +297,7 @@ fn the_tap_gets_frames_and_power_lines() {
                 assert_eq!(p[TONE_BIN], 1.0);
                 lines += 1;
             }
+            TapMsg::Zoom(_) => panic!("no zoom jobs"),
         }
     }
     assert_eq!((frames, lines), (300, 1));
@@ -364,4 +392,100 @@ fn tap_only_leaves_rx_to_the_radio() {
         frames += f.iter().map(|f| f.count).sum::<usize>();
     }
     assert!(frames >= 300, "{frames}");
+}
+
+fn zjob(logn: u8, bins: u16, k0: u16) -> ZoomJob {
+    ZoomJob {
+        tag: 0,
+        shift: 3,
+        logn,
+        bins,
+        k0,
+    }
+}
+
+/// The zoom results a subscriber got: (tag, points).
+fn results(rx: &std::sync::mpsc::Receiver<TapMsg>) -> Vec<(u8, usize)> {
+    let mut v = vec![];
+    while let Ok(m) = rx.try_recv() {
+        if let TapMsg::Zoom(z) = m {
+            v.push((z.tag, z.power.len()));
+        }
+    }
+    v
+}
+
+#[test]
+fn zoom_results_go_to_their_jobs_views() {
+    let mut r = BinRx::new(FakeBins::with_zoom(), 1).unwrap();
+    let tap = r.tap();
+    assert_eq!(tap.zoom_caps(), Some(ZoomCaps::ENGINE));
+    let (a, arx) = tap.subscribe();
+    let (b, brx) = tap.subscribe();
+    // tags given in turn, whatever the job says
+    let ta = a.submit_zoom(&[zjob(7, 17, 228), zjob(7, 17, 228)], false);
+    let tb = b.submit_zoom(&[zjob(6, 9, 900)], false);
+    assert_eq!((ta, tb.clone()), (vec![0, 1], vec![2]));
+    let mut buf = vec![Iq32::default(); 512];
+    for _ in 0..3 {
+        r.read_rx(&mut buf).unwrap();
+    }
+    // a's two jobs one after the other (17 x 128: both contexts), b's
+    // after them
+    assert_eq!(results(&arx), vec![(0, 1088), (1, 1088)]);
+    assert_eq!(results(&brx), vec![(2, 288)]);
+    assert_eq!(
+        r.inner()
+            .submitted
+            .iter()
+            .map(|j| j.tag)
+            .collect::<Vec<_>>(),
+        [0, 1, 2]
+    );
+    // the tags are free again: the next ones follow on
+    assert_eq!(b.submit_zoom(&[zjob(3, 1, 5)], false), vec![3]);
+}
+
+#[test]
+fn zoom_tags_run_out_and_queued_jobs_are_replaced() {
+    let mut r = BinRx::new(FakeBins::with_zoom(), 1).unwrap();
+    let tap = r.tap();
+    let (a, arx) = tap.subscribe();
+    let (b, brx) = tap.subscribe();
+    // 64 tags at most outstanding
+    let jobs = vec![zjob(11, 1, 100); 40];
+    assert_eq!(a.submit_zoom(&jobs, false).len(), 40);
+    assert_eq!(b.submit_zoom(&jobs, false).len(), 24);
+    // a moves: its queued jobs go, their tags free
+    assert_eq!(a.submit_zoom(&[zjob(3, 1, 7)], true).len(), 1);
+    let mut buf = vec![Iq32::default(); 512];
+    r.read_rx(&mut buf).unwrap();
+    // the engine took 16 (its queue); b's were first
+    assert_eq!(r.inner().submitted.len(), 16);
+    assert!(r.inner().submitted.iter().all(|j| j.logn == 11));
+    // b goes: its 8 jobs still queued here go, the results of the 16
+    // sent are dropped when they come
+    drop(b);
+    // 8 x 2048 frames, then a's: 300 frames a read
+    for _ in 0..60 {
+        r.read_rx(&mut buf).unwrap();
+    }
+    // b's 16 (2048 frames each, two at a time), then a's one
+    let got = results(&arx);
+    assert_eq!(got.len(), 1, "{got:?}");
+    assert_eq!(got[0].1, 4);
+    assert!(results(&brx).is_empty());
+    assert_eq!(tap.zoom_timeouts(), 0);
+}
+
+#[test]
+fn without_the_engine_views_get_no_zoom() {
+    let mut r = BinRx::new(FakeBins::with_zoom(), 1).unwrap();
+    r.set_zoom_engine(false);
+    let tap = r.tap();
+    assert_eq!(tap.zoom_caps(), None);
+    let (a, _rx) = tap.subscribe();
+    assert!(a.submit_zoom(&[zjob(3, 1, 7)], false).is_empty());
+    let mut r = BinRx::new(FakeBins::new(), 1).unwrap();
+    assert_eq!(r.tap().zoom_caps(), None);
 }
