@@ -403,6 +403,34 @@ the metrics instead:
   (`--no-zoom-engine`): median difference 0.04-0.18 dB, the floor −97.1
   against −97.2 dB, the same carriers at the same points.
 
+  **Wider views on the engine (2026-11-11, 763999b).** Tried: views of
+  up to 1025 bins (15.36 and 30.72 MHz) on jobs of 8-point FFTs (three
+  and five jobs a spectrum; 7.5 kHz points) instead of the power line.
+  Eight sessions, each its own view around 20 MHz, as above:
+
+  | views | pool | hw thread | web | floor's line-to-line sd |
+  |---|---|---|---|---|
+  | 15.36 MHz, power line (af628da) | 36.2 | 15.7 | 21.8 | 0.25 dB |
+  | 15.36 MHz, engine, 6 spectra a line | 78.8 | 25.6 | 21.0 | 1.9 dB |
+  | 15.36 MHz, engine, 4 a line | 61.0 | 22.6 | 19.6 | 2.3 dB |
+  | 30.72 MHz, power line (af628da) | 41.6 | 15.3 | 21.6 | 0.27 dB |
+  | 30.72 MHz, engine, 6 a line | 118.8 | 28.8 | 19.6 | 1.8 dB; 21 audio gaps, 17.8 lines/s |
+  | 30.72 MHz, engine, 2 a line | 80.1 | 21.7 | 19.6 | 3.0 dB |
+
+  (sd: the median over a view's display bins of each one's standard
+  deviation over 20 s of lines, `webload`'s dump.) The engine has the
+  time (a spectrum is 8 frames), the CPU pays: such a view costs the
+  pool 3 to 5 % of a core and the hw thread 1 %, where one on the power
+  line costs next to nothing, and it is grainy: a spectrum is 8 frames
+  of the 3000 a line has, and the power line averages them all. What it
+  gains is 15 kHz display bins at 15.36 MHz (the power line: 30 kHz
+  stretched). Kept, with a line's sum capped at 8400 points (four
+  spectra a line at 15.36 MHz, two at 30.72) and only for a display
+  finer than the bins: 15.36 MHz, and 30.72 MHz on 2048 points; 30.72
+  MHz on 1024 points stays on the power line. Whether the sharper,
+  grainier wide view is the better one is a matter of taste: `ZOOM_BINS`
+  as the limit again (`ENGINE_BINS` = 257) turns it off.
+
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
   sooner.

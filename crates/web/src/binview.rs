@@ -45,8 +45,11 @@ use web888_radio::bins::{BinCaps, BinFrames, ZoomCaps, ZoomJob, ZoomResult};
 pub const ZOOM_BINS: usize = 257;
 
 /// Most bins a view on the zoom engine's jobs shows (a 30.72 MHz span:
-/// 1025 bins of 8-point FFTs, five jobs a spectrum); the full band draws
-/// the power line, its bins the display's or finer.
+/// 1025 bins of 8-point FFTs, five jobs a spectrum), past [`ZOOM_BINS`]
+/// only for a display finer than the bins (15.36 MHz; 30.72 MHz on 2048
+/// points). On the unit such a view costs the pool 3 to 5 % of a core
+/// and its noise floor moves 2 to 3 dB from line to line, the power
+/// line's 0.3 dB (`doc/m6-channelizer.md` §6).
 pub const ENGINE_BINS: usize = 1025;
 
 /// Most FFT points a line of a view on the engine's jobs sums (its
@@ -359,7 +362,11 @@ impl BinViewJob {
             _ if self.loaded => LIGHT_BINS,
             _ => ZOOM_BINS,
         };
-        self.view.len() <= most
+        // past ZOOM_BINS only for a display finer than the bins: the
+        // power line is as sharp otherwise, and far smoother
+        let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
+        let finer = self.span_hz / (px as f64) < self.caps.bin_hz;
+        self.view.len() <= most && (self.view.len() <= ZOOM_BINS || finer)
     }
 
     /// The FFT length for the finest display bins asked for: FFT bins no
@@ -1196,10 +1203,13 @@ mod tests {
             assert!((p + 20.0).abs() < 3.0, "{hz}: {p} dB");
         }
         assert!(l.at(10.0e6) < -110.0, "{}", l.at(10.0e6));
-        // the whole band: the power line
-        let (mut j, _rx, _ctx) = job(&tap, 30.72e6, 61.44e6);
-        j.tick(t, Ctx::default());
-        assert!(j.jobs.is_none() && j.zoom.is_none());
+        // 30.72 MHz on 1024 points (30 kHz each), the whole band: the
+        // power line
+        for span in [30.72e6, 61.44e6] {
+            let (mut j, _rx, _ctx) = job(&tap, 30.72e6, span);
+            j.tick(t, Ctx::default());
+            assert!(j.jobs.is_none() && j.zoom.is_none(), "{span}");
+        }
     }
 
     #[test]
