@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Zoomed views from a bin source's zoom engine (`hw/docs/channelizer.md`
-//! §3.9): a view's spectrum is one or two jobs (its bins, an FFT length),
+//! §3.9): a view's spectrum is a job or a few (its bins, an FFT length),
 //! their results summed into the view's line. Here: how a view's bins
 //! become jobs, the engine's time shared by the views ([`schedule`]), the
 //! line from the results ([`ZoomAcc`]), and the shift a job's bins want.
@@ -240,6 +240,11 @@ mod tests {
         let p = plan(&c, &ZC, &v, 3);
         assert_eq!(p.iter().map(|p| p.bins).collect::<Vec<_>>(), [129, 128]);
         assert_eq!(p[1].k0, 229);
+        // 30.72 MHz: 1025 bins of 8 points: five jobs
+        let v: Vec<usize> = (500..1525).collect();
+        let p = plan(&c, &ZC, &v, 3);
+        assert_eq!(p.iter().map(|p| p.bins).collect::<Vec<_>>(), [205; 5]);
+        assert_eq!((p[4].at, p[4].k0), (820, 1320));
         // 60 kHz of 2048 points: 3 x 2048 over 4096 samples: two jobs
         let v = [235, 236, 237];
         assert_eq!(split(&ZC, &runs(&c, &v), 11), vec![(0, 2), (2, 1)]);

@@ -2,7 +2,8 @@
 //! Waterfall views from a channelizer's bins (`doc/m6-channelizer.md` §4),
 //! for radios without WF slots in bins mode:
 //!
-//! * a **zoomed** view (at most [`ZOOM_BINS`] bins: 7.68 MHz) takes the
+//! * a **zoomed** view (at most [`ZOOM_BINS`] bins: 7.68 MHz; on a zoom
+//!   engine's jobs [`ENGINE_BINS`]: 30.72 MHz) takes the
 //!   bins it covers through a [`BinTap`] and puts each through its own
 //!   FFT; the middle 30 kHz of each (the bins are 60 kS/s, 30 kHz apart,
 //!   flat well past ±15 kHz) side by side tile the view without a seam;
@@ -17,7 +18,7 @@
 //!
 //! With a zoom engine in the source (`hw/docs/channelizer.md` §3.9) a
 //! zoomed view of FFTs up to the engine's length runs none of its own: it
-//! hands the tap jobs, a spectrum's (one job, or two past the engine's
+//! hands the tap jobs, a spectrum's (one job, or more past the engine's
 //! limits) at a time, as many a line as its share of the engine allows
 //! (`web888_dsp::zoom::schedule`), spread over the line, and sums their
 //! results into its line. A job's samples are 2-34 ms old when its result
@@ -42,6 +43,11 @@ use web888_radio::bins::{BinCaps, BinFrames, ZoomCaps, ZoomJob, ZoomResult};
 /// least one hw read, 300 frames: about 0.1 % a bin); a view's FFTs cost
 /// about 10 % whatever its span. Bins from the view's centre out.
 pub const ZOOM_BINS: usize = 257;
+
+/// Most bins a view on the zoom engine's jobs shows (a 30.72 MHz span:
+/// 1025 bins of 8-point FFTs, five jobs a spectrum); the full band draws
+/// the power line, its bins the display's or finer.
+pub const ENGINE_BINS: usize = 1025;
 
 /// Most bins a zoomed view shows while the pool sheds load (960 kHz).
 pub const LIGHT_BINS: usize = 33;
@@ -340,8 +346,21 @@ impl BinViewJob {
 
     fn zoomed(&self) -> bool {
         // on the engine's jobs a view costs the pool little
-        let light = self.loaded && self.engine.is_none();
-        self.view.len() <= if light { LIGHT_BINS } else { ZOOM_BINS }
+        let most = match self.engine {
+            Some(zc) if self.fft() <= 1 << zc.max_logn => ENGINE_BINS,
+            _ if self.loaded => LIGHT_BINS,
+            _ => ZOOM_BINS,
+        };
+        self.view.len() <= most
+    }
+
+    /// The FFT length for the finest display bins asked for: FFT bins no
+    /// wider than the display's.
+    fn fft(&self) -> usize {
+        let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
+        ((self.caps.frame_rate * px as f64 / self.span_hz).ceil() as usize)
+            .next_power_of_two()
+            .clamp(8, 8192)
     }
 
     fn fps(&self) -> f64 {
@@ -361,12 +380,8 @@ impl BinViewJob {
             self.tap.burst(Vec::new(), 0, true);
             return;
         }
-        let px = self.subs.iter().map(|s| s.s.bins).max().unwrap_or(1024);
-        // FFT bins no wider than the display's
         let fs = self.caps.frame_rate;
-        let n = ((fs * px as f64 / self.span_hz).ceil() as usize)
-            .next_power_of_two()
-            .clamp(8, 8192);
+        let n = self.fft();
         if let Some(zc) = self.engine
             && n <= 1 << zc.max_logn
         {
@@ -1133,6 +1148,35 @@ mod tests {
             assert!((p + 20.0).abs() < 1.0, "{hz}: {p} dB");
         }
         assert!(l.at(7.0e6) < -120.0, "{}", l.at(7.0e6));
+    }
+
+    #[test]
+    fn a_15_36_mhz_view_on_the_engines_jobs() {
+        let tap = BinTap::with_zoom(CAPS, Some(ZoomCaps::ENGINE));
+        let (mut j, mut rx, _ctx) = job(&tap, 14.0e6, 15.36e6);
+        let mut e = Engine::new();
+        let tones = [(7.074e6, 0.1), (14.074e6, 0.1), (21.3e6, 0.1)];
+        let t = run_jobs(&mut j, &tap, &mut e, Instant::now(), 400, &tones);
+        j.tick(t, Ctx::default());
+        assert!(j.zoom.is_none() && j.jobs.is_some());
+        // 513 bins of 8 points in three jobs a spectrum
+        assert_eq!(j.view.len(), 513);
+        let b: Vec<_> = e.jobs[..3].iter().map(|j| (j.bins, j.logn)).collect();
+        assert_eq!(b, [(171, 3); 3]);
+        assert_eq!(e.jobs[1].k0, e.jobs[0].k0 + 171);
+        let l = newest(&mut rx);
+        // 15 kHz a display bin: two FFT points each
+        assert_eq!(l.bin_hz, 15e3);
+        assert!((l.db.len() as i64 - 1024).abs() <= 1, "{}", l.db.len());
+        for (hz, _) in tones {
+            let p = peak(&l, hz);
+            assert!((p + 20.0).abs() < 3.0, "{hz}: {p} dB");
+        }
+        assert!(l.at(10.0e6) < -110.0, "{}", l.at(10.0e6));
+        // the whole band: the power line
+        let (mut j, _rx, _ctx) = job(&tap, 30.72e6, 61.44e6);
+        j.tick(t, Ctx::default());
+        assert!(j.jobs.is_none() && j.zoom.is_none());
     }
 
     #[test]
