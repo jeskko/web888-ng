@@ -384,6 +384,25 @@ the metrics instead:
   pool 4.3 % of a core with the engine, 11.8 % without (the software
   engine's own FFTs run on the hw thread there).
 
+  **On the unit with the PL's engine (2026-11-11, af628da, hw CI
+  43068822343).** The table above again, the views from jobs; the ten
+  FT8 skimmers running, 75 s each, CPU per thread over 60 s (% of a
+  core); audio 11 994-12 002 S/s, no gaps, 20 fresh lines/s in every
+  run:
+
+  | sessions, views | pool | hw thread | web | before (CPU FFTs) |
+  |---|---|---|---|---|
+  | 8, 480 kHz each | 36.7 | 17.1 | 17.8 | 88.4 / 31.4 / 21.1 |
+  | 8, 240 kHz each | 35.4 | 15.6 | 18.0 | 104.3 / 25.7 / 21.1 |
+  | 16, 480 kHz each | 59.7 | 17.7 | 34.3 | 99.1 / 33.8 / 33.5, views shed to 16.7 lines/s, 15 gaps |
+
+  Eight sessions with their own zoomed views now cost what eight on the
+  shared full view do (35.1 / 21.1 / 17.0), and the skimmers kept their
+  bands. The view itself is right: a 480 kHz view's lines averaged over
+  20 s (`webload` with `WEBLOAD_DUMP`), engine against CPU FFTs
+  (`--no-zoom-engine`): median difference 0.04-0.18 dB, the floor −97.1
+  against −97.2 dB, the same carriers at the same points.
+
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
   sooner.

@@ -20,6 +20,8 @@
 //! `--warmup`: seconds not counted after the sessions start (with many
 //! sessions at once, the start has its own gaps: setups, queueing).
 //! The server must allow the sessions from one address (`limits.per_ip`).
+//! With `WEBLOAD_DUMP=FILE`, session 0's fresh waterfall lines, averaged
+//! (power), go to FILE as `Hz dB` lines.
 
 use futures_util::{SinkExt, StreamExt};
 use std::time::Duration;
@@ -49,6 +51,9 @@ struct Stats {
     /// Bytes received (WebSocket payloads), audio and waterfall.
     bytes: (usize, usize),
     error: Option<String>,
+    /// Fresh lines summed (power per bin), their count, the first bin's
+    /// frequency and the spacing.
+    spec: (Vec<f64>, usize, f64, f64),
 }
 
 /// Session k's dial and view request (none: the default full view).
@@ -135,6 +140,19 @@ async fn session(url: String, k: usize, o: Opts) -> Stats {
                     st.bytes.1 += b.len();
                     st.lines += 1;
                     st.fresh += (b[1] & FLAG_STALE == 0) as usize;
+                    if k == 0 && b[1] & FLAG_STALE == 0 && b.len() >= 40 {
+                        let f64at = |i: usize| f64::from_le_bytes(b[i..i + 8].try_into().unwrap());
+                        let f32at = |i: usize| f32::from_le_bytes(b[i..i + 4].try_into().unwrap());
+                        let (db0, step) = (f32at(24) as f64, f32at(28) as f64);
+                        let lv = &b[40..];
+                        if st.spec.0.len() != lv.len() {
+                            st.spec = (vec![0.0; lv.len()], 0, f64at(8), f64at(16));
+                        }
+                        for (a, &v) in st.spec.0.iter_mut().zip(lv.iter()) {
+                            *a += 10f64.powf((db0 + v as f64 * step) / 10.0);
+                        }
+                        st.spec.1 += 1;
+                    }
                 }
                 _ => {}
             },
@@ -210,6 +228,24 @@ async fn main() {
         if let Some(e) = &s.error {
             println!("{k:>3}  {:<34} error: {e}", s.label);
             continue;
+        }
+        if k == 0
+            && s.spec.1 > 0
+            && let Some(path) = std::env::var_os("WEBLOAD_DUMP")
+        {
+            let (sum, n, f0, df) = &s.spec;
+            let text: String = sum
+                .iter()
+                .enumerate()
+                .map(|(i, p)| {
+                    format!(
+                        "{:.1} {:.2}\n",
+                        f0 + i as f64 * df,
+                        10.0 * (p / *n as f64).log10()
+                    )
+                })
+                .collect();
+            std::fs::write(path, text).expect("WEBLOAD_DUMP");
         }
         let f = s.fresh as f64 / secs;
         fresh.push(f);
