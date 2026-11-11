@@ -7,17 +7,19 @@ on [web888-ng-os](https://github.com/jeskko/web888-ng-os), the open SD card
 image, with the open driver and bitstreams from
 [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status (see `doc/design.md` §11), release v0.5.0:
+Status (see `doc/design.md` §11), release v0.7.0:
 
 * **Done:** **M1** stock-driver backend and HPSDR, **M2** web UI, **M3**
   multi-user, **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet,
-  syslog, MQTT).
+  syslog, MQTT). JTTY decoding in the browser (`crates/jtty`, ported
+  from jtty-cuf; v0.6.0).
 * **Mostly done: M6**, bins mode for the channelizer bitstream (30 kHz
   bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
   on ten bands.
-* **Not released yet:** JTTY decoding in the browser (`crates/jtty`,
-  ported from jtty-cuf).
+* **Not done yet:** a JTTY skimmer on the unit. On the A9 the receiver
+  runs about four times slower than real time, so it needs to get faster
+  first.
 
 | crate | content |
 |---|---|
