@@ -340,6 +340,12 @@ the metrics instead:
   low by an order of magnitude: at 16 distinct views the pool alone
   spends over a core on them. The device now has the room (hw
   `docs/channelizer.md` §3.8: LUT 65 %, BRAM 54.5 of 60, 15 DSP free).
+  **Designed** (hw `docs/channelizer.md` §3.9, not built): the PL takes
+  jobs (bins, FFT length) and returns each job's power spectrum on the
+  power ring; a view sums its jobs' spectra instead of running FFTs on
+  bursts of bins. This side's part is its step 2: the job interface, the
+  iq backend's software engine, views on jobs, the scheduler, and a
+  bench of what a view then costs.
 
 * The 64-bin limit against zoomed views: a 1.92 MHz view takes all 64.
   Views may need a cap (say 16 bins: 480 kHz) or to use the power line
