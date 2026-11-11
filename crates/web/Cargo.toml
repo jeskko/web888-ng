@@ -28,6 +28,11 @@ argon2 = "0.6.0"
 getrandom = "0.4.3"
 libc.workspace = true
 
+[features]
+default = ["kiwi"]
+# the KiwiSDR protocol (`doc/m5-kiwi.md`)
+kiwi = []
+
 [dev-dependencies]
 futures-util = "0.3.34"
 num-complex.workspace = true

@@ -7,6 +7,7 @@
 pub mod admin;
 pub mod auth;
 pub mod binview;
+pub mod kiwi;
 pub mod markers;
 pub mod proto;
 pub mod session;
@@ -55,6 +56,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .route("/api/spots", get(spots))
         .merge(admin::routes())
         .merge(markers::routes())
+        .merge(kiwi::routes())
         .fallback_service(ui)
         // revalidate every load (cheap with ETags): a new UI build is
         // picked up at once, never mixed with cached old files

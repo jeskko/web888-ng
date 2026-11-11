@@ -53,6 +53,8 @@ pub struct Shared {
     /// One minute of `limits.session_minutes` / `idle_minutes` (60 s;
     /// tests shorten it).
     pub limit_unit: Duration,
+    /// Kiwi protocol streams (`doc/m5-kiwi.md`).
+    pub kiwi: crate::kiwi::Registry,
 }
 
 /// What the web side sees of the skimmers (`doc/m4-skimmers.md` §5).
@@ -77,7 +79,7 @@ pub const CLOSE_IDLE: u16 = 4002;
 
 /// What the session and idle limits say now.
 #[derive(Debug, PartialEq)]
-enum Timeout {
+pub(crate) enum Timeout {
     /// A minute left.
     Warn(String),
     /// Over: close with this code and reason.
@@ -87,13 +89,13 @@ enum Timeout {
 /// The session time limit and the idle limit, with a warning one minute
 /// ahead (limits of two minutes or more). Admins aren't limited.
 #[derive(Default)]
-struct Timeouts {
+pub(crate) struct Timeouts {
     warned_age: bool,
     warned_idle: bool,
 }
 
 impl Timeouts {
-    fn check(
+    pub(crate) fn check(
         &mut self,
         l: &web888_config::Limits,
         unit: Duration,
@@ -135,7 +137,7 @@ impl Timeouts {
     }
 
     /// The user did something.
-    fn input(&mut self) {
+    pub(crate) fn input(&mut self) {
         self.warned_idle = false;
     }
 }
@@ -221,7 +223,7 @@ impl Shared {
         }
     }
 
-    fn clamp_wf(&self, w: WfReq) -> WfReq {
+    pub(crate) fn clamp_wf(&self, w: WfReq) -> WfReq {
         clamp_view(&self.radio, w)
     }
 
@@ -274,16 +276,16 @@ fn sync_state(s: &mut State, a: &AudioSpec) {
 
 /// A session's place: counted per client address; its waterfall, user
 /// and registry entries are removed when dropped.
-struct Admission<'a> {
+pub(crate) struct Admission<'a> {
     sh: &'a Shared,
     ip: IpAddr,
-    id: SessionId,
+    pub(crate) id: SessionId,
 }
 
 impl<'a> Admission<'a> {
     /// Err if the address has its limit of sessions already (`exempt`:
     /// admins aren't limited, nor trusted addresses).
-    fn new(sh: &'a Shared, ip: IpAddr, exempt: bool) -> Result<Self, usize> {
+    pub(crate) fn new(sh: &'a Shared, ip: IpAddr, exempt: bool) -> Result<Self, usize> {
         let (limit, trusted) = {
             let l = &sh.live.borrow().limits;
             (l.per_ip, l.trusted.iter().any(|n| n.contains(ip)))

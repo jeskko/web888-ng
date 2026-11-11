@@ -981,6 +981,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             }),
             skim: Some(skim),
             limit_unit: Duration::from_secs(60),
+            kiwi: Default::default(),
         });
         let tls = match w.tls {
             TlsMode::Off => web888_web::Tls::Off,

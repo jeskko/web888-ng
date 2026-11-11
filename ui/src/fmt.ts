@@ -89,6 +89,7 @@ export function bandwidths(mode: Mode): { label: string; lo: number; hi: number 
     case "am":
     case "sam":
     case "sas":
+    case "iq":
       return [6, 8, 10].map((k) => ({ label: `${k}k`, lo: (-k * 1000) / 2, hi: (k * 1000) / 2 }));
     // one sideband and the carrier (50 Hz inside the edge)
     case "sal":

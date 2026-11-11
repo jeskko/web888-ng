@@ -53,6 +53,8 @@ impl Out {
 pub struct WfSink {
     pub out: Out,
     pub seq: Arc<AtomicU32>,
+    /// Kiwi protocol lines instead of web888d's.
+    pub kiwi: Option<Arc<crate::kiwi::wire::WfEnc>>,
 }
 
 impl WfSink {
@@ -60,11 +62,15 @@ impl WfSink {
         WfSink {
             out,
             seq: Arc::default(),
+            kiwi: None,
         }
     }
 
     /// Send levels `db` (dBFS) for bins from `f0` (Hz) every `df`.
     pub(crate) fn send(&self, new_gen: bool, fresh: bool, f0: f64, df: f64, db: &[f32]) -> bool {
+        if let Some(k) = &self.kiwi {
+            return self.out.send(k.encode(f0, df, db));
+        }
         let mut flags = if new_gen { FLAG_NEW_GEN } else { 0 };
         if !fresh {
             flags |= FLAG_STALE;
@@ -143,6 +149,16 @@ pub enum AudioCmd {
     Channel(Option<usize>),
     /// Draw the session's waterfall from its channel (or stop).
     Wf(Option<ChanView>),
+    /// Kiwi protocol packets: their settings.
+    Kiwi(crate::kiwi::wire::SndSet),
+}
+
+/// How a job packs its audio.
+pub enum Framing {
+    /// web888d's frames (`proto::audio_frame`), 20 ms each.
+    Web,
+    /// Kiwi `SND` packets.
+    Kiwi(Box<crate::kiwi::wire::SndEnc>),
 }
 
 /// A session's channel on the DSP pool: PCM frames, and the waterfall
@@ -154,6 +170,7 @@ pub struct AudioJob {
     droop: Droop,
     cmd: CbReceiver<AudioCmd>,
     out: Out,
+    framing: Framing,
     wf_sink: WfSink,
     chain: AudioChain,
     pcm: Vec<f32>,
@@ -180,6 +197,7 @@ impl AudioJob {
             droop,
             cmd,
             out,
+            framing: Framing::Web,
             wf_sink,
             chain: AudioChain::new(spec, rx_rate, droop),
             pcm: Vec::new(),
@@ -189,6 +207,12 @@ impl AudioJob {
             rssi: -200.0,
             wf: None,
         }
+    }
+
+    /// Pack the audio as `f` instead of web888d's frames.
+    pub fn with_framing(mut self, f: Framing) -> Self {
+        self.framing = f;
+        self
     }
 
     fn set_wf(&mut self, v: Option<ChanView>) {
@@ -252,6 +276,11 @@ impl AudioJob {
                 }
                 Ok(AudioCmd::Channel(_)) => {}
                 Ok(AudioCmd::Wf(v)) => self.set_wf(v),
+                Ok(AudioCmd::Kiwi(k)) => {
+                    if let Framing::Kiwi(e) = &mut self.framing {
+                        e.set(k);
+                    }
+                }
                 Err(TryRecvError::Empty) => return true,
                 Err(TryRecvError::Disconnected) => return false,
             }
@@ -280,21 +309,37 @@ impl Job for AudioJob {
             w.contiguous = true;
         }
         self.chain.process(b.channel(ch), &mut self.pcm);
-        // frames of AUDIO_FRAME sample times, of every channel
+        // frames of AUDIO_FRAME sample times (Kiwi: its packet), of every
+        // channel
         let chans = self.chain.channels();
-        let len = AUDIO_FRAME * chans;
+        let len = chans
+            * match &self.framing {
+                Framing::Web => AUDIO_FRAME,
+                Framing::Kiwi(e) => e.samples(chans),
+            };
         let stereo = if chans == 2 { FLAG_STEREO } else { 0 };
+        let squelched = self.chain.squelched();
         let mut used = 0;
         while self.pcm.len() - used >= len {
             // a block may finish several frames: they share its reading
             self.rssi = self.chain.take_power_db().unwrap_or(self.rssi);
-            let f = proto::audio_frame(
-                self.flags | stereo,
-                self.seq,
-                AUDIO_RATE as u32,
-                self.rssi,
-                &self.pcm[used..used + len],
-            );
+            let pcm = &self.pcm[used..used + len];
+            let f = match &mut self.framing {
+                Framing::Web => proto::audio_frame(
+                    self.flags | stereo,
+                    self.seq,
+                    AUDIO_RATE as u32,
+                    self.rssi,
+                    pcm,
+                ),
+                Framing::Kiwi(e) => e.encode(
+                    self.flags & FLAG_OVERLOAD != 0,
+                    squelched,
+                    self.rssi,
+                    pcm,
+                    chans,
+                ),
+            };
             if !self.out.send(f) {
                 return false;
             }

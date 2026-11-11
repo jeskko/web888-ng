@@ -23,6 +23,8 @@ pub enum Mode {
     Sal,
     Sar,
     Sas,
+    /// The channel's I/Q, stereo (Kiwi protocol clients).
+    Iq,
 }
 
 impl Mode {
@@ -44,6 +46,7 @@ impl From<Mode> for web888_dsp::audio::Mode {
             Mode::Sal => M::Sal,
             Mode::Sar => M::Sar,
             Mode::Sas => M::Sas,
+            Mode::Iq => M::Iq,
         }
     }
 }

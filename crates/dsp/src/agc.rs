@@ -106,6 +106,25 @@ impl Agc {
             *x = (*x * self.target / self.env).clamp(-1.0, 1.0);
         }
     }
+
+    /// The same for interleaved I/Q pairs: the envelope follows |I + jQ|,
+    /// so both parts get the same gain (and the timing is per pair).
+    pub fn process_iq(&mut self, buf: &mut [f32]) {
+        for p in buf.as_chunks_mut::<2>().0 {
+            let a = p[0].hypot(p[1]);
+            if a > self.env {
+                self.env += self.attack * (a - self.env);
+                self.hang_left = self.hang;
+            } else if self.hang_left > 0 {
+                self.hang_left -= 1;
+            } else {
+                self.env = (self.env * self.decay).max(self.min_env);
+            }
+            let g = self.target / self.env;
+            p[0] = (p[0] * g).clamp(-1.0, 1.0);
+            p[1] = (p[1] * g).clamp(-1.0, 1.0);
+        }
+    }
 }
 
 #[cfg(test)]

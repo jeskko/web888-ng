@@ -15,6 +15,9 @@
 //! Synchronous AM (`demod::Sync`): SAM both sidebands; SAL and SAR one,
 //! the channel filter (-5000..50, -50..5000) taking out the other; SAS
 //! stereo (lower sideband left, upper right), interleaved, two channels.
+//!
+//! IQ: the filtered channel itself, I and Q interleaved (two channels),
+//! with the AGC on its magnitude; no demodulator, NR or pitch shift.
 
 use crate::agc::{Agc, AgcSpec};
 use crate::chan::{ChannelSpec, Droop, design};
@@ -44,6 +47,8 @@ pub enum Mode {
     Sal,
     Sar,
     Sas,
+    /// The channel's I/Q (Kiwi protocol clients).
+    Iq,
 }
 
 impl Mode {
@@ -57,7 +62,11 @@ impl Mode {
 
     /// Audio channels (interleaved).
     pub fn channels(self) -> usize {
-        if self == Mode::Sas { 2 } else { 1 }
+        if matches!(self, Mode::Sas | Mode::Iq) {
+            2
+        } else {
+            1
+        }
     }
 }
 
@@ -87,6 +96,7 @@ impl AudioSpec {
             Mode::Lsb => (-2700.0, -300.0, AgcSpec::ssb()),
             Mode::Cw => (-250.0, 250.0, AgcSpec::ssb()),
             Mode::Am | Mode::Sam | Mode::Sas => (-5000.0, 5000.0, AgcSpec::am()),
+            Mode::Iq => (-5000.0, 5000.0, AgcSpec::ssb()),
             // the carrier stays inside, 50 Hz from the edge
             Mode::Sal => (-5000.0, 50.0, AgcSpec::am()),
             Mode::Sar => (-50.0, 5000.0, AgcSpec::am()),
@@ -127,7 +137,7 @@ impl AudioSpec {
             hi_hz: self.hi_hz,
             // AM's wider transitions are shorter filters; one sideband
             // needs a sharp edge by the carrier
-            transition_hz: if matches!(self.mode, Mode::Am | Mode::Sam | Mode::Sas) {
+            transition_hz: if matches!(self.mode, Mode::Am | Mode::Sam | Mode::Sas | Mode::Iq) {
                 500.0
             } else {
                 200.0
@@ -361,9 +371,13 @@ impl AudioChain {
                 };
                 self.sync.process(&self.z, kind, agc, out);
             }
+            Mode::Iq => out.extend(self.z.iter().flat_map(|s| [s.re, s.im])),
         }
         let a = &mut out[start..];
-        if self.channels() == 2 {
+        let iq = self.spec.mode == Mode::Iq;
+        if iq {
+            // no NR on I/Q
+        } else if self.channels() == 2 {
             if let (Some(nl), Some(nr)) = (&mut self.nr, &mut self.nr_r) {
                 self.l.clear();
                 self.r.clear();
@@ -383,6 +397,7 @@ impl AudioChain {
         }
         match &mut self.agc {
             Some(_) if carrier_agc => {}
+            Some(agc) if iq => agc.process_iq(a),
             Some(agc) => agc.process(a),
             None => a
                 .iter_mut()

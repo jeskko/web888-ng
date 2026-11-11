@@ -87,6 +87,7 @@ async fn start(config: Config, path: PathBuf) -> (std::net::SocketAddr, Arc<Atom
         }),
         skim: None,
         limit_unit: Duration::from_millis(100),
+        kiwi: Default::default(),
     });
     let listener = tokio::net::TcpListener::bind("127.0.0.1:0").await.unwrap();
     let addr = listener.local_addr().unwrap();
@@ -375,7 +376,7 @@ async fn admin_api() {
         keys,
         [
             "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt",
-            "markers"
+            "markers", "kiwi"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());

@@ -17,6 +17,9 @@ Status (see `doc/design.md` §11), release v0.7.0:
   bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
   on ten bands.
+* **In progress: M5**, the KiwiSDR protocol (`doc/m5-kiwi.md`): Kiwi
+  clients (kiwirecorder, SuperSDR) get audio (PCM, ADPCM, IQ) and the
+  waterfall. Not released yet; not yet tried with kiwirecorder itself.
 * **Not done yet:** a JTTY skimmer on the unit. On the A9 the receiver
   runs about four times slower than real time, so it needs to get faster
   first.
@@ -31,7 +34,7 @@ Status (see `doc/design.md` §11), release v0.7.0:
 | `crates/hpsdr` | OpenHPSDR Protocol 1 receive server (discovery, up to 7 receivers, 48 kS/s) |
 | `crates/hw` | the hardware thread: owns the radio, fans RX/WF blocks out to HPSDR and web sessions, time-shares WF slots |
 | `crates/core` | what clients share: RX channel leases, the DSP pool, the waterfall scheduler |
-| `crates/web` | web UI server: HTTPS/HTTP on one port, WebSocket sessions (audio + waterfall) |
+| `crates/web` | web UI server: HTTPS/HTTP on one port, WebSocket sessions (audio + waterfall); the KiwiSDR protocol (`src/kiwi/`, feature `kiwi`) |
 | `crates/ftx` | FT8 and FT4 decoders |
 | `crates/wspr` | WSPR-2 decoder (a port of wsprd) |
 | `crates/jtty` | JTTY receiver (4-GFSK keyboard mode; a port of jtty-cuf, MIT); `crates/jtty-wasm` runs it in the browser |
@@ -242,6 +245,26 @@ one again later. On the A9, FT8 on eight bands keeps the two cores about
 84 % busy; adding FT4 and WSPR on top of five FT8 bands makes the
 decoders drop slots (`doc/m4-skimmers.md` §7). Plan and scores against
 jt9 and wsprd: `doc/m4-skimmers.md`.
+
+### KiwiSDR clients
+
+Kiwi clients connect to the same port as the web UI: kiwirecorder, for
+example `kiwirecorder.py -s <host> -p 8073 -f 7074 -m usb`, and SuperSDR.
+They get audio (USB, LSB, CW, AM, SAM, IQ; PCM or ADPCM) and the waterfall,
+and `/status` answers as on a Kiwi. Each audio stream takes an RX channel.
+When none is free, the client is told the receiver is busy (Kiwi clients
+don't queue). With a listener password set, clients send it as their
+password (kiwirecorder `--pw`).
+
+```toml
+[kiwi]
+enabled = true
+name = ""               # empty: "web888d <callsign>"
+location = ""
+smeter_offset_db = 0.0  # dBm = dBFS + this (web888d measures dBFS)
+```
+
+What is and isn't covered, and the protocol mapping: `doc/m5-kiwi.md`.
 
 ### Real signals without a Web-888 (HackRF, IQ recordings)
 

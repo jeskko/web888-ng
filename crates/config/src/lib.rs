@@ -67,6 +67,9 @@ pub struct Config {
     pub mqtt: Mqtt,
     /// Frequency labels and the band ribbon (apply at once).
     pub markers: Markers,
+    /// KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at
+    /// once; `doc/m5-kiwi.md`).
+    pub kiwi: Kiwi,
 }
 
 /// What the skimmers log, for choosing what goes to syslog and MQTT.
@@ -399,6 +402,33 @@ pub struct Station {
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
+pub struct Kiwi {
+    /// Accept Kiwi protocol connections (`/<n>/SND`, `/<n>/W/F`) and
+    /// answer `/status`.
+    pub enabled: bool,
+    /// The receiver's name, as clients and `/status` show it (empty:
+    /// "web888d" and the callsign).
+    pub name: String,
+    /// Where it is, in words.
+    pub location: String,
+    /// dBm = dBFS + this, for the S-meter and the waterfall levels Kiwi
+    /// clients get (web888d measures dBFS; calibrate with a known signal).
+    pub smeter_offset_db: f32,
+}
+
+impl Default for Kiwi {
+    fn default() -> Self {
+        Kiwi {
+            enabled: true,
+            name: String::new(),
+            location: String::new(),
+            smeter_offset_db: 0.0,
+        }
+    }
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
 pub struct Markers {
     /// IARU region (1-3) of the band ribbon and the amateur frequencies,
     /// until a listener picks another.
@@ -687,6 +717,7 @@ impl Config {
             || self.report != new.report
             || self.syslog != new.syslog
             || self.mqtt != new.mqtt
+            || self.kiwi != new.kiwi
             || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics

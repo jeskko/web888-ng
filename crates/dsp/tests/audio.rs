@@ -322,3 +322,56 @@ fn a_passband_change_keeps_the_tone() {
     let a = amp(&usb[usb.len() - 6000..], 1500.0);
     assert!(a > 0.0 && db(a).is_finite(), "{a}");
 }
+
+/// Amplitude of the complex tone at `f` (positive or negative) in
+/// interleaved I/Q (Blackman-Harris windowed DFT).
+fn camp(iq: &[f32], f: f64) -> f64 {
+    let n = iq.len() / 2;
+    let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);
+    let mut acc = Complex64::new(0.0, 0.0);
+    let mut wsum = 0.0;
+    for (k, p) in iq.as_chunks::<2>().0.iter().enumerate() {
+        let t = 2.0 * std::f64::consts::PI * k as f64 / (n - 1) as f64;
+        let w = a0 - a1 * t.cos() + a2 * (2.0 * t).cos() - a3 * (3.0 * t).cos();
+        let z = Complex64::new(p[0] as f64, p[1] as f64);
+        acc += z
+            * w
+            * Complex64::from_polar(1.0, -2.0 * std::f64::consts::PI * f * k as f64 / AUDIO_RATE);
+        wsum += w;
+    }
+    acc.norm() / wsum
+}
+
+#[test]
+fn iq_is_the_channel_with_both_sides_apart() {
+    let (a, _) = run(two_sidebands(), fixed(Mode::Iq), 2.0);
+    let a = &a[12_000..];
+    let c = camp(a, 0.0);
+    // the carrier at -40 dBFS: |z| = 0.01 at 0 dB gain
+    assert!((db(c) + 40.0).abs() < 1.0, "{:.2}", db(c));
+    // the tones 10 dB under it, each on its own side, no images
+    assert!((db(camp(a, 1500.0) / c) + 10.0).abs() < 0.5);
+    assert!((db(camp(a, -1000.0) / c) + 10.0).abs() < 0.5);
+    assert!(
+        db(camp(a, -1500.0) / c) < -60.0,
+        "{:.1}",
+        db(camp(a, -1500.0) / c)
+    );
+    assert!(
+        db(camp(a, 1000.0) / c) < -60.0,
+        "{:.1}",
+        db(camp(a, 1000.0) / c)
+    );
+
+    // with the AGC: both parts get the same gain, the peak near its target
+    let (a, _) = run(two_sidebands(), AudioSpec::new(Mode::Iq), 2.0);
+    let a = &a[12_000..];
+    let peak = a
+        .as_chunks::<2>()
+        .0
+        .iter()
+        .map(|p| p[0].hypot(p[1]))
+        .fold(0.0f32, f32::max);
+    assert!((peak - 0.3).abs() < 0.05, "{peak}");
+    assert!(db(camp(a, 1000.0) / camp(a, 0.0)) < -60.0);
+}

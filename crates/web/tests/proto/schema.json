@@ -136,6 +136,16 @@
         "region": 1,
         "file": "markers.csv"
       }
+    },
+    "kiwi": {
+      "description": "KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at\nonce; `doc/m5-kiwi.md`).",
+      "$ref": "#/$defs/Kiwi",
+      "default": {
+        "enabled": true,
+        "name": "",
+        "location": "",
+        "smeter_offset_db": 0.0
+      }
     }
   },
   "additionalProperties": false,
@@ -716,6 +726,33 @@
           "description": "The station's own labels (CSV; the admin pages upload and download\nit). A relative path is next to this configuration file.",
           "type": "string",
           "default": "markers.csv"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Kiwi": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Accept Kiwi protocol connections (`/<n>/SND`, `/<n>/W/F`) and\nanswer `/status`.",
+          "type": "boolean",
+          "default": true
+        },
+        "name": {
+          "description": "The receiver's name, as clients and `/status` show it (empty:\n\"web888d\" and the callsign).",
+          "type": "string",
+          "default": ""
+        },
+        "location": {
+          "description": "Where it is, in words.",
+          "type": "string",
+          "default": ""
+        },
+        "smeter_offset_db": {
+          "description": "dBm = dBFS + this, for the S-meter and the waterfall levels Kiwi\nclients get (web888d measures dBFS; calibrate with a known signal).",
+          "type": "number",
+          "format": "float",
+          "default": 0.0
         }
       },
       "additionalProperties": false

@@ -6,7 +6,8 @@
 
 export const PROTO = 2;
 
-export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas";
+/** "iq": Kiwi protocol clients only (not offered in the UI). */
+export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas" | "iq";
 export type AgcSpeed = "fast" | "medium" | "slow";
 export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas"];
 /** The AM family, in the order the AM button cycles through: envelope,
