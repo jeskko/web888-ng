@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! A Kiwi audio stream (`/<n>/SND`, `doc/m5-kiwi.md` §3): an RX channel
-//! lease (class protocol, or admin with the admin password), its audio
+//! lease (class web, as a listener; admin with the admin password), its audio
 //! job packing Kiwi `SND` packets, and the client's `SET` commands.
 
 use super::wire::{Cmd, SND_FLAG_LPF, SND_FLAG_NEW_FREQ, SND_FLAG_RESTART, SndEnc, SndSet};
@@ -122,10 +122,11 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
         let _ = send_msg(&mut ws, "camp_disconnect").await;
         return close(&mut ws, 1000, "no camping").await;
     }
+    // a listener like a web user (not under HPSDR's protocol quota)
     let class = if role == Role::Admin {
         Class::Admin
     } else {
-        Class::Protocol
+        Class::Web
     };
     let busy = |sh: &Shared| format!("too_busy={}", sh.channels.channels());
     let Some(entry) = sh.kiwi.add_snd(ip, ts) else {

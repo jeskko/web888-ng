@@ -19,7 +19,7 @@ Status (see `doc/design.md` §11), release v0.7.0:
   on ten bands.
 * **In progress: M5**, the KiwiSDR protocol (`doc/m5-kiwi.md`): Kiwi
   clients (kiwirecorder, SuperSDR) get audio (PCM, ADPCM, IQ) and the
-  waterfall. Not released yet; not yet tried with kiwirecorder itself.
+  waterfall; kiwirecorder works. Not released yet.
 * **Not done yet:** a JTTY skimmer on the unit. On the A9 the receiver
   runs about four times slower than real time, so it needs to get faster
   first.

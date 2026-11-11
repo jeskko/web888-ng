@@ -1,10 +1,10 @@
 # M5 Kiwi protocol
 
 Status: implemented 2026-11-11 (`crates/web/src/kiwi/`, feature `kiwi`,
-on by default). End-to-end tests pass against the simulated radio, using a
-client that sends what kiwirecorder sends (`crates/web/tests/kiwi.rs`).
-**Not yet run with kiwirecorder or SuperSDR themselves**, which is the
-milestone's done-when (design.md §11).
+on by default). **kiwirecorder works** (§6): kiwiclient 4eb733e against
+web888d on the sim backend. SuperSDR (a GUI) hasn't been tried yet. The
+end-to-end tests (`crates/web/tests/kiwi.rs`) use a client that sends what
+kiwirecorder sends.
 
 ## 1. What it is
 
@@ -17,7 +17,7 @@ protocol. Kiwi's browser UI isn't served; web888d's own UI stays at `/`.
 flowchart LR
     c["Kiwi client"] -- "/&lt;ts&gt;/SND" --> snd["SND stream<br/>(kiwi/snd.rs)"]
     c -- "/&lt;ts&gt;/W/F" --> wf["W/F stream<br/>(kiwi/wf.rs)"]
-    snd -- "lease (protocol class)" --> ch["RX channel"]
+    snd -- "lease (web class)" --> ch["RX channel"]
     ch --> job["AudioJob<br/>Framing::Kiwi"]
     job -- "SND packets" --> c
     wf -- "HwView" --> views["shared waterfall views"]
@@ -71,9 +71,13 @@ advertising clause, which is not GPL-compatible.
    gets the admin class (not limited, can't be pre-empted). Refusals send
    `badp=1`, `badp=4` (no admin password set) or `badp=5` (the per-address
    limit, or the same stream twice), then close.
-2. **Channel.** A lease of class *protocol* (admin: *admin*). Kiwi clients
-   don't queue: with no channel free they get `too_busy=<n>` and the stream
-   closes, and the same happens if a higher class takes the channel later.
+2. **Channel.** A lease of class *web* (admin: *admin*): a Kiwi stream is
+   a listener, as kiwirecorder is a user on a Kiwi. It isn't under the
+   protocol class's quota (`[limits] hpsdr_channels`), and skimmers yield
+   to it as to web users. Kiwi clients don't queue: with no channel free
+   they get `too_busy=<n>` and the stream closes (kiwirecorder retries
+   every 15 s), and the same happens if a higher class takes the channel
+   later.
 3. **Setup messages** in upstream's order: `rx_chans`, `badp=0`, `is_local`,
    version, `load_cfg` (with `rx_gps` from `[station] locator`, which
    kiwiclient needs), `freq_offset`, `center_freq bandwidth adc_clk_nom`,
@@ -108,8 +112,9 @@ edge.
 dBFS + `[kiwi] smeter_offset_db` (default 0, uncalibrated), for the
 S-meter and the waterfall alike.
 
-**Limits.** The per-address session limit and the session time limit
-apply. The idle limit doesn't: a recorder never tunes. A stream with no
+**Limits.** The per-address session limit (`[limits] per_ip`, 4 by
+default: a host running many recorders, as wsprdaemon does, belongs in
+`[limits] trusted`) and the session time limit apply. The idle limit doesn't: a recorder never tunes. A stream with no
 message for 60 s is closed (20 s before auth). Kiwi streams show in the
 users list (name from `ident_user`) and the admin's session list, where
 they can be kicked.
@@ -142,7 +147,35 @@ smeter_offset_db = 0.0  # dBm = dBFS + this
 
 The position in `load_cfg` and `/status` comes from `[station] locator`.
 
-## 6. Not done
+## 6. kiwirecorder on web888d (2026-11-11)
+
+kiwiclient at 4eb733e (jks-prv/kiwiclient), run locally against web888d
+on the sim backend (a -40 dBFS tone at 7075.5 kHz):
+
+| run | result |
+|---|---|
+| `-f 7074 -m usb --ncomp`, 10 s | 12 kS/s mono WAV, 10.07 s, tone at 1500 Hz; RSSI -40.0; version 1.902 and the GNSS position read from `load_cfg` |
+| `-m usb` (ADPCM, the default) | tone at 1500 Hz, clean |
+| `-m iq` | stereo WAV, tone at +1500 Hz, image -117 dB |
+| `-f 7075 -m cw` | tone at 500 Hz |
+| `-m am` on the bare carrier | silence (the AGC follows the carrier) |
+| `-m lsb -g 40`, `--nb` | fixed gain 40 dB: full scale; NB: tone kept |
+| `--wf -z 10`, `--wf -z 4 --wf-comp`, `--wf-png` | the tone in the middle of both PNGs |
+| 13 recorders on 12 channels | 12 record, the 13th gets "too busy" and retries every 15 s |
+| listener password: none, wrong, `--pw` right | bad-password error, the same, records |
+
+Found on the way:
+
+* At first only 7 got channels: the protocol class has HPSDR's quota
+  (`hpsdr_channels`). Kiwi streams are now of class web (§3).
+* `per_ip` (4) stops the fifth recorder from one host with `badp=5`
+  ("No multiple connections from the same IP address").
+* kiwiclient drops the 10 ADPCM pad samples from the end of a compressed
+  waterfall line, while the Kiwi browser UI (and the encoder, upstream's
+  and ours) puts them at the start. Its compressed waterfalls are
+  therefore 10 pixels off on any Kiwi; uncompressed ones are fine.
+
+## 7. Not done
 
 * Camping (`?camp`): answered with `camp_disconnect`.
 * The `EXT` stream (extensions), Kiwi's admin and DX-label commands, and
@@ -150,5 +183,5 @@ The position in `load_cfg` and `/status` comes from `[station] locator`.
 * GPS timestamps in IQ packets (wait for M6's timestamps), TDoA.
 * NBFM, de-emphasis, the Kiwi squelch, and the noise reduction algorithms
   by number.
-* Running kiwirecorder and SuperSDR themselves against web888d (the
-  done-when).
+* SuperSDR (needs a person at the GUI), and a run on a Web-888 with
+  real signals.
