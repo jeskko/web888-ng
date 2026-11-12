@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The map: opens it, counts the stations shown, takes screenshots in both
-// projections, drags the great circle map and zooms, and hovers a station.
+// The map: opens it, counts the stations shown, takes screenshots in the
+// three projections, drags the great circle map and zooms, and hovers a station.
 //   CHROME=... node map.mjs URL OUT_PREFIX
 import { launch, q, sleep } from "./lib.mjs";
 const [url, out = "/tmp/map"] = process.argv.slice(2);
@@ -38,6 +38,10 @@ for (let i = 0; i < 6; i++) {
 }
 await sleep(800);
 await p.shot(`${out}-azim-zoom.png`);
+await setProj("globe");
+await sleep(1500);
+console.log("stations shown (globe):", await count());
+await p.shot(`${out}-globe.png`);
 await setProj("merc");
 await sleep(300);
 await p.ev(`[...document.querySelectorAll(".map .spots-bar button")].find((b) => b.textContent.includes("⌖")).click()`);

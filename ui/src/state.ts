@@ -835,9 +835,9 @@ effect(() => {
 
 /** The map's options, remembered in this browser. */
 export interface MapOpts {
-  /** "merc": Mercator; "azim": azimuthal equidistant (great circles from
-   * its centre are straight lines). */
-  proj: "merc" | "azim";
+  /** "azim": azimuthal equidistant (great circles from its centre are
+   * straight lines); "globe": the globe (orthographic); "merc": Mercator. */
+  proj: "merc" | "azim" | "globe";
   layers: Layer[];
   /** Minutes back. */
   age: number;

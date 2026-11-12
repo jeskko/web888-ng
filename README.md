@@ -227,7 +227,8 @@ Lines are great circles from where each station was heard (the
 receiver's locator, `[station] locator` or gpsd's). The map is
 **Great circle** (azimuthal equidistant, centred on the receiver: straight
 lines from it are great circles; drag to turn the globe under the
-centre) or **Mercator**; the wheel or a pinch zooms, ⌖ centres on the
+centre), **Globe** (the hemisphere around the centre, drag to turn it) or
+**Mercator**; the wheel or a pinch zooms, ⌖ centres on the
 receiver, and the greyline shades night. Filter by band and age; hover a
 station for its locator, distance and bearing, click to tune. The world
 (Natural Earth's countries at 1:110m and 1:50m, public domain, from the

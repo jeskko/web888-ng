@@ -13,6 +13,7 @@ import {
   geoDistance,
   geoGraticule,
   geoMercator,
+  geoOrthographic,
   geoPath,
   type GeoPermissibleObjects,
   type GeoProjection,
@@ -97,14 +98,11 @@ interface View {
 function projection(kind: MapOpts["proj"], v: View, w: number, h: number, coarse: boolean): GeoProjection {
   const p =
     kind === "merc"
-      ? geoMercator()
-          .rotate([-v.lon, 0])
-          .center([0, v.lat])
-          .scale((w / (2 * Math.PI)) * v.k)
-      : geoAzimuthalEquidistant()
-          .rotate([-v.lon, -v.lat])
-          .scale((Math.min(w, h) / 2 / Math.PI) * v.k * 0.98)
-          .clipAngle(179.9);
+      ? geoMercator().rotate([-v.lon, 0]).center([0, v.lat])
+      : kind === "globe"
+        ? geoOrthographic().rotate([-v.lon, -v.lat]).clipAngle(90)
+        : geoAzimuthalEquidistant().rotate([-v.lon, -v.lat]).clipAngle(179.9);
+  p.scale(scaleOf(kind, v, w, h));
   return p
     .translate([w / 2, h / 2])
     .clipExtent([
@@ -112,6 +110,14 @@ function projection(kind: MapOpts["proj"], v: View, w: number, h: number, coarse
       [w + 2, h + 2],
     ])
     .precision(coarse ? 3 : 0.7);
+}
+
+/** Pixels per radian at the centre of the view. */
+function scaleOf(kind: MapOpts["proj"], v: View, w: number, h: number): number {
+  if (kind === "merc") return (w / (2 * Math.PI)) * v.k;
+  // the globe's radius, or the azimuthal map's (pi radians to its edge)
+  const r = (Math.min(w, h) / 2) * 0.98 * v.k;
+  return kind === "globe" ? r : r / Math.PI;
 }
 
 /** The view's centre on the globe and how far from it (radians) the
@@ -352,12 +358,12 @@ export function MapPanel() {
       }
       const placed: { p: MapPoint; x: number; y: number }[] = [];
       const centre = proj.invert?.([w / 2, h / 2]);
-      const far = 0.999 * Math.PI * 6371;
+      // the far side: past the azimuthal map's edge, behind the globe
+      const far = o.proj === "globe" ? (Math.PI / 2) * 6371 : o.proj === "azim" ? 0.999 * Math.PI * 6371 : Infinity;
       for (const p of points) {
         const xy = proj([p.pos[1], p.pos[0]]);
         if (!xy || !Number.isFinite(xy[0]) || xy[0] < -10 || xy[1] < -10 || xy[0] > w + 10 || xy[1] > h + 10) continue;
-        // azimuthal: the far side's edge is clipped
-        if (o.proj === "azim" && centre && distanceKm([centre[1], centre[0]], p.pos) > far) continue;
+        if (far < Infinity && centre && distanceKm([centre[1], centre[0]], p.pos) > far) continue;
         placed.push({ p, x: xy[0], y: xy[1] });
       }
       // the points, one path per band (later bands on top)
@@ -477,7 +483,7 @@ export function MapPanel() {
     }
     const w = c.clientWidth;
     const h = c.clientHeight;
-    const scale = o.proj === "merc" ? (w / (2 * Math.PI)) * v.k : (Math.min(w, h) / 2 / Math.PI) * v.k;
+    const scale = scaleOf(o.proj, v, w, h);
     const deg = 180 / Math.PI / scale;
     const lon = ((v.lon - (cur[0] - last[0]) * deg + 540) % 360) - 180;
     const lat = Math.max(-80, Math.min(80, v.lat + (cur[1] - last[1]) * deg));
@@ -514,6 +520,7 @@ export function MapPanel() {
       <div class="spots-bar">
         <select value={o.proj} onChange={(e) => setMapOpts({ proj: (e.target as HTMLSelectElement).value as MapOpts["proj"] })} title="Projection">
           <option value="azim">Great circle</option>
+          <option value="globe">Globe</option>
           <option value="merc">Mercator</option>
         </select>
         {LAYERS.map((l) => (
