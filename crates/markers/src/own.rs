@@ -103,7 +103,8 @@ pub fn parse(text: &str) -> Result<Vec<Marker>, String> {
             "usb" => Tune::Usb,
             "lsb" => Tune::Lsb,
             "cw" => Tune::Cw,
-            m => return Err(format!("line {n}: mode \"{m}\" (usb, lsb, cw or am)")),
+            "nbfm" | "fm" => Tune::Nbfm,
+            m => return Err(format!("line {n}: mode \"{m}\" (usb, lsb, cw, am or nbfm)")),
         };
         let dial = match get(col("dial_khz")) {
             "" => None,
@@ -221,9 +222,13 @@ mod tests {
                 .starts_with("line 3")
         );
         assert!(
-            parse("khz,name,mode\n1000,a,fm\n")
+            parse("khz,name,mode\n1000,a,dsb\n")
                 .unwrap_err()
                 .contains("mode")
+        );
+        assert_eq!(
+            parse("khz,name,mode\n29600,a,fm\n").unwrap()[0].mode,
+            Tune::Nbfm
         );
         assert!(parse("khz,name\n1000,\n").unwrap_err().contains("no name"));
         assert_eq!(parse("").unwrap(), vec![]);

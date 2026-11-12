@@ -81,4 +81,6 @@ test("paths, equality and labels", () => {
   assert.ok(!same([1, 2], [2, 1]));
   assert.equal(label("wf_budget"), "WF budget");
   assert.equal(label("per_ip"), "Per IP");
+  assert.equal(label("dxspots"), "DX spots");
+  assert.equal(label("ca_file"), "CA file");
 });

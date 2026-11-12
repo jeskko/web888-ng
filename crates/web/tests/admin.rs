@@ -376,7 +376,7 @@ async fn admin_api() {
         keys,
         [
             "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt",
-            "markers", "kiwi"
+            "markers", "dxspots", "kiwi"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());

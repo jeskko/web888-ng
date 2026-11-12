@@ -1071,6 +1071,12 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             listener.local_addr()?,
             w.ui_dir.display()
         );
+        // live DX spots (`[dxspots]`): one connection, on this runtime
+        rt.spawn(web888_web::dxspots::run(
+            shared.live.clone(),
+            shared.radio.rf_lo,
+            shared.radio.rf_hi,
+        ));
         let app = web888_web::router(shared, w.ui_dir.clone());
         let web_stop = stop.clone();
         threads.push(

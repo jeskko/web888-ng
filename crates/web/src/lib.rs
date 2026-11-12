@@ -7,6 +7,7 @@
 pub mod admin;
 pub mod auth;
 pub mod binview;
+pub mod dxspots;
 pub mod kiwi;
 pub mod markers;
 pub mod metrics;

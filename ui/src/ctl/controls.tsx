@@ -48,6 +48,7 @@ import {
   stepOf,
   stereo,
   tune,
+  tuneInView,
   tuneStep,
   volume,
 } from "../state.ts";
@@ -67,7 +68,8 @@ export function FreqDisplay() {
           const el = e.currentTarget;
           if (e.key === "Enter") {
             const f = parseFreq(el.value);
-            if (f !== null) tune(f);
+            // a typed frequency off the waterfall brings the view along
+            if (f !== null) tuneInView(f);
             editing.value = false;
           } else if (e.key === "Escape") editing.value = false;
         }}

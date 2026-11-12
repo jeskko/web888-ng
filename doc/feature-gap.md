@@ -86,7 +86,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | feature | stock | Kiwi | OWRX+ | ng | plan |
 |---|---|---|---|---|---|
 | Band bars + band plan (ITU regions) | ✓ | ✓ | ✓ | ✓ band ribbon (IARU R1-3, ITU services), the phone's band picker | – |
-| DX labels: own, EiBi schedules, community | ✓ | ✓ | bookmarks | ✓ own (admin upload), EiBi on air now, utility and amateur lists (v0.7.0); no community list | – |
+| DX labels: own, EiBi schedules, community | ✓ | ✓ | bookmarks | ✓ own (admin upload), EiBi on air now, utility and amateur lists (v0.7.0); live DX cluster spots from Spothole (POTA/SOTA/... configurable); no community list | – |
 | Frequency memories, VFO A/B | ✓ | ✓ | ✓ | ✗ | **R** |
 | Audio recording (WAV), squelch-triggered | ✓ | ✓ | MP3 | ✗ | **R** (client side) |
 | Queue / camp on a user's channel | ✓ | ✓ | ✗ | ✓ (listen-along) | – |

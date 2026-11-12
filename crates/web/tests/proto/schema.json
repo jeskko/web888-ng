@@ -140,6 +140,20 @@
         "file": "markers.csv"
       }
     },
+    "dxspots": {
+      "description": "Live DX spots from a Spothole server, as labels on the spectrum\n(apply at once).",
+      "$ref": "#/$defs/DxSpots",
+      "default": {
+        "enabled": true,
+        "server": "https://spothole.app/api/v3",
+        "sources": [
+          "Cluster"
+        ],
+        "de_continents": [],
+        "max_age_minutes": 30,
+        "ca_file": ""
+      }
+    },
     "kiwi": {
       "description": "KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at\nonce; `doc/m5-kiwi.md`).",
       "$ref": "#/$defs/Kiwi",
@@ -762,6 +776,54 @@
           "description": "The station's own labels (CSV; the admin pages upload and download\nit). A relative path is next to this configuration file.",
           "type": "string",
           "default": "markers.csv"
+        }
+      },
+      "additionalProperties": false
+    },
+    "DxSpots": {
+      "description": "Live DX spots: web888d follows a Spothole server's spot stream\n(<https://spothole.app>, an aggregator of DX clusters and outdoor\nactivity programmes) and shows the spots in the receiver's range as\nlabels on the spectrum.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Follow the spots (an HTTPS connection to `server`).",
+          "type": "boolean",
+          "default": true
+        },
+        "server": {
+          "description": "The Spothole API's address.",
+          "type": "string",
+          "default": "https://spothole.app/api/v3"
+        },
+        "sources": {
+          "description": "Spothole's sources to take: \"Cluster\" (DX clusters), and e.g.\n\"POTA\", \"SOTA\", \"WWFF\", \"GMA\", \"HEMA\" (its /options lists them).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "Cluster"
+          ]
+        },
+        "de_continents": {
+          "description": "Only spots by spotters on these continents (EU, NA, SA, AS, AF, OC,\nAN); empty: all.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "max_age_minutes": {
+          "description": "A spot is shown this long (minutes; Spothole keeps them an hour).",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 1,
+          "maximum": 60,
+          "default": 30
+        },
+        "ca_file": {
+          "description": "CA certificates (PEM) to check the server with; empty: the\nsystem's, else the built-in roots of Let's Encrypt.",
+          "type": "string",
+          "default": ""
         }
       },
       "additionalProperties": false

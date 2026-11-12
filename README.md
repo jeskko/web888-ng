@@ -170,7 +170,10 @@ click a label to tune there, in its mode:
   RTTY, the NCDXF beacons;
 * **Amateur**: digital-mode dials (FT8, FT4, WSPR, JS8...), calling, QRP,
   SSTV and emergency frequencies of the IARU region;
-* **Station**: the receiver's own list (yellow).
+* **Station**: the receiver's own list (yellow);
+* **DX spots**: live DX cluster spots in the receiver's range, the latest
+  of each station on each band (orange; the spotter, comment and time on
+  hover), from [Spothole](https://spothole.app).
 
 The **band ribbon** between the spectrum and the scale shows the IARU
 region's amateur band plan (CW, narrow-band digital, all-mode segments)
@@ -183,7 +186,24 @@ region = 1             # IARU region of the ribbon and the amateur frequencies
 file = "markers.csv"   # the station's own list, next to this file
 ```
 
-All data is compiled into web888d, nothing is fetched at runtime:
+**DX spots** come from a Spothole server (spothole.app, an aggregator of
+DX clusters and outdoor activity programmes, free to use). web888d keeps
+one connection to it whatever the number of listeners: at start the
+spots of the last `max_age_minutes`, then each new one as it comes
+(server-sent events). Only these requests go out (the User-Agent names
+web888d); nothing is sent to Spothole. On by default, DX clusters only:
+
+```toml
+[dxspots]
+enabled = true
+server = "https://spothole.app/api/v3"
+sources = ["Cluster"]  # also e.g. "POTA", "SOTA", "WWFF", "GMA", "HEMA"
+de_continents = []     # only spotters on these (EU, NA, ...); empty: all
+max_age_minutes = 30   # how long a spot is shown (at most 60)
+ca_file = ""           # CA bundle (PEM); empty: the system's, else Let's Encrypt's roots built in
+```
+
+The other labels' data is compiled into web888d, nothing is fetched at runtime:
 `crates/markers/data/README.md` lists every file's sources and terms
 (EiBi's schedule is free to use and distribute; the rest is compiled from
 the IARU, ITU and operators' own publications). The own list is a CSV

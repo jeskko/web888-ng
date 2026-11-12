@@ -60,6 +60,7 @@ test("labels: where a click tunes, and the hover text", () => {
   assert.equal(markerTitle(bc), "6 070.000 kHz Channel 292 (AM) · 2300-0100 Sa UTC · E to Eu D: click to tune");
   assert.notEqual(markerColour(bc), markerColour(ft8));
   assert.equal(markerColour({ ...ft8, src: "own" }), "#ffd25a"); // the station's own stand out
+  assert.equal(markerColour({ ...ft8, src: "dx", category: "dx" }), "#ffa94d"); // DX spots too
 });
 
 test("label sources remembered", () => {

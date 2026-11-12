@@ -66,6 +66,8 @@ sinks, the system. Restarts are marked.
 | `wsprnet_enabled`, `_pending`, `_error`, `_last_sent_seconds` | gauge | | WSPRnet uploading; the last upload failed |
 | `wsprnet_spots_total`, `_failed_total`, `_skipped_total` | counter | | spots sent, given up on, not sent (not live) |
 | `gpsd_connected`, `gpsd_fix_mode`, `gpsd_last_fix_seconds` | gauge | | gpsd (when set) |
+| `dxspots_enabled`, `dxspots_connected`, `dxspots_held` | gauge | | live DX spots: following, the stream open, spots held |
+| `dxspots_received_total`, `dxspots_errors_total` | counter | | spots taken in; failed connections |
 | `log_sink_configured`, `log_sink_connected` | gauge | `sink` (mqtt, syslog) | a server is set; connected |
 | `log_sink_messages_total`, `_dropped_total`, `_errors_total` | counter | `sink` | messages sent and dropped; failed connects and sends |
 | `system_cpu_seconds_total` | counter | `mode` (busy, idle) | all CPUs |

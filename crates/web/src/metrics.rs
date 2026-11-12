@@ -536,6 +536,37 @@ fn uploaders(o: &mut Out, sh: &Shared) {
             );
         }
     }
+    let dx = crate::dxspots::global();
+    o.one(
+        "dxspots_enabled",
+        "gauge",
+        "Following live DX spots ([dxspots]).",
+        flag(dx.enabled.load(Ordering::Relaxed)),
+    );
+    o.one(
+        "dxspots_connected",
+        "gauge",
+        "The DX spot stream is open.",
+        flag(dx.connected.load(Ordering::Relaxed)),
+    );
+    o.one(
+        "dxspots_held",
+        "gauge",
+        "DX spots held (in the receiver's range, of the last max_age_minutes).",
+        dx.len() as f64,
+    );
+    o.one(
+        "dxspots_received_total",
+        "counter",
+        "DX spots taken in.",
+        n(&dx.received),
+    );
+    o.one(
+        "dxspots_errors_total",
+        "counter",
+        "Failed connections to the DX spot server.",
+        n(&dx.errors),
+    );
     let sinks = [
         ("mqtt", &web888_skim::sink::MQTT),
         ("syslog", &web888_skim::sink::SYSLOG),

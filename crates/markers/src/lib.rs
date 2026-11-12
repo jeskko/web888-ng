@@ -11,7 +11,8 @@
 //! * `amateur`: digital-mode dials, calling and emergency frequencies,
 //!   per IARU region;
 //! * `own`: the station's list (`own.rs`, a CSV file on the configuration
-//!   partition).
+//!   partition);
+//! * `dx`: live DX spots, served by web888d (not this crate).
 
 pub mod bandplan;
 pub mod eibi;
@@ -29,6 +30,8 @@ pub enum Tune {
     Lsb,
     Cw,
     Am,
+    /// Narrow-band FM (VHF voice, 10 and 6 m FM).
+    Nbfm,
 }
 
 /// A label on the spectrum.
@@ -60,8 +63,9 @@ pub struct Marker {
     pub src: String,
 }
 
-/// The marker lists the receiver has.
-pub const SOURCES: [&str; 4] = ["eibi", "utility", "amateur", "own"];
+/// The marker lists the receiver has. `dx` (live DX spots) is web888d's
+/// own (`web888-web`'s `dxspots`); [`query`] leaves it out.
+pub const SOURCES: [&str; 5] = ["eibi", "utility", "amateur", "own", "dx"];
 
 /// A marker as the bundled lists give it: the marker, the IARU regions it
 /// applies to (empty: all) and the id of the document it comes from.

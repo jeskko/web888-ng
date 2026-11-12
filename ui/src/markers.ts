@@ -6,7 +6,7 @@
 
 import { formatKhz } from "./fmt.ts";
 
-export type Tune = "usb" | "lsb" | "cw" | "am";
+export type Tune = "usb" | "lsb" | "cw" | "am" | "nbfm";
 
 /** A label: a station or a frequency of activity. */
 export interface FreqMarker {
@@ -61,6 +61,7 @@ export const LABEL_SOURCES: { id: string; name: string; title: string }[] = [
   { id: "utility", name: "Utility", title: "Time signals, maritime, aero, weather fax, beacons" },
   { id: "amateur", name: "Amateur", title: "Digital-mode dials and calling frequencies of the IARU region" },
   { id: "own", name: "Station", title: "This receiver's own list (from its admin)" },
+  { id: "dx", name: "DX spots", title: "Live DX cluster spots (from Spothole), the latest of each station" },
 ];
 
 /** Labels are asked for only when the view is at most this wide (Hz):
@@ -70,6 +71,7 @@ export const LABEL_MAX_SPAN = 3_000_000;
 /** A label's colour, by what it is. */
 export function markerColour(m: FreqMarker): string {
   if (m.src === "own") return "#ffd25a";
+  if (m.src === "dx") return "#ffa94d";
   switch (m.category) {
     case "broadcast":
       return "#ff9b8a";

@@ -1,8 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Frequency labels and the band ribbon (`web888-markers`):
 //!
-//! * `GET /api/markers?lo=&hi=&src=eibi,utility,amateur,own&region=1`:
-//!   the labels in that range (Hz), EiBi's what is on the air now;
+//! * `GET /api/markers?lo=&hi=&src=eibi,utility,amateur,own,dx&region=1`:
+//!   the labels in that range (Hz), EiBi's what is on the air now, `dx`
+//!   the live DX spots ([`crate::dxspots`]);
 //! * `GET /api/markers/info`: the sources, the station's region, EiBi's
 //!   season;
 //! * `GET /api/bandplan?region=1`: a region's amateur band plan and the
@@ -120,7 +121,7 @@ async fn markers(
     } else {
         Arc::default()
     };
-    let list = web888_markers::query(
+    let mut list = web888_markers::query(
         &Want {
             lo: q.lo,
             hi: q.hi,
@@ -131,6 +132,20 @@ async fn markers(
         },
         &own,
     );
+    if src.contains(&"dx") {
+        let max_age = sh.live.borrow().dxspots.max_age_minutes.clamp(1, 60) as f64 * 60.0;
+        let now = q.t.map_or_else(
+            || {
+                SystemTime::now()
+                    .duration_since(SystemTime::UNIX_EPOCH)
+                    .map_or(0.0, |d| d.as_secs_f64())
+            },
+            |t| t as f64,
+        );
+        list.extend(crate::dxspots::global().markers(q.lo, q.hi, now - max_age));
+        list.sort_by(|a, b| a.hz.total_cmp(&b.hz));
+        list.truncate(LIMIT);
+    }
     Json(serde_json::json!({ "markers": list })).into_response()
 }
 
@@ -143,6 +158,12 @@ async fn info(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
         .map(|(id, n)| serde_json::json!({ "id": id, "count": n }))
         .collect();
     sources.push(serde_json::json!({ "id": "own", "count": own_list(&sh).len() }));
+    let dx = crate::dxspots::global();
+    sources.push(serde_json::json!({
+        "id": "dx",
+        "count": dx.len(),
+        "enabled": sh.live.borrow().dxspots.enabled,
+    }));
     Json(serde_json::json!({
         "region": region(&sh, None),
         "eibi_season": eibi::SEASON,

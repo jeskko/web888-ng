@@ -90,6 +90,9 @@ pub struct Config {
     pub mqtt: Mqtt,
     /// Frequency labels and the band ribbon (apply at once).
     pub markers: Markers,
+    /// Live DX spots from a Spothole server, as labels on the spectrum
+    /// (apply at once).
+    pub dxspots: DxSpots,
     /// KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at
     /// once; `doc/m5-kiwi.md`).
     pub kiwi: Kiwi,
@@ -486,6 +489,44 @@ impl Default for Markers {
     }
 }
 
+/// Live DX spots: web888d follows a Spothole server's spot stream
+/// (<https://spothole.app>, an aggregator of DX clusters and outdoor
+/// activity programmes) and shows the spots in the receiver's range as
+/// labels on the spectrum.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct DxSpots {
+    /// Follow the spots (an HTTPS connection to `server`).
+    pub enabled: bool,
+    /// The Spothole API's address.
+    pub server: String,
+    /// Spothole's sources to take: "Cluster" (DX clusters), and e.g.
+    /// "POTA", "SOTA", "WWFF", "GMA", "HEMA" (its /options lists them).
+    pub sources: Vec<String>,
+    /// Only spots by spotters on these continents (EU, NA, SA, AS, AF, OC,
+    /// AN); empty: all.
+    pub de_continents: Vec<String>,
+    /// A spot is shown this long (minutes; Spothole keeps them an hour).
+    #[schemars(range(min = 1, max = 60))]
+    pub max_age_minutes: u32,
+    /// CA certificates (PEM) to check the server with; empty: the
+    /// system's, else the built-in roots of Let's Encrypt.
+    pub ca_file: PathBuf,
+}
+
+impl Default for DxSpots {
+    fn default() -> Self {
+        DxSpots {
+            enabled: true,
+            server: "https://spothole.app/api/v3".into(),
+            sources: vec!["Cluster".into()],
+            de_continents: Vec::new(),
+            max_age_minutes: 30,
+            ca_file: PathBuf::new(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SkimMode {
@@ -757,6 +798,8 @@ impl Config {
             || self.syslog != new.syslog
             || self.mqtt != new.mqtt
             || self.kiwi != new.kiwi
+            || self.markers != new.markers
+            || self.dxspots != new.dxspots
             || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics

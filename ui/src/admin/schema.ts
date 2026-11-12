@@ -125,7 +125,8 @@ export function getIn(obj: Json | undefined, path: string[]): Json | undefined {
 
 /** "wf_budget" -> "WF budget" */
 export function label(key: string): string {
-  const words = key.split("_").map((w) => (["wf", "ip", "tls", "iq", "adc", "ui", "hpsdr"].includes(w) ? w.toUpperCase() : w));
+  if (key === "dxspots") return "DX spots";
+  const words = key.split("_").map((w) => (["wf", "ip", "tls", "iq", "adc", "ui", "hpsdr", "ca", "de", "dx"].includes(w) ? w.toUpperCase() : w));
   const s = words.join(" ");
   return s.charAt(0).toUpperCase() + s.slice(1);
 }

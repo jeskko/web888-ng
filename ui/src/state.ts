@@ -356,7 +356,7 @@ export function goBand(b: Band): void {
 }
 
 /** Tune, and bring the waterfall along when the dial is leaving its
- * view (the phone's wheel, steps and keypad). */
+ * view (the phone's wheel, steps and keypad, a frequency typed in). */
 export function tuneInView(hz: number): void {
   tune(hz);
   const s = st.value;
@@ -770,9 +770,14 @@ export function pickMarker(m: FreqMarker): void {
   tuneInView(t.hz);
 }
 
-/** Bumped every 5 minutes: what is on the air changes with the schedule. */
+/** Bumped every 5 minutes: what is on the air changes with the schedule;
+ * every minute with the live DX spots shown. */
 const labelTick = signal(0);
-window.setInterval(() => labelTick.value++, 5 * 60_000);
+let labelTicks = 0;
+window.setInterval(() => {
+  labelTicks++;
+  if (labelTicks % 5 === 0 || labelSources.peek().includes("dx")) labelTick.value++;
+}, 60_000);
 
 let fetched: { range: [number, number]; key: string } | null = null;
 let labelTimer: number | undefined;
