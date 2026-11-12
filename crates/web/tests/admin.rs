@@ -49,6 +49,7 @@ async fn start(config: Config, path: PathBuf) -> (std::net::SocketAddr, Arc<Atom
     let (live_tx, live_rx) = tokio::sync::watch::channel(Arc::new(config));
     let p = path.clone();
     let shared = Arc::new(Shared {
+        external_spots: Default::default(),
         waterfalls: web888_web::wfsvc::Waterfalls::new(
             caps.wf_channels,
             caps.adc_hz,
@@ -376,7 +377,7 @@ async fn admin_api() {
         keys,
         [
             "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt",
-            "markers", "kiwi"
+            "markers", "spots", "kiwi"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());
@@ -867,6 +868,54 @@ async fn trusted_proxies_forward_the_client() {
     assert_eq!(wrong("192.0.2.67").await.status, 401);
 
     drop((wa, wb, wa2));
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}
+
+#[tokio::test]
+async fn imported_spots_follow_listener_auth_and_work_without_skimmers() {
+    let path = temp("external-spots");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    c.auth.listener_hash = Some(auth::hash("listener-secret"));
+    c.spots.spothole.enabled = true;
+    c.spots.spothole.station_name = "Test receiver".into();
+    c.spots.spothole.station_url = "https://receiver.example/".into();
+    let (addr, stop) = start(c, path.clone()).await;
+    assert_eq!(
+        http(addr, "GET", "/api/spots/external", None, None)
+            .await
+            .status,
+        401
+    );
+    let login = http(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password":"listener-secret"})),
+    )
+    .await;
+    assert_eq!(login.status, 200);
+    let response = http(
+        addr,
+        "GET",
+        "/api/spots/external",
+        Some(&login.token()),
+        None,
+    )
+    .await;
+    assert_eq!(response.status, 200);
+    assert_eq!(response.json()["enabled"], true);
+    assert_eq!(response.json()["state"], "loading");
+    assert_eq!(response.json()["spots"], json!([]));
+    // The old local route remains a local-only list, even with no skimmers.
+    assert_eq!(
+        http(addr, "GET", "/api/spots", Some(&login.token()), None)
+            .await
+            .json(),
+        json!({"spots":[]})
+    );
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

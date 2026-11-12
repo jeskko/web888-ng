@@ -997,6 +997,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         let w = &cfg.web;
         let rf = caps.rf_range.clone();
         let shared = Arc::new(web888_web::session::Shared {
+            external_spots: Default::default(),
             status: status.clone(),
             radio: web888_web::proto::RadioInfo {
                 backend: id.backend.into(),
@@ -1071,6 +1072,11 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             listener.local_addr()?,
             w.ui_dir.display()
         );
+        rt.spawn(web888_web::external_spots::run(
+            shared.external_spots.clone(),
+            shared.live.clone(),
+            (shared.radio.rf_lo, shared.radio.rf_hi),
+        ));
         let app = web888_web::router(shared, w.ui_dir.clone());
         let web_stop = stop.clone();
         threads.push(

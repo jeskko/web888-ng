@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addSpots, choices, filterSpots, latest, placeLabels, utcTime } from "../src/spots.ts";
+import { addSpots, choices, filterSpots, latest, placeLabels, utcTime, activityChoices, mergeSpots, spotTarget, spotTitle } from "../src/spots.ts";
 import type { Spot } from "../src/proto.ts";
 
 const sp = (t: number, call: string, dial: number, band: string, mode = "FT8"): Spot => ({
@@ -81,4 +81,48 @@ test("labels take the lowest free row", () => {
       ["d", 0],
     ],
   );
+});
+
+const remote = (id: string, mode = "CW", hz = 7030000): Spot => ({
+  id, t: 1000, mode, reported_mode: mode, band: hz < 10000000 ? "40m" : "20m",
+  hz, dial: hz, call: "OH0TEST", msg: "CQ test", source: "spothole",
+  activities: ["POTA", "WWFF"], refs: [{activity: "POTA", id: "FI-0001"}],
+});
+
+test("imported CW, LSB and USB tune to RF while local digital modes keep their dial", () => {
+  assert.deepEqual(spotTarget(remote("cw")), {mode: "cw", hz: 7030000});
+  assert.deepEqual(spotTarget(remote("lsb", "LSB", 7100000)), {mode: "lsb", hz: 7100000});
+  assert.deepEqual(spotTarget(remote("usb", "USB", 14285000)), {mode: "usb", hz: 14285000});
+  assert.deepEqual(spotTarget(remote("60m", "USB", 5354000)), {mode: "usb", hz: 5354000});
+  for (const mode of ["FT8", "FT4", "WSPR"]) {
+    assert.deepEqual(spotTarget(sp(1000, "LOCAL", 7074000, "40m", mode)), {mode: "usb", hz: 7074000});
+  }
+});
+
+test("activity membership handles dual activations and composes with source, mode and reference text", () => {
+  const data = mergeSpots([sp(990, "LOCAL", 7074000, "40m")], [remote("a")], 1000);
+  for (const activity of ["POTA", "WWFF"]) assert.equal(filterSpots(data, {band: "40m", mode: "CW", activity, source: "spothole", text: "fi-0001"}).length, 1);
+  assert.equal(filterSpots(data, {band: "", mode: "", activity: "SOTA", text: ""}).length, 0);
+  assert.equal(filterSpots(data, {band: "", mode: "", activity: "none", text: ""}).length, 1);
+  assert.equal(filterSpots(data, {band: "", mode: "", source: "local", text: ""}).length, 1);
+  assert.deepEqual(activityChoices(data), ["POTA", "SOTA", "WWFF"]);
+});
+
+test("snapshot merge is ordered, bounded and deduplicated, with no fictional SNR", () => {
+  const a = remote("a");
+  const b = {...remote("b"), t: 900};
+  const merged = mergeSpots([], [a, a, b, {...remote("expired"), t: -1000}], 1000);
+  assert.deepEqual(merged.map(s => s.id), ["b", "a"]);
+  assert.equal(merged[0].snr, undefined);
+  assert.equal(mergeSpots([], Array.from({length: 600}, (_,i) => remote(String(i))), 1000).length, 500);
+});
+
+test("external labels retain multiple bands, respect expiry, and local FT8 stays short-lived", () => {
+  const a = remote("a");
+  const b = remote("b", "CW", 14030000);
+  const values = mergeSpots([sp(1000, "LOCAL", 7074000, "40m")], [a,b], 1000);
+  assert.equal(latest(values, 1050).length, 2);
+  assert.equal(latest(values, 2801).length, 0);
+  assert.match(spotTitle({...remote("ssb", "LSB"), reported_mode: "SSB"}), /SSB → LSB by band convention/);
+  assert.doesNotMatch(spotTitle(a), /undefined|NaN/);
 });

@@ -277,6 +277,36 @@ smeter_offset_db = 0.0  # dBm = dBFS + this (web888d measures dBFS)
 
 What is and isn't covered, and the protocol mapping: `doc/m5-kiwi.md`.
 
+### External spots (Spothole)
+
+The Spots panel can also show [Spothole](https://spothole.app/) reports,
+with Source and Activity filters (POTA, SOTA, WWFF and other reported
+activities). Enable this explicitly in the admin configuration or TOML:
+
+```toml
+[spots.spothole]
+enabled = true
+station_url = "https://your-public-receiver.example/"
+# station_name = "My receiver"  # optional; otherwise kiwi.name / station.callsign
+```
+
+The receiver fetches one shared snapshot per minute; listener browsers
+never connect to Spothole. The public station URL is sent as Referer,
+and the station name plus URL in User-Agent. No API key is needed for
+reading. You can change `url` from `https://spothole.app` to another
+compatible HTTPS instance. The feed is off by default.
+
+Click a spot to tune: CW selects CW; SSB uses LSB below 10 MHz and USB
+above, with USB on 60 m. Spothole supplies SSB rather than a sideband,
+so that choice is an inference and can be changed manually. Existing
+FT8/FT4/WSPR local spots still tune to their skimmer's USB dial.
+Imported spots are identified separately and are never uploaded as
+locally decoded reports. Their cache/labels expire after 30 minutes;
+source failures show an unavailable/stale status. On phones the list
+uses compact callsign/frequency/mode/activity rows, with filters closed
+until you open Filters. See [the integration design](doc/changes/2026-11-12-spothole-spots.md)
+for limits and verification.
+
 ### Real signals without a Web-888 (HackRF, IQ recordings)
 
 `--backend iq` feeds web888d from a wideband IQ stream instead of the

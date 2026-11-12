@@ -140,6 +140,18 @@
         "file": "markers.csv"
       }
     },
+    "spots": {
+      "description": "External spot feeds (opt-in; apply at once).",
+      "$ref": "#/$defs/Spots",
+      "default": {
+        "spothole": {
+          "enabled": false,
+          "url": "https://spothole.app",
+          "station_name": "",
+          "station_url": ""
+        }
+      }
+    },
     "kiwi": {
       "description": "KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at\nonce; `doc/m5-kiwi.md`).",
       "$ref": "#/$defs/Kiwi",
@@ -762,6 +774,48 @@
           "description": "The station's own labels (CSV; the admin pages upload and download\nit). A relative path is next to this configuration file.",
           "type": "string",
           "default": "markers.csv"
+        }
+      },
+      "additionalProperties": false
+    },
+    "Spots": {
+      "description": "Read-only external spots, kept separate from local decodes and reporting.",
+      "type": "object",
+      "properties": {
+        "spothole": {
+          "$ref": "#/$defs/Spothole",
+          "default": {
+            "enabled": false,
+            "url": "https://spothole.app",
+            "station_name": "",
+            "station_url": ""
+          }
+        }
+      },
+      "additionalProperties": false
+    },
+    "Spothole": {
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Fetch one shared snapshot per minute; no requests when off.",
+          "type": "boolean",
+          "default": false
+        },
+        "url": {
+          "description": "HTTPS root of a Spothole v3 instance, without query or credentials.",
+          "type": "string",
+          "default": "https://spothole.app"
+        },
+        "station_name": {
+          "description": "Public station name in User-Agent; empty uses kiwi.name, then station.callsign.",
+          "type": "string",
+          "default": ""
+        },
+        "station_url": {
+          "description": "Public station URL sent as Referer and in User-Agent (not a listener URL).",
+          "type": "string",
+          "default": ""
         }
       },
       "additionalProperties": false

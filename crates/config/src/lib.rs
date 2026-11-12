@@ -90,9 +90,42 @@ pub struct Config {
     pub mqtt: Mqtt,
     /// Frequency labels and the band ribbon (apply at once).
     pub markers: Markers,
+    /// External spot feeds (opt-in; apply at once).
+    pub spots: Spots,
     /// KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at
     /// once; `doc/m5-kiwi.md`).
     pub kiwi: Kiwi,
+}
+
+/// Read-only external spots, kept separate from local decodes and reporting.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Spots {
+    pub spothole: Spothole,
+}
+
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Spothole {
+    /// Fetch one shared snapshot per minute; no requests when off.
+    pub enabled: bool,
+    /// HTTPS root of a Spothole v3 instance, without query or credentials.
+    pub url: String,
+    /// Public station name in User-Agent; empty uses kiwi.name, then station.callsign.
+    pub station_name: String,
+    /// Public station URL sent as Referer and in User-Agent (not a listener URL).
+    pub station_url: String,
+}
+
+impl Default for Spothole {
+    fn default() -> Self {
+        Self {
+            enabled: false,
+            url: "https://spothole.app".into(),
+            station_name: String::new(),
+            station_url: String::new(),
+        }
+    }
 }
 
 /// What the skimmers log, for choosing what goes to syslog and MQTT.
@@ -751,7 +784,8 @@ impl Config {
         if web_restart {
             c.restart.push("web");
         }
-        c.live = self.station != new.station
+        c.live = self.spots != new.spots
+            || self.station != new.station
             || self.skimmer != new.skimmer
             || self.report != new.report
             || self.syslog != new.syslog

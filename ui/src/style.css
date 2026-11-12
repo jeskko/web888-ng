@@ -230,3 +230,35 @@ table.wide { width: 100%; }
 .overlay .start { display: inline-flex; align-items: center; gap: 8px; }
 .overlay .start .ico { margin: 0; }
 
+
+.spots-status { padding: 5px 8px; border-bottom: 1px solid var(--line); overflow-wrap: anywhere; }
+.spot-meta { display: block; font-family: inherit; font-size: 10px; }
+.spot-tune { border: 0; background: transparent; color: inherit; padding: 0; font: inherit; white-space: nowrap; }
+.spot-tune:focus-visible { outline: 2px solid var(--accent); }
+.spots-list table { table-layout: fixed; }
+.spots-list th, .spots-list td { padding-right: 5px; }
+.spots-list th { white-space: normal; }
+.spots-list th:nth-child(1) { width: 57px; }
+.spots-list th:nth-child(2) { width: 77px; }
+.spots-list th:nth-child(3) { width: 39px; }
+.spots-list th:nth-child(4) { width: 25px; }
+.spots .spot-tune { min-width: 0; padding: 0; font: inherit; }
+@media (max-width: 600px) {
+  .spots-list th:nth-child(1) { width: 51px; }
+  .spots-list th:nth-child(2) { width: 68px; }
+  .spots-list th:nth-child(3) { width: 33px; }
+  .spots-list th:nth-child(4) { width: 21px; }
+}
+
+/* Compact phone rows: callsign, kHz, mode, activity. Details remain in titles. */
+.spot-cards { list-style: none; padding: 0; margin: 4px 0; }
+.spot-cards li + li { border-top: 1px solid var(--line); }
+.spots .spot-card { display: grid; grid-template-columns: minmax(65px, 1fr) 68px 34px minmax(0, 1fr); gap: 7px; align-items: center; width: 100%; min-height: 44px; padding: 7px 2px; text-align: left; white-space: normal; border: 0; border-radius: 0; background: transparent; font: 13px/1.3 system-ui, sans-serif; }
+.spot-row-call { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; font-size: 14px; }
+.spot-row-freq { text-align: right; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.spot-row-mode { color: var(--accent); font-size: 12px; }
+.spot-row-activity { font-size: 11px; overflow-wrap: anywhere; }
+.spots-mobile-heading > strong { margin-right: auto; }
+.m-tools { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+.m-tools .group { display: block; min-width: 0; }
+.m-tools button { width: 100%; white-space: normal; overflow-wrap: anywhere; }

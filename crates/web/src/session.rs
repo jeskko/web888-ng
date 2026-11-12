@@ -50,6 +50,8 @@ pub struct Shared {
     pub admin: crate::admin::Admin,
     /// The skimmers' spots and status (none: no skimmer service).
     pub skim: Option<Skim>,
+    /// Shared imported spots; never connected to the local reporting bus.
+    pub external_spots: Arc<crate::external_spots::ExternalSpots>,
     /// One minute of `limits.session_minutes` / `idle_minutes` (60 s;
     /// tests shorten it).
     pub limit_unit: Duration,

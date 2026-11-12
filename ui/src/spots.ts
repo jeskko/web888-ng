@@ -2,7 +2,7 @@
 // Spots from the skimmers: the list's filters and the labels on the scale
 // (pure, unit-tested).
 
-import type { Spot } from "./proto.ts";
+import type { Mode, Spot } from "./proto.ts";
 
 /** Spots kept in the browser. */
 export const SPOTS_KEEP = 3000;
@@ -11,6 +11,8 @@ export interface SpotFilter {
   /** "" for all. */
   band: string;
   mode: string;
+  source?: string;
+  activity?: string;
   /** Part of the message, any case; "" for all. */
   text: string;
 }
@@ -23,7 +25,10 @@ export function filterSpots(spots: Spot[], f: SpotFilter): Spot[] {
     const s = spots[k];
     if (f.band && s.band !== f.band) continue;
     if (f.mode && s.mode !== f.mode) continue;
-    if (text && !s.msg.toUpperCase().includes(text)) continue;
+    if (f.source && (s.source ?? "local") !== f.source) continue;
+    if (f.activity === "none" && s.activities?.length) continue;
+    if (f.activity && f.activity !== "none" && !s.activities?.includes(f.activity)) continue;
+    if (text && ![s.call, s.msg, ...(s.refs ?? []).map((r) => r.id)].join(" ").toUpperCase().includes(text)) continue;
     out.push(s);
   }
   return out;
@@ -56,14 +61,43 @@ export function shownFor(mode: string): number {
  * at `now` (UTC seconds): what the scale shows. */
 export function latest(spots: Spot[], now: number): Spot[] {
   const by = new Map<string, Spot>();
-  const oldest = now - shownFor("WSPR");
+  const oldest = now - 1800;
   for (let k = spots.length - 1; k >= 0 && spots[k].t >= oldest; k--) {
     const s = spots[k];
-    if (s.t < now - shownFor(s.mode)) continue;
-    const key = `${s.mode} ${s.call ?? s.msg}`;
+    if (s.t < now - (s.source === "spothole" ? 1800 : shownFor(s.mode))) continue;
+    const key = s.source === "spothole" ? `external ${s.call} ${s.band} ${s.mode}` : `${s.mode} ${s.call ?? s.msg}`;
     if (!by.has(key)) by.set(key, s);
   }
   return [...by.values()].sort((a, b) => a.hz - b.hz);
+}
+
+/** A local decode uses its USB dial; an imported spot uses the reported RF. */
+export function spotTarget(s: Spot): { mode: Mode; hz: number } {
+  if (s.source !== "spothole") return { mode: "usb", hz: s.dial };
+  const mode: Mode = s.mode === "CW" ? "cw" : s.mode === "LSB" ? "lsb" : s.mode === "AM" ? "am" : s.mode === "FM" ? "nbfm" : "usb";
+  return { mode, hz: s.hz };
+}
+
+export function spotTitle(s: Spot): string {
+  const detail = s.source === "spothole"
+    ? `Spothole / ${s.upstream_source ?? "external"}; ${s.reported_mode === "SSB" ? `SSB → ${s.mode} by band convention; ` : ""}externally reported`
+    : `${s.snr} dB, DT ${s.dt} s; locally decoded`;
+  return `${utcTime(s.t)} ${s.mode} ${detail}: ${s.call ?? ""} ${s.msg}`;
+}
+
+export function activityChoices(spots: Spot[]): string[] {
+  return [...new Set(["WWFF", "SOTA", "POTA", ...spots.flatMap((s) => s.activities ?? [])])].sort();
+}
+
+/** Stable chronological merge; repeated upstream snapshots cannot grow history. */
+export function mergeSpots(local: Spot[], external: Spot[], now: number): Spot[] {
+  const seen = new Set<string>();
+  const remote = external.filter((s) => {
+    if (s.t < now - 1800 || !s.id || seen.has(s.id)) return false;
+    seen.add(s.id);
+    return true;
+  }).slice(-500);
+  return [...local, ...remote].sort((a,b) => a.t - b.t || (a.id ?? "").localeCompare(b.id ?? ""));
 }
 
 export interface Placed<T> {

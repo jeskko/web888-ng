@@ -3,7 +3,7 @@
 // `state` message is authoritative; actions update the local copy at once
 // (optimistic) and send the request.
 
-import { batch, effect, signal } from "@preact/signals";
+import { batch, computed, effect, signal } from "@preact/signals";
 import { Player, type PlayerStats } from "./audio/player.ts";
 import { bandOf, type Band } from "./bands.ts";
 import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
@@ -11,7 +11,7 @@ import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
-import { addSpots } from "./spots.ts";
+import { addSpots, filterSpots, mergeSpots, spotTarget } from "./spots.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
@@ -41,8 +41,62 @@ export const usersOpen = signal(false);
 /** The server's skimmers (background decoders). */
 export const skimmers = signal<SkimMark[]>([]);
 /** The server runs skimmers; their spots, oldest first. */
-export const spotsAvail = signal(false);
+const localSpotsAvail = signal(false);
+export const spotsAvail = computed(() => localSpotsAvail.value || externalSpots.value.enabled);
 export const spots = signal<Spot[]>([]);
+export interface ExternalSpots {
+  enabled: boolean;
+  state: "disabled" | "loading" | "ready" | "stale" | "unavailable";
+  last_success: number | null;
+  error: string | null;
+  spots: Spot[];
+}
+const emptyExternal = (): ExternalSpots => ({ enabled: false, state: "disabled", last_success: null, error: null, spots: [] });
+export const externalSpots = signal<ExternalSpots>(emptyExternal());
+export const spotFilter = signal({ band: "", mode: "", source: "", activity: "", text: "" });
+const spotClock = signal(Date.now() / 1000);
+export const allSpots = computed(() => mergeSpots(spots.value, externalSpots.value.spots, spotClock.value));
+/** Oldest first, shared by the table and waterfall labels. */
+export const visibleSpots = computed(() => filterSpots(allSpots.value, spotFilter.value).reverse());
+let externalTimer: number | undefined;
+let spotTick: number | undefined;
+let externalRequest: AbortController | null = null;
+let externalGeneration = 0;
+function stopExternal(): void {
+  externalGeneration++;
+  clearTimeout(externalTimer);
+  clearInterval(spotTick);
+  externalRequest?.abort();
+  externalRequest = null;
+  externalSpots.value = emptyExternal();
+}
+async function pollExternal(generation: number): Promise<void> {
+  if (generation !== externalGeneration || conn.value !== "open") return;
+  const abort = new AbortController();
+  externalRequest = abort;
+  const timeout = window.setTimeout(() => abort.abort(), 10_000);
+  try {
+    const response = await fetch(api("api/spots/external"), { signal: abort.signal });
+    if (!response.ok) throw new Error("Receiver spot feed unavailable");
+    const snapshot = await response.json() as ExternalSpots;
+    if (generation === externalGeneration && Array.isArray(snapshot.spots)) externalSpots.value = snapshot;
+  } catch {
+    if (generation === externalGeneration && externalSpots.value.enabled) {
+      externalSpots.value = { ...externalSpots.value, state: "stale", error: "Receiver spot feed unavailable" };
+    }
+  } finally {
+    clearTimeout(timeout);
+    if (generation === externalGeneration && conn.value === "open") {
+      externalTimer = window.setTimeout(() => void pollExternal(generation), 30_000);
+    }
+  }
+}
+function startExternal(): void {
+  stopExternal();
+  spotTick = window.setInterval(() => spotClock.value = Date.now() / 1000, 5000);
+  void pollExternal(externalGeneration);
+}
+
 /** The spot list is open (remembered in this browser). */
 export const spotsOpen = signal(load("spotsOpen") === "1");
 /** The next spots message holds the recent spots (after a hello). */
@@ -149,6 +203,7 @@ export function connect(): void {
   link = new Conn(wsUrl(location), {
     onState(s, why, opened) {
       conn.value = s;
+      if (s !== "open") stopExternal();
       connNote.value = why ?? "";
       // refused: the password changed, or the login expired
       if (s === "closed" && !opened) {
@@ -168,8 +223,9 @@ export function connect(): void {
             limits.value = m.limits;
             server.value = m.server;
             sessionId.value = m.session;
-            spotsAvail.value = !!m.spots;
+            localSpotsAvail.value = !!m.spots;
           });
+          startExternal();
           audioRate = m.audio_rate;
           if (myName.value) link?.send({ type: "name", name: myName.value });
           if (m.spots) {
@@ -624,13 +680,14 @@ export function showSpots(on: boolean): void {
 /** A spot was picked: tune to its skimmer's dial (USB) and bring the
  * signal into view. */
 export function pickSpot(s: Spot): void {
-  if (st.value?.mode !== "usb") setMode("usb");
-  tune(s.dial);
+  const target = spotTarget(s);
+  if (st.value?.mode !== target.mode) setMode(target.mode);
+  tune(target.hz);
   const v = st.value?.wf;
   const r = radio.value;
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
-  if (Math.abs(s.hz - v.center_hz) > 0.45 * span) setView({ ...v, center_hz: s.dial + 1500 });
+  if (Math.abs(s.hz - v.center_hz) > 0.45 * span) setView({ ...v, center_hz: s.source === "spothole" ? s.hz : s.dial + 1500 });
 }
 
 /** A skimmer was picked: tune to its dial (USB) and bring its range

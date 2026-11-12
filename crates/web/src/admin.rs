@@ -372,7 +372,10 @@ fn parse(v: Value) -> Result<Config, Fail> {
             "passwords are set with /api/admin/password, not in the config",
         ));
     }
-    serde_json::from_value(v).map_err(|e| Fail::new(StatusCode::BAD_REQUEST, e.to_string()))
+    let config: Config =
+        serde_json::from_value(v).map_err(|e| Fail::new(StatusCode::BAD_REQUEST, e.to_string()))?;
+    crate::external_spots::validate(&config).map_err(|e| Fail::new(StatusCode::BAD_REQUEST, e))?;
+    Ok(config)
 }
 
 /// What saving `file` would change in the running server.

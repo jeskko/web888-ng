@@ -52,6 +52,7 @@ async fn start(channels: usize, users: usize) -> (String, Arc<AtomicBool>) {
     config.limits.per_ip = 0;
     let pool = Arc::new(web888_core::pool::DspPool::new(2, &tx, false).unwrap());
     let shared = Arc::new(Shared {
+        external_spots: Default::default(),
         waterfalls: web888_web::wfsvc::Waterfalls::new(
             caps.wf_channels,
             caps.adc_hz,

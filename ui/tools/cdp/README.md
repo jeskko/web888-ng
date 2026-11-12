@@ -42,3 +42,11 @@ kill $P
 Set passwords in the throwaway config with
 `echo PASSWORD | web888d passwd --config /tmp/t/c.toml` (and
 `--listener`).
+
+`spothole.mjs` checks the shared list against a local simulated receiver,
+using synthetic data injected only in the test browser. It verifies local-
+skimmer-independent availability, CW/LSB/USB and 60 m tuning, dual-activity
+filtering, no browser requests to external services, stale/empty states,
+keyboard tuning, and compact phone rows with filters hidden by default.
+Run at desktop and phone sizes with `W=1400 H=900` and `W=360 H=800`;
+`OUT` receives screenshots. No live Spothole or receiver is required.

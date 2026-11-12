@@ -7,6 +7,7 @@
 pub mod admin;
 pub mod auth;
 pub mod binview;
+pub mod external_spots;
 pub mod kiwi;
 pub mod markers;
 pub mod metrics;
@@ -55,6 +56,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .route("/ws", get(ws))
         .route("/api/status", get(status))
         .route("/api/spots", get(spots))
+        .route("/api/spots/external", get(external_spots::get))
         .merge(admin::routes())
         .merge(markers::routes())
         .merge(kiwi::routes())

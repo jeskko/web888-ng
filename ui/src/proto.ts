@@ -115,8 +115,15 @@ export interface Spot {
   dial: number;
   /** RF frequency of the signal (its lowest tone). */
   hz: number;
-  snr: number;
-  dt: number;
+  snr?: number;
+  dt?: number;
+  /** Absent on the backwards-compatible local skimmer payload. */
+  source?: "local" | "spothole";
+  id?: string;
+  reported_mode?: string;
+  upstream_source?: string;
+  activities?: string[];
+  refs?: { activity: string; id: string }[];
   msg: string;
   /** The sender and its locator, when the message says. */
   call?: string;

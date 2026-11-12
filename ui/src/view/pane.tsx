@@ -9,8 +9,8 @@ import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
-import { latest, utcTime } from "../spots.ts";
-import { bandPlan, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { latest, spotTitle } from "../spots.ts";
+import { bandPlan, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, visibleSpots, st, stepOf, tune, users } from "../state.ts";
 import { markerColour, markerTitle, ribbon, type FreqMarker, type RibbonPiece } from "../markers.ts";
 import { pick } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
@@ -104,7 +104,7 @@ export function Pane() {
     const unsubName = myName.subscribe(() => {
       dirty = true;
     });
-    const unsubSpots = spots.subscribe(() => {
+    const unsubSpots = visibleSpots.subscribe(() => {
       dirty = true;
     });
     const unsubSkims = skimmers.subscribe(() => {
@@ -127,7 +127,7 @@ export function Pane() {
       const { min, max } = currentRange();
       wf?.draw(v.start, v.span, min, max);
       const marks = users.value.filter(followable).map((u) => ({ hz: u.hz, on: u.id === s.listen, name: u.name }));
-      const shown = latest(spots.value, Date.now() / 1000).map((p) => ({
+      const shown = latest(visibleSpots.value, Date.now() / 1000).map((p) => ({
         hz: p.hz,
         text: p.call ?? p.msg,
         other: p.mode !== "FT8",
@@ -333,7 +333,7 @@ export function Pane() {
           : m
             ? `${m.name ? `${m.name}: ` : ""}${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
             : p
-              ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
+              ? spotTitle(p)
               : l
                 ? markerTitle(l)
                 : rp
