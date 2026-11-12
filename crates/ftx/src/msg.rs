@@ -243,10 +243,7 @@ pub fn plausible_call(c: &str) -> bool {
         }
     }
     // 3DA0XYZ and 3XA0XYZ style.
-    if b.len() >= 5 && (c.starts_with("3DA") || c.starts_with("3X")) {
-        return true;
-    }
-    false
+    b.len() >= 5 && (c.starts_with("3DA") || c.starts_with("3X"))
 }
 
 fn is_call(s: &str) -> bool {
