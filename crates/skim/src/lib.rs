@@ -8,7 +8,7 @@
 //! by their deadlines and publish what they decode on the [`SpotBus`]. The
 //! slots of one boundary are gathered first; the earliest deadline goes
 //! first, and of those due together the band that cost least last time.
-//! When the slots waiting need more time than the decoders have before
+//! When the slots due by a deadline need more time than the decoders have before
 //! the deadline, each gets a share of it in proportion to what its band
 //! cost last time, so the busy bands keep more of their decodes. When
 //! they keep running out of time anyway (the CPU goes to listeners), the
@@ -177,9 +177,9 @@ fn expected(st: &BandStatus) -> f64 {
     }
 }
 
-/// Seconds a slot may take: all `left` when the work waiting (`own` and
-/// `others`, expected seconds) fits on `threads` decoders by then, else
-/// its part in proportion to `own`.
+/// Seconds a slot may take: all `left` when the work due by its deadline
+/// (`own` and `others`, expected seconds) fits on `threads` decoders by
+/// then, else its part in proportion to `own`.
 fn share(left: f64, threads: usize, own: f64, others: f64) -> f64 {
     let room = left * threads as f64;
     if own + others <= room {
@@ -341,7 +341,15 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
                 });
                 let k = pick(keys).expect("not empty");
                 let w = q.remove(k).expect("in range");
-                let others: f64 = q.iter().map(|w| expected(&w.band.status)).sum();
+                // The work that shares this slot's time: what is due by
+                // then. Slots due later (FT8's, next to an FT4 slot) are
+                // decoded after it, and don't shorten its share.
+                let due = w.deadline() + 0.5;
+                let others: f64 = q
+                    .iter()
+                    .filter(|o| o.deadline() <= due)
+                    .map(|o| expected(&o.band.status))
+                    .sum();
                 break (w, q.len(), others);
             }
         };
