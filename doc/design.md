@@ -303,15 +303,15 @@ to a common spot bus: the UI, PSKReporter, WSPRnet, syslog and MQTT
 | M | content | done when |
 |---|---|---|
 | M0 ✅ | workspace, `Radio` trait, `Sim` backend, DSP crate with tests, CI (x86 + armv7 cross build) | IQ from Sim through channel filter verified in tests (`crates/dsp/tests/dsp.rs`) |
-| M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested; on a production unit 2026-10-28 with the stock and the open bitstream: RX at 48 kS/s, web UI, skimmers), PPS loop ✅ (on the unit: no GPS antenna yet), HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programming opt-in `--si5351-adc`, test unit only); open: HPSDR from a real unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
+| M1 🚧 | `ZynqsdrIoctl` backend ✅ (fake-driver tested; on a production unit 2026-10-28 with the stock and the open bitstream: RX at 48 kS/s, web UI, skimmers), PPS loop ✅ (on the unit: no GPS antenna yet), HPSDR P1 ✅ (loopback tested); Si5351 plan/encoding ✅ (programmed by `band = "vhf"` and back, on a unit 2026-11-12; `--si5351-adc` for other clocks); open: HPSDR from a real unit. IQ stream moved to M3 (needs leases next to HPSDR) | SDR++/SparkSDR receive 7 channels from a real unit |
 | M2 ✅ | web UI MVP: 1 user, waterfall (exclusive), SSB/AM/CW audio (`doc/m2-web-ui.md`, v0.1.0) | usable in a browser |
 | M3 ✅ | multi-user leases, WF scheduler, AGC/NB/NR, admin API, auth (`doc/m3-multi-user.md`, v0.2.0/v0.2.1); the 12-user load test on a board is left | 13 users + time-shared waterfalls |
 | M4 ✅ | skimmers and spot reporting (`doc/m4-skimmers.md`, v0.3.0): FT8/FT4/WSPR decoders (91–92 % / 89 % of jt9, 64/64 of wsprd on the corpus), runtime with yielding leases, PSKReporter and WSPRnet uploads (accepted live), spots and skimmer ranges in the UI, syslog/MQTT/gpsd; A9: FT8 on 8 bands at 84 % busy (FST4W left) | spots uploaded |
 | M5 ✅ | Kiwi protocol (feature `kiwi`) ported from upstream (`doc/m5-kiwi.md`): SND (PCM, ADPCM, IQ) on web-class leases, W/F on the shared views, `/status`, `/VER` ✅; kiwirecorder ✅ (sim, and the unit with real signals: FT8 decodes as the skimmer's), SuperSDR ✅ (2026-11-11); open: a measured dBm calibration (-12 dB provisional) | kiwirecorder/SuperSDR work |
-| M6 🚧 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver ✅, IRQ-driven); core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`, released in hw v0.3.0) ✅ and web888d's bins mode (`doc/m6-channelizer.md`, v0.4.0/v0.5.0): 32 tuner receivers, full-band waterfall and zooms from the bins, on a Web-888 since 2026-10-29; open: GPS timestamps | GPS-timestamped IQ |
+| M6 🚧 | open-FPGA extras: timestamps, overflow/peak status, IRQ-driven I/O (open driver ✅, IRQ-driven); core: the channelizer bitstream (web888-ng-hw `docs/channelizer.md`, released in hw v0.3.0) ✅ and web888d's bins mode (`doc/m6-channelizer.md`, v0.4.0/v0.5.0): 32 tuner receivers, full-band waterfall and zooms from the bins, on a Web-888 since 2026-10-29; the zoom engine (v0.9.0); VHF on the VHF channelizer (v0.10.0, experimental); the os default since os v0.7.0; open: GPS timestamps | GPS-timestamped IQ |
 
-The order after M3 is being revisited against the stock firmware,
-KiwiSDR and OpenWebRX+: `doc/feature-gap.md` (proposal).
+The order after M6 is proposed in `doc/feature-gap.md` §3.2 (revisited
+2026-11-12 against the stock firmware, KiwiSDR and OpenWebRX+).
 
 ## 12. Licensing and provenance
 
