@@ -1,7 +1,7 @@
 # Spothole spots, receive modes and activity filters
 
 Date: 2026-11-12
-Status: Approved
+Status: Implemented
 Branch: jouni/spothole-spots, based on upstream main 091143b.
 
 ## Requested outcome
@@ -99,7 +99,7 @@ The approved receiver-side/client choice is implemented. External spots appear i
 After approval, use $project-implementation-lead with this document as the contract. Implement the provider/config/cache/API and UI slices above, preserving the existing local SpotBus/reporters and wire compatibility. Build the read client from the documented Spothole v3 contract and the repository's patterns; do not copy its application implementation. Complete the test plan with synthetic fixtures and muted local browser checks. Use the fresh app feature branch, not the owner firmware OS branch. Publication of the owner-requested signed test bundle to the already approved Kapsi directory is in scope; receiver installation/administration is not. Update this document with actual files, tests, deviations and definition-of-done evidence. Return material contract changes to Proposed for owner review.
 
 ## Implementation notes
-Feature implementation complete under the approved option A, every minute. The owner then specified reuse of station identity, a Kapsi test update, and compact mobile rows with callsign/frequency/mode/activity and filters hidden by default. Source publication and signed test release are in progress.
+Feature implementation complete under the approved option A, every minute. The owner then specified reuse of station identity, a Kapsi test update, and compact mobile rows with callsign/frequency/mode/activity and filters hidden by default. Source branch pushed and signed owner test release published/verified at the requested Kapsi source.
 
 ## Verification results
 - Rust formatting and Clippy (`--all-targets -- -D warnings`) pass.
@@ -109,7 +109,7 @@ Feature implementation complete under the approved option A, every minute. The o
 - `pnpm check` and `pnpm build` pass with both actual decoder WASM files built by the repository script.
 - Muted Chromium checks pass at 1400x900 and 360x800: source availability without local skimmers, row tuning, dual activity filters, stale/empty status, keyboard activation, no browser-side external fetch, no page/panel/list overflow; phone rows omit verbose metadata and filter dropdowns start collapsed. Screenshots inspected; More controls wrap in two columns.
 - Static ARMv7 musl binary built locally using Rust 1.99.1, rust-lld and Debian ARM GCC/headers. `file` identifies statically linked ELF32 ARM EABI5. QEMU executes `--version` and `serve --print-config`, confirming new opt-in defaults. No real receiver installation was performed.
-- Existing owner-signed v0.8.0 root image personalized with the exact new ARM binary and final complete UI, preserving kernel/driver/bitstream/owner trust/update helper. Inserted bytes extracted and compared, runtime trust validated and `e2fsck -fn` passed. Owner signature and public hosting verification remain part of the requested test-release publication, not evidence of a tested hardware OTA.
+- Existing owner-signed v0.8.0 root image personalized with the exact new ARM binary and final complete UI, preserving kernel/driver/bitstream/owner trust/update helper. Inserted bytes extracted and compared, runtime trust validated and `e2fsck -fn` passed. Owner signature/full payload and public hosting verification passed: source checksums, HTTPS metadata, HTTP 206 ranges and complete public download match. The owner reported RAUC installation succeeded and confirmed reboot is still pending; do not claim active-boot/radio validation.
 - Independent review found no remaining blockers after private IPv6, date-form Retry-After, VHF band mapping and station-name normalization were addressed.
 
 ## Implementation notes
@@ -118,4 +118,7 @@ The provider is a separate web cache and endpoint, with no path into the decoder
 The owner explicitly requested the test update at the existing Kapsi source under the previously approved scoped deployment procedure. This is separate from PR readiness; do not imply an upstream PR has been submitted or a receiver has been installed/restarted.
 
 ## Remaining risks
-The SSB sideband convention can be wrong for unusual operation; users retain manual mode controls. External spots do not prove local audibility. Spothole is a volunteer service and can be unavailable. This is an owner test build, with real-board OTA and radio testing still pending. Before reverting to an older daemon after saving the new config schema, restore the prior config/remove the new `[spots.spothole]` table, since older releases reject unknown fields. Signing and Kapsi publication are in progress.
+The SSB sideband convention can be wrong for unusual operation; users retain manual mode controls. External spots do not prove local audibility. Spothole is a volunteer service and can be unavailable. This is an owner test build, with real-board OTA and radio testing still pending. Before reverting to an older daemon after saving the new config schema, restore the prior config/remove the new `[spots.spothole]` table, since older releases reject unknown fields. Owner test release v0.8.0-owner2-spothole1 is signed and published. Owner reported successful inactive-slot installation; reboot/radio testing is pending.
+
+## Final delivery
+Feature source commit 9d6da36 on j0uni/web888-ng branch jouni/spothole-spots; PR description prepared, no upstream PR submitted. Owner test bundle v0.8.0-owner2-spothole1 is public at https://jouni.kapsi.fi/web888fw/latest.raucb (91,953,268 bytes; SHA-256 bd83b1c6f3c42d57ea00514b7745e74248ad5ae3d55621048683f7b422ea3a5f). Previous owner1 remains available and hosting rollback copies were preserved. Agent did not install or restart a receiver. Owner has been advised to reboot to activate the already-installed slot, then enable Spothole and set a public station_url.
