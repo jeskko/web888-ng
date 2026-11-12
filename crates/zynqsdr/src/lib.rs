@@ -201,6 +201,8 @@ pub fn tuner_users(signature: u32) -> usize {
 }
 
 /// The tuner's rate as a stage-2 decimation at the HF clock: 12 kS/s.
+/// Also what `RX_START` takes for the tuner at any clock (the driver
+/// accepts only this in the channelizer build).
 pub const TUNER_R2: u16 = 40;
 
 /// The ADC clock a channelizer bitstream is built for (its signature's
@@ -416,7 +418,10 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         if !(5..=40).contains(&r2) {
             return Err(Error::InvalidParam("r2 out of range"));
         }
-        self.dev.set(RX_START, r2 as u32).map_err(io)?;
+        // the channelizer: the driver takes TUNER_R2 as the tuner's one
+        // rate whatever the clock (R2 feeds nothing in that build)
+        let arg = if self.pfb.is_some() { TUNER_R2 } else { r2 };
+        self.dev.set(RX_START, arg as u32).map_err(io)?;
         self.r2 = r2;
         // the ring restarts at offset 0 with frame 0
         self.rx_stage.clear();

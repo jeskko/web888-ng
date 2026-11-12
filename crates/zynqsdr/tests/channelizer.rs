@@ -330,7 +330,8 @@ fn the_vhf_build_undersamples_at_98_304_mhz() {
     assert_eq!(rx_rate(c.adc_hz, 32), 12e3);
     assert_eq!(c.rf_range, 98.304e6..=147.456e6);
     let starts: Vec<_> = r.device().sets.iter().filter(|s| s.0 == RX_START).collect();
-    assert_eq!(starts, vec![&(RX_START, 32)]);
+    // RX_START takes the driver's token for the tuner (40) at any clock
+    assert_eq!(starts, vec![&(RX_START, 40)]);
     // RF in, the baseband's word out: 125 MHz is 26.696 MHz upright
     r.tune_rx(3, 125.0e6).unwrap();
     let w = r.device().rx_params[0];
