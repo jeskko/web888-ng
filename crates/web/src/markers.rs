@@ -8,7 +8,10 @@
 //!   season;
 //! * `GET /api/bandplan?region=1`: a region's amateur band plan and the
 //!   other services' bands;
-//! * `GET` / `PUT /api/admin/markers`: the station's own list as CSV.
+//! * `GET` / `PUT /api/admin/markers`: the station's own list as CSV;
+//! * `GET /api/map/info`: the receiver's place (locator) for the map;
+//! * `GET /api/map/dx`: the live DX spots with places, the latest of each
+//!   station on each band.
 //!
 //! With a listener password, the public ones need a login (as `/ws`).
 
@@ -35,6 +38,8 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/markers/info", get(info))
         .route("/api/bandplan", get(band_plan))
         .route("/api/admin/markers", get(own_get).put(own_put))
+        .route("/api/map/info", get(map_info))
+        .route("/api/map/dx", get(map_dx))
 }
 
 fn allowed(sh: &Shared, headers: &HeaderMap) -> bool {
@@ -233,6 +238,61 @@ async fn own_put(_: AdminOnly, State(sh): State<Arc<Shared>>, body: Bytes) -> Re
     }
     *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
     Json(serde_json::json!({ "count": list.len() })).into_response()
+}
+
+/// The receiver's locator (gpsd's while it has one, else the
+/// configured) and callsign: where the map draws it.
+async fn map_info(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
+    if !allowed(&sh, &headers) {
+        return (StatusCode::UNAUTHORIZED, "login required").into_response();
+    }
+    let st = sh.live.borrow().station.clone();
+    let gps = sh
+        .skim
+        .as_ref()
+        .and_then(|k| k.gpsd.as_ref())
+        .and_then(|g| g.lock().unwrap().locator.clone());
+    let locator = gps.clone().unwrap_or(st.locator);
+    Json(serde_json::json!({
+        "locator": locator,
+        "call": st.callsign,
+        "gps": gps.is_some(),
+    }))
+    .into_response()
+}
+
+/// At most this many DX spots for the map.
+const MAP_DX_MAX: usize = 2000;
+
+async fn map_dx(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
+    if !allowed(&sh, &headers) {
+        return (StatusCode::UNAUTHORIZED, "login required").into_response();
+    }
+    let max_age = sh.live.borrow().dxspots.max_age_minutes.clamp(1, 60) as f64 * 60.0;
+    let now = SystemTime::now()
+        .duration_since(SystemTime::UNIX_EPOCH)
+        .map_or(0.0, |d| d.as_secs_f64());
+    let pos = |p: Option<(f64, f64)>| p.map(|(la, lo)| [la, lo]);
+    let spots: Vec<serde_json::Value> = crate::dxspots::global()
+        .latest(now - max_age, MAP_DX_MAX)
+        .into_iter()
+        .map(|s| {
+            let m = s.marker();
+            serde_json::json!({
+                "t": s.time,
+                "hz": s.hz,
+                "band": s.band,
+                "mode": s.mode,
+                "tune": m.mode,
+                "dx": s.dx,
+                "de": s.de,
+                "note": m.note,
+                "dx_pos": pos(s.dx_pos),
+                "de_pos": pos(s.de_pos),
+            })
+        })
+        .collect();
+    Json(serde_json::json!({ "spots": spots })).into_response()
 }
 
 /// An error answer as the admin API gives them.

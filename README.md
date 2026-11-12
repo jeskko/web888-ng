@@ -212,6 +212,29 @@ upload and download (Labels tab). Each label also carries its signal's
 kind (`emission`: am, cw, rtty, fax, ft8...) and published parameters,
 for decoders to come.
 
+### Map
+
+The **Map** button shows the stations heard on a world map beside the
+waterfall (on the phone: under More):
+
+* **Skimmers**: senders of the skimmers' FT8, FT4 and WSPR spots, placed
+  by the locator in the message or one the same call sent earlier;
+* **Browser**: what this browser decoded itself (FT8/FT4/WSPR button);
+* **DX spots**: the live DX spots (above) whose station has a known place,
+  with the line from the spotter.
+
+Lines are great circles from where each station was heard (the
+receiver's locator, `[station] locator` or gpsd's). The map is
+**Great circle** (azimuthal equidistant, centred on the receiver: straight
+lines from it are great circles; drag to turn the globe under the
+centre) or **Mercator**; the wheel or a pinch zooms, ⌖ centres on the
+receiver, and the greyline shades night. Filter by band and age; hover a
+station for its locator, distance and bearing, click to tune. The world
+(Natural Earth's countries at 1:110m and 1:50m, public domain, from the
+`world-atlas` package) is served by the receiver; nothing is fetched
+elsewhere. `GET /api/map/info` (the receiver's locator) and
+`GET /api/map/dx` (the DX spots with places) feed it.
+
 ### Passwords, admin API, metrics
 
 ```

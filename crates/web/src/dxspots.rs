@@ -66,6 +66,12 @@ pub struct DxSpot {
     pub source: String,
     /// Activity references ("SOTA W5N/NL-004", ...).
     pub refs: Vec<String>,
+    /// Where the station is (latitude, longitude), when Spothole thinks
+    /// it good enough for a map (a reference's place, a grid, or the
+    /// country's).
+    pub dx_pos: Option<(f64, f64)>,
+    /// Where the spotter is (often its country's centre).
+    pub de_pos: Option<(f64, f64)>,
 }
 
 impl DxSpot {
@@ -99,6 +105,14 @@ impl DxSpot {
                     .collect()
             })
             .unwrap_or_default();
+        let pos = |lat: &str, lon: &str| {
+            let la = v.get(lat)?.as_f64()?;
+            let lo = v.get(lon)?.as_f64()?;
+            ((-90.0..=90.0).contains(&la) && (-180.0..=180.0).contains(&lo)).then_some((la, lo))
+        };
+        let good = v.get("dx_location_good").and_then(|g| g.as_bool()) != Some(false);
+        let dx_pos = pos("dx_latitude", "dx_longitude").filter(|_| good);
+        let de_pos = pos("de_latitude", "de_longitude");
         let mut id = s("id");
         if id.is_empty() {
             id = format!("{dx} {hz} {time}");
@@ -115,6 +129,8 @@ impl DxSpot {
             comment: s("comment"),
             source: s("source"),
             refs,
+            dx_pos,
+            de_pos,
         })
     }
 
@@ -238,6 +254,20 @@ impl Dx {
 
     pub fn is_empty(&self) -> bool {
         self.len() == 0
+    }
+
+    /// The latest spot of each station on each band spotted at or after
+    /// `oldest` (Unix time), newest first, at most `max`.
+    pub fn latest(&self, oldest: f64, max: usize) -> Vec<DxSpot> {
+        let st = self.store.lock().unwrap();
+        let mut all: Vec<&DxSpot> = st.spots.iter().filter(|s| s.time >= oldest).collect();
+        all.sort_by(|a, b| b.time.total_cmp(&a.time));
+        let mut seen: HashSet<(&str, &str)> = HashSet::new();
+        all.into_iter()
+            .filter(|s| seen.insert((s.dx.as_str(), s.band.as_str())))
+            .take(max)
+            .cloned()
+            .collect()
     }
 
     /// The labels in `lo..=hi` Hz: the latest spot of each station on
@@ -770,8 +800,15 @@ mod tests {
             "mode": "CW", "band": "40m", "time": 1794507605.5, "comment": "12 X Goat",
             "source": "SOTA", "activities": ["SOTA"],
             "activity_refs": [{"activity": "SOTA", "id": "W5N/NL-004"}],
+            "dx_latitude": 36.6, "dx_longitude": -107.8, "dx_location_good": true,
+            "de_latitude": 91.0, "de_longitude": 0.0,
         }))
         .unwrap();
+        assert_eq!((s.dx_pos, s.de_pos), (Some((36.6, -107.8)), None));
+        let rough = DxSpot::from_json(&json!({"dx_call": "X", "freq": 7e6,
+            "dx_latitude": 1.0, "dx_longitude": 2.0, "dx_location_good": false}))
+        .unwrap();
+        assert_eq!(rough.dx_pos, None);
         assert_eq!(
             (s.dx.as_str(), s.hz, s.tune()),
             ("KE5AKL", 7.063e6, Tune::Cw)

@@ -12,6 +12,7 @@ import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
+import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
@@ -99,7 +100,7 @@ let link: Conn | null = null;
 let pendingHash = parseHash(location.hash);
 
 /** URL of a server path next to the page. */
-function api(path: string): string {
+export function api(path: string): string {
   return location.pathname.replace(/[^/]*$/, "") + path;
 }
 
@@ -828,4 +829,86 @@ effect(() => {
       // drawn without a ribbon until the next change
     }
   })();
+});
+
+// ----------------------------------------------------------------- map
+
+/** The map's options, remembered in this browser. */
+export interface MapOpts {
+  /** "merc": Mercator; "azim": azimuthal equidistant (great circles from
+   * its centre are straight lines). */
+  proj: "merc" | "azim";
+  layers: Layer[];
+  /** Minutes back. */
+  age: number;
+  /** "" for all. */
+  band: string;
+  lines: boolean;
+  greyline: boolean;
+}
+
+const MAP_DEFAULTS: MapOpts = { proj: "azim", layers: ["skimmer", "browser", "dx"], age: 15, band: "", lines: true, greyline: true };
+
+function loadMapOpts(): MapOpts {
+  try {
+    return { ...MAP_DEFAULTS, ...(JSON.parse(load("map") ?? "{}") as Partial<MapOpts>) };
+  } catch {
+    return MAP_DEFAULTS;
+  }
+}
+
+export const mapOpen = signal(load("mapOpen") === "1");
+export const mapOpts = signal<MapOpts>(loadMapOpts());
+/** The receiver's locator and call (`/api/map/info`), and the live DX
+ * spots with places (`/api/map/dx`, every minute while shown). */
+export const mapInfo = signal<{ locator: string; call: string } | null>(null);
+export const mapDx = signal<DxMapSpot[]>([]);
+
+export function showMap(on: boolean): void {
+  mapOpen.value = on;
+  save("mapOpen", on ? "1" : "0");
+}
+
+export function setMapOpts(o: Partial<MapOpts>): void {
+  mapOpts.value = { ...mapOpts.value, ...o };
+  save("map", JSON.stringify(mapOpts.value));
+}
+
+/** A station on the map was clicked: tune to it (a skimmer spot as from
+ * the list; a DX spot in its mode). */
+export function pickMapPoint(p: MapPoint): void {
+  if (p.spot) pickSpot(p.spot);
+  else if (p.tune) {
+    if (st.value?.mode !== p.tune.mode) setMode(p.tune.mode);
+    tuneInView(p.tune.hz);
+  }
+}
+
+async function loadMapInfo(): Promise<void> {
+  try {
+    const r = await fetch(api("api/map/info"));
+    if (r.ok) mapInfo.value = (await r.json()) as { locator: string; call: string };
+  } catch {
+    // drawn without the receiver until the next opening
+  }
+}
+
+async function loadMapDx(): Promise<void> {
+  try {
+    const r = await fetch(api("api/map/dx"));
+    if (r.ok) mapDx.value = ((await r.json()) as { spots: DxMapSpot[] }).spots;
+  } catch {
+    // the next minute tries again
+  }
+}
+
+effect(() => {
+  if (!mapOpen.value || !radio.value) return;
+  void loadMapInfo();
+});
+effect(() => {
+  if (!mapOpen.value || !radio.value || !mapOpts.value.layers.includes("dx")) return;
+  void loadMapDx();
+  const id = window.setInterval(() => void loadMapDx(), 60_000);
+  return () => window.clearInterval(id);
 });

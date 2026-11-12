@@ -37,6 +37,7 @@ kill $P
 | `idle.mjs` | idle limit ends the session, no auto-reconnect | `[limits] idle_minutes = 1` |
 | `features.mjs` | name, users list, hover preview, tuning step, AM/SAM/SAL/SAR/SAS cycle, CPU/temperature | — (the iq backend on a recording shows AM stations) |
 | `spots.mjs` | spot list, band filter, row click tunes, labels on the scale | `[[skimmer]]` bands with spots (live, or the iq backend on a recording) |
+| `map.mjs` | the map: stations shown, both projections, drag, zoom, hover tooltip (screenshots) | `[dxspots]` (internet) or skimmer spots; `[station] locator` |
 | `dxspots.mjs` | DX spot labels near 40 m, a typed frequency in view (the view stays) and off it (the view follows) | `[dxspots]` on (the default) and internet |
 | `digi.mjs` | FT8/FT4/WSPR decoding in the page: mode, dial, Deep, the status line and the rows | real signals: live, or a recording replayed from the same second of the slot as it was recorded (`2026-10-22_..._60s.cs8` started 8.7 s into a 15 s slot) |
 

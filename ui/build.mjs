@@ -3,7 +3,7 @@
 // worklet, loaded separately by the browser), jtty-worker.js (the JTTY
 // decoder's worker) with jtty.wasm, digi-worker.js (the FT8/FT4/WSPR
 // decoders' worker) with digi.wasm (both from scripts/build-wasm.sh, in
-// wasm/), index.html, style.css.
+// wasm/), index.html, style.css, and the map's world (map/*.json).
 // `node build.mjs --watch` rebuilds on change (development).
 import * as esbuild from "esbuild";
 import { access, copyFile, mkdir } from "node:fs/promises";
@@ -17,6 +17,9 @@ const copyStatic = {
   setup(build) {
     build.onEnd(async () => {
       for (const f of ["index.html", "style.css"]) await copyFile(`src/${f}`, `${out}/${f}`);
+      // the map's world (Natural Earth, public domain, via world-atlas)
+      await mkdir(`${out}/map`, { recursive: true });
+      for (const res of ["110m", "50m"]) await copyFile(`node_modules/world-atlas/countries-${res}.json`, `${out}/map/countries-${res}.json`);
       for (const [f, what] of [
         ["jtty.wasm", "JTTY decoding"],
         ["digi.wasm", "FT8/FT4/WSPR decoding"],

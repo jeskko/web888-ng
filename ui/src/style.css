@@ -97,9 +97,17 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .spots-list td.msg { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
 .spots-list tbody tr { cursor: pointer; }
 .spots-list tbody tr:hover td { background: var(--accent-bg); }
+.map { display: flex; flex-direction: column; flex: 1 1 55%; min-width: 320px; border-left: 1px solid var(--line); background: var(--panel); font-size: 12px; }
+.map-box { position: relative; flex: 1; min-height: 240px; }
+.map-box canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; cursor: grab; }
+.map-box canvas:active { cursor: grabbing; }
+.map-box canvas.pick { cursor: pointer; }
+.map-tip { position: absolute; z-index: 2; max-width: 280px; padding: 6px 8px; background: var(--bg); border: 1px solid var(--line); border-radius: 6px; pointer-events: none; line-height: 1.4; }
+.map-note { position: absolute; left: 8px; bottom: 4px; margin: 0; }
 @media (max-width: 900px) {
   main { flex-direction: column; }
   .spots { width: auto; height: 40%; border-left: 0; border-top: 1px solid var(--line); }
+  .map { min-width: 0; height: 55%; border-left: 0; border-top: 1px solid var(--line); }
 }
 
 @media (max-width: 640px) {
@@ -212,6 +220,7 @@ table.wide { width: 100%; }
 .m-sheet label { flex: 1 1 220px; }
 .m-sheet .users-pop { position: static; margin-top: 6px; max-height: 40vh; box-shadow: none; }
 .m-sheet .spots { width: auto; height: 50vh; border: 0; }
+.m-sheet .map { height: 60vh; border: 0; }
 .m-sheet .status { padding: 8px 0 0; }
 
 .m-entry { display: flex; align-items: baseline; justify-content: flex-end; gap: 8px; min-height: 52px; padding: 6px 10px; background: var(--bg); border: 1px solid var(--line); border-radius: 8px; font: 600 36px/1.2 ui-monospace, "SF Mono", Menlo, monospace; }

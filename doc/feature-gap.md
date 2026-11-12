@@ -94,7 +94,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Chat | ✗ | ✗ | ✓ | ✗ | omit |
 | Mobile layout, keyboard shortcuts, URL state | ✓ | ✓ | ✓ | ✓ phone layout (PR #1), keys (u/l/c/a/f, arrows), `#f=&m=&z=&c=` links, tuning steps, hover preview | – (a key help overlay: **R**) |
 | Themes | ✓ | ~ | ✓ | ✗ (dark) | later |
-| Map (receivers, spots, aircraft) | ✗ | TDoA map | ✓ | ✗ (spots are a list and scale marks) | **M** |
+| Map (receivers, spots, aircraft) | ✗ | TDoA map | ✓ | ✓ skimmer spots, the browser's own decodes and live DX spots with great circle lines; Mercator or azimuthal equidistant, greyline (no aircraft, no other receivers) | **M** (more layers) |
 | Languages | ✗ | ✗ | ✗ | ✗ | omit |
 
 ### 2.4 Decoders
