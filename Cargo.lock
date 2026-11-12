@@ -1767,11 +1767,11 @@ dependencies = [
 
 [[package]]
 name = "web888-clock"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "web888-config"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "schemars",
  "serde",
@@ -1781,7 +1781,7 @@ dependencies = [
 
 [[package]]
 name = "web888-core"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "libc",
  "tokio",
@@ -1792,7 +1792,7 @@ dependencies = [
 
 [[package]]
 name = "web888-digi-wasm"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "web888-clock",
  "web888-ftx",
@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "web888-dsp"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1812,7 +1812,7 @@ dependencies = [
 
 [[package]]
 name = "web888-ftx"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1821,7 +1821,7 @@ dependencies = [
 
 [[package]]
 name = "web888-hpsdr"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1832,7 +1832,7 @@ dependencies = [
 
 [[package]]
 name = "web888-hw"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "web888-radio",
@@ -1841,7 +1841,7 @@ dependencies = [
 
 [[package]]
 name = "web888-iq"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1852,7 +1852,7 @@ dependencies = [
 
 [[package]]
 name = "web888-jtty"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1860,14 +1860,14 @@ dependencies = [
 
 [[package]]
 name = "web888-jtty-wasm"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "web888-jtty",
 ]
 
 [[package]]
 name = "web888-markers"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -1875,11 +1875,11 @@ dependencies = [
 
 [[package]]
 name = "web888-radio"
-version = "0.10.0"
+version = "0.11.0"
 
 [[package]]
 name = "web888-sim"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "web888-radio",
@@ -1887,7 +1887,7 @@ dependencies = [
 
 [[package]]
 name = "web888-skim"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "libc",
  "serde_json",
@@ -1902,7 +1902,7 @@ dependencies = [
 
 [[package]]
 name = "web888-web"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "argon2",
  "axum",
@@ -1934,7 +1934,7 @@ dependencies = [
 
 [[package]]
 name = "web888-wspr"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1944,7 +1944,7 @@ dependencies = [
 
 [[package]]
 name = "web888-zynqsdr"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "libc",
  "web888-dsp",
@@ -1954,7 +1954,7 @@ dependencies = [
 
 [[package]]
 name = "web888d"
-version = "0.10.0"
+version = "0.11.0"
 dependencies = [
  "clap",
  "libc",
