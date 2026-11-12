@@ -11,7 +11,7 @@
 //!   of `mode` (0 FT8, 1 FT4, 2 WSPR) with the skimmers' settings, or
 //!   (`deep` 1) a deeper search ([`deep`]), stopping after `budget_ms`
 //!   (0: no limit); returns the length of the JSON at `digi_output()`:
-//!   `{"ms":..,"cut":..,"decodes":[{"snr":..,"dt":..,"hz":..,"text":..,"drift":..}]}`
+//!   `{"ms":..,"cut":..,"decodes":[{"snr":..,"dt":..,"hz":..,"text":..,"drift":..,"uncertain":true}]}`
 //!   (`hz` above the dial; `dt` from the mode's nominal start; `drift`
 //!   for WSPR only, Hz)
 //! * `digi_reset()`: forget the callsigns heard (another band)
@@ -37,6 +37,8 @@ pub struct Row {
     pub hz: f64,
     pub text: String,
     pub drift: Option<f32>,
+    /// Possibly a false decode (`web888_ftx::ft8::uncertain`).
+    pub uncertain: bool,
 }
 
 /// The deeper search a browser can afford (doc/m4-skimmers.md §3.3,
@@ -94,6 +96,7 @@ impl Decoders {
         let ftx = |ds: Vec<ft8::Decode>| -> Vec<Row> {
             ds.into_iter()
                 .map(|d| Row {
+                    uncertain: ft8::uncertain(&d),
                     snr: d.snr,
                     dt: d.dt,
                     hz: d.freq as f64,
@@ -133,6 +136,7 @@ impl Decoders {
                         hz: d.freq,
                         text: d.message.text,
                         drift: Some(d.drift),
+                        uncertain: false,
                     })
                     .collect();
                 (rows, d.cut_short != cut)
@@ -175,6 +179,9 @@ pub fn to_json(ms: f64, cut: bool, rows: &[Row]) -> String {
         s.push('"');
         if let Some(d) = r.drift {
             let _ = write!(s, ",\"drift\":{d:.0}");
+        }
+        if r.uncertain {
+            s.push_str(",\"uncertain\":true");
         }
         s.push('}');
     }
@@ -242,6 +249,7 @@ mod tests {
                 hz: 1234.56,
                 text: "CQ \"N0CALL\" FN42".into(),
                 drift: None,
+                uncertain: true,
             },
             Row {
                 snr: -20.0,
@@ -249,11 +257,12 @@ mod tests {
                 hz: 1500.25,
                 text: "N0CALL FN42 37".into(),
                 drift: Some(-1.0),
+                uncertain: false,
             },
         ];
         assert_eq!(
             to_json(12.34, false, &rows),
-            r#"{"ms":12.3,"cut":false,"decodes":[{"snr":-12,"dt":0.21,"hz":1234.6,"text":"CQ \"N0CALL\" FN42"},{"snr":-20,"dt":1.00,"hz":1500.2,"text":"N0CALL FN42 37","drift":-1}]}"#
+            r#"{"ms":12.3,"cut":false,"decodes":[{"snr":-12,"dt":0.21,"hz":1234.6,"text":"CQ \"N0CALL\" FN42","uncertain":true},{"snr":-20,"dt":1.00,"hz":1500.2,"text":"N0CALL FN42 37","drift":-1}]}"#
         );
         assert_eq!(
             to_json(0.0, true, &[]),

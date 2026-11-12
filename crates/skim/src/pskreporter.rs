@@ -109,6 +109,10 @@ pub const MAX_RECORDS: usize = 50;
 const INTERVAL: Duration = Duration::from_secs(300);
 const TEMPLATES_EVERY: Duration = Duration::from_secs(3600);
 const REPORT_AGAIN: f64 = 3600.0;
+/// An uncertain decode (maybe false) is reported only if its call was
+/// decoded on the band in another slot within this long before (false
+/// decodes don't repeat; stations do).
+const CONFIRM: f64 = 900.0;
 
 #[derive(Clone, Debug, PartialEq)]
 pub struct Receiver {
@@ -207,7 +211,14 @@ pub struct Status {
     /// Spots not sent: not live, no sender, or reported recently.
     pub skipped_not_live: u64,
     pub skipped_recent: u64,
+    /// Uncertain decodes not sent: the call wasn't decoded again (yet).
+    pub skipped_unconfirmed: u64,
     pub last_error: Option<String>,
+}
+
+/// Time to drop old entries of `heard` (once a minute of slots).
+fn slots_due(t: f64) -> bool {
+    (t as u64).is_multiple_of(60)
 }
 
 /// Batches spots and sends them.
@@ -222,6 +233,8 @@ pub struct Uploader {
     pending: Vec<Report>,
     /// (call, band in MHz) -> last report time
     reported: HashMap<(String, u32), f64>,
+    /// (call, MHz) -> the slots it was decoded in lately (any decode).
+    heard: HashMap<(String, u32), Vec<f64>>,
     pub status: Status,
 }
 
@@ -250,6 +263,7 @@ impl Uploader {
             next_send: Instant::now() + INTERVAL + jitter(domain),
             pending: vec![],
             reported: HashMap::new(),
+            heard: HashMap::new(),
             status: Status::default(),
         })
     }
@@ -268,6 +282,24 @@ impl Uploader {
             return;
         };
         let key = (call.to_ascii_uppercase(), (s.freq_hz / 1e6) as u32);
+        // what was decoded, certain or not, confirms what comes next
+        let slots = self.heard.entry(key.clone()).or_default();
+        let again = slots
+            .iter()
+            .any(|&t| t != s.time && (s.time - t).abs() <= CONFIRM);
+        if !slots.contains(&s.time) {
+            slots.push(s.time);
+        }
+        if self.heard.len() > 4096 || slots_due(s.time) {
+            self.heard.retain(|_, v| {
+                v.retain(|&t| s.time - t <= CONFIRM);
+                !v.is_empty()
+            });
+        }
+        if s.uncertain && !again {
+            self.status.skipped_unconfirmed += 1;
+            return;
+        }
         if self
             .reported
             .get(&key)
@@ -467,6 +499,35 @@ mod tests {
         assert_eq!(hex, stock);
     }
 
+    /// An uncertain decode waits for its call to be decoded again on the
+    /// band, in another slot within the quarter hour.
+    #[test]
+    fn uncertain_decodes_need_another() {
+        let l = UdpSocket::bind("127.0.0.1:0").unwrap();
+        let mut u = Uploader::new(&l.local_addr().unwrap().to_string()).unwrap();
+        let unsure = |call: &str, t: f64| Spot {
+            uncertain: true,
+            ..spot(call, t, true)
+        };
+        u.add(&unsure("D60MON", 1000.0));
+        assert_eq!((u.pending.len(), u.status.skipped_unconfirmed), (0, 1));
+        // again in the same slot: no confirmation
+        u.add(&unsure("D60MON", 1000.0));
+        assert_eq!(u.pending.len(), 0);
+        // in a later slot: believed
+        u.add(&unsure("D60MON", 1030.0));
+        assert_eq!(u.pending.len(), 1);
+        // a certain decode goes at once, and confirms what follows
+        u.add(&spot("K1ABC", 1000.0, true));
+        assert_eq!(u.pending.len(), 2);
+        u.add(&unsure("K1ABC", 1015.0)); // reported already: skipped as recent
+        assert_eq!(u.status.skipped_recent, 1);
+        // too long apart
+        u.add(&unsure("W9XYZ", 1000.0));
+        u.add(&unsure("W9XYZ", 1000.0 + CONFIRM + 15.0));
+        assert_eq!(u.pending.len(), 2);
+    }
+
     #[test]
     fn locators() {
         assert_eq!(locator("FN42AA"), "FN42aa");
@@ -490,6 +551,7 @@ mod tests {
             drift: None,
             dbm: None,
             live,
+            uncertain: false,
         }
     }
 

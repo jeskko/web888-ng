@@ -366,7 +366,7 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         let cpu0 = thread_cpu();
         let cut0 = ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short;
         let dial = w.band.cfg.dial;
-        let spot = |mode, freq: f64, snr, dt, message: String, sender, grid| Spot {
+        let spot = |mode, freq: f64, snr, dt, message: String, sender, grid, uncertain| Spot {
             time: w.start,
             mode,
             dial_hz: dial,
@@ -379,12 +379,23 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
             drift: None,
             dbm: None,
             live: w.live,
+            uncertain,
         };
         let ftx = |mode, ds: Vec<web888_ftx::ft8::Decode>| -> Vec<Spot> {
             ds.into_iter()
                 .map(|d| {
+                    let u = web888_ftx::ft8::uncertain(&d);
                     let m = d.message;
-                    spot(mode, d.freq as f64, d.snr, d.dt, m.text, m.sender, m.grid)
+                    spot(
+                        mode,
+                        d.freq as f64,
+                        d.snr,
+                        d.dt,
+                        m.text,
+                        m.sender,
+                        m.grid,
+                        u,
+                    )
                 })
                 .collect()
         };
@@ -405,7 +416,7 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
                     Spot {
                         drift: Some(d.drift),
                         dbm: Some(m.dbm),
-                        ..spot("WSPR", d.freq, d.snr, d.dt, m.text, m.call, m.grid)
+                        ..spot("WSPR", d.freq, d.snr, d.dt, m.text, m.call, m.grid, false)
                     }
                 })
                 .collect(),

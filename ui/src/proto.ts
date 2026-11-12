@@ -124,6 +124,8 @@ export interface Spot {
   /** WSPR: drift (Hz) and transmitter power (dBm). */
   drift?: number;
   dbm?: number;
+  /** Possibly a false decode: believed once the call is heard again. */
+  uncertain?: boolean;
 }
 
 export interface Status {

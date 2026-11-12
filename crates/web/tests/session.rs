@@ -495,6 +495,7 @@ fn spot(time: f64, call: &str, dial: f64) -> web888_skim::Spot {
         drift: None,
         dbm: None,
         live: false,
+        uncertain: false,
     }
 }
 

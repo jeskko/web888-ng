@@ -133,6 +133,7 @@ export interface Skimmers {
     reports: number;
     skipped_not_live: number;
     skipped_recent: number;
+    skipped_unconfirmed?: number;
     last_sent: number | null;
     last_error: string | null;
   } | null;

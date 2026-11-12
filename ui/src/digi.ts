@@ -263,6 +263,9 @@ export interface DigiDecode {
   text: string;
   /** WSPR: Hz over the transmission. */
   drift?: number;
+  /** Possibly a false decode (OSD, an unknown hashed call, -20 dB or
+   * weaker). */
+  uncertain?: boolean;
 }
 
 /** A slot's result. */
@@ -283,6 +286,7 @@ export interface DigiRow {
   dt: number;
   text: string;
   drift?: number;
+  uncertain?: boolean;
 }
 
 /** Rows kept. */
@@ -297,6 +301,7 @@ export function toRows(r: DigiResult, mode: DigiMode, dial: number, start: numbe
     dt: d.dt,
     text: d.text,
     ...(d.drift !== undefined ? { drift: d.drift } : {}),
+    ...(d.uncertain ? { uncertain: true } : {}),
   }));
 }
 

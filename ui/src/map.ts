@@ -95,14 +95,51 @@ function latestEach(points: MapPoint[]): MapPoint[] {
 
 /** Where a locator is; none for RR73 (FT8's sign-off sent as a locator
  * by some software: nobody is in the Arctic Ocean there). */
+/** Seconds within which another decode of a call on a band confirms an
+ * uncertain one (false decodes don't repeat; stations do). */
+const CONFIRM = 900;
+
+/** The slots each call was decoded in, per band ("CALL band"), by the
+ * skimmers and this browser. */
+export type Heard = Map<string, number[]>;
+
+const senderOf = (mode: string, text: string) => (mode.toUpperCase() === "WSPR" ? wsprSender(text) : ftxSender(text));
+const browserBand = (rf: number) => {
+  const b = bandOf(rf);
+  return b ? `${b.name}m` : "";
+};
+
+export function heardTimes(spots: Spot[], rows: DigiRow[]): Heard {
+  const h: Heard = new Map();
+  const note = (call: string | undefined, band: string, t: number) => {
+    if (!call) return;
+    const k = `${call} ${band}`;
+    const l = h.get(k);
+    if (!l) h.set(k, [t]);
+    else if (!l.includes(t)) l.push(t);
+  };
+  for (const s of spots) note(s.call ?? senderOf(s.mode, s.msg).call, s.band, s.t);
+  for (const r of rows) note(senderOf(r.mode, r.text).call, browserBand(r.rf), r.t);
+  return h;
+}
+
+/** A decode to believe: a certain one, or an uncertain one whose call
+ * was decoded on the band in another slot within CONFIRM. */
+export function believed(uncertain: boolean | undefined, heard: Heard, call: string, band: string, t: number): boolean {
+  if (!uncertain) return true;
+  return (heard.get(`${call} ${band}`) ?? []).some((x) => x !== t && Math.abs(x - t) <= CONFIRM);
+}
+
 const place = (grid: string | undefined) => (grid && !grid.toUpperCase().startsWith("RR73") ? gridToLatLon(grid) : null);
 
 /** Skimmer spots heard since `oldest` from senders with a known locator
  * (said in this spot or an earlier one: `book` learns them all). */
-export function skimmerPoints(spots: Spot[], book: GridBook, rx: LatLon | null, oldest: number): MapPoint[] {
+export function skimmerPoints(spots: Spot[], book: GridBook, rx: LatLon | null, oldest: number, heard: Heard = new Map()): MapPoint[] {
   const out: MapPoint[] = [];
   for (const s of spots) {
-    const call = s.call ?? (s.mode === "WSPR" ? wsprSender(s.msg) : ftxSender(s.msg)).call;
+    const call = s.call ?? senderOf(s.mode, s.msg).call;
+    // possibly false and not heard again: neither shown nor learnt from
+    if (!call || !believed(s.uncertain, heard, call, s.band, s.t)) continue;
     if (place(s.grid)) book.note(call, s.grid);
     if (s.t < oldest || !call) continue;
     const grid = s.grid ?? book.get(call);
@@ -114,23 +151,24 @@ export function skimmerPoints(spots: Spot[], book: GridBook, rx: LatLon | null, 
 }
 
 /** This browser's decodes, the same way. */
-export function browserPoints(rows: DigiRow[], book: GridBook, rx: LatLon | null, oldest: number): MapPoint[] {
+export function browserPoints(rows: DigiRow[], book: GridBook, rx: LatLon | null, oldest: number, heard: Heard = new Map()): MapPoint[] {
   const out: MapPoint[] = [];
   for (const r of rows) {
-    const who = r.mode === "wspr" ? wsprSender(r.text) : ftxSender(r.text);
-    book.note(who.call, who.grid);
+    const who = senderOf(r.mode, r.text);
+    const band = browserBand(r.rf);
+    if (!who.call || !believed(r.uncertain, heard, who.call, band, r.t)) continue;
+    if (place(who.grid)) book.note(who.call, who.grid);
     if (r.t < oldest || !who.call) continue;
     const grid = who.grid ?? book.get(who.call);
     const pos = place(grid);
     if (!pos) continue;
-    const b = bandOf(r.rf);
     out.push({
       layer: "browser",
       call: who.call,
       pos,
       from: rx,
       grid,
-      band: b ? `${b.name}m` : "",
+      band,
       mode: r.mode.toUpperCase(),
       t: r.t,
       hz: r.rf,

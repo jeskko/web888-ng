@@ -25,6 +25,9 @@ pub struct Spot {
     pub dbm: Option<i32>,
     /// Received live (not from a recording or simulation).
     pub live: bool,
+    /// Possibly a false decode (`web888_ftx::ft8::uncertain`): reported
+    /// only when the call is decoded again.
+    pub uncertain: bool,
 }
 
 impl Spot {
@@ -139,6 +142,7 @@ mod tests {
             drift: None,
             dbm: None,
             live: true,
+            uncertain: false,
         }
     }
 

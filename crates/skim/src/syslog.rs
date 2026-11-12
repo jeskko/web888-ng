@@ -332,6 +332,7 @@ mod tests {
             drift: None,
             dbm: None,
             live: true,
+            uncertain: false,
         });
         // the event bus is the process's: other tests' events come too
         let event = |m: &String| {

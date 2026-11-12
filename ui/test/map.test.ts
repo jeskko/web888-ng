@@ -2,7 +2,7 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { GridBook } from "../src/geo.ts";
-import { bandColour, bandsOf, browserPoints, dxPoints, skimmerPoints, type DxMapSpot } from "../src/map.ts";
+import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, skimmerPoints, type DxMapSpot } from "../src/map.ts";
 import type { DigiRow } from "../src/digi.ts";
 import type { Spot } from "../src/proto.ts";
 
@@ -45,6 +45,26 @@ test("skimmer spots: senders with a locator, now or heard before", () => {
   const b2 = new GridBook();
   assert.deepEqual(skimmerPoints([spot(100, "CQ X1XX RR73", { call: "X1XX", grid: "RR73" })], b2, rx, 0), []);
   assert.equal(b2.get("X1XX"), undefined);
+});
+
+test("uncertain decodes count once their call is heard again", () => {
+  const unsure = (t: number, call: string, band = "40m") =>
+    spot(t, `<...> ${call} NB30`, { call, grid: "NB30", band, hz: 7_074_290, uncertain: true });
+  const once = [unsure(100, "D60MON")];
+  assert.deepEqual(skimmerPoints(once, new GridBook(), rx, 0, heardTimes(once, [])), []);
+  // a second decode in a later slot, or this browser's: believed
+  const twice = [unsure(100, "D60MON"), unsure(130, "D60MON")];
+  assert.equal(skimmerPoints(twice, new GridBook(), rx, 0, heardTimes(twice, [])).length, 1);
+  const rows: DigiRow[] = [{ t: 145, mode: "ft8", rf: 7_074_300, snr: -15, dt: 0, text: "CQ D60MON NB30" }];
+  assert.equal(skimmerPoints(once, new GridBook(), rx, 0, heardTimes(once, rows)).length, 1);
+  // on another band, or too long apart: not
+  const apart = [unsure(100, "D60MON"), unsure(100, "D60MON", "20m"), unsure(2000, "D60MON")];
+  assert.deepEqual(skimmerPoints(apart, new GridBook(), rx, 0, heardTimes(apart, [])), []);
+  // an uncertain browser decode, confirmed by the skimmers
+  const brow: DigiRow[] = [{ t: 160, mode: "ft8", rf: 7_075_000, snr: -21, dt: 0, text: "CQ K1ABC FN42", uncertain: true }];
+  assert.deepEqual(browserPoints(brow, new GridBook(), rx, 0, heardTimes([], brow)), []);
+  const sk = [spot(130, "CQ K1ABC FN42", { call: "K1ABC", grid: "FN42", band: "40m", hz: 7_075_000 })];
+  assert.equal(browserPoints(brow, new GridBook(), rx, 0, heardTimes(sk, brow)).length, 1);
 });
 
 test("this browser's decodes", () => {

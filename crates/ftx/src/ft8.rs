@@ -988,6 +988,14 @@ impl Decoder {
 }
 
 /// See `Decoder::osd_plausible`; shared with FT4.
+/// A decode that may well be false: found by OSD (the search that finds
+/// a codeword near noise), with a call nobody was heard sending in full
+/// (`<...>`), or at -20 dB or weaker. Spot reporting waits for the call
+/// to be decoded again before believing one.
+pub fn uncertain(d: &Decode) -> bool {
+    d.how >= 10 || d.message.text.contains("<...>") || d.snr <= -20.0
+}
+
 pub(crate) fn osd_plausible(
     m: &Message,
     f: &osd::Found,

@@ -375,6 +375,7 @@ mod tests {
             drift: Some(-1.0),
             dbm: Some(37),
             live: true,
+            uncertain: false,
         };
         assert_eq!(
             spot_json(&s, "web888-rx", 1_792_789_920.0),
@@ -437,6 +438,7 @@ mod tests {
             drift: None,
             dbm: None,
             live: true,
+            uncertain: false,
         };
         bus.publish(spot("FT4", "CQ N0FT4 FN42"));
         bus.publish(spot("FT8", "CQ K1ABC FN42"));

@@ -23,7 +23,7 @@ import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import { formatKhz } from "../fmt.ts";
 import { bearing, distanceKm, gridToLatLon, latLonToGrid, subsolar, GridBook, type LatLon } from "../geo.ts";
-import { bandColour, bandsOf, browserPoints, dxPoints, LAYERS, skimmerPoints, type Layer, type MapPoint } from "../map.ts";
+import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, LAYERS, skimmerPoints, type Layer, type MapPoint } from "../map.ts";
 import { utcTime } from "../spots.ts";
 import { api, digiRows, mapDx, mapInfo, mapOpen, mapOpts, pickMapPoint, setMapOpts, showMap, spots, type MapOpts } from "../state.ts";
 
@@ -261,9 +261,11 @@ export function MapPanel() {
     if (!open) return out;
     const oldest = t - o.age * 60;
     // the book learns from everything heard, whatever is shown
+    // uncertain decodes count once their call is heard again
+    const heard = heardTimes(sp, rows);
     const lists: [Layer, MapPoint[]][] = [
-      ["skimmer", skimmerPoints(sp, book.current, rx, oldest)],
-      ["browser", browserPoints(rows, book.current, rx, oldest)],
+      ["skimmer", skimmerPoints(sp, book.current, rx, oldest, heard)],
+      ["browser", browserPoints(rows, book.current, rx, oldest, heard)],
       ["dx", dxPoints(dxs, oldest)],
     ];
     for (const [id, list] of lists) if (o.layers.includes(id)) out.push(...list);

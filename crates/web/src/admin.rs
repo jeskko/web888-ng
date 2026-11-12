@@ -648,6 +648,7 @@ async fn skimmers(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
             "reports": p.reports,
             "skipped_not_live": p.skipped_not_live,
             "skipped_recent": p.skipped_recent,
+            "skipped_unconfirmed": p.skipped_unconfirmed,
             "last_sent": p.last_sent,
             "last_error": p.last_error,
         })

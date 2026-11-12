@@ -271,6 +271,9 @@ pub struct SpotMsg {
     pub drift: Option<f32>,
     #[serde(default, skip_serializing_if = "Option::is_none")]
     pub dbm: Option<i32>,
+    /// Possibly a false decode: shown once its call is heard again.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub uncertain: bool,
 }
 
 impl From<&web888_skim::Spot> for SpotMsg {
@@ -288,6 +291,7 @@ impl From<&web888_skim::Spot> for SpotMsg {
             grid: s.grid.clone(),
             drift: s.drift,
             dbm: s.dbm,
+            uncertain: s.uncertain,
         }
     }
 }

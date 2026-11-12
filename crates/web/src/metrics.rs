@@ -442,13 +442,17 @@ fn uploaders(o: &mut Out, sh: &Shared) {
         o.put(
             "pskreporter_skipped_total",
             "counter",
-            "Spots not sent (not_live: the radio isn't on the air; recent: the station was reported on the band lately).",
+            "Spots not sent (not_live: the radio isn't on the air; recent: the station was reported on the band lately; unconfirmed: an uncertain decode whose call wasn't decoded again).",
             &[
                 (
                     labels(&[("reason", "not_live")]),
                     p.skipped_not_live as f64,
                 ),
                 (labels(&[("reason", "recent")]), p.skipped_recent as f64),
+                (
+                    labels(&[("reason", "unconfirmed")]),
+                    p.skipped_unconfirmed as f64,
+                ),
             ],
         );
         o.one(

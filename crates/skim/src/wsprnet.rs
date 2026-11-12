@@ -353,6 +353,7 @@ mod tests {
             drift: Some(-1.0),
             dbm: Some(37),
             live,
+            uncertain: false,
         }
     }
 

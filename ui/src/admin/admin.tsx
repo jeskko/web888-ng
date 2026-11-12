@@ -350,7 +350,7 @@ function SkimCard({ skim }: { skim: Skimmers }) {
           <dd>{p.pending}</dd>
           <dt>Not sent</dt>
           <dd>
-            {p.skipped_recent} reported within the hour, {p.skipped_not_live} not live
+            {p.skipped_recent} reported within the hour, {p.skipped_unconfirmed ?? 0} uncertain and not heard again, {p.skipped_not_live} not live
           </dd>
           {p.last_error && (
             <>
