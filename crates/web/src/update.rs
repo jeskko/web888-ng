@@ -56,7 +56,8 @@ pub fn routes() -> Router<Arc<Shared>> {
 #[derive(Clone, Debug)]
 pub struct Sys {
     pub rauc: PathBuf,
-    pub system_conf: PathBuf,
+    /// RAUC's configuration: any of these (where RAUC looks).
+    pub system_conf: Vec<PathBuf>,
     pub os_release: PathBuf,
     pub reboot: Vec<String>,
 }
@@ -65,7 +66,11 @@ impl Default for Sys {
     fn default() -> Self {
         Sys {
             rauc: "/usr/bin/rauc".into(),
-            system_conf: "/etc/rauc/system.conf".into(),
+            system_conf: vec![
+                "/etc/rauc/system.conf".into(),
+                "/run/rauc/system.conf".into(),
+                "/usr/lib/rauc/system.conf".into(),
+            ],
             os_release: "/etc/os-release".into(),
             reboot: vec!["systemctl".into(), "reboot".into()],
         }
@@ -75,7 +80,7 @@ impl Default for Sys {
 impl Sys {
     /// Why updates can't run here, if they can't.
     fn missing(&self) -> Option<&'static str> {
-        if !self.rauc.exists() || !self.system_conf.exists() {
+        if !self.rauc.exists() || !self.system_conf.iter().any(|p| p.exists()) {
             return Some("this system has no RAUC (updates are for the web888-ng-os card image)");
         }
         None
@@ -310,6 +315,8 @@ pub fn slots(status: &Value) -> Vec<Value> {
             }));
         }
     }
+    // RAUC lists them in no set order
+    out.sort_by(|a, b| a["name"].as_str().cmp(&b["name"].as_str()));
     out
 }
 
@@ -709,9 +716,9 @@ mod tests {
             "compatible": "web888",
             "booted": "A",
             "slots": [
+                {"rootfs.1": {"bootname": "B", "state": "inactive", "boot_status": "bad"}},
                 {"rootfs.0": {"bootname": "A", "state": "booted", "boot_status": "good",
                     "slot_status": {"bundle": {"version": "0.8.0"}, "installed": {"timestamp": "2026-11-12T20:00:00Z"}}}},
-                {"rootfs.1": {"bootname": "B", "state": "inactive", "boot_status": "bad"}},
             ],
         });
         let s = slots(&status);
@@ -732,7 +739,7 @@ mod tests {
         std::fs::write(dir.join("os-release"), "ID=web888\nVERSION_ID=0.8.0\n").unwrap();
         Sys {
             rauc,
-            system_conf: dir.join("system.conf"),
+            system_conf: vec![dir.join("nothing.conf"), dir.join("system.conf")],
             os_release: dir.join("os-release"),
             reboot: vec!["true".into()],
         }
