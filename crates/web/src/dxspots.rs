@@ -13,9 +13,11 @@
 //!
 //! HTTP/1.1 is spoken here (a request, a response with a length, chunks
 //! or up to the close): enough for this API, without an HTTP client
-//! crate.
+//! crate. [`fetch`] lends it to other one-off requests (the OS update
+//! check).
 
 use std::collections::{HashSet, VecDeque};
+use std::path::Path;
 use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::sync::{Arc, Mutex, OnceLock};
 use std::time::{Duration, Instant};
@@ -402,7 +404,11 @@ fn enc(s: &str) -> String {
 /// (Ok) or fails.
 async fn follow(dx: &Dx, c: &DxSpots, rf_lo: f64, rf_hi: f64) -> Result<(), String> {
     let base = Base::parse(&c.server)?;
-    let tls = if base.tls { Some(connector(c)?) } else { None };
+    let tls = if base.tls {
+        Some(connector(&c.ca_file)?)
+    } else {
+        None
+    };
     let max_age = c.max_age_minutes.clamp(1, 60) as f64 * 60.0;
     let f = filters(c);
     let amp = if f.is_empty() { "" } else { "&" };
@@ -450,10 +456,32 @@ async fn follow(dx: &Dx, c: &DxSpots, rf_lo: f64, rf_hi: f64) -> Result<(), Stri
     }
 }
 
+/// GET `url` (http or https, a query allowed): the whole body, at most
+/// `max` bytes; any status but 200 is an error. TLS checks the server
+/// as [`roots`] says.
+pub(crate) async fn fetch(
+    url: &str,
+    ca_file: &Path,
+    accept: &str,
+    max: usize,
+) -> Result<Vec<u8>, String> {
+    let base = Base::parse(url)?;
+    let tls = if base.tls {
+        Some(connector(ca_file)?)
+    } else {
+        None
+    };
+    base.get(tls.as_ref(), "", accept)
+        .await?
+        .body
+        .all(max)
+        .await
+}
+
 /// The CA roots: `ca_file`, else the system's bundle, else the built-in.
-fn roots(c: &DxSpots) -> Result<RootCertStore, String> {
-    let pem: Vec<u8> = if !c.ca_file.as_os_str().is_empty() {
-        std::fs::read(&c.ca_file).map_err(|e| format!("{}: {e}", c.ca_file.display()))?
+fn roots(ca_file: &Path) -> Result<RootCertStore, String> {
+    let pem: Vec<u8> = if !ca_file.as_os_str().is_empty() {
+        std::fs::read(ca_file).map_err(|e| format!("{}: {e}", ca_file.display()))?
     } else {
         SYSTEM_ROOTS
             .iter()
@@ -470,12 +498,12 @@ fn roots(c: &DxSpots) -> Result<RootCertStore, String> {
     Ok(store)
 }
 
-fn connector(c: &DxSpots) -> Result<tokio_rustls::TlsConnector, String> {
+fn connector(ca_file: &Path) -> Result<tokio_rustls::TlsConnector, String> {
     let provider = Arc::new(tokio_rustls::rustls::crypto::ring::default_provider());
     let cfg = ClientConfig::builder_with_provider(provider)
         .with_safe_default_protocol_versions()
         .map_err(|e| e.to_string())?
-        .with_root_certificates(roots(c)?)
+        .with_root_certificates(roots(ca_file)?)
         .with_no_client_auth();
     Ok(tokio_rustls::TlsConnector::from(Arc::new(cfg)))
 }
@@ -571,7 +599,7 @@ impl Base {
             .await
             .map_err(|_| "no answer".to_string())??;
         if r.status != 200 {
-            return Err(format!("{path}: HTTP {}", r.status));
+            return Err(format!("{}{path}: HTTP {}", self.prefix, r.status));
         }
         Ok(r)
     }
@@ -908,11 +936,7 @@ mod tests {
 
     #[test]
     fn the_builtin_roots_load() {
-        let c = DxSpots {
-            ca_file: "/no/such/file".into(),
-            ..Default::default()
-        };
-        assert!(roots(&c).is_err());
+        assert!(roots(Path::new("/no/such/file")).is_err());
         let mut s = RootCertStore::empty();
         for cert in CertificateDer::pem_slice_iter(BUILTIN_ROOTS) {
             s.add(cert.unwrap()).unwrap();

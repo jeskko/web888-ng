@@ -140,6 +140,8 @@ pre { background: var(--panel); padding: 6px 12px; border-radius: 4px; }
 .cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 340px), 1fr)); gap: 12px; align-items: start; }
 .card { background: var(--panel); border: 1px solid var(--line); border-radius: 6px; padding: 10px 14px; min-width: 0; overflow-x: auto; }
 .card h3 { margin: 0 0 8px; font-size: 15px; }
+.card pre.notes { white-space: pre-wrap; overflow-wrap: anywhere; max-height: 300px; overflow: auto; font-size: 12px; }
+.card progress { width: 100%; }
 .card h4 { margin: 12px 0 4px; font-size: 13px; color: var(--dim); }
 .card form { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
 .card form p { flex-basis: 100%; margin: 0; }

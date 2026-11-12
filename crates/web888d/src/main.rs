@@ -1077,6 +1077,8 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             shared.radio.rf_lo,
             shared.radio.rf_hi,
         ));
+        // OS releases (`[update]`; only where RAUC is)
+        rt.spawn(web888_web::update::run(shared.live.clone()));
         let app = web888_web::router(shared, w.ui_dir.clone());
         let web_stop = stop.clone();
         threads.push(

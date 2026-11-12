@@ -15,6 +15,7 @@ pub mod proto;
 pub mod session;
 pub mod sysstat;
 pub mod tls;
+pub mod update;
 pub mod users;
 pub mod wfsvc;
 pub mod workers;
@@ -59,6 +60,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .merge(admin::routes())
         .merge(markers::routes())
         .merge(kiwi::routes())
+        .merge(update::routes())
         .fallback_service(ui)
         // revalidate every load (cheap with ETags): a new UI build is
         // picked up at once, never mixed with cached old files

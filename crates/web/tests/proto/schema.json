@@ -154,6 +154,17 @@
         "ca_file": ""
       }
     },
+    "update": {
+      "description": "Updates of the OS (web888-ng-os) from the admin page: the check for\na new release and its install (apply at once).",
+      "$ref": "#/$defs/Update",
+      "default": {
+        "enabled": true,
+        "releases": "https://api.github.com/repos/jeskko/web888-ng-os/releases",
+        "check_hours": 24,
+        "prereleases": true,
+        "ca_file": ""
+      }
+    },
     "kiwi": {
       "description": "KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at\nonce; `doc/m5-kiwi.md`).",
       "$ref": "#/$defs/Kiwi",
@@ -822,6 +833,41 @@
         },
         "ca_file": {
           "description": "CA certificates (PEM) to check the server with; empty: the\nsystem's, else the built-in roots of Let's Encrypt.",
+          "type": "string",
+          "default": ""
+        }
+      },
+      "additionalProperties": false
+    },
+    "Update": {
+      "description": "OS updates: on the web888-ng-os image (with RAUC), the admin page shows\nwhether a newer release is out and installs it into the other root\nslot (the receiver keeps running; a reboot starts the new system, and\na system that doesn't come up falls back to the old one).",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Look for new releases and allow installing them (only where RAUC\nis installed: the OS image).",
+          "type": "boolean",
+          "default": true
+        },
+        "releases": {
+          "description": "The releases (the GitHub API's list of a repository's releases).",
+          "type": "string",
+          "default": "https://api.github.com/repos/jeskko/web888-ng-os/releases"
+        },
+        "check_hours": {
+          "description": "Look by itself every this many hours (0: only from the admin\npage). Nothing is installed without the admin.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "maximum": 720,
+          "default": 24
+        },
+        "prereleases": {
+          "description": "Releases marked as pre-releases count too.",
+          "type": "boolean",
+          "default": true
+        },
+        "ca_file": {
+          "description": "CA certificates (PEM) to check the server with; empty: the\nsystem's.",
           "type": "string",
           "default": ""
         }

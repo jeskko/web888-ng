@@ -93,6 +93,9 @@ pub struct Config {
     /// Live DX spots from a Spothole server, as labels on the spectrum
     /// (apply at once).
     pub dxspots: DxSpots,
+    /// Updates of the OS (web888-ng-os) from the admin page: the check for
+    /// a new release and its install (apply at once).
+    pub update: Update,
     /// KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at
     /// once; `doc/m5-kiwi.md`).
     pub kiwi: Kiwi,
@@ -527,6 +530,41 @@ impl Default for DxSpots {
     }
 }
 
+/// OS updates: on the web888-ng-os image (with RAUC), the admin page shows
+/// whether a newer release is out and installs it into the other root
+/// slot (the receiver keeps running; a reboot starts the new system, and
+/// a system that doesn't come up falls back to the old one).
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Update {
+    /// Look for new releases and allow installing them (only where RAUC
+    /// is installed: the OS image).
+    pub enabled: bool,
+    /// The releases (the GitHub API's list of a repository's releases).
+    pub releases: String,
+    /// Look by itself every this many hours (0: only from the admin
+    /// page). Nothing is installed without the admin.
+    #[schemars(range(max = 720))]
+    pub check_hours: u32,
+    /// Releases marked as pre-releases count too.
+    pub prereleases: bool,
+    /// CA certificates (PEM) to check the server with; empty: the
+    /// system's.
+    pub ca_file: PathBuf,
+}
+
+impl Default for Update {
+    fn default() -> Self {
+        Update {
+            enabled: true,
+            releases: "https://api.github.com/repos/jeskko/web888-ng-os/releases".into(),
+            check_hours: 24,
+            prereleases: true,
+            ca_file: PathBuf::new(),
+        }
+    }
+}
+
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
 #[serde(rename_all = "lowercase")]
 pub enum SkimMode {
@@ -800,6 +838,7 @@ impl Config {
             || self.kiwi != new.kiwi
             || self.markers != new.markers
             || self.dxspots != new.dxspots
+            || self.update != new.update
             || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics

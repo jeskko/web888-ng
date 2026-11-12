@@ -158,3 +158,49 @@ export interface ConfigView {
   running: { [k: string]: Json };
   auth: { admin_password: boolean; listener_password: boolean };
 }
+
+export interface UpdateSlot {
+  name: string;
+  bootname: string | null;
+  state: string | null;
+  boot_status: string | null;
+  version: string | null;
+  installed: string | null;
+}
+
+export interface Release {
+  version: string;
+  name: string;
+  published: string;
+  url: string;
+  size: number;
+  page: string;
+  notes: string;
+  prerelease: boolean;
+}
+
+/** `GET /api/admin/update`: OS updates (RAUC). */
+export interface UpdateView {
+  available: boolean;
+  why: string | null;
+  enabled: boolean;
+  check_hours: number;
+  current: string | null;
+  booted: string | null;
+  slots: UpdateSlot[];
+  status_error: string | null;
+  latest: Release | null;
+  newer: boolean;
+  checked: number | null;
+  check_error: string | null;
+  install: {
+    phase: "idle" | "running" | "done" | "failed";
+    version: string;
+    percent: number;
+    step: string;
+    started: number;
+    ended: number;
+    error: string;
+    log: string[];
+  };
+}

@@ -252,7 +252,8 @@ characters): it is applied at the next start and the file is deleted (also
 the way back in after a forgotten password). There is no default password.
 
 The admin pages are at `#/admin` on the receiver's address (link in its
-status bar): status, sessions (kick), the configuration form, passwords.
+status bar): status, sessions (kick), the configuration form, labels,
+passwords and OS updates.
 Logins are `POST /api/login {"password": ..., "admin": true}` (a 12 h
 HttpOnly cookie; 5 failed tries per address per minute). With the admin
 cookie: `/api/admin/sessions` (and `.../{id}/kick`), `/api/admin/leases`,
@@ -263,6 +264,30 @@ thread, DSP pool, waterfall views) and `POST /api/admin/restart` (exits
 metrics at `/metrics` to the addresses in `metrics_allow` (none by
 default; no login; what's there: `doc/metrics.md`).
 Details: `doc/m3-multi-user.md` §7.
+
+### OS updates
+
+On the web888-ng-os card image (with RAUC), the admin page's **Update**
+tab shows the running OS version and the root slots, looks for a newer
+release of [web888-ng-os](https://github.com/jeskko/web888-ng-os)
+(GitHub's list of its releases; also by itself once a day), and installs
+it: `rauc install` streams the signed bundle into the slot not running,
+with its progress on the page, while the receiver keeps running. **Reboot
+now** then starts the new system; one that doesn't come up falls back to
+the old slot after three tries. Nothing installs without the admin.
+
+```toml
+[update]
+enabled = true
+releases = "https://api.github.com/repos/jeskko/web888-ng-os/releases"
+check_hours = 24       # 0: only from the admin page
+prereleases = true     # os releases are marked pre-releases
+```
+
+API (admin): `GET /api/admin/update`, `POST /api/admin/update/check`,
+`POST /api/admin/update/install {"version": "0.9.0"}` (the release found
+last), `POST /api/admin/update/reboot`. Elsewhere (a development machine)
+the tab says updates aren't available.
 
 ### Skimmers
 

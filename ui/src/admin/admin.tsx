@@ -6,16 +6,17 @@
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
-import { call, get, href, loggedOut, putText, type Auth, type LeaseRow, type Session, type Skimmers, type Stats } from "./api.ts";
+import { call, get, href, loggedOut, putText, type Auth, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
-type Tab = "status" | "sessions" | "config" | "labels" | "passwords";
+type Tab = "status" | "sessions" | "config" | "labels" | "passwords" | "update";
 const TABS: { id: Tab; name: string }[] = [
   { id: "status", name: "Status" },
   { id: "sessions", name: "Sessions" },
   { id: "config", name: "Configuration" },
   { id: "labels", name: "Labels" },
   { id: "passwords", name: "Passwords" },
+  { id: "update", name: "Update" },
 ];
 
 function tabFromHash(): Tab {
@@ -603,6 +604,225 @@ function PasswordsPage() {
   );
 }
 
+const mb = (n: number) => `${(n / 1e6).toFixed(0)} MB`;
+const day = (iso: string | null) => (iso ? iso.slice(0, 16).replace("T", " ") + " UTC" : "–");
+
+/** Wait for the unit to come back after a reboot, then reload. */
+async function backAfterReboot(): Promise<void> {
+  const t0 = Date.now();
+  // it goes down first
+  await new Promise((r) => setTimeout(r, 15_000));
+  while (Date.now() - t0 < 15 * 60_000) {
+    try {
+      await get("api/auth");
+      location.reload();
+      return;
+    } catch {
+      await new Promise((r) => setTimeout(r, 5000));
+    }
+  }
+}
+
+/** OS updates: the running version, the newest release, its install
+ * into the other root slot and the reboot into it. */
+function UpdatePage() {
+  const [v, setV] = useState<UpdateView | null>(null);
+  const [busy, setBusy] = useState("");
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [rebooting, setRebooting] = useState(false);
+  const running = v?.install.phase === "running";
+  usePoll(
+    async () => {
+      if (!rebooting) setV(await get<UpdateView>("api/admin/update"));
+    },
+    running ? 1000 : 10_000,
+  );
+  const act = async (what: string, f: () => Promise<UpdateView | null>) => {
+    setBusy(what);
+    setMsg(null);
+    try {
+      const r = await f();
+      if (r) setV(r);
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy("");
+    }
+  };
+  if (!v) return <p class="dim">Loading…</p>;
+  if (!v.available) {
+    return (
+      <div class="cards">
+        <section class="card">
+          <h3>OS updates</h3>
+          <p>Not available: {v.why}.</p>
+        </section>
+      </div>
+    );
+  }
+  const i = v.install;
+  const rel = v.latest;
+  const check = () => act("check", () => call<UpdateView>("POST", "api/admin/update/check"));
+  const install = (version: string) => {
+    if (!confirm(`Install web888-ng ${version} into the other root slot? The receiver keeps running; a reboot then starts the new system.`)) return;
+    void act("install", () => call<UpdateView>("POST", "api/admin/update/install", { version }));
+  };
+  const reboot = () => {
+    if (!confirm("Reboot the unit now? Everyone is disconnected; it is back in a minute or two.")) return;
+    void act("reboot", async () => {
+      await call("POST", "api/admin/update/reboot");
+      setRebooting(true);
+      void backAfterReboot();
+      return null;
+    });
+  };
+  if (rebooting) {
+    return (
+      <div class="cards">
+        <section class="card">
+          <h3>Rebooting</h3>
+          <p>The unit is restarting{i.phase === "done" ? ` into web888-ng ${i.version}` : ""}. This page reloads when it is back.</p>
+          <p class="dim">
+            If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes).
+          </p>
+        </section>
+      </div>
+    );
+  }
+  return (
+    <div class="cards">
+      <section class="card">
+        <h3>OS</h3>
+        <dl>
+          <dt>Running</dt>
+          <dd>web888-ng {v.current ?? "?"}{v.booted ? `, slot ${v.booted}` : ""}</dd>
+          <dt>Newest release</dt>
+          <dd>
+            {rel ? (
+              <>
+                <a href={rel.page} target="_blank" rel="noopener">
+                  {rel.version}
+                </a>{" "}
+                <span class="dim">
+                  ({day(rel.published)}, {mb(rel.size)}
+                  {rel.prerelease ? ", pre-release" : ""})
+                </span>
+              </>
+            ) : v.checked ? (
+              "none found"
+            ) : (
+              "not looked yet"
+            )}
+          </dd>
+          <dt>Looked</dt>
+          <dd>
+            {v.checked ? `${ago(v.checked)} ago` : "never"}
+            {v.check_hours > 0 && v.enabled ? <span class="dim"> (by itself every {v.check_hours} h)</span> : null}
+          </dd>
+        </dl>
+        {v.check_error && <p class="warn">Looking for releases failed: {v.check_error}</p>}
+        {!v.enabled && <p class="warn">Updates are off (Configuration: update.enabled).</p>}
+        <p>
+          <button onClick={() => void check()} disabled={!!busy || !v.enabled}>
+            {busy === "check" ? "Looking…" : "Look for a release"}
+          </button>{" "}
+          {rel && v.newer && i.phase !== "done" && (
+            <button class="on" onClick={() => install(rel.version)} disabled={!!busy || running || !v.enabled}>
+              Install {rel.version}
+            </button>
+          )}
+          {rel && !v.newer && v.checked && <span class="ok">Up to date.</span>}
+        </p>
+        {rel && !v.newer && i.phase === "idle" && (
+          <p class="dim">
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                install(rel.version);
+              }}
+            >
+              Install {rel.version} again
+            </a>{" "}
+            (into the other slot, as an update would).
+          </p>
+        )}
+        {rel?.notes && (
+          <details>
+            <summary>Release notes</summary>
+            <pre class="notes">{rel.notes}</pre>
+          </details>
+        )}
+      </section>
+      {i.phase !== "idle" && (
+        <section class="card">
+          <h3>Install {i.version}</h3>
+          {i.phase === "running" && (
+            <>
+              <progress max={100} value={i.percent} />
+              <p>
+                {i.percent} % · {i.step}
+              </p>
+              <p class="dim">Streamed from the release and checked as it goes; the receiver keeps running.</p>
+            </>
+          )}
+          {i.phase === "done" && (
+            <>
+              <p class="ok">Installed{i.ended && i.started ? ` in ${Math.round((i.ended - i.started) / 60)} min` : ""}. Reboot to start it.</p>
+              <p>
+                <button class="on" onClick={reboot} disabled={!!busy}>
+                  Reboot now
+                </button>
+              </p>
+              <p class="dim">The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay.</p>
+            </>
+          )}
+          {i.phase === "failed" && <p class="warn">Failed: {i.error}. The running system is unchanged.</p>}
+          {i.log.length > 0 && (
+            <details open={i.phase === "failed"}>
+              <summary>RAUC</summary>
+              <pre class="notes">{i.log.join("\n")}</pre>
+            </details>
+          )}
+        </section>
+      )}
+      <section class="card">
+        <h3>Root slots</h3>
+        {v.status_error && <p class="warn">{v.status_error}</p>}
+        <table>
+          <thead>
+            <tr>
+              <th>Slot</th>
+              <th>State</th>
+              <th>Boot</th>
+              <th>Version</th>
+              <th>Installed</th>
+            </tr>
+          </thead>
+          <tbody>
+            {v.slots.map((s) => (
+              <tr>
+                <td>
+                  {s.bootname ?? s.name} <span class="dim">{s.name}</span>
+                </td>
+                <td>{s.state ?? "–"}</td>
+                <td class={s.boot_status === "bad" ? "warn" : ""}>{s.boot_status ?? "–"}</td>
+                <td>{s.version ?? "–"}</td>
+                <td>{day(s.installed)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+        <p class="dim">
+          An update goes into the slot not running; the old one stays as it was, to go back to. The boot files on the card (BOOT.BIN,
+          u-boot.img) are never updated this way.
+        </p>
+      </section>
+      {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+    </div>
+  );
+}
+
 export function AdminApp() {
   const [auth, setAuth] = useState<Auth | null>(null);
   const [err, setErr] = useState("");
@@ -645,6 +865,7 @@ export function AdminApp() {
         {tab.value === "config" && <ConfigPage onRestart={() => void restart()} />}
         {tab.value === "labels" && <LabelsPage />}
         {tab.value === "passwords" && <PasswordsPage />}
+        {tab.value === "update" && <UpdatePage />}
       </div>
     </div>
   );

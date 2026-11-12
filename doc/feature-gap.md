@@ -142,7 +142,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Channels without a password (open + private sets) | ✓ | ✓ | ✗ (all or nothing) | **O** |
 | Receiver info page (name, location, antenna, photo) | ✓ | ✓ | ✗ | **O** |
 | Logs in the admin page | ✓ | ✓ | ✗ (journald) | **O** |
-| Updates (channels, rollback) | ✓ zip | ✓ | ✓ os: A/B with rollback (RAUC, `rauc install URL`, since os v0.3.0); no update button or channel in the UI yet | **O** (from the admin page) |
+| Updates (channels, rollback) | ✓ zip | ✓ | ✓ os: A/B with rollback (RAUC, since os v0.3.0); the admin page looks for a release (daily too), installs it with progress and reboots into it | – |
 | Network config (static IP, Wi-Fi) | ✓ | ✓ | ✓ os: DHCP or static from `web888.txt` (the board has no Wi-Fi) | – |
 | Usage analytics (heatmaps, visitors) | ✓ | ~ | metrics | omit (Prometheus/Grafana) |
 | Browser shell console | ✓ | ✓ | ✗ | omit (ssh) |
