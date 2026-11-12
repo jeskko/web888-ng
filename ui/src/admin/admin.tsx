@@ -796,7 +796,7 @@ function UpdatePage() {
               <th>State</th>
               <th>Boot</th>
               <th>Version</th>
-              <th>Installed</th>
+              <th>Installed (UTC)</th>
             </tr>
           </thead>
           <tbody>
@@ -808,7 +808,7 @@ function UpdatePage() {
                 <td>{s.state ?? "–"}</td>
                 <td class={s.boot_status === "bad" ? "warn" : ""}>{s.boot_status ?? "–"}</td>
                 <td>{s.version ?? "–"}</td>
-                <td>{day(s.installed)}</td>
+                <td>{s.installed ? s.installed.slice(0, 16).replace("T", " ") : "–"}</td>
               </tr>
             ))}
           </tbody>
