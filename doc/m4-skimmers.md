@@ -439,6 +439,34 @@ that can't go are dropped. It applies live.
   busy FT8 bands kept their decodes. The decoders then have about 22 s
   of CPU per 15 s for a demand near 30 s.
 
+* Where the A9's time goes (2026-11-12, d6b010e with timers added to
+  the `ft8wav`/`ft4wav` examples, static armv7 builds on the unit at
+  nice 19 next to the service; busy FT8 = the first 8 slots of the
+  40 m set, quiet = 10 m and 12 m of the second set, FT4 = 20 m by day
+  and an empty 30 m):
+
+  | stage | FT8 busy | FT8 quiet | FT4 busy | FT4 quiet | A9 / desktop (FT8 busy) |
+  |---|---|---|---|---|---|
+  | A9 time per slot | 3.57 s | 0.82 s | 1.41 s | 0.25 s | 44 |
+  | slot FFT, and the audio back for passes 2-3 | 7 % | 15 % | 7 % | 15 % | 44, 76 |
+  | search: spectrogram FFTs | 26 % | 53 % | 17 % | 40 % | 105 |
+  | search: lag sums | 13 % | 27 % | 9 % | 20 % | 51 |
+  | candidates: downsampling (an inverse FFT each) | 18 % | 1 % | 23 % | 5 % | 103 |
+  | candidates: time lags, coarse gate | 2 % | 0 % | 6 % | 1 % | 29 |
+  | candidates: fine sync, symbols | 6 % | 1 % | 16 % | 7 % | 23, 68 |
+  | soft bits | 7 % | 1 % | 4 % | 2 % | 28 |
+  | BP | 9 % | 1 % | 5 % | 5 % | 16 |
+  | OSD | 5 % | 1 % | 3 % | 4 % | 23 |
+  | subtraction | 5 % | 0 % | 8 % | 0 % | 39 |
+
+  The FFTs are what the A9 is slow at (rustfft has no NEON code for
+  32-bit ARM, and 3840 and 3200 aren't powers of two): they are half
+  of a busy FT8 slot and two thirds of a quiet one, against a fifth on
+  the desktop, which is why the gates saved less there. The decoders
+  (BP, OSD) are 14 % of a busy slot. A search costs 0.46 s, three
+  times a busy slot. FT4's fine sync still downsamples up to three
+  times a candidate (FT8's doesn't since 2026-10-29).
+
 ## 8. Open
 
 * FST4W (step 8) is left for later.
@@ -446,8 +474,11 @@ that can't go are dropped. It applies live.
   slots could pre-empt it, so a WSPR decode doesn't cost FT8 slots
   (step 9 bench).
 * All FT8 and FT4 bands at once on the A9 need about a third less
-  decoder time than d6b010e takes (above). Not measured there yet: where
-  the A9's time goes per stage (the FFTs weigh more than on the desktop).
+  decoder time than d6b010e takes (above). By the profile above the
+  candidates are: the spectrogram from a band-limited, decimated slot
+  with power-of-two FFTs; the coarse gate from the spectrogram, before
+  a candidate is downsampled; the lag sums in integers (NEON); FT8's
+  fine sync for FT4.
 * Board CPU next to users: how many FT8 bands fit next to 12 users
   (measured without users so far).
 * CW/RTTY skimmers (S2) come after M4 (feature-gap §5, question 8).
