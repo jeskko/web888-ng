@@ -82,6 +82,10 @@ header .tools { margin-left: auto; }
 .controls { display: flex; flex-wrap: wrap; gap: 8px 24px; padding: 6px 16px; }
 .status { display: flex; flex-wrap: wrap; gap: 4px 16px; padding: 4px 16px 6px; font-size: 12px; color: var(--dim); border-top: 1px solid var(--line); }
 .status .right { margin-left: auto; }
+/* fixed slots: values changing width don't move what follows */
+.status { font-variant-numeric: tabular-nums; }
+.status .sn { display: inline-block; text-align: right; }
+.status .conn { display: inline-block; min-width: 10ch; }
 .conn.open { color: var(--ok); }
 .conn.closed, .conn.busy, .conn.ended { color: var(--bad); }
 .conn.connecting { color: var(--warn); }

@@ -556,6 +556,14 @@ export function SMeter() {
   );
 }
 
+/** A number in the status bar, in a slot `w` characters wide (right
+ * aligned unless `left`, tabular digits): the bar doesn't shift as values change. */
+const N = ({ v, w, left }: { v: string | number; w: number; left?: boolean }) => (
+  <span class="sn" style={{ minWidth: `${w}ch`, textAlign: left ? "left" : undefined }}>
+    {v}
+  </span>
+);
+
 export function StatusBar() {
   const c = conn.value;
   const s = status.value;
@@ -570,10 +578,14 @@ export function StatusBar() {
           {r.backend} · {(r.rx_rate / 1e3).toFixed(0)} kS/s
         </span>
       )}
-      {latencyMs.value !== null && <span>rtt {latencyMs.value.toFixed(0)} ms</span>}
+      {latencyMs.value !== null && (
+        <span>
+          rtt <N v={latencyMs.value.toFixed(0)} w={4} /> ms
+        </span>
+      )}
       {audioOn.value && a && (
         <span title="Audio buffer, underruns, playback trim">
-          buf {a.fillMs.toFixed(0)} ms · {a.underruns} underruns · {((a.trim - 1) * 1e6).toFixed(0)} ppm
+          buf <N v={a.fillMs.toFixed(0)} w={4} /> ms · <N v={a.underruns} w={3} /> underruns · <N v={((a.trim - 1) * 1e6).toFixed(0)} w={5} /> ppm
         </span>
       )}
       {audioOn.value && player.fallback && (
@@ -584,16 +596,20 @@ export function StatusBar() {
       )}
       {s && (
         <span title="Frames dropped (audio / waterfall), audio gaps">
-          drops {s.audio_drops}/{s.wf_drops} · gaps {audioGaps.value}
+          drops <N v={s.audio_drops} w={3} />/<N v={s.wf_drops} w={3} left /> · gaps <N v={audioGaps.value} w={3} />
         </span>
       )}
       {s && !s.hw_rate_ok && <span class="warn">hardware falling behind</span>}
-      {s && s.clock_ppm !== 0 && <span>clock {s.clock_ppm.toFixed(3)} ppm</span>}
+      {s && s.clock_ppm !== 0 && (
+        <span>
+          clock <N v={s.clock_ppm.toFixed(3)} w={6} /> ppm
+        </span>
+      )}
       {s && (s.cpu !== undefined || s.temp_c !== undefined) && (
         <span title="The receiver's CPU load (all cores) and temperature">
-          {s.cpu !== undefined && <span class={s.cpu >= 90 ? "warn" : ""}>cpu {s.cpu.toFixed(0)} %</span>}
+          {s.cpu !== undefined && <span class={s.cpu >= 90 ? "warn" : ""}>cpu <N v={s.cpu.toFixed(0)} w={3} /> %</span>}
           {s.cpu !== undefined && s.temp_c !== undefined && " · "}
-          {s.temp_c !== undefined && <span class={s.temp_c >= 85 ? "warn" : ""}>{s.temp_c.toFixed(0)} °C</span>}
+          {s.temp_c !== undefined && <span class={s.temp_c >= 85 ? "warn" : ""}><N v={s.temp_c.toFixed(0)} w={3} /> °C</span>}
         </span>
       )}
       <span class="right">
