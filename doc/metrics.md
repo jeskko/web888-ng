@@ -25,6 +25,13 @@ scrape_configs:
       - targets: ["web888.local:8073"]
 ```
 
+A Grafana dashboard for these: [grafana/web888d.json](grafana/web888d.json)
+(Dashboards → New → Import; pick the Prometheus data source). Rows:
+overview, listeners and channels, the DSP pool (load, time and jobs by
+kind, shedding, lost blocks), waterfalls, skimmers (spots, CPU and slots
+not decoded in full per band, a table of the bands now), uploads and log
+sinks, the system. Restarts are marked.
+
 ## What there is
 
 | Metric | Type | Labels | What |

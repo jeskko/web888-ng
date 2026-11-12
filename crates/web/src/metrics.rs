@@ -140,7 +140,8 @@ fn build(o: &mut Out, sh: &Shared) {
         "The server's version, the radio's backend and variant (hf, vhf), and how its RX channels are made (ddc: the hardware's DDCs, bins: a channelizer's).",
         &[(labels(&l), 1.0)],
     );
-    let started = unix_now() - sh.kiwi.started.elapsed().as_secs_f64();
+    // whole seconds: the same at every scrape (changes() finds restarts)
+    let started = (unix_now() - sh.kiwi.started.elapsed().as_secs_f64()).round();
     o.one(
         "start_time_seconds",
         "gauge",
