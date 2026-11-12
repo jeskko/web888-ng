@@ -153,6 +153,8 @@ struct St {
     checked: Option<f64>,
     check_error: Option<String>,
     install: Install,
+    /// `rauc status` as last read (RAUC can't answer during an install).
+    status: Option<Value>,
 }
 
 pub struct Updater {
@@ -365,17 +367,31 @@ impl Updater {
         }
     }
 
-    /// The page's view; `rauc status` is asked each time.
+    /// The page's view; `rauc status` is asked each time, but during an
+    /// install (when RAUC is busy) the last answer stands.
     pub async fn view(&self, c: &web888_config::Update) -> Value {
         let missing = self.sys.missing();
         let current = self.sys.os_version();
-        let status = if missing.is_none() {
-            let rauc = self.sys.rauc.clone();
-            tokio::task::spawn_blocking(move || rauc_status(&rauc))
-                .await
-                .unwrap_or_else(|e| Err(e.to_string()))
-        } else {
+        let running = self.running();
+        let cached = self.lock().status.clone();
+        let status = if missing.is_some() {
             Err(String::new())
+        } else if let Some(s) = cached.filter(|_| running) {
+            Ok(s)
+        } else {
+            let rauc = self.sys.rauc.clone();
+            let r = tokio::task::spawn_blocking(move || rauc_status(&rauc))
+                .await
+                .unwrap_or_else(|e| Err(e.to_string()));
+            match r {
+                Ok(s) => {
+                    self.lock().status = Some(s.clone());
+                    Ok(s)
+                }
+                // busy installing: what was read before
+                Err(_) if running => self.lock().status.clone().ok_or_else(String::new),
+                Err(e) => Err(e),
+            }
         };
         let st = self.lock();
         let newer_out = match (&st.latest, &current) {
@@ -497,11 +513,20 @@ impl Updater {
     fn line(&self, raw: &str) {
         let line = plain(raw);
         let mut st = self.lock();
+        let i = &mut st.install;
         if let Some((p, step)) = progress(&line) {
-            st.install.percent = p;
-            st.install.step = step;
+            // one line per step: its latest percentage
+            if i.log
+                .last()
+                .and_then(|l| progress(l))
+                .is_some_and(|(_, s)| s == step)
+            {
+                i.log.pop();
+            }
+            i.percent = p;
+            i.step = step;
         }
-        let log = &mut st.install.log;
+        let log = &mut i.log;
         log.push(line);
         if log.len() > LOG_LINES {
             log.remove(0);
@@ -531,7 +556,7 @@ impl Updater {
 
 fn rauc_status(rauc: &Path) -> Result<Value, String> {
     let out = Command::new(rauc)
-        .args(["status", "--output-format=json"])
+        .args(["status", "--detailed", "--output-format=json"])
         .stdin(Stdio::null())
         .output()
         .map_err(|e| format!("rauc status: {e}"))?;
@@ -767,7 +792,7 @@ mod tests {
             &dir,
             r#"case "$1" in
 status) echo '{"booted":"A","slots":[{"rootfs.0":{"bootname":"A","state":"booted"}}]}' ;;
-install) echo installing; echo '  0% Installing'; echo " 50% Copying image to rootfs.1 ($2)"; echo '100% Installing done.'; echo "Installing \`$2' succeeded" ;;
+install) echo installing; echo '  0% Installing'; sleep 0.3; echo ' 10% Checking'; echo ' 20% Checking'; echo " 50% Copying image to rootfs.1 ($2)"; echo '100% Installing done.'; echo "Installing \`$2' succeeded" ;;
 esac
 "#,
         );
@@ -784,6 +809,11 @@ esac
         assert_eq!(v["slots"][0]["bootname"], "A");
         assert!(u.install("0.8.5").is_err());
         u.install("0.9.0").unwrap();
+        // during it: the slots as read before (RAUC is busy)
+        tokio::time::sleep(Duration::from_millis(100)).await;
+        let v = u.view(&c).await;
+        assert_eq!(v["install"]["phase"], "running");
+        assert_eq!(v["slots"][0]["bootname"], "A");
         let i = wait_done(u).await;
         assert_eq!(i.phase, Phase::Done, "{:?}", i);
         assert_eq!(i.percent, 100);
