@@ -22,7 +22,8 @@ if (await p.ev("!!document.querySelector('.admin-login input')")) {
   await sleep(2500);
 }
 await p.ev("location.hash = '#/admin/update'");
-await sleep(2500);
+// the tab loads (slowly in the emulator)
+for (let i = 0; i < 40 && !(await p.ev("[...document.querySelectorAll('.card button')].some(b => b.textContent.startsWith('Look for'))")); i++) await sleep(500);
 await p.ev("window.confirm = () => true");
 const click = async (text) =>
   console.log(
