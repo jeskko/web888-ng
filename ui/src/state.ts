@@ -13,6 +13,8 @@ import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, Sta
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots } from "./spots.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
+import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
+import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { TuneSync } from "./tunesync.ts";
 import { WHEEL_STEPS } from "./wheel.ts";
@@ -217,9 +219,11 @@ export function connect(): void {
       if (f.flags & FLAG_OVERLOAD) overloadAt.value = performance.now();
       if (f.flags & FLAG_GAP) audioGaps.value++;
       jttyAudio(f); // first: the player hands the samples to the worklet
+      digiAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
     onWf(l) {
+      serverClock.observe(l.time / 1000, Date.now() / 1000);
       for (const s of sinks) s(l);
     },
     onLatency(ms) {
@@ -447,14 +451,169 @@ export function setJtty(on: boolean): void {
 /** A JTTY dial frequency was picked: USB with the decoder's passband, the
  * signals in view. */
 export function pickJtty(dial: number): void {
-  if (st.value?.mode !== "usb") setMode("usb");
   tune(dial);
-  setPassband(JTTY_PASSBAND.lo, JTTY_PASSBAND.hi);
+  setModePassband("usb", JTTY_PASSBAND.lo, JTTY_PASSBAND.hi);
   const v = st.value?.wf;
   const r = radio.value;
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
   if (Math.abs(dial + 1600 - v.center_hz) > 0.45 * span - 1600) setView({ ...v, center_hz: dial + 1600 });
+}
+
+// ------------------------------------------------- FT8, FT4, WSPR (browser)
+
+/** The server's UTC, from the waterfall lines' times (the slots follow
+ * it, not this computer's clock). */
+const serverClock = new ServerClock();
+
+/** FT8/FT4/WSPR decoding of this receiver's audio in this browser
+ * (remembered); nothing decoded here is reported anywhere. */
+export const digiOn = signal(load("digi") === "1");
+export const digiMode = signal<DigiMode>(((m) => (m && m in DIGI_MODES ? (m as DigiMode) : "ft8"))(load("digiMode")));
+/** The deeper search (more CPU, a few more decodes). */
+export const digiDeep = signal(load("digiDeep") === "1");
+export const digiRows = signal<DigiRow[]>([]);
+export const digiError = signal("");
+/** The next slot's start (UTC), and the last slot decoded. */
+export const digiStatus = signal<{
+  next: number | null;
+  last: { start: number; ms: number; cut: boolean; n: number } | null;
+  /** Slots handed to the decoder and not back yet. */
+  pending: number;
+  /** The server's clock is known (else this computer's is used). */
+  clock: boolean;
+}>({ next: null, last: null, pending: 0, clock: false });
+let digiWorker: Worker | null = null;
+const digiFeed = new JttyFeed();
+let digiSlotter: Slotter | null = null;
+const digiClock = new SampleClock(DIGI_RATE);
+/** The stream's sample count; dial, mode and listen-along of the stream
+ * (a change starts it over; `digiGen` tells late results from it). */
+let digiIndex = 0;
+let digiKey = "";
+let digiDial = 0;
+let digiGen = 0;
+/** The mode and dial of each generation's slots. */
+const digiOf = new Map<number, { mode: DigiMode; dial: number }>();
+
+function digiStart(): Worker {
+  const w = new Worker("digi-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { result?: DigiResult; start?: number; gen?: number; error?: string };
+    if (d.error) digiError.value = d.error;
+    if (!d.result || d.start === undefined || d.gen === undefined) return;
+    const st0 = digiStatus.value;
+    const pending = Math.max(0, st0.pending - 1);
+    const of = digiOf.get(d.gen);
+    if (d.gen !== digiGen || !of) {
+      digiStatus.value = { ...st0, pending };
+      return;
+    }
+    const rows = digiRowsOf(d.result, of.mode, of.dial, d.start);
+    const all = digiRows.value.concat(rows);
+    digiRows.value = all.length > DIGI_KEEP ? all.slice(all.length - DIGI_KEEP) : all;
+    digiStatus.value = {
+      ...st0,
+      pending,
+      last: { start: d.start, ms: d.result.ms, cut: d.result.cut, n: rows.length },
+    };
+  };
+  return w;
+}
+
+function digiRestart(): void {
+  digiSlotter?.reset();
+  digiClock.reset();
+  digiIndex = 0;
+}
+
+function digiAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!digiOn.value || !s) return;
+  digiWorker ??= digiStart();
+  const mode = digiMode.value;
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}|${mode}`;
+  if (key !== digiKey) {
+    // another band: the callsigns heard on the last one don't help
+    if (Math.abs(s.hz - digiDial) > 1e6) digiWorker.postMessage({ reset: true });
+    digiKey = key;
+    digiDial = s.hz;
+    digiGen++;
+    digiOf.clear();
+    digiOf.set(digiGen, { mode, dial: s.hz });
+    const m = DIGI_MODES[mode];
+    digiSlotter = new Slotter(m.period, m.collect);
+    digiRestart();
+  }
+  // lost samples break the timeline
+  if (f.flags & FLAG_GAP) digiRestart();
+  // the signals' tones go up in frequency in USB only
+  if (s.mode !== "usb" || !digiSlotter) return;
+  const pcm = digiFeed.push(f.pcm, f.rate, f.stereo);
+  if (pcm.length === 0) return;
+  const first = digiIndex;
+  digiIndex += pcm.length;
+  digiClock.observe(digiIndex, serverClock.now(Date.now() / 1000));
+  const slots = digiSlotter.push(first, pcm, digiClock);
+  let pending = digiStatus.value.pending;
+  for (const slot of slots) {
+    digiWorker.postMessage(
+      { slot: slot.audio, mode: DIGI_MODES[mode].id, deep: digiDeep.value, budget: budgetMs(mode), start: slot.start, gen: digiGen },
+      [slot.audio.buffer],
+    );
+    pending++;
+  }
+  const next = digiSlotter.next;
+  const old = digiStatus.value;
+  if (slots.length || next !== old.next || serverClock.known !== old.clock) {
+    digiStatus.value = { ...old, next, pending, clock: serverClock.known };
+  }
+}
+
+export function setDigi(on: boolean): void {
+  digiOn.value = on;
+  save("digi", on ? "1" : "0");
+  if (!on && digiWorker) {
+    digiWorker.terminate();
+    digiWorker = null;
+    digiKey = "";
+    digiDial = 0;
+    digiStatus.value = { next: null, last: null, pending: 0, clock: serverClock.known };
+  }
+}
+
+/** Another mode; on one of the old mode's dials, the new one's on the same
+ * band. */
+export function setDigiMode(mode: DigiMode): void {
+  const old = DIGI_MODES[digiMode.value];
+  digiMode.value = mode;
+  save("digiMode", mode);
+  const band = old.dials.find((d) => d.hz === st.value?.hz)?.band;
+  const dial = DIGI_MODES[mode].dials.find((d) => d.band === band);
+  if (dial) pickDigi(dial.hz);
+}
+
+export function setDigiDeep(on: boolean): void {
+  digiDeep.value = on;
+  save("digiDeep", on ? "1" : "0");
+}
+
+/** A dial frequency was picked: USB with the mode's passband, the signals
+ * in view. */
+export function pickDigi(dial: number): void {
+  const m = DIGI_MODES[digiMode.value];
+  tune(dial);
+  setModePassband("usb", m.passband.lo, m.passband.hi);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const mid = dial + (m.passband.lo + m.passband.hi) / 2;
+  const span = wfSpan(r.adc_hz, v.decim);
+  if (Math.abs(mid - v.center_hz) > 0.45 * span - 1600) setView({ ...v, center_hz: mid });
+}
+
+export function clearDigi(): void {
+  digiRows.value = [];
 }
 
 export function showSpots(on: boolean): void {
@@ -497,6 +656,16 @@ export function cycleAm(): void {
   const m = st.value?.mode;
   const i = m ? AM_MODES.indexOf(m) : -1;
   setMode(i < 0 ? "am" : AM_MODES[(i + 1) % AM_MODES.length]);
+}
+
+/** A mode with its passband, in one request (`setMode` then
+ * `setPassband` would send the old mode with the passband: the local
+ * state follows the server's answer). */
+export function setModePassband(mode: Mode, lo: number, hi: number): void {
+  const s = st.value;
+  if (!s) return;
+  update({ mode, lo, hi });
+  link?.send({ type: "mode", mode, lo, hi, pitch: s.pitch });
 }
 
 export function setPassband(lo: number, hi: number): void {

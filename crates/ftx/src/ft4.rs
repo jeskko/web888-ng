@@ -24,7 +24,7 @@ use crate::tones::{self, FT4_COSTAS, FT4_GRAY, FT4_SYMBOLS, Shape};
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
 use std::sync::Arc;
-use std::time::Instant;
+use web888_clock::Instant;
 
 pub const RATE: f32 = 12_000.0;
 pub const NSPS: usize = 576;

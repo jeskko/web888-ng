@@ -1,7 +1,8 @@
 #!/bin/sh
 # SPDX-License-Identifier: GPL-3.0-or-later
-# The web UI's WebAssembly: the JTTY receiver (crates/jtty-wasm) to
-# ui/wasm/jtty.wasm, which `pnpm build` copies into dist/.
+# The web UI's WebAssembly, to ui/wasm/, which `pnpm build` copies into
+# dist/: the JTTY receiver (crates/jtty-wasm) as jtty.wasm, and the FT8,
+# FT4 and WSPR decoders (crates/digi-wasm) as digi.wasm.
 #
 #   scripts/build-wasm.sh
 #
@@ -12,10 +13,11 @@ set -eu
 src=$(cd "$(dirname "$0")/.." && pwd)
 target=wasm32-unknown-unknown
 out=$src/ui/wasm
+crates="-p web888-jtty-wasm -p web888-digi-wasm"
 mkdir -p "$out"
 if [ -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/$target" ]; then
-	(cd "$src" && cargo build --release --target $target -p web888-jtty-wasm)
-	cp "$src/target/$target/release/web888_jtty_wasm.wasm" "$out/jtty.wasm"
+	(cd "$src" && cargo build --release --target $target $crates)
+	built=$src/target/$target/release
 else
 	engine=$(command -v podman || command -v docker)
 	mkdir -p "$src/target/wasm-build"
@@ -23,7 +25,9 @@ else
 		-e CARGO_TARGET_DIR=/out/target \
 		docker.io/library/rust:1-slim sh -c "
 			rustup target add $target >/dev/null 2>&1
-			cd /src && cargo build --release --target $target -p web888-jtty-wasm"
-	cp "$src/target/wasm-build/target/$target/release/web888_jtty_wasm.wasm" "$out/jtty.wasm"
+			cd /src && cargo build --release --target $target $crates"
+	built=$src/target/wasm-build/target/$target/release
 fi
-ls -l "$out/jtty.wasm"
+cp "$built/web888_jtty_wasm.wasm" "$out/jtty.wasm"
+cp "$built/web888_digi_wasm.wasm" "$out/digi.wasm"
+ls -l "$out/jtty.wasm" "$out/digi.wasm"

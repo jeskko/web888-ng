@@ -423,10 +423,10 @@ impl Decoder {
     pub fn decode_until(
         &mut self,
         audio: &[f32],
-        deadline: Option<std::time::Instant>,
+        deadline: Option<web888_clock::Instant>,
     ) -> Vec<Decode> {
         self.slots += 1;
-        let late = || deadline.is_some_and(|d| std::time::Instant::now() >= d);
+        let late = || deadline.is_some_and(|d| web888_clock::Instant::now() >= d);
         let (mut id, mut qd) = Self::downsample(audio);
         let np = NFFT2;
         let df = DF / 2.0;

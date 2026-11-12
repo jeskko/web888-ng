@@ -1,0 +1,15 @@
+[package]
+name = "web888-digi-wasm"
+description = "FT8, FT4 and WSPR decoding for the web UI (WebAssembly, plain C ABI)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+web888-clock.workspace = true
+web888-ftx.workspace = true
+web888-wspr.workspace = true

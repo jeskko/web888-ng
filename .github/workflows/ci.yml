@@ -35,7 +35,7 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
-      # the JTTY decoder's WebAssembly (ui/wasm/jtty.wasm, copied by the build)
+      # the decoders' WebAssembly (ui/wasm/jtty.wasm, digi.wasm, copied by the build)
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -43,7 +43,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
-      - run: test -s dist/jtty.wasm
+      - run: test -s dist/jtty.wasm && test -s dist/digi.wasm
       - uses: actions/upload-artifact@v4
         with:
           name: web888d-ui

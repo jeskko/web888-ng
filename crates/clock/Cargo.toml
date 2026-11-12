@@ -1,0 +1,9 @@
+[package]
+name = "web888-clock"
+description = "A monotonic Instant for the decoders, also in the browser (wasm32-unknown-unknown)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]

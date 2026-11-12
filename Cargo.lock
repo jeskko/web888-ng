@@ -1766,6 +1766,10 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-clock"
+version = "0.10.0"
+
+[[package]]
 name = "web888-config"
 version = "0.10.0"
 dependencies = [
@@ -1787,6 +1791,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-digi-wasm"
+version = "0.10.0"
+dependencies = [
+ "web888-clock",
+ "web888-ftx",
+ "web888-wspr",
+]
+
+[[package]]
 name = "web888-dsp"
 version = "0.10.0"
 dependencies = [
@@ -1803,6 +1816,7 @@ version = "0.10.0"
 dependencies = [
  "num-complex",
  "rustfft",
+ "web888-clock",
 ]
 
 [[package]]
@@ -1924,6 +1938,7 @@ version = "0.10.0"
 dependencies = [
  "num-complex",
  "rustfft",
+ "web888-clock",
  "web888-ftx",
 ]
 

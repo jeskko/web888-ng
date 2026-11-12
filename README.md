@@ -12,7 +12,8 @@ Status (see `doc/design.md` §11), release v0.10.0:
 * **Done:** **M1** stock-driver backend and HPSDR, **M2** web UI, **M3**
   multi-user, **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet,
   syslog, MQTT). JTTY decoding in the browser (`crates/jtty`, ported
-  from jtty-cuf; v0.6.0).
+  from jtty-cuf; v0.6.0). FT8, FT4 and WSPR on the user's own frequency
+  in the browser too (`doc/m4-skimmers.md` §10; not reported anywhere).
 * **Mostly done: M6**, bins mode for the channelizer bitstream (30 kHz
   bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
@@ -44,8 +45,10 @@ Status (see `doc/design.md` §11), release v0.10.0:
 | `crates/ftx` | FT8 and FT4 decoders |
 | `crates/wspr` | WSPR-2 decoder (a port of wsprd) |
 | `crates/jtty` | JTTY receiver (4-GFSK keyboard mode; a port of jtty-cuf, MIT); `crates/jtty-wasm` runs it in the browser |
+| `crates/digi-wasm` | the FT8, FT4 and WSPR decoders in the browser (WebAssembly) |
+| `crates/clock` | the decoders' `Instant`, also in WebAssembly |
 | `crates/skim` | skimmers: band jobs, decoder threads, the spot bus, PSKReporter, WSPRnet, syslog, MQTT, gpsd |
-| `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet; JTTY decoding in a Web Worker) |
+| `ui/` | the web UI (TypeScript, Preact, WebGL2 waterfall, AudioWorklet; JTTY, FT8, FT4 and WSPR decoding in Web Workers) |
 | `crates/iq` | backend fed by real signals: wideband IQ from an SDR (SoapySDR, e.g. HackRF) or a recording, channelized like the FPGA |
 | `crates/web888d` | the daemon: `serve` (radio + HPSDR + web UI), `sim` (one channel to stdout) |
 

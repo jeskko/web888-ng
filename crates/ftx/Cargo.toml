@@ -7,5 +7,6 @@ license.workspace = true
 repository.workspace = true
 
 [dependencies]
+web888-clock.workspace = true
 num-complex.workspace = true
 rustfft.workspace = true

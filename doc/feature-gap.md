@@ -105,6 +105,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | WSPR autorun → WSPRnet, MQTT | ✓ | ✓ | ✓ | ✓ (M4) | – |
 | Autorun pre-empted by users, resumes after | ~ (stock #55: doesn't resume) | ✓ | – | ✓ skimmers yield and resume (`skimmers_yield`); with the channelizer's 32 receivers they rarely have to | – |
 | JTTY (Finnish teletype) | ✗ | ✗ | ✗ | ✓ in the browser (v0.6.0, WASM); not as a skimmer (the A9 is 4x too slow) | – |
+| FT8/FT4/WSPR on the user's frequency, in the browser | ✗ | ✗ | ✓ (server-side) | ✓ (WASM, the skimmers' decoders; not reported; `m4-skimmers.md` §10) | – |
 | CW decoder (single) | ✓ | ✓ | ✓ | ✗ | **B** |
 | CW skimmer (multi-signal; RBN?) | ✓ | ✓ exp. | ✗ | ✗ | later |
 | FSK/RTTY, NAVTEX, DSC, SITOR | ✓ | ✓ | ✓ | ✗ | **B** |

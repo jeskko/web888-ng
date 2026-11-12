@@ -537,3 +537,76 @@ that can't go are dropped. It applies live.
    confident of, with a callsign separate from the one another station
    of the developer's already uploads with, and **only from live
    signals, never recordings**.
+4. **In the browser too** (user, 2026-11-12): FT8, FT4 and WSPR decoded
+   on the user's own frequency in their browser, not reported anywhere
+   (§10). CPU only: a GPU wouldn't make it decode better (§10.3).
+
+## 10. In the browser
+
+The same decoders on the frequency the user tunes, in their browser: the
+**FT8/FT4/WSPR** button opens a list beside the waterfall with the mode,
+the common dial frequencies (picking one tunes there in USB with the
+mode's passband) and **Deep**. The decodes stay in the page: nothing goes
+to PSKReporter or WSPRnet, and the unit spends nothing on them.
+
+### 10.1 How
+
+* `crates/digi-wasm` (`digi.wasm`, built by `scripts/build-wasm.sh`):
+  web888-ftx and web888-wspr behind a C ABI, as `crates/jtty-wasm`
+  (`digi_buffer`, `digi_decode(mode, deep, n, budget_ms)` → JSON,
+  `digi_reset`). Callsign hashes are kept from slot to slot.
+* `crates/clock`: `std::time::Instant::now()` panics on
+  wasm32-unknown-unknown, so the decoders take their `Instant` from
+  web888-clock: `std`'s natively, `performance.now()` (the import
+  `env.web888_now_ms`) in the module.
+* `ui/src/digi.ts`: the audio (resampled to 12 kHz mono as for JTTY) is
+  put on the server's UTC, not the computer's: the waterfall lines carry
+  the server's time, and the least delayed line gives the clocks' offset
+  (`ServerClock`); the sample clock and the slotter are the skimmers'
+  (`FrameClock`, `Slotter`) in TypeScript. Lost audio (`FLAG_GAP`) or
+  another frequency or mode starts over at the next whole slot.
+* `ui/src/digi/worker.ts`: the module in a Web Worker; each slot may
+  take its mode's period less a second (`decode_until`).
+
+### 10.2 Checks
+
+* The module against the corpora in Node (V8 on the workstation, ms per
+  slot):
+
+  | | FT8 40 m | FT8 30 m | FT4 40 m | WSPR 40 m | WSPR 30 m |
+  |---|---|---|---|---|---|
+  | found (of jt9's / wsprd's) | 1458 of 1600 | 1173 of 1267 | 268 of 300 | 39 of 39 | 25 of 25 |
+  | ms per slot | 121 | 95 | 27 | 2742 | 1281 |
+  | Deep: found | 1477 | 1175 | 272 | 40 | 25 |
+  | Deep: ms per slot | 279 | 245 | 105 | 6809 | 2730 |
+
+  The same decodes as the native build (the second set's scores are in
+  §3.3). The extra WSPR decode is the one wsprd's limit also finds.
+* In Chromium (`ui/tools/cdp/digi.mjs`) against a web888d replaying the
+  40 m capture, started at the recording's phase in the slot: 32 and 33
+  FT8 decodes in the first two slots (287 and 143 ms), DT -0.1 s
+  typically: the slots are on time to about 0.1 s.
+
+### 10.3 No GPU
+
+The user asked for GPU-assisted decoding if it would help. It wouldn't:
+
+* There is no time pressure to relieve. One band is 1-2 % of a desktop
+  core (FT8 0.1 s per 15 s slot, WSPR 1-3 s per 2 minutes); a phone
+  several times slower still decodes every slot with time to spare.
+  Faster wouldn't decode more: the slot is decoded either way.
+* What finds more is searching harder, and that is what Deep does with
+  the spare CPU: FT8 +1.2 % of jt9's decodes on 40 m, +1.3 % on the
+  second set, for 2.3 times the time.
+* The work is many small FFTs (3200 points per candidate, 1024 per
+  spectrogram frame) and belief propagation and OSD per candidate, with
+  data-dependent branches: dispatches and read-backs would cost more
+  than the arithmetic saved, and a second (WGSL) implementation of the
+  numerics could change the borderline decodes.
+
+### 10.4 Not done
+
+* WSPR and FT4 checked in the browser only on the corpora (in Node):
+  the 60 s replay has no FT4 and is shorter than a WSPR transmission.
+* No markers on the scale for the browser's decodes, and no click to
+  tune; FST4W (as for the skimmers).
