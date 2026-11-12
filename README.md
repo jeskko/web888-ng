@@ -7,7 +7,7 @@ on [web888-ng-os](https://github.com/jeskko/web888-ng-os), the open SD card
 image, with the open driver and bitstreams from
 [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status (see `doc/design.md` §11), release v0.9.0:
+Status (see `doc/design.md` §11), release v0.10.0:
 
 * **Done:** **M1** stock-driver backend and HPSDR, **M2** web UI, **M3**
   multi-user, **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet,
