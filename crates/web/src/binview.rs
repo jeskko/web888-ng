@@ -1151,11 +1151,11 @@ mod tests {
                 self.u.fill(web888_dsp::C32::default());
                 for &(hz, a) in tones {
                     let (k, _) = CAPS.bin_of(hz).unwrap();
-                    for k in k - 1..=k + 1 {
-                        let off = hz - CAPS.freq(k);
+                    for (j, u) in self.u.iter_mut().enumerate().skip(k - 1).take(3) {
+                        let off = hz - CAPS.freq(j);
                         if off.abs() < 30e3 {
                             let p = (2.0 * PI * off * t).rem_euclid(2.0 * PI);
-                            self.u[k] += web888_dsp::C32::from_polar(a as f32, p as f32);
+                            *u += web888_dsp::C32::from_polar(a as f32, p as f32);
                         }
                     }
                 }
