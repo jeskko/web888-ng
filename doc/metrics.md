@@ -32,6 +32,13 @@ kind, shedding, lost blocks), waterfalls, skimmers (spots, CPU and slots
 not decoded in full per band, a table of the bands now), uploads and log
 sinks, the system. Restarts are marked.
 
+The rate panels take at least 2 min windows (their min interval), so
+they also work with a 1 min scrape when the data source is left at
+Grafana's default 15 s (`rate()` needs two samples in its window: with
+a 1 min window it would be empty). With a slower scrape, set the data
+source's **Scrape interval** to it (Connections → Data sources →
+Prometheus); `$__rate_interval` then follows it.
+
 ## What there is
 
 | Metric | Type | Labels | What |
