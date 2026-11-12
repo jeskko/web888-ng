@@ -6,9 +6,19 @@
 // anywhere (drag to turn the globe under it); the greyline on top.
 
 import { useSignal } from "@preact/signals";
-import { geoAzimuthalEquidistant, geoCircle, geoGraticule, geoMercator, geoPath, type GeoPermissibleObjects, type GeoProjection } from "d3-geo";
+import {
+  geoAzimuthalEquidistant,
+  geoCentroid,
+  geoCircle,
+  geoDistance,
+  geoGraticule,
+  geoMercator,
+  geoPath,
+  type GeoPermissibleObjects,
+  type GeoProjection,
+} from "d3-geo";
 import { useEffect, useMemo, useRef } from "preact/hooks";
-import { feature, mesh } from "topojson-client";
+import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import { formatKhz } from "../fmt.ts";
 import { bearing, distanceKm, gridToLatLon, latLonToGrid, subsolar, GridBook, type LatLon } from "../geo.ts";
@@ -32,9 +42,19 @@ export function MapCtl() {
   );
 }
 
-interface World {
-  land: GeoPermissibleObjects;
-  borders: GeoPermissibleObjects;
+/** A country, with the circle around it (centre, radius in radians) to
+ * leave it out quickly when it is out of view. */
+interface Country {
+  f: GeoPermissibleObjects;
+  c: [number, number];
+  r: number;
+}
+type World = Country[];
+
+/** Every [lon, lat] of a geometry. */
+function eachPoint(c: unknown, out: (p: [number, number]) => void): void {
+  if (Array.isArray(c) && typeof c[0] === "number") out(c as [number, number]);
+  else if (Array.isArray(c)) for (const x of c) eachPoint(x, out);
 }
 
 /** The world at two resolutions, loaded once on first use. */
@@ -44,11 +64,18 @@ function loadWorlds(): Promise<[World, World]> {
     const r = await fetch(api(`map/countries-${res}.json`));
     if (!r.ok) throw new Error(`map/countries-${res}.json: HTTP ${r.status}`);
     const topo = (await r.json()) as Topology;
-    const countries = topo.objects.countries as Parameters<typeof feature>[1];
-    return {
-      land: feature(topo, countries) as GeoPermissibleObjects,
-      borders: mesh(topo, countries as never, (a, b) => a !== b) as GeoPermissibleObjects,
+    const fc = feature(topo, topo.objects.countries as Parameters<typeof feature>[1]) as unknown as {
+      features: { geometry: { coordinates: unknown } | null }[];
     };
+    return fc.features
+      .filter((f) => f.geometry)
+      .map((f) => {
+        const g = f as unknown as GeoPermissibleObjects;
+        const c = geoCentroid(g as never);
+        let r = 0;
+        eachPoint(f.geometry!.coordinates, (p) => (r = Math.max(r, geoDistance(c, p))));
+        return { f: g, c, r };
+      });
   };
   worlds ??= Promise.all([one("110m"), one("50m")]).catch((e: unknown) => {
     worlds = null;
@@ -64,23 +91,92 @@ interface View {
   k: number;
 }
 
-function projection(kind: MapOpts["proj"], v: View, w: number, h: number): GeoProjection {
-  if (kind === "merc") {
-    const base = w / (2 * Math.PI);
-    return geoMercator()
-      .rotate([-v.lon, 0])
-      .center([0, v.lat])
-      .scale(base * v.k)
-      .translate([w / 2, h / 2])
-      .precision(0.5);
-  }
-  const base = Math.min(w, h) / 2 / Math.PI;
-  return geoAzimuthalEquidistant()
-    .rotate([-v.lon, -v.lat])
-    .scale(base * v.k * 0.98)
+/** The projection of view `v` on a `w` x `h` canvas; `coarse` (while
+ * moving): curves resampled to a few pixels, not under one. Clipped to
+ * the canvas: zoomed in, most of the world isn't drawn at all. */
+function projection(kind: MapOpts["proj"], v: View, w: number, h: number, coarse: boolean): GeoProjection {
+  const p =
+    kind === "merc"
+      ? geoMercator()
+          .rotate([-v.lon, 0])
+          .center([0, v.lat])
+          .scale((w / (2 * Math.PI)) * v.k)
+      : geoAzimuthalEquidistant()
+          .rotate([-v.lon, -v.lat])
+          .scale((Math.min(w, h) / 2 / Math.PI) * v.k * 0.98)
+          .clipAngle(179.9);
+  return p
     .translate([w / 2, h / 2])
-    .clipAngle(179.9)
-    .precision(0.5);
+    .clipExtent([
+      [-2, -2],
+      [w + 2, h + 2],
+    ])
+    .precision(coarse ? 3 : 0.7);
+}
+
+/** The view's centre on the globe and how far from it (radians) the
+ * canvas reaches: what is farther isn't drawn. */
+function reach(proj: GeoProjection, w: number, h: number): { c: [number, number]; r: number } {
+  const c = proj.invert?.([w / 2, h / 2]);
+  if (!c) return { c: [0, 0], r: Math.PI };
+  let r = 0;
+  for (const xy of [
+    [0, 0],
+    [w, 0],
+    [0, h],
+    [w, h],
+    [w / 2, 0],
+    [w / 2, h],
+    [0, h / 2],
+    [w, h / 2],
+  ] as [number, number][]) {
+    const g = proj.invert?.(xy);
+    if (!g || !Number.isFinite(g[0])) return { c, r: Math.PI };
+    r = Math.max(r, geoDistance(c, g));
+  }
+  // an edge can bulge past its corners (azimuthal): some margin
+  return { c, r: Math.min(Math.PI, r * 1.15 + 0.02) };
+}
+
+/** The base map: sea, Maidenhead fields, the countries in view. */
+function drawBase(g: CanvasRenderingContext2D, proj: GeoProjection, world: World | null, w: number, h: number): void {
+  const path = geoPath(proj, g);
+  g.beginPath();
+  path({ type: "Sphere" });
+  g.fillStyle = css("--map-sea", "#0e1b2e");
+  g.fill();
+  g.beginPath();
+  path(geoGraticule().step([20, 10]).extent([[-180, -90], [180, 90.001]])());
+  g.strokeStyle = "rgba(140,160,190,0.18)";
+  g.lineWidth = 1;
+  g.stroke();
+  if (world) {
+    const { c, r } = reach(proj, w, h);
+    const land = new Path2D();
+    const lp = geoPath(proj, land as unknown as CanvasRenderingContext2D);
+    for (const k of world) if (r >= Math.PI || geoDistance(c, k.c) - k.r <= r) lp(k.f);
+    g.fillStyle = css("--map-land", "#3a4a63");
+    g.fill(land);
+    g.strokeStyle = "rgba(200,215,235,0.45)";
+    g.lineWidth = 0.6;
+    g.stroke(land);
+  }
+  g.beginPath();
+  path({ type: "Sphere" });
+  g.strokeStyle = "rgba(170,185,205,0.5)";
+  g.lineWidth = 1;
+  g.stroke();
+}
+
+/** The base map drawn last, for reuse while only the stations change,
+ * and stretched or shifted while zooming or panning. */
+interface Base {
+  key: string;
+  canvas: HTMLCanvasElement;
+  view: View;
+  proj: MapOpts["proj"];
+  w: number;
+  h: number;
 }
 
 const css = (name: string, fallback: string) => getComputedStyle(document.documentElement).getPropertyValue(name).trim() || fallback;
@@ -124,6 +220,10 @@ export function MapPanel() {
   /** Where a press began and the station under it (a click, if it
    * doesn't move). */
   const press = useRef<{ x: number; y: number; hit: MapPoint | null } | null>(null);
+  /** Labels' widths (measuring text is slow), and the wheel's end. */
+  const widths = useRef(new Map<string, number>());
+  const wheelEnd = useRef(0);
+  const base = useRef<Base | null>(null);
   const open = mapOpen.value;
 
   // the world, the clock (greyline, ages)
@@ -173,6 +273,8 @@ export function MapPanel() {
     if (!open || !c || !v) return;
     void size.value;
     const frame = requestAnimationFrame(() => {
+      const t0 = performance.now();
+      const coarse = moving.value;
       const dpr = window.devicePixelRatio || 1;
       const w = c.clientWidth;
       const h = c.clientHeight;
@@ -181,9 +283,36 @@ export function MapPanel() {
         c.height = Math.round(h * dpr);
       }
       const g = c.getContext("2d")!;
+      g.setTransform(1, 0, 0, 1, 0, 0);
+      g.clearRect(0, 0, c.width, c.height);
+      const proj = projection(o.proj, v, w, h, coarse);
+      // the base map: as drawn last if the view is the same; stretched
+      // (zoom) or shifted (Mercator pan) while moving; else drawn now
+      const wd = world.value;
+      const fine = v.k >= 3 && !coarse;
+      const key = `${o.proj} ${v.lon} ${v.lat} ${v.k} ${w} ${h} ${dpr} ${fine} ${!!wd}`;
+      const b = base.current;
+      const same = b && b.proj === o.proj && b.w === w && b.h === h;
+      if (b && b.key === key) {
+        g.drawImage(b.canvas, 0, 0);
+      } else if (coarse && same && b.view.lon === v.lon && b.view.lat === v.lat) {
+        const s = v.k / b.view.k;
+        g.drawImage(b.canvas, (c.width * (1 - s)) / 2, (c.height * (1 - s)) / 2, c.width * s, c.height * s);
+      } else if (coarse && same && o.proj === "merc" && b.view.k === v.k) {
+        const was = projection("merc", b.view, w, h, true).invert?.([w / 2, h / 2]);
+        const xy = was && proj(was);
+        if (xy) g.drawImage(b.canvas, (xy[0] - w / 2) * dpr, (xy[1] - h / 2) * dpr);
+      } else {
+        const bc = b?.canvas ?? document.createElement("canvas");
+        bc.width = c.width;
+        bc.height = c.height;
+        const bg = bc.getContext("2d")!;
+        bg.setTransform(dpr, 0, 0, dpr, 0, 0);
+        drawBase(bg, proj, wd ? wd[fine ? 1 : 0] : null, w, h);
+        base.current = { key, canvas: bc, view: v, proj: o.proj, w, h };
+        g.drawImage(bc, 0, 0);
+      }
       g.setTransform(dpr, 0, 0, dpr, 0, 0);
-      g.clearRect(0, 0, w, h);
-      const proj = projection(o.proj, v, w, h);
       const path = geoPath(proj, g);
       const stroke = (obj: GeoPermissibleObjects, colour: string, width = 1) => {
         g.beginPath();
@@ -198,68 +327,66 @@ export function MapPanel() {
         g.fillStyle = colour;
         g.fill();
       };
-      fill({ type: "Sphere" }, css("--map-sea", "#0e1b2e"));
-      // Maidenhead fields (20° x 10°)
-      stroke(geoGraticule().step([20, 10]).extent([[-180, -90], [180, 90.001]])(), "rgba(140,160,190,0.18)");
-      const wd = world.value;
-      if (wd) {
-        // the finer world when zoomed in and still
-        const res = v.k >= 3 && !moving.value ? wd[1] : wd[0];
-        fill(res.land, css("--map-land", "#3a4a63"));
-        stroke(res.land, "rgba(200,215,235,0.55)", 0.7);
-        stroke(res.borders, "rgba(200,215,235,0.3)", 0.5);
-      }
       if (o.greyline) {
         const [la, lo] = subsolar(now.value);
         // the antipode of the sun: the middle of the night
         const night: [number, number] = [lo > 0 ? lo - 180 : lo + 180, -la];
-        fill(geoCircle().center(night).radius(96)(), "rgba(0,0,0,0.12)");
-        fill(geoCircle().center(night).radius(90)(), "rgba(0,0,0,0.22)");
+        fill(geoCircle().center(night).radius(96)(), "rgba(0,0,0,0.09)");
+        fill(geoCircle().center(night).radius(90)(), "rgba(0,0,0,0.16)");
       }
-      stroke({ type: "Sphere" }, "rgba(170,185,205,0.5)");
-      // lines, then points (newest on top)
+      // lines, one path per band, then points (newest on top)
       if (o.lines) {
-        const max = moving.value ? MAX_LINES_MOVING : MAX_LINES;
-        g.globalAlpha = 0.45;
-        for (const p of points.slice(-max)) {
+        const byBand = new Map<string, [number, number][][]>();
+        for (const p of points.slice(-(coarse ? MAX_LINES_MOVING : MAX_LINES))) {
           if (!p.from) continue;
-          stroke(
-            {
-              type: "LineString",
-              coordinates: [
-                [p.from[1], p.from[0]],
-                [p.pos[1], p.pos[0]],
-              ],
-            },
-            bandColour(p.band),
-            1,
-          );
+          let l = byBand.get(p.band);
+          if (!l) byBand.set(p.band, (l = []));
+          l.push([
+            [p.from[1], p.from[0]],
+            [p.pos[1], p.pos[0]],
+          ]);
         }
+        g.globalAlpha = 0.45;
+        for (const [band, coordinates] of byBand) stroke({ type: "MultiLineString", coordinates }, bandColour(band), 1);
         g.globalAlpha = 1;
       }
       const placed: { p: MapPoint; x: number; y: number }[] = [];
       const centre = proj.invert?.([w / 2, h / 2]);
+      const far = 0.999 * Math.PI * 6371;
       for (const p of points) {
         const xy = proj([p.pos[1], p.pos[0]]);
         if (!xy || !Number.isFinite(xy[0]) || xy[0] < -10 || xy[1] < -10 || xy[0] > w + 10 || xy[1] > h + 10) continue;
         // azimuthal: the far side's edge is clipped
-        if (o.proj === "azim" && centre && distanceKm([centre[1], centre[0]], p.pos) > 0.999 * Math.PI * 6371) continue;
-        const [x, y] = xy;
-        g.fillStyle = bandColour(p.band);
-        g.strokeStyle = "rgba(0,0,0,0.6)";
-        g.lineWidth = 1;
+        if (o.proj === "azim" && centre && distanceKm([centre[1], centre[0]], p.pos) > far) continue;
+        placed.push({ p, x: xy[0], y: xy[1] });
+      }
+      // the points, one path per band (later bands on top)
+      const marks = new Map<string, typeof placed>();
+      for (const s of placed) {
+        let l = marks.get(s.p.band);
+        if (!l) marks.set(s.p.band, (l = []));
+        l.push(s);
+      }
+      g.strokeStyle = "rgba(0,0,0,0.6)";
+      g.lineWidth = 1;
+      for (const [band, list] of marks) {
         g.beginPath();
-        if (p.layer === "dx") g.rect(x - 3, y - 3, 6, 6);
-        else if (p.layer === "browser") {
-          g.moveTo(x, y - 4);
-          g.lineTo(x + 4, y);
-          g.lineTo(x, y + 4);
-          g.lineTo(x - 4, y);
-          g.closePath();
-        } else g.arc(x, y, 3, 0, 2 * Math.PI);
+        for (const { p, x, y } of list) {
+          if (p.layer === "dx") g.rect(x - 3, y - 3, 6, 6);
+          else if (p.layer === "browser") {
+            g.moveTo(x, y - 4);
+            g.lineTo(x + 4, y);
+            g.lineTo(x, y + 4);
+            g.lineTo(x - 4, y);
+            g.closePath();
+          } else {
+            g.moveTo(x + 3, y);
+            g.arc(x, y, 3, 0, 2 * Math.PI);
+          }
+        }
+        g.fillStyle = bandColour(band);
         g.fill();
         g.stroke();
-        placed.push({ p, x, y });
       }
       // calls beside the points, where they fit (the newest first)
       if (v.k >= 2 || placed.length < 150) {
@@ -267,7 +394,8 @@ export function MapPanel() {
         g.fillStyle = "rgba(230,236,245,0.9)";
         const taken: [number, number, number, number][] = [];
         for (const { p, x, y } of placed.slice().reverse()) {
-          const tw = g.measureText(p.call).width;
+          let tw = widths.current.get(p.call);
+          if (tw === undefined) widths.current.set(p.call, (tw = g.measureText(p.call).width));
           const r: [number, number, number, number] = [x + 5, y - 6, x + 5 + tw, y + 6];
           if (taken.some((t) => r[0] < t[2] && r[2] > t[0] && r[1] < t[3] && r[3] > t[1])) continue;
           taken.push(r);
@@ -290,6 +418,8 @@ export function MapPanel() {
         }
       }
       shown.current = placed;
+      // how long a frame takes (checks: tools/cdp/map.mjs)
+      c.dataset.drawMs = (performance.now() - t0).toFixed(1);
     });
     return () => cancelAnimationFrame(frame);
   }, [open, points, view.value, world.value, moving.value, size.value, o, t, rxKey]);
@@ -361,6 +491,12 @@ export function MapPanel() {
   };
   const onWheel = (e: WheelEvent) => {
     e.preventDefault();
+    // coarse while the wheel turns, the full detail once it stops
+    moving.value = true;
+    window.clearTimeout(wheelEnd.current);
+    wheelEnd.current = window.setTimeout(() => {
+      if (pointers.current.size === 0) moving.value = false;
+    }, 250);
     const v = view.value;
     if (v) view.value = { ...v, k: Math.min(64, Math.max(0.5, v.k * Math.exp(-e.deltaY * 0.0015))) };
   };
