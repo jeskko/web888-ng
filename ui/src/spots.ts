@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Spots from the skimmers: the list's filters and the labels on the scale
-// (pure, unit-tested).
+// Spots from the skimmers (and the live DX spots in the list): the list's
+// rows and filters and the labels on the scale (pure, unit-tested).
 
+import type { DxMapSpot } from "./map.ts";
 import type { Spot } from "./proto.ts";
 
 /** Spots kept in the browser. */
@@ -29,6 +30,52 @@ export function filterSpots(spots: Spot[], f: SpotFilter): Spot[] {
   return out;
 }
 
+/** What the list shows: the skimmers' decodes, the live DX spots or both. */
+export type SpotSource = "skim" | "dx" | "both";
+
+/** A row of the list, from either source. */
+export interface SpotRow {
+  t: number;
+  hz: number;
+  band: string;
+  mode: string;
+  snr?: number;
+  /** The message; a DX spot's station and note. */
+  text: string;
+  /** A skimmer's spot, to tune to as from its dial. */
+  spot?: Spot;
+  /** A DX spot, to tune to in its mode. */
+  dx?: DxMapSpot;
+}
+
+/** The rows of `src`, newest first: the skimmers' spots (oldest first,
+ * as kept) and the DX spots (the latest of each station on each band). */
+export function spotRows(skim: Spot[], dx: DxMapSpot[], src: SpotSource): SpotRow[] {
+  const a: SpotRow[] = [];
+  if (src !== "dx")
+    for (let k = skim.length - 1; k >= 0; k--) {
+      const s = skim[k];
+      a.push({ t: s.t, hz: s.hz, band: s.band, mode: s.mode, snr: s.snr, text: s.msg, spot: s });
+    }
+  if (src === "skim") return a;
+  const b: SpotRow[] = dx
+    .map((d) => ({ t: d.t, hz: d.hz, band: d.band, mode: d.mode, text: d.note ? `${d.dx}  ${d.note}` : d.dx, dx: d }))
+    .sort((x, y) => y.t - x.t);
+  if (src === "dx") return b;
+  // merge, newest first
+  const out: SpotRow[] = [];
+  let i = 0;
+  let j = 0;
+  while (i < a.length || j < b.length) out.push(j >= b.length || (i < a.length && a[i].t >= b[j].t) ? a[i++] : b[j++]);
+  return out;
+}
+
+/** Rows that pass the filter (the text in the message, any case). */
+export function filterRows(rows: SpotRow[], f: SpotFilter): SpotRow[] {
+  const text = f.text.trim().toUpperCase();
+  return rows.filter((r) => (!f.band || r.band === f.band) && (!f.mode || r.mode === f.mode) && (!text || r.text.toUpperCase().includes(text)));
+}
+
 /** Add a batch, keeping the newest `keep`. */
 export function addSpots(old: Spot[], batch: Spot[], keep = SPOTS_KEEP): Spot[] {
   const all = old.concat(batch);
@@ -36,9 +83,9 @@ export function addSpots(old: Spot[], batch: Spot[], keep = SPOTS_KEEP): Spot[] 
 }
 
 /** The distinct values of a field, sorted (bands by frequency). */
-export function choices(spots: Spot[], key: "band" | "mode"): string[] {
+export function choices(spots: { band: string; mode: string; hz: number }[], key: "band" | "mode"): string[] {
   const seen = new Map<string, number>();
-  for (const s of spots) if (s[key] && !seen.has(s[key])) seen.set(s[key], s.dial);
+  for (const s of spots) if (s[key] && !seen.has(s[key])) seen.set(s[key], s.hz);
   return [...seen.entries()].sort((a, b) => (key === "band" ? a[1] - b[1] : a[0].localeCompare(b[0]))).map((e) => e[0]);
 }
 

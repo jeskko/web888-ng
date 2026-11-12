@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { addSpots, choices, filterSpots, latest, placeLabels, utcTime } from "../src/spots.ts";
+import { addSpots, choices, filterRows, filterSpots, latest, placeLabels, spotRows, utcTime } from "../src/spots.ts";
+import type { DxMapSpot } from "../src/map.ts";
 import type { Spot } from "../src/proto.ts";
 
 const sp = (t: number, call: string, dial: number, band: string, mode = "FT8"): Spot => ({
@@ -80,5 +81,51 @@ test("labels take the lowest free row", () => {
       ["c", -1],
       ["d", 0],
     ],
+  );
+});
+
+test("skimmer and DX spots in one list, newest first", () => {
+  const dx = (t: number, call: string, hz: number, band: string): DxMapSpot => ({
+    t,
+    hz,
+    band,
+    mode: "CW",
+    tune: "cw",
+    dx: call,
+    de: "N0CALL",
+    note: "de N0CALL",
+    dx_pos: null,
+    de_pos: null,
+  });
+  const d = [dx(20, "A1A", 14_020_000, "20m"), dx(40, "B2B", 7_010_000, "40m")];
+  assert.deepEqual(
+    spotRows(list, d, "skim").map((r) => r.t),
+    [30, 15, 15, 0],
+  );
+  assert.deepEqual(
+    spotRows(list, d, "dx").map((r) => r.text),
+    ["B2B  de N0CALL", "A1A  de N0CALL"],
+  );
+  const both = spotRows(list, d, "both");
+  assert.deepEqual(
+    both.map((r) => [r.t, !!r.dx]),
+    [
+      [40, true],
+      [30, false],
+      [20, true],
+      [15, false],
+      [15, false],
+      [0, false],
+    ],
+  );
+  assert.deepEqual(choices(both, "band"), ["40m", "30m", "20m"]);
+  assert.deepEqual(choices(both, "mode"), ["CW", "FT4", "FT8"]);
+  assert.deepEqual(
+    filterRows(both, { band: "40m", mode: "", text: "" }).map((r) => r.t),
+    [40, 15, 0],
+  );
+  assert.deepEqual(
+    filterRows(both, { band: "", mode: "", text: "n0call" }).map((r) => r.dx?.dx),
+    ["B2B", "A1A"],
   );
 });

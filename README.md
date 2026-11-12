@@ -173,7 +173,9 @@ click a label to tune there, in its mode:
 * **Station**: the receiver's own list (yellow);
 * **DX spots**: live DX cluster spots in the receiver's range, the latest
   of each station on each band (orange; the spotter, comment and time on
-  hover), from [Spothole](https://spothole.app).
+  hover), from [Spothole](https://spothole.app). The **Spots** list
+  shows them too, instead of or beside the skimmers' decodes (its first
+  selector: Skimmers, DX spots or Both).
 
 The **band ribbon** between the spectrum and the scale shows the IARU
 region's amateur band plan (CW, narrow-band digital, all-mode segments)

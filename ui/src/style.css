@@ -98,6 +98,8 @@ header .tools { margin-left: auto; }
 .digi-status { margin: 6px 0 !important; }
 .spots-list td.msg { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
 .spots-list tbody tr { cursor: pointer; }
+.spots-list tr.dx td.msg { color: #ffa94d; }
+.spots-list .dx-tag { font-size: 10px; color: #ffa94d; }
 .spots-list tbody tr:hover td { background: var(--accent-bg); }
 .map { display: flex; flex-direction: column; flex: 1 1 55%; min-width: 320px; border-left: 1px solid var(--line); background: var(--panel); font-size: 12px; }
 .map-box { position: relative; flex: 1; min-height: 240px; }

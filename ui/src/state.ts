@@ -3,7 +3,7 @@
 // `state` message is authoritative; actions update the local copy at once
 // (optimistic) and send the request.
 
-import { batch, effect, signal } from "@preact/signals";
+import { batch, computed, effect, signal } from "@preact/signals";
 import { Player, type PlayerStats } from "./audio/player.ts";
 import { bandOf, type Band } from "./bands.ts";
 import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
@@ -11,7 +11,7 @@ import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
-import { addSpots } from "./spots.ts";
+import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
@@ -878,10 +878,17 @@ export function setMapOpts(o: Partial<MapOpts>): void {
  * the list; a DX spot in its mode). */
 export function pickMapPoint(p: MapPoint): void {
   if (p.spot) pickSpot(p.spot);
-  else if (p.tune) {
-    if (st.value?.mode !== p.tune.mode) setMode(p.tune.mode);
-    tuneInView(p.tune.hz);
-  }
+  else if (p.tune) tuneMode(p.tune.hz, p.tune.mode);
+}
+
+/** A DX spot was picked from the list: tune to it in its mode. */
+export function pickDxSpot(d: DxMapSpot): void {
+  tuneMode(d.hz, d.tune);
+}
+
+function tuneMode(hz: number, mode: Mode): void {
+  if (st.value?.mode !== mode) setMode(mode);
+  tuneInView(hz);
 }
 
 async function loadMapInfo(): Promise<void> {
@@ -906,8 +913,40 @@ effect(() => {
   if (!mapOpen.value || !radio.value) return;
   void loadMapInfo();
 });
+/** The server follows live DX spots (`/api/markers/info`). */
+export const dxAvail = signal(false);
+/** What the spot list shows (remembered in this browser). */
+const SOURCES: SpotSource[] = ["skim", "dx", "both"];
+export const spotsSrc = signal<SpotSource>(SOURCES.find((s) => s === load("spotsSrc")) ?? "skim");
+
+export function setSpotsSrc(s: SpotSource): void {
+  spotsSrc.value = s;
+  save("spotsSrc", s);
+}
+
+/** The list's source as it can be: without skimmers only DX spots,
+ * without DX spots only the skimmers'. */
+export const spotsSrcNow = computed<SpotSource>(() => (!dxAvail.value ? "skim" : !spotsAvail.value ? "dx" : spotsSrc.value));
+
 effect(() => {
-  if (!mapOpen.value || !radio.value || !mapOpts.value.layers.includes("dx")) return;
+  if (!radio.value) return;
+  void (async () => {
+    try {
+      const r = await fetch(api("api/markers/info"));
+      if (!r.ok) return;
+      const info = (await r.json()) as { sources: { id: string; enabled?: boolean }[] };
+      dxAvail.value = !!info.sources.find((s) => s.id === "dx")?.enabled;
+    } catch {
+      // the list without DX spots
+    }
+  })();
+});
+
+effect(() => {
+  if (!radio.value) return;
+  const onMap = mapOpen.value && mapOpts.value.layers.includes("dx");
+  const inList = spotsOpen.value && dxAvail.value && spotsSrcNow.value !== "skim";
+  if (!onMap && !inList) return;
   void loadMapDx();
   const id = window.setInterval(() => void loadMapDx(), 60_000);
   return () => window.clearInterval(id);

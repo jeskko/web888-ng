@@ -21,7 +21,8 @@ const rows = "document.querySelectorAll('.spots tbody tr')";
 console.log("rows:", await p.ev(`${rows}.length`), "count:", await p.ev("document.querySelector('.spots-bar .num').textContent"));
 console.log("first:", await p.ev(`${rows}[0]?.textContent`));
 await p.shot(`${out}/spots-1.png`);
-await p.ev(`(() => { const s = document.querySelector('.spots-bar select'); s.value = '30m'; s.dispatchEvent(new Event('change')); })()`);
+// the band filter (after the source choice, with live DX spots on too)
+await p.ev(`(() => { const s = [...document.querySelectorAll('.spots-bar select')].find(e => e.options[0].text === 'All bands'); s.value = '30m'; s.dispatchEvent(new Event('change')); })()`);
 await sleep(500);
 console.log("30m rows:", await p.ev(`${rows}.length`), "bands:", await p.ev(`[...new Set([...${rows}].map(r => r.title.split(' ')[0]))].join(',')`));
 await p.ev(`${rows}[0]?.click()`);
