@@ -29,6 +29,7 @@ fn main() {
             "passes" => cfg.passes = f as usize,
             "sync_symbols" => cfg.sync_symbols = f as usize,
             "sync_symbols_coarse" => cfg.sync_symbols_coarse = f as usize,
+            "sync_symbols_search" => cfg.sync_symbols_search = f as usize,
             "osd_off" => cfg.osd = None,
             "osd_max_distance" => cfg.osd_max_distance = f,
             "osd_max_hard_errors" => cfg.osd_max_hard_errors = f as usize,

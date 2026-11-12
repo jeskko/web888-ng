@@ -15,7 +15,7 @@
 //!    propagation, then OSD.
 //! 4. **Subtraction** of what was decoded, and further passes.
 
-use crate::ft8::{boxcar, osd_plausible, parabola_peak};
+use crate::ft8::{boxcar, delay, osd_plausible, parabola_peak};
 use crate::ldpc::{self, Bp, N};
 use crate::msg::{self, CallHashes, Message};
 use crate::osd;
@@ -62,9 +62,16 @@ static TAPER: std::sync::LazyLock<[f32; 101]> = std::sync::LazyLock::new(|| {
 const SUB_BELOW: f32 = 60.0;
 const SUB_ABOVE: f32 = 125.0;
 
-const SPEC_STEP: usize = NSPS / 4;
-const SPEC_NFFT: usize = 2 * NSPS;
-const SPEC_DF: f32 = RATE / SPEC_NFFT as f32;
+/// The spectrogram works on the band 0..5333 Hz at 5333 S/s: 256
+/// samples per symbol, 1/4-symbol steps, 1/2-tone bins.
+const SPEC_NSPS: usize = 256;
+const SPEC_N: usize = NFFT1 * SPEC_NSPS / NSPS;
+const SPEC_STEP: usize = SPEC_NSPS / 4;
+const SPEC_NFFT: usize = 2 * SPEC_NSPS;
+const SPEC_DF: f32 = BAUD / 2.0;
+const SPEC_EDGE: f32 = 100.0;
+/// Seconds per spectrogram step.
+const SPEC_DT: f32 = NSPS as f32 / 4.0 / RATE;
 /// Coarse start times searched: this far either side of the nominal.
 const MAX_LAG_S: f32 = 1.0;
 
@@ -80,6 +87,10 @@ pub struct Config {
     /// the corpora has fewer (doc/m4-skimmers.md §3.3).
     pub sync_symbols_coarse: usize,
     pub sync_symbols: usize,
+    /// The same count taken from the search's spectrogram (of the 16, or
+    /// in proportion for a signal partly outside the slot), before the
+    /// candidate is downsampled at all.
+    pub sync_symbols_search: usize,
     pub passes: usize,
     pub bp_iterations: usize,
     pub osd: Option<osd::Depth>,
@@ -101,6 +112,7 @@ impl Default for Config {
             max_candidates: 300,
             sync_symbols_coarse: 7,
             sync_symbols: 8,
+            sync_symbols_search: 6,
             passes: 3,
             bp_iterations: 30,
             osd: Some(osd::Depth {
@@ -142,6 +154,7 @@ pub struct Decoder {
     fft2: Arc<dyn Fft<f32>>,
     ifft2: Arc<dyn Fft<f32>>,
     spec_fft: Arc<dyn Fft<f32>>,
+    spec_ifft: Arc<dyn Fft<f32>>,
     fft32: Arc<dyn Fft<f32>>,
     bp: Bp,
     tone_ref: [[C32; DS_NSPS]; 4],
@@ -164,6 +177,7 @@ impl Decoder {
             fft2: p.plan_fft_forward(NFFT2),
             ifft2: p.plan_fft_inverse(NFFT2),
             spec_fft: p.plan_fft_forward(SPEC_NFFT),
+            spec_ifft: p.plan_fft_inverse(SPEC_N),
             fft32: p.plan_fft_forward(DS_NSPS),
             bp: Bp::default(),
             tone_ref,
@@ -195,15 +209,11 @@ impl Decoder {
         let mut found: Vec<Decode> = vec![];
         self.stats.slots += 1;
         let mut spectrum = self.fft1.forward(&x);
+        drop(x);
         let mut tried: Vec<(f32, f32)> = vec![];
         'passes: for pass in 1..=self.cfg.passes {
-            if pass > 1 {
-                let t = Instant::now();
-                x = self.audio(&spectrum);
-                self.stats.subtract += t.elapsed();
-            }
             let t = Instant::now();
-            let cands = self.candidates(&x);
+            let cands = self.candidates(&spectrum);
             self.stats.search += t.elapsed();
             self.stats.candidates += cands.len() as u64;
             let mut new: Vec<Decode> = vec![];
@@ -250,6 +260,8 @@ impl Decoder {
         found
     }
 
+    /// Real audio back from a slot spectrum (tests).
+    #[cfg(test)]
     fn audio(&self, spectrum: &[C32]) -> Vec<f32> {
         let mut x = self.fft1.inverse(spectrum);
         x.truncate(SLOT);
@@ -308,31 +320,37 @@ impl Decoder {
         }
     }
 
+    /// The slot's lower band as a complex signal for the spectrogram (as
+    /// FT8's).
+    fn baseband(&self, spectrum: &[C32]) -> Vec<C32> {
+        let mut c: Vec<C32> = spectrum[..SPEC_N].to_vec();
+        // Raised-cosine edges, SPEC_EDGE Hz wide.
+        let ne = (SPEC_EDGE / DF1) as usize;
+        for k in 0..ne {
+            let w = 0.5 * (1.0 - (std::f32::consts::PI * k as f32 / ne as f32).cos());
+            c[k] *= w;
+            c[SPEC_N - 1 - k] *= w;
+        }
+        self.spec_ifft.process(&mut c);
+        c
+    }
+
     /// Coarse search on a spectrogram (as FT8's, with FT4's sync).
-    fn candidates(&self, x: &[f32]) -> Vec<Candidate> {
-        let nsteps = SLOT / SPEC_STEP - 3;
+    fn candidates(&self, spectrum: &[C32]) -> Vec<Candidate> {
+        let nsteps = SLOT / (NSPS / 4) - 3;
         let i_min = (self.cfg.f_min / SPEC_DF) as usize;
-        let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(SPEC_NFFT / 2 - 8);
+        let top = ((RATE * SPEC_NSPS as f32 / NSPS as f32 - SPEC_EDGE) / SPEC_DF) as usize;
+        let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(top - 8);
         let nbins = i_max + 8;
+        let z = self.baseband(spectrum);
         let mut s = vec![0f32; nsteps * nbins];
         let mut buf = vec![C32::default(); SPEC_NFFT];
-        for j in (0..nsteps).step_by(2) {
-            let j2 = (j + 1).min(nsteps - 1);
-            for (k, b) in buf.iter_mut().enumerate() {
-                *b = if k < NSPS {
-                    C32::new(x[j * SPEC_STEP + k], x[j2 * SPEC_STEP + k])
-                } else {
-                    C32::default()
-                };
-            }
+        for j in 0..nsteps {
+            buf[..SPEC_NSPS].copy_from_slice(&z[j * SPEC_STEP..][..SPEC_NSPS]);
+            buf[SPEC_NSPS..].fill(C32::default());
             self.spec_fft.process(&mut buf);
-            for i in 0..nbins {
-                let z = buf[i];
-                let zc = buf[(SPEC_NFFT - i) % SPEC_NFFT].conj();
-                s[j * nbins + i] = (z + zc).norm_sqr() * 0.25;
-                if j2 != j {
-                    s[j2 * nbins + i] = (z - zc).norm_sqr() * 0.25;
-                }
+            for (v, b) in s[j * nbins..][..nbins].iter_mut().zip(&buf) {
+                *v = b.norm_sqr();
             }
         }
         let mut tsum = vec![0f32; nsteps * nbins];
@@ -342,7 +360,7 @@ impl Decoder {
                 tsum[j * nbins + i] = (0..4).map(|t| row[i + 2 * t]).sum();
             }
         }
-        let step_s = SPEC_STEP as f32 / RATE;
+        let step_s = SPEC_DT;
         let j0 = (T0 / step_s).round() as i32;
         let max_lag = (MAX_LAG_S / step_s).round() as i32;
         let ni = i_max - i_min;
@@ -416,6 +434,27 @@ impl Decoder {
             {
                 continue;
             }
+            // The hard sync check on the spectrogram (`sync_symbols_search`).
+            let i = (c.freq / SPEC_DF).round() as usize;
+            let lag = (c.dt / step_s).round() as i32;
+            let (mut hits, mut seen) = (0, 0);
+            for (a, &at) in SYNC_AT.iter().enumerate() {
+                for (k, &tone) in FT4_COSTAS[a].iter().enumerate() {
+                    let j = j0 + lag + 4 * (1 + at + k) as i32;
+                    if j < 0 || j as usize >= nsteps {
+                        continue;
+                    }
+                    let row = &s[j as usize * nbins + i..];
+                    let top = (0..4)
+                        .max_by(|&x, &y| row[2 * x].total_cmp(&row[2 * y]))
+                        .unwrap();
+                    seen += 1;
+                    hits += (top == tone as usize) as usize;
+                }
+            }
+            if hits * 16 < self.cfg.sync_symbols_search * seen {
+                continue;
+            }
             kept.push(c);
             if kept.len() >= self.cfg.max_candidates {
                 break;
@@ -469,17 +508,44 @@ impl Decoder {
         i0 + (DS_NSPS * (1 + k)) as i64
     }
 
-    fn sync_fine(&self, cd: &[C32], i0: i64) -> f32 {
-        self.sync_fine_df(cd, i0, None)[0]
+    /// Coherent Costas correlation at `n` consecutive start samples from
+    /// `first`, by a sliding DFT per sync symbol (as FT8's `sync_lags`).
+    fn sync_lags(&self, cd: &[C32], first: i64, n: usize) -> Vec<f32> {
+        let at = |i: i64| {
+            if i >= 0 && (i as usize) < cd.len() {
+                cd[i as usize]
+            } else {
+                C32::default()
+            }
+        };
+        let mut sum = vec![0f32; n];
+        for (a, &sym) in SYNC_AT.iter().enumerate() {
+            for (k, &tone) in FT4_COSTAS[a].iter().enumerate() {
+                let r = &self.tone_ref[tone as usize];
+                let step = r[1];
+                let start = Self::sym_start(first, sym + k);
+                let mut x: C32 = (0..DS_NSPS)
+                    .map(|j| at(start + j as i64) * r[j].conj())
+                    .sum();
+                for (lag, s) in sum.iter_mut().enumerate() {
+                    if lag > 0 {
+                        let s0 = start + lag as i64 - 1;
+                        x = (x - at(s0) + at(s0 + DS_NSPS as i64)) * step;
+                    }
+                    *s += x.norm_sqr();
+                }
+            }
+        }
+        sum
     }
 
-    /// Coherent Costas correlation for each offset of `FINE_DF` (`Some`)
-    /// or none.
+    /// Coherent Costas correlation at start sample `i0` for each of the
+    /// frequency offsets in `FINE_DF`.
     fn sync_fine_df(
         &self,
         cd: &[C32],
         i0: i64,
-        offsets: Option<&[[C32; DS_NSPS]; FINE_DF.len()]>,
+        offsets: &[[C32; DS_NSPS]; FINE_DF.len()],
     ) -> [f32; FINE_DF.len()] {
         let mut sum = [0f32; FINE_DF.len()];
         let mut p = [C32::default(); DS_NSPS];
@@ -494,13 +560,8 @@ impl Decoder {
                         C32::default()
                     };
                 }
-                match offsets {
-                    None => sum[0] += p.iter().sum::<C32>().norm_sqr(),
-                    Some(tw) => {
-                        for (s, t) in sum.iter_mut().zip(tw) {
-                            *s += p.iter().zip(t).map(|(a, b)| a * b).sum::<C32>().norm_sqr();
-                        }
-                    }
+                for (s, t) in sum.iter_mut().zip(offsets) {
+                    *s += p.iter().zip(t).map(|(a, b)| a * b).sum::<C32>().norm_sqr();
                 }
             }
         }
@@ -576,16 +637,21 @@ impl Decoder {
         let mut f0 = c.freq;
         let mut cd = self.downsample(spectrum, f0);
         let nominal = ((c.dt + T0) * DS_RATE).round() as i64;
-        let mut i0 = nominal;
-        let mut best = 0.0;
-        // the coarse step is 1/4 symbol (8 samples)
-        for di in -12..=12 {
-            let s = self.sync_fine(&cd, nominal + di);
-            if s > best {
-                best = s;
-                i0 = nominal + di;
+        // The peak of sync over start samples first..first + len (the
+        // first of equal ones).
+        let peak = |v: &[f32], first: i64| {
+            let mut best = (first, 0f32);
+            for (k, &s) in v.iter().enumerate() {
+                if s > best.1 {
+                    best = (first + k as i64, s);
+                }
             }
-        }
+            best
+        };
+        // The coarse step is 1/4 symbol (8 samples): ±12 samples, and a
+        // neighbour on each side for the sub-sample peak.
+        let mut lags = (nominal - 13, self.sync_lags(&cd, nominal - 13, 27));
+        let (mut i0, mut best) = peak(&lags.1[1..26], nominal - 12);
         if coarse_min > 0 && self.sync_hits(&cd, i0) < coarse_min {
             self.stats.sync += t.elapsed();
             if self.cfg.trace.is_some_and(|f| (f - c.freq).abs() < 10.0) {
@@ -593,7 +659,7 @@ impl Decoder {
             }
             return None;
         }
-        let fs = self.sync_fine_df(&cd, i0, Some(&self.fine_tw));
+        let fs = self.sync_fine_df(&cd, i0, &self.fine_tw);
         let kb = (0..fs.len())
             .max_by(|&a, &b| fs[a].total_cmp(&fs[b]))
             .unwrap();
@@ -603,25 +669,19 @@ impl Decoder {
         }
         if df.abs() > 0.1 {
             f0 += df;
+            // Downsampled again: FT8's rotation of the samples costs FT4
+            // decodes (3 of 736 on the corpora). The sub-sample step
+            // below is a short filter, as FT8's.
             cd = self.downsample(spectrum, f0);
             let start = i0;
-            best = 0.0;
-            for di in -4..=4 {
-                let s = self.sync_fine(&cd, start + di);
-                if s > best {
-                    best = s;
-                    i0 = start + di;
-                }
-            }
+            lags = (start - 5, self.sync_lags(&cd, start - 5, 11));
+            (i0, best) = peak(&lags.1[1..10], start - 4);
         }
-        let p = parabola_peak(
-            self.sync_fine(&cd, i0 - 1),
-            best,
-            self.sync_fine(&cd, i0 + 1),
-        );
+        let near = |i: i64| lags.1[(i - lags.0) as usize];
+        let p = parabola_peak(near(i0 - 1), best, near(i0 + 1));
         let frac = p.clamp(-0.5, 0.5);
         if frac.abs() > 0.05 {
-            cd = self.downsample_shifted(spectrum, f0, frac / DS_RATE);
+            cd = delay(&cd, frac);
         }
         self.stats.sync += t.elapsed();
         let t = Instant::now();

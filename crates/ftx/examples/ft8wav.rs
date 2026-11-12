@@ -34,6 +34,7 @@ fn main() {
             "passes" => cfg.passes = f as usize,
             "sync_symbols" => cfg.sync_symbols = f as usize,
             "sync_symbols_coarse" => cfg.sync_symbols_coarse = f as usize,
+            "sync_symbols_search" => cfg.sync_symbols_search = f as usize,
             "osd_order2" => {
                 cfg.osd
                     .get_or_insert(web888_ftx::osd::Depth {

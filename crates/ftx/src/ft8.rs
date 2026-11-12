@@ -2,9 +2,11 @@
 //! FT8 decoder for one 15-second slot of 12 kS/s audio.
 //!
 //! 1. **Candidates.** A spectrogram (symbol-length windows, 1/4-symbol
-//!    steps, 1/2-tone bins) is searched for the three 7×7 Costas arrays;
-//!    the sync score is the power on the Costas tones against the mean of
-//!    the other tones, normalised by the band's typical score.
+//!    steps, 1/2-tone bins; taken from the band below 3.2 kHz at
+//!    3200 S/s) is searched for the three 7×7 Costas arrays; the sync
+//!    score is the power on the Costas tones against the mean of the
+//!    other tones, normalised by the band's typical score. A candidate
+//!    must also show enough of the Costas tones on top there.
 //! 2. **Per candidate.** The slot's spectrum around the candidate is
 //!    shifted to 0 Hz and transformed back at 200 S/s (32 samples per
 //!    symbol). Time and frequency are refined by correlating with the
@@ -53,9 +55,16 @@ static TAPER: std::sync::LazyLock<[f32; 101]> = std::sync::LazyLock::new(|| {
 const SUB_BELOW: f32 = 50.0;
 const SUB_ABOVE: f32 = 94.0;
 
-const SPEC_STEP: usize = NSPS / 4;
-const SPEC_NFFT: usize = 2 * NSPS;
-const SPEC_DF: f32 = RATE / SPEC_NFFT as f32;
+/// The spectrogram works on the band 0..3200 Hz at 3200 S/s: 512
+/// samples per symbol, 1/4-symbol steps, 1/2-tone bins.
+const SPEC_NSPS: usize = 512;
+const SPEC_N: usize = NFFT1 * SPEC_NSPS / NSPS;
+const SPEC_STEP: usize = SPEC_NSPS / 4;
+const SPEC_NFFT: usize = 2 * SPEC_NSPS;
+const SPEC_DF: f32 = BAUD / 2.0;
+const SPEC_EDGE: f32 = 100.0;
+/// Seconds per spectrogram step.
+const SPEC_DT: f32 = NSPS as f32 / 4.0 / RATE;
 
 #[derive(Clone, Debug)]
 pub struct Config {
@@ -70,6 +79,10 @@ pub struct Config {
     /// the corpora has fewer (doc/m4-skimmers.md §3.3).
     pub sync_symbols_coarse: usize,
     pub sync_symbols: usize,
+    /// The same count taken from the search's spectrogram (of the 21, or
+    /// in proportion for a signal partly outside the slot), before the
+    /// candidate is downsampled at all.
+    pub sync_symbols_search: usize,
     /// Decoding passes, with subtraction between them.
     pub passes: usize,
     pub bp_iterations: usize,
@@ -100,6 +113,7 @@ impl Default for Config {
             max_candidates: 400,
             sync_symbols_coarse: 5,
             sync_symbols: 8,
+            sync_symbols_search: 6,
             passes: 3,
             bp_iterations: 30,
             osd: Some(osd::Depth {
@@ -188,6 +202,7 @@ pub struct Decoder {
     fft2: Arc<dyn Fft<f32>>,
     ifft2: Arc<dyn Fft<f32>>,
     spec_fft: Arc<dyn Fft<f32>>,
+    spec_ifft: Arc<dyn Fft<f32>>,
     fft32: Arc<dyn Fft<f32>>,
     bp: Bp,
     /// Costas reference waveforms per tone at 200 S/s.
@@ -213,6 +228,7 @@ impl Decoder {
             fft2: p.plan_fft_forward(NFFT2),
             ifft2: p.plan_fft_inverse(NFFT2),
             spec_fft: p.plan_fft_forward(SPEC_NFFT),
+            spec_ifft: p.plan_fft_inverse(SPEC_N),
             fft32: p.plan_fft_forward(DS_NSPS),
             bp: Bp::default(),
             tone_ref,
@@ -257,17 +273,12 @@ impl Decoder {
         let mut found: Vec<Decode> = vec![];
         self.stats.slots += 1;
         let mut spectrum = self.spectrum(&x);
+        drop(x);
         // Candidates tried so far, (freq, dt).
         let mut tried: Vec<(f32, f32)> = vec![];
         'passes: for pass in 1..=self.cfg.passes {
-            if pass > 1 {
-                // The audio without what earlier passes decoded.
-                let t = Instant::now();
-                x = self.audio(&spectrum);
-                self.stats.subtract += t.elapsed();
-            }
             let t = Instant::now();
-            let cands = self.candidates(&x);
+            let cands = self.candidates(&spectrum);
             self.stats.search += t.elapsed();
             self.stats.candidates += cands.len() as u64;
             let mut new: Vec<Decode> = vec![];
@@ -433,33 +444,41 @@ impl Decoder {
         self.fft1.forward(x)
     }
 
-    /// Coarse search on a spectrogram.
-    fn candidates(&self, x: &[f32]) -> Vec<Candidate> {
-        let nsteps = SLOT / SPEC_STEP - 3;
+    /// The slot's band 0..SPEC_RATE Hz as a complex signal at SPEC_RATE,
+    /// for the spectrogram: a symbol is then a power of two samples
+    /// long, and the frames' FFTs are short and radix-2 (on the A9 a
+    /// tenth of the time of FFTs of the audio itself).
+    fn baseband(&self, spectrum: &[C32]) -> Vec<C32> {
+        let mut c: Vec<C32> = spectrum[..SPEC_N].to_vec();
+        // Raised-cosine edges, SPEC_EDGE Hz wide.
+        let ne = (SPEC_EDGE / DF1) as usize;
+        for k in 0..ne {
+            let w = 0.5 * (1.0 - (std::f32::consts::PI * k as f32 / ne as f32).cos());
+            c[k] *= w;
+            c[SPEC_N - 1 - k] *= w;
+        }
+        self.spec_ifft.process(&mut c);
+        c
+    }
+
+    /// Coarse search on a spectrogram of the slot spectrum.
+    fn candidates(&self, spectrum: &[C32]) -> Vec<Candidate> {
+        let nsteps = SLOT / (NSPS / 4) - 3;
         let i_min = (self.cfg.f_min / SPEC_DF) as usize;
-        let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(SPEC_NFFT / 2 - 16);
+        // The tones above the highest candidate stay below the band's edge.
+        let top = ((RATE * SPEC_NSPS as f32 / NSPS as f32 - SPEC_EDGE) / SPEC_DF) as usize;
+        let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(top - 16);
         let nbins = i_max + 16;
-        // Power spectra of symbol-length frames, two real frames per
-        // complex FFT (one as the real part, one as the imaginary).
+        // Power spectra of symbol-length frames.
+        let z = self.baseband(spectrum);
         let mut s = vec![0f32; nsteps * nbins];
         let mut buf = vec![C32::default(); SPEC_NFFT];
-        for j in (0..nsteps).step_by(2) {
-            let j2 = (j + 1).min(nsteps - 1);
-            for (k, b) in buf.iter_mut().enumerate() {
-                *b = if k < NSPS {
-                    C32::new(x[j * SPEC_STEP + k], x[j2 * SPEC_STEP + k])
-                } else {
-                    C32::default()
-                };
-            }
+        for j in 0..nsteps {
+            buf[..SPEC_NSPS].copy_from_slice(&z[j * SPEC_STEP..][..SPEC_NSPS]);
+            buf[SPEC_NSPS..].fill(C32::default());
             self.spec_fft.process(&mut buf);
-            for i in 0..nbins {
-                let z = buf[i];
-                let zc = buf[(SPEC_NFFT - i) % SPEC_NFFT].conj();
-                s[j * nbins + i] = (z + zc).norm_sqr() * 0.25;
-                if j2 != j {
-                    s[j2 * nbins + i] = (z - zc).norm_sqr() * 0.25;
-                }
+            for (v, b) in s[j * nbins..][..nbins].iter_mut().zip(&buf) {
+                *v = b.norm_sqr();
             }
         }
         // Sum of the 7 tones from each bin (the sync score's reference).
@@ -473,7 +492,7 @@ impl Decoder {
         // Lags in steps from the nominal start: 0.04 s each, ±2.5 s. For
         // each lag, the three Costas arrays' power and reference sums go
         // into per-bin accumulators.
-        let j0 = (T0 / (SPEC_STEP as f32 / RATE)).round() as i32;
+        let j0 = (T0 / SPEC_DT).round() as i32;
         let ni = i_max - i_min;
         let mut best = vec![(0f32, 0i32, 0f32, 0i32); ni]; // (sync, lag, sync near, lag near)
         let mut ta = vec![[0f32; 3]; ni];
@@ -529,7 +548,7 @@ impl Decoder {
                 if sync >= self.cfg.sync_min {
                     cands.push(Candidate {
                         freq,
-                        dt: lag as f32 * SPEC_STEP as f32 / RATE,
+                        dt: lag as f32 * SPEC_DT,
                         sync,
                     });
                 }
@@ -543,6 +562,27 @@ impl Decoder {
                 .iter()
                 .any(|k| (k.freq - c.freq).abs() < 4.0 && (k.dt - c.dt).abs() < 0.04 + 1e-3)
             {
+                continue;
+            }
+            // The hard sync check on the spectrogram (`sync_symbols_search`).
+            let i = (c.freq / SPEC_DF).round() as usize;
+            let lag = (c.dt / SPEC_DT).round() as i32;
+            let (mut hits, mut seen) = (0, 0);
+            for a in 0..3 {
+                for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+                    let j = j0 + lag + 4 * (36 * a + k as i32);
+                    if j < 0 || j as usize >= nsteps {
+                        continue;
+                    }
+                    let row = &s[j as usize * nbins + i..];
+                    let top = (0..8)
+                        .max_by(|&x, &y| row[2 * x].total_cmp(&row[2 * y]))
+                        .unwrap();
+                    seen += 1;
+                    hits += (top == tone as usize) as usize;
+                }
+            }
+            if hits * 21 < self.cfg.sync_symbols_search * seen {
                 continue;
             }
             kept.push(c);
@@ -1056,9 +1096,10 @@ fn rotate(v: &mut [C32], cycles: f32) {
 }
 
 /// Samples at n + `frac` (|frac| <= 0.5) by an 8-tap windowed sinc. The
-/// signal is within a quarter of the sample rate (0..53 Hz at 200 S/s),
-/// where its error is far below the noise of a decodable signal.
-fn delay(v: &[C32], frac: f32) -> Vec<C32> {
+/// signal is within a quarter of the sample rate (FT8: 0..53 Hz at
+/// 200 S/s; FT4: 0..83 Hz at 667 S/s), where its error is far below the
+/// noise of a decodable signal.
+pub(crate) fn delay(v: &[C32], frac: f32) -> Vec<C32> {
     use std::f32::consts::PI;
     // taps for samples n - 3 ..= n + 4
     let h: [f32; 8] = std::array::from_fn(|k| {

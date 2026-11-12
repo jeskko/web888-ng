@@ -125,6 +125,7 @@ The scores go in this doc at each improvement step.
 | 2026-10-23 | OSD by CRC syndromes (orders 2 and 3 over all 91 bits), acceptance by distance ratio to the runner-up; subtraction in the frequency domain | 91.3 %, 54 extra | 92.3 %, 17 extra | 0.25 |
 | 2026-10-29 | for the A9's time: soft bits from squared magnitudes and shared partial sums, the fine time search by a sliding DFT, the frequency step as a rotation and the sub-sample step as an 8-tap fractional delay (one inverse FFT per candidate, not three), min-sum BP (0.8) with WSJT-X's early stop | 91.1 %, 56 extra (FT4 unchanged: 89.3 %) | – | 0.10; A9 3.4 s/slot (5.0 before) |
 | 2026-11-12 | sync symbol gates: a candidate needs 5 of the 21 Costas symbols on top at the coarse time peak (before the fine sync) and 8 after it (before: 7, after it only) | 91.1 %, 56 extra | 92.4 %, 15 extra | 0.078 (40 m), 0.063 (30 m): -26 %, -31 % |
+| 2026-11-12 | for the A9's time again: the spectrogram from the band below 3.2 kHz at 3200 S/s (1024-point FFTs, no audio rebuilt between passes); a candidate needs 6 of the 21 Costas symbols on top in the spectrogram before it is downsampled | 91.1 %, 56 extra | 92.6 %, 15 extra | 0.063 (40 m), 0.048 (30 m); A9 2.3 s/slot (3.5 before) |
 
 **Sync symbol gates (2026-11-12).** Of the candidates on a busy band
 95 % never decode, and they took two thirds of the time: 80 % failed
@@ -467,6 +468,36 @@ that can't go are dropped. It applies live.
   times a busy slot. FT4's fine sync still downsamples up to three
   times a candidate (FT8's doesn't since 2026-10-29).
 
+* For the A9's time, after that profile (2026-11-12; the same builds
+  and slots on the unit, seconds per slot):
+
+  | | FT8 busy | FT8 quiet | FT4 busy | FT4 quiet |
+  |---|---|---|---|---|
+  | d6b010e | 3.54 | 0.80 | 1.38 | 0.24 |
+  | the spectrogram from a decimated band | 2.85 | 0.53 | 1.32 | 0.23 |
+  | + the spectrogram gate, FT4's fine sync | 2.32 | 0.53 | 0.97 | 0.22 |
+
+  * **Spectrogram.** The slot spectrum's band below 3.2 kHz (FT4:
+    5.3 kHz) goes back to time at 512 (256) samples a symbol, and the
+    frames are 1024 (512)-point FFTs. The audio isn't rebuilt for
+    passes 2 and 3 any more. The same decodes (+1 on the second set).
+  * **Spectrogram gate** (`sync_symbols_search`). The hard sync check
+    on the spectrogram's own rows, before a candidate costs an inverse
+    FFT: 6 of 21 (FT8) drops 64 % of the candidates, 6 of 16 (FT4)
+    fewer. Decodes: FT8 the same or more up to 7 (30 m 1173 from 1171;
+    the list of 400 has room for others), first losses at 8; FT4 the
+    same at 6, one lost at 7.
+  * **FT4's fine sync** as FT8's (the time search by a sliding DFT, the
+    sub-sample step by the 8-tap delay). FT8's rotation for the
+    frequency step cost FT4 3 of 736 decodes, so FT4 downsamples again
+    there: two inverse FFTs a candidate, not three.
+  * **Not kept: the lag sums in integers** (u32 sums of a quantised
+    spectrogram, built with `+neon`, the reference sums sliding). The
+    same decodes, but on the A9 the search got 4 % faster for FT8 and
+    10 % slower for FT4: its time is memory traffic over 1.5 MB arrays,
+    not the additions. A search is now 0.29 s (FT8; 0.46 before):
+    decimation 33 ms, the frames' FFTs 92 ms, the sums and lags 155 ms.
+
 ## 8. Open
 
 * FST4W (step 8) is left for later.
@@ -474,11 +505,10 @@ that can't go are dropped. It applies live.
   slots could pre-empt it, so a WSPR decode doesn't cost FT8 slots
   (step 9 bench).
 * All FT8 and FT4 bands at once on the A9 need about a third less
-  decoder time than d6b010e takes (above). By the profile above the
-  candidates are: the spectrogram from a band-limited, decimated slot
-  with power-of-two FFTs; the coarse gate from the spectrogram, before
-  a candidate is downsampled; the lag sums in integers (NEON); FT8's
-  fine sync for FT4.
+  decoder time than d6b010e takes (above); the next build takes a third
+  less on busy slots. What is left is mostly the search (38 % of a busy
+  FT8 slot, 76 % of a quiet one, three searches a slot): fewer steps in
+  time or bins in frequency would need scoring.
 * Board CPU next to users: how many FT8 bands fit next to 12 users
   (measured without users so far).
 * CW/RTTY skimmers (S2) come after M4 (feature-gap §5, question 8).
