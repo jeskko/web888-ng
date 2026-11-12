@@ -423,10 +423,34 @@ async fn admin_api() {
     assert_eq!(me("GET", "/api/auth", None).await.json()["role"], "admin");
     let m = http(addr, "GET", "/metrics", None, None).await;
     assert_eq!(m.status, 200);
-    assert!(m.body.contains("web888d_sessions 1\n"), "{}", m.body);
-    assert!(m.body.contains("web888d_channels_in_use 1\n"));
-    assert!(m.body.contains("web888d_pool_jobs{worker=\"1\"}"));
+    let has = |l: &str| m.body.lines().any(|x| x == l);
+    assert!(has("web888d_sessions{protocol=\"web\"} 1"), "{}", m.body);
+    assert!(has("web888d_sessions{protocol=\"kiwi\"} 0"));
+    let leased: f64 = m
+        .body
+        .lines()
+        .filter(|l| l.starts_with("web888d_channels_in_use{"))
+        .map(|l| l.rsplit_once(' ').unwrap().1.parse::<f64>().unwrap())
+        .sum();
+    assert_eq!(leased, 1.0);
+    assert!(has("web888d_pool_jobs{worker=\"1\",kind=\"audio\"} 0"));
+    assert!(
+        m.body
+            .contains("web888d_pool_job_seconds_total{worker=\"0\",kind=\"waterfall\"}")
+    );
+    assert!(m.body.contains("web888d_build_info{version=\""));
+    assert!(m.body.contains("web888d_start_time_seconds "));
+    assert!(
+        m.body
+            .contains("web888d_log_sink_connected{sink=\"mqtt\"} 0")
+    );
+    assert!(m.body.contains("web888d_memory_bytes{kind=\"total\"}"));
     assert!(m.body.contains("web888d_thread_cpu_seconds_total{thread="));
+    // each metric's HELP and TYPE once, before its samples
+    let mut seen = std::collections::HashSet::new();
+    for l in m.body.lines().filter(|l| l.starts_with("# TYPE ")) {
+        assert!(seen.insert(l.split(' ').nth(2).unwrap()), "{l} twice");
+    }
 
     // stats: CPU per thread name (% from the second call on)
     let s = me("GET", "/api/admin/stats", None).await.json();

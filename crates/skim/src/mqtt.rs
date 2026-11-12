@@ -268,6 +268,7 @@ pub fn spawn(
                             conn = Some((c.clone(), k));
                         }
                         Err(e) => {
+                            crate::sink::MQTT.count(&crate::sink::MQTT.errors, 1);
                             let w = format!("mqtt: {}: {e}", c.server);
                             if w != warned {
                                 eprintln!("{w}");
@@ -314,17 +315,23 @@ pub fn spawn(
                         Err(TryRecvError::Closed) => return,
                     }
                 }
+                let st = &crate::sink::MQTT;
+                let mut sent = 0;
                 if let Some((_, k)) = &mut conn {
                     let r = out
                         .iter()
-                        .try_for_each(|p| k.send(p))
+                        .try_for_each(|p| k.send(p).map(|_| sent += 1))
                         .and_then(|_| k.tend());
                     if let Err(e) = r {
                         eprintln!("mqtt: {}: {e}; reconnecting", c.server);
+                        st.count(&st.errors, 1);
                         conn = None;
                         retry_at = Some(Instant::now() + RECONNECT);
                     }
                 }
+                st.count(&st.sent, sent);
+                st.count(&st.dropped, out.len() - sent);
+                st.state(!c.server.is_empty(), conn.is_some());
                 std::thread::sleep(Duration::from_millis(250));
             }
         })?;

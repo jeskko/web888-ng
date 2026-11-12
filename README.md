@@ -214,7 +214,8 @@ cookie: `/api/admin/sessions` (and `.../{id}/kick`), `/api/admin/leases`,
 change would need), `/api/admin/password`, `/api/admin/stats` (CPU per
 thread, DSP pool, waterfall views) and `POST /api/admin/restart` (exits
 75; the service restarts it). `[web] metrics = true` serves Prometheus
-metrics at `/metrics` (no login). Details: `doc/m3-multi-user.md` §7.
+metrics at `/metrics` (no login; what's there: `doc/metrics.md`).
+Details: `doc/m3-multi-user.md` §7.
 
 ### Skimmers
 

@@ -122,7 +122,7 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64) {
             _guard = Some(ViewGuard { sh: &sh, id });
             id
         }
-        None => match Admission::new(&sh, ip, false) {
+        None => match Admission::new(&sh, ip, false).map(Admission::kiwi) {
             Ok(a) => {
                 let id = a.id;
                 _adm = Some(a);
@@ -172,6 +172,7 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64) {
         out: Out {
             tx,
             drops: Arc::new(AtomicU64::new(0)),
+            total: Some(&crate::metrics::KIWI.wf),
         },
         seq: Arc::default(),
         kiwi: Some(enc.clone()),

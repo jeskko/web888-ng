@@ -135,7 +135,7 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
         let _ = answer_auth(&mut ws, &sh, super::BADP_NO_MULTIPLE_CONNS).await;
         return close(&mut ws, 1008, "duplicate").await;
     };
-    let Ok(adm) = Admission::new(&sh, ip, class == Class::Admin) else {
+    let Ok(adm) = Admission::new(&sh, ip, class == Class::Admin).map(Admission::kiwi) else {
         let _ = answer_auth(&mut ws, &sh, super::BADP_NO_MULTIPLE_CONNS).await;
         return close(&mut ws, 1013, "busy").await;
     };
@@ -210,10 +210,12 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
         Out {
             tx: audio_tx,
             drops: audio_drops.clone(),
+            total: Some(&crate::metrics::KIWI.audio),
         },
         WfSink::new(Out {
             tx: wf_tx,
             drops: Arc::default(),
+            total: None,
         }),
     )
     .with_framing(Framing::Kiwi(Box::new(SndEnc::new(

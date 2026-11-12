@@ -122,10 +122,12 @@ async fn thirteen_sessions_on_the_pool() {
                 Out {
                     tx: out,
                     drops: drops.clone(),
+                    total: None,
                 },
                 WfSink::new(Out {
                     tx: mpsc::channel(1).0,
                     drops: Arc::default(),
+                    total: None,
                 }),
             );
             pool.add(Box::new(job));

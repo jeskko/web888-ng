@@ -262,9 +262,11 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
     side (the difference is the command line).
   * `web888d passwd [--listener [--remove]]`; `/boot/web888d-admin`
     applied at start and deleted, also when a password is already set.
-  * `/metrics` is `[web] metrics` (live): sessions, channels in use,
-    lease queue, ADC overloads, RX frames, clock ppm, per-worker pool
-    busy/jobs/shed/drops, CPU per thread name.
+  * `/metrics` is `[web] metrics` (live): the build, sessions by
+    protocol, leases by class, the hardware, the DSP pool per worker and
+    per kind of job, waterfall views, skimmers, uploaders and log sinks,
+    the system, CPU per thread name. The list and queries:
+    [metrics.md](metrics.md).
   * Restart exits with code 75; the unit's service has
     `Restart=on-failure`.
   * The receiver page asks for the listener password when one is set,

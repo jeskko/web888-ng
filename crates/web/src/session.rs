@@ -280,6 +280,8 @@ pub(crate) struct Admission<'a> {
     sh: &'a Shared,
     ip: IpAddr,
     pub(crate) id: SessionId,
+    /// A Kiwi session (the metrics count them apart).
+    kiwi: bool,
 }
 
 impl<'a> Admission<'a> {
@@ -302,12 +304,23 @@ impl<'a> Admission<'a> {
             sh,
             ip,
             id: sh.next_session.fetch_add(1, Ordering::Relaxed) + 1,
+            kiwi: false,
         })
+    }
+
+    /// Counted as a Kiwi session.
+    pub(crate) fn kiwi(mut self) -> Self {
+        self.kiwi = true;
+        crate::metrics::KIWI_SESSIONS.fetch_add(1, Ordering::Relaxed);
+        self
     }
 }
 
 impl Drop for Admission<'_> {
     fn drop(&mut self) {
+        if self.kiwi {
+            crate::metrics::KIWI_SESSIONS.fetch_sub(1, Ordering::Relaxed);
+        }
         self.sh.waterfalls.remove(self.id);
         self.sh.users.leave(self.id);
         self.sh.admin.sessions.lock().unwrap().remove(&self.id);
@@ -699,6 +712,7 @@ pub async fn run(
     let sink = WfSink::new(Out {
         tx: wf_tx,
         drops: wf_drops.clone(),
+        total: Some(&crate::metrics::WEB.wf),
     });
     let (audio_cmd, audio_cmd_rx) = crossbeam_channel::unbounded();
     let job = AudioJob::new(
@@ -717,6 +731,7 @@ pub async fn run(
         Out {
             tx: audio_tx,
             drops: audio_drops.clone(),
+            total: Some(&crate::metrics::WEB.audio),
         },
         sink.clone(),
     );

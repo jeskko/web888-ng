@@ -713,6 +713,10 @@ impl BinViewJob {
 }
 
 impl Job for BinViewJob {
+    fn kind(&self) -> web888_core::pool::JobKind {
+        web888_core::pool::JobKind::Bins
+    }
+
     fn tick(&mut self, now: Instant, ctx: Ctx) -> bool {
         if !self.commands(now) {
             return false;
@@ -897,6 +901,7 @@ mod tests {
         let sink = WfSink::new(Out {
             tx,
             drops: Arc::new(AtomicU64::new(0)),
+            total: None,
         });
         ctx.send(ViewCmd::Add(ViewSub {
             session: 1,

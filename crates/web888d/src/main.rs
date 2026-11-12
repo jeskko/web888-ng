@@ -908,6 +908,10 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         "radio: {} signature {:#010x}, {} RX / {} WF channels, ADC {:.0} Hz",
         id.backend, id.signature, caps.rx_channels, caps.wf_channels, caps.adc_hz
     );
+    web888_web::metrics::set_info(vec![(
+        "signature".into(),
+        format!("{:#010x}", id.signature),
+    )]);
     // HPSDR P1 is served at 48 kS/s; the web audio chain decimates from it
     // bins mode: RX at the bins' frame rate, no resampler in BinRx (HPSDR
     // resamples its receivers to 48 kS/s)

@@ -49,6 +49,11 @@ fn sample_loop() {
     }
 }
 
+/// (busy, total) clock ticks of all CPUs since boot (the metrics).
+pub(crate) fn cpu_jiffies() -> Option<(u64, u64)> {
+    cpu_times()
+}
+
 /// (busy, total) jiffies of all CPUs, from /proc/stat.
 fn cpu_times() -> Option<(u64, u64)> {
     parse_stat(&std::fs::read_to_string("/proc/stat").ok()?)
@@ -74,7 +79,7 @@ fn busy_pct(a: (u64, u64), b: (u64, u64)) -> Option<f32> {
 }
 
 /// The Zynq's XADC (IIO `in_temp0_*`), else the first thermal zone.
-fn temperature() -> Option<f32> {
+pub(crate) fn temperature() -> Option<f32> {
     let read = |p: &str| std::fs::read_to_string(p).ok()?.trim().parse::<f64>().ok();
     if let Ok(dirs) = std::fs::read_dir("/sys/bus/iio/devices") {
         for d in dirs.flatten() {

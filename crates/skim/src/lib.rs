@@ -21,6 +21,7 @@ pub mod gpsd;
 pub mod mqtt;
 pub mod pskreporter;
 pub mod shed;
+pub mod sink;
 pub mod slots;
 pub mod spot;
 pub mod syslog;
@@ -221,6 +222,10 @@ pub struct BandJob {
 const MAX_QUEUED: usize = 64;
 
 impl Job for BandJob {
+    fn kind(&self) -> web888_core::pool::JobKind {
+        web888_core::pool::JobKind::Skimmer
+    }
+
     fn rx(&mut self, b: &RxBlock) -> bool {
         if self.stop.load(Ordering::Relaxed) {
             return false;

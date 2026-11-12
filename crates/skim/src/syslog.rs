@@ -129,10 +129,16 @@ impl Link {
         })
     }
 
-    fn send(&mut self, msg: &str) {
+    /// False if it didn't go.
+    fn send(&mut self, msg: &str) -> bool {
+        let st = &crate::sink::SYSLOG;
         match self {
             Link::Udp(s, a) => {
-                let _ = s.send_to(msg.as_bytes(), *a);
+                let ok = s.send_to(msg.as_bytes(), *a).is_ok();
+                if !ok {
+                    st.count(&st.errors, 1);
+                }
+                ok
             }
             Link::Tcp(conn, addr, retry_at) => {
                 if conn.is_none() && retry_at.is_none_or(|t| Instant::now() >= t) {
@@ -141,16 +147,21 @@ impl Link {
                             s.set_write_timeout(Some(Duration::from_secs(5))).ok();
                             *conn = Some(s);
                         }
-                        Err(_) => *retry_at = Some(Instant::now() + RECONNECT),
+                        Err(_) => {
+                            st.count(&st.errors, 1);
+                            *retry_at = Some(Instant::now() + RECONNECT);
+                        }
                     }
                 }
-                if let Some(s) = conn {
-                    let framed = format!("{} {msg}", msg.len());
-                    if s.write_all(framed.as_bytes()).is_err() {
-                        *conn = None;
-                        *retry_at = Some(Instant::now() + RECONNECT);
-                    }
+                let Some(s) = conn else { return false };
+                let framed = format!("{} {msg}", msg.len());
+                if s.write_all(framed.as_bytes()).is_err() {
+                    st.count(&st.errors, 1);
+                    *conn = None;
+                    *retry_at = Some(Instant::now() + RECONNECT);
+                    return false;
                 }
+                true
             }
         }
     }
@@ -177,6 +188,7 @@ pub fn spawn(
                     link = match Link::open(&c) {
                         Ok(l) => Some((c.clone(), l)),
                         Err(e) => {
+                            crate::sink::SYSLOG.count(&crate::sink::SYSLOG.errors, 1);
                             let w = format!("syslog: {}: {e}", c.server);
                             if w != warned {
                                 eprintln!("{w}");
@@ -234,11 +246,21 @@ pub fn spawn(
                         Err(TryRecvError::Closed) => return,
                     }
                 }
-                if let Some((_, l)) = &mut link {
-                    for m in &out {
-                        l.send(m);
-                    }
-                }
+                let st = &crate::sink::SYSLOG;
+                let sent = match &mut link {
+                    Some((_, l)) => out.iter().filter(|m| l.send(m)).count(),
+                    None => 0,
+                };
+                st.count(&st.sent, sent);
+                st.count(&st.dropped, out.len() - sent);
+                st.state(
+                    !c.server.is_empty(),
+                    match &link {
+                        Some((_, Link::Tcp(conn, ..))) => conn.is_some(),
+                        Some((_, Link::Udp(..))) => true,
+                        None => false,
+                    },
+                );
                 std::thread::sleep(Duration::from_millis(250));
             }
         })?;

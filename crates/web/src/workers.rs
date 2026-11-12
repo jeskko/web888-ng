@@ -31,6 +31,8 @@ pub const AUDIO_FRAME: usize = 240;
 pub struct Out {
     pub tx: Sender<Vec<u8>>,
     pub drops: Arc<AtomicU64>,
+    /// Also counts the drops (all sessions of a protocol, the metrics).
+    pub total: Option<&'static AtomicU64>,
 }
 
 impl Out {
@@ -40,6 +42,9 @@ impl Out {
             Ok(()) => true,
             Err(TrySendError::Full(_)) => {
                 self.drops.fetch_add(1, Ordering::Relaxed);
+                if let Some(t) = self.total {
+                    t.fetch_add(1, Ordering::Relaxed);
+                }
                 true
             }
             Err(TrySendError::Closed(_)) => false,
@@ -281,6 +286,10 @@ impl AudioJob {
 }
 
 impl Job for AudioJob {
+    fn kind(&self) -> web888_core::pool::JobKind {
+        web888_core::pool::JobKind::Audio
+    }
+
     fn rx(&mut self, b: &RxBlock) -> bool {
         if !self.commands() {
             return false;
@@ -528,6 +537,10 @@ impl ViewJob {
 }
 
 impl Job for ViewJob {
+    fn kind(&self) -> web888_core::pool::JobKind {
+        web888_core::pool::JobKind::Waterfall
+    }
+
     fn wf(&mut self, b: &Arc<WfBlock>) -> bool {
         if b.generation != self.generation {
             return true;

@@ -25,6 +25,11 @@
 //!
 //! A worker admits one new job a round: many sessions arriving at once
 //! (their first ticks set up filters and FFTs) don't stall it.
+//!
+//! Each worker also keeps its jobs' time per [`JobKind`], for the
+//! metrics: every [`SAMPLE`]th round times each call (on the Zynq a clock
+//! read is a system call, too dear for every call of every round), so the
+//! per-kind time is an estimate; the worker's busy time is exact.
 
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU64, AtomicUsize, Ordering};
@@ -40,9 +45,52 @@ pub struct Ctx {
     pub shed: u32,
 }
 
+/// What a job is, for the metrics.
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum JobKind {
+    /// A listener's audio chain (web or Kiwi).
+    Audio,
+    /// A waterfall view from the WF FFT.
+    Waterfall,
+    /// A waterfall view from the channelizer's bins (the zoom engine).
+    Bins,
+    /// A skimmer band's audio.
+    Skimmer,
+    Other,
+}
+
+impl JobKind {
+    pub const ALL: [JobKind; 5] = [
+        JobKind::Audio,
+        JobKind::Waterfall,
+        JobKind::Bins,
+        JobKind::Skimmer,
+        JobKind::Other,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            JobKind::Audio => "audio",
+            JobKind::Waterfall => "waterfall",
+            JobKind::Bins => "bins",
+            JobKind::Skimmer => "skimmer",
+            JobKind::Other => "other",
+        }
+    }
+}
+
+const KINDS: usize = JobKind::ALL.len();
+
+/// Rounds per timed round (the per-kind estimate).
+pub const SAMPLE: u64 = 8;
+
 /// Work for one client (a session's audio chain, a waterfall view). Each
 /// method returns false when the job is finished.
 pub trait Job: Send + 'static {
+    /// What it is (the metrics).
+    fn kind(&self) -> JobKind {
+        JobKind::Other
+    }
     fn rx(&mut self, _b: &RxBlock) -> bool {
         true
     }
@@ -83,6 +131,16 @@ struct Load {
     shed: std::sync::atomic::AtomicU32,
     /// Most RX blocks waiting in the last second.
     backlog: AtomicU64,
+    /// Jobs and estimated time (ns) per kind.
+    kind_jobs: [AtomicUsize; KINDS],
+    kind_ns: [AtomicU64; KINDS],
+}
+
+impl Load {
+    fn ended(&self, k: JobKind) {
+        self.jobs.fetch_sub(1, Ordering::Relaxed);
+        self.kind_jobs[k as usize].fetch_sub(1, Ordering::Relaxed);
+    }
 }
 
 struct Worker {
@@ -110,6 +168,9 @@ pub struct WorkerStats {
     pub shed: u32,
     /// Most RX blocks waiting in the last second.
     pub backlog: u64,
+    /// Jobs and their time (estimated, see the module docs) per kind, in
+    /// [`JobKind::ALL`]'s order.
+    pub kinds: [(usize, Duration); KINDS],
 }
 
 pub struct DspPool {
@@ -171,9 +232,11 @@ impl DspPool {
             .enumerate()
             .min_by_key(|(_, w)| w.load.jobs.load(Ordering::Relaxed))
             .expect("at least one worker");
+        let kind = job.kind();
         w.load.jobs.fetch_add(1, Ordering::Relaxed);
+        w.load.kind_jobs[kind as usize].fetch_add(1, Ordering::Relaxed);
         if w.jobs.send(job).is_err() {
-            w.load.jobs.fetch_sub(1, Ordering::Relaxed);
+            w.load.ended(kind);
         }
         Placement {
             worker: k,
@@ -192,6 +255,12 @@ impl DspPool {
                 wf_dropped: w.wf_dropped.load(Ordering::Relaxed),
                 shed: w.load.shed.load(Ordering::Relaxed),
                 backlog: w.load.backlog.load(Ordering::Relaxed),
+                kinds: std::array::from_fn(|k| {
+                    (
+                        w.load.kind_jobs[k].load(Ordering::Relaxed),
+                        Duration::from_nanos(w.load.kind_ns[k].load(Ordering::Relaxed)),
+                    )
+                }),
             })
             .collect()
     }
@@ -279,39 +348,61 @@ fn run(
     new: Receiver<Box<dyn Job>>,
     load: Arc<Load>,
 ) {
-    let mut jobs: Vec<Box<dyn Job>> = Vec::new();
+    let mut jobs: Vec<(JobKind, Box<dyn Job>)> = Vec::new();
     let mut ctx = Ctx::default();
     let mut shedding = Shedding::new(Instant::now());
     let mut taken = 0u64;
+    let mut round = 0u64;
     loop {
         // one new job a round: a crowd of sessions doesn't stall the rest
         match new.try_recv() {
-            Ok(j) => jobs.push(j),
+            Ok(j) => jobs.push((j.kind(), j)),
             Err(TryRecvError::Empty) => {}
             // the pool is gone: finish
             Err(TryRecvError::Disconnected) => return,
         }
-        let before = jobs.len();
+        let sample = round.is_multiple_of(SAMPLE);
+        round += 1;
+        let mut spent = [0u64; KINDS];
+        // run one call of a job; false (and counted) when it ended
+        let mut call = |k: JobKind, f: &mut dyn FnMut() -> bool| {
+            let alive = if sample {
+                let t = Instant::now();
+                let a = f();
+                spent[k as usize] += t.elapsed().as_nanos() as u64;
+                a
+            } else {
+                f()
+            };
+            if !alive {
+                load.ended(k);
+            }
+            alive
+        };
         let rx = rx_in.blocks.recv_timeout(TICK);
         let t = Instant::now();
         match rx {
             Ok(b) => {
                 taken += 1;
-                jobs.retain_mut(|j| j.rx(&b));
+                jobs.retain_mut(|(k, j)| call(*k, &mut || j.rx(&b)));
             }
             Err(RecvTimeoutError::Timeout) => {}
             Err(RecvTimeoutError::Disconnected) => return,
         }
         while let Ok(b) = wf_blocks.try_recv() {
-            jobs.retain_mut(|j| j.wf(&b));
+            jobs.retain_mut(|(k, j)| call(*k, &mut || j.wf(&b)));
         }
         let now = Instant::now();
-        jobs.retain_mut(|j| j.tick(now, ctx));
-        let spent = t.elapsed();
+        jobs.retain_mut(|(k, j)| call(*k, &mut || j.tick(now, ctx)));
+        let busy = t.elapsed();
         load.busy_ns
-            .fetch_add(spent.as_nanos() as u64, Ordering::Relaxed);
-        if jobs.len() != before {
-            load.jobs.fetch_sub(before - jobs.len(), Ordering::Relaxed);
+            .fetch_add(busy.as_nanos() as u64, Ordering::Relaxed);
+        if sample {
+            for (k, ns) in spent.iter().enumerate() {
+                if *ns > 0 {
+                    load.kind_ns[k].fetch_add(ns * SAMPLE, Ordering::Relaxed);
+                }
+            }
         }
         let waiting = rx_in.sent.load(Ordering::Relaxed).saturating_sub(taken);
         ctx.shed = shedding.observe(waiting, rx_in.lost.load(Ordering::Relaxed), now);
@@ -409,12 +500,19 @@ mod tests {
             .collect();
         assert_eq!(places, [0, 1, 0], "least loaded first");
         wait_for(|| p.stats().iter().map(|s| s.jobs).sum::<usize>() == 3);
+        let other = JobKind::ALL
+            .iter()
+            .position(|&k| k == JobKind::Other)
+            .unwrap();
+        assert_eq!(p.stats()[0].kinds[other].0, 2);
+        assert_eq!(p.stats()[0].kinds[0].0, 0);
         // give the workers time to pick the jobs up before the blocks
         std::thread::sleep(Duration::from_millis(150));
         for f in 0..5 {
             hw.send(block(f * 10));
         }
         wait_for(|| p.stats().iter().all(|s| s.jobs == 0));
+        assert!(p.stats().iter().all(|s| s.kinds.iter().all(|k| k.0 == 0)));
         let got: Vec<Vec<u64>> = seen.iter().map(|s| s.lock().unwrap().clone()).collect();
         assert_eq!(got, [vec![0, 10], vec![0, 10, 20], vec![0, 10, 20, 30]]);
         // the next job goes to a now empty worker
@@ -426,6 +524,9 @@ mod tests {
     struct Hog(Arc<std::sync::atomic::AtomicU32>);
 
     impl Job for Hog {
+        fn kind(&self) -> JobKind {
+            JobKind::Skimmer
+        }
         fn tick(&mut self, _: Instant, ctx: Ctx) -> bool {
             self.0.store(ctx.shed, Ordering::Relaxed);
             std::thread::sleep(Duration::from_millis(20));
@@ -448,6 +549,18 @@ mod tests {
             std::thread::sleep(Duration::from_millis(2));
         }
         assert!(p.stats()[0].shed >= 1);
+        // the hog's time, estimated from every SAMPLEth round
+        let sk = JobKind::Skimmer as usize;
+        let t = Instant::now();
+        while p.stats()[0].busy < Duration::from_millis(800) {
+            assert!(t.elapsed() < Duration::from_secs(4), "not busy");
+            std::thread::sleep(Duration::from_millis(20));
+        }
+        let s = &p.stats()[0];
+        let (jobs, est) = s.kinds[sk];
+        assert_eq!(jobs, 1);
+        let r = est.as_secs_f64() / s.busy.as_secs_f64();
+        assert!((0.5..1.5).contains(&r), "{est:?} of {:?}", s.busy);
     }
 
     #[test]

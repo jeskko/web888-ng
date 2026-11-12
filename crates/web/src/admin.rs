@@ -5,7 +5,8 @@
 //!   `POST /api/login {password, admin}`, `POST /api/logout`.
 //! * `/api/admin/...` (admin login): sessions (list, kick), leases,
 //!   config (get, validate, put), passwords, stats, restart.
-//! * `GET /metrics`: Prometheus text, when `web.metrics` is on.
+//! * `GET /metrics`: Prometheus text, when `web.metrics` is on
+//!   ([`crate::metrics`]).
 //!
 //! The admin cookie is SameSite=Strict and the admin API takes JSON
 //! bodies only, so other sites can't make a logged-in browser call it.
@@ -501,7 +502,7 @@ async fn password(
 }
 
 /// Per-thread CPU time (clock ticks) and names, from `/proc/self/task`.
-fn threads() -> Vec<(u32, String, u64)> {
+pub(crate) fn threads() -> Vec<(u32, String, u64)> {
     let Ok(dir) = std::fs::read_dir("/proc/self/task") else {
         return vec![];
     };
@@ -519,7 +520,7 @@ fn threads() -> Vec<(u32, String, u64)> {
     .collect()
 }
 
-fn clock_ticks() -> f64 {
+pub(crate) fn clock_ticks() -> f64 {
     // SAFETY: sysconf has no preconditions
     let t = unsafe { libc::sysconf(libc::_SC_CLK_TCK) };
     if t > 0 { t as f64 } else { 100.0 }
@@ -714,204 +715,9 @@ async fn metrics(State(sh): State<Arc<Shared>>) -> Response {
     if !sh.live.borrow().web.metrics {
         return StatusCode::NOT_FOUND.into_response();
     }
-    use std::fmt::Write;
-    let mut m = String::new();
-    let mut put = |name: &str, kind: &str, help: &str, rows: &[(String, f64)]| {
-        let _ = writeln!(
-            m,
-            "# HELP web888d_{name} {help}\n# TYPE web888d_{name} {kind}"
-        );
-        for (labels, v) in rows {
-            let _ = writeln!(m, "web888d_{name}{labels} {v}");
-        }
-    };
-    let one = |v: f64| vec![(String::new(), v)];
-    let s = &sh.status;
-    put(
-        "sessions",
-        "gauge",
-        "Web sessions.",
-        &one(sh.sessions.load(Ordering::Relaxed) as f64),
-    );
-    let leases = sh.channels.leases();
-    let granted = leases
-        .iter()
-        .filter(|l| l.state.channel().is_some())
-        .count();
-    put(
-        "channels",
-        "gauge",
-        "RX channels.",
-        &one(sh.channels.channels() as f64),
-    );
-    put(
-        "channels_in_use",
-        "gauge",
-        "RX channels leased.",
-        &one(granted as f64),
-    );
-    put(
-        "lease_queue",
-        "gauge",
-        "Lease requests waiting for a channel.",
-        &one((leases.len() - granted) as f64),
-    );
-    put(
-        "adc_overloads_total",
-        "counter",
-        "Blocks with an ADC overload.",
-        &one(s.overload_blocks.load(Ordering::Relaxed) as f64),
-    );
-    put(
-        "rx_frames_total",
-        "counter",
-        "RX frames read from the hardware.",
-        &one(s.rx_frames.load(Ordering::Relaxed) as f64),
-    );
-    put(
-        "clock_ppm",
-        "gauge",
-        "ADC clock error (GPS PPS).",
-        &one(s.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3),
-    );
-    put(
-        "hw_rate_ok",
-        "gauge",
-        "The hardware keeps up with the RX rate.",
-        &one(s.rx_rate_ok.load(Ordering::Relaxed) as u8 as f64),
-    );
-    let pool = sh.pool.stats();
-    let per = |f: &dyn Fn(&web888_core::pool::WorkerStats) -> f64| -> Vec<(String, f64)> {
-        pool.iter()
-            .enumerate()
-            .map(|(k, w)| (format!("{{worker=\"{k}\"}}"), f(w)))
-            .collect()
-    };
-    put(
-        "pool_busy_seconds_total",
-        "counter",
-        "DSP worker busy time.",
-        &per(&|w| w.busy.as_secs_f64()),
-    );
-    put(
-        "pool_jobs",
-        "gauge",
-        "Jobs on a DSP worker.",
-        &per(&|w| w.jobs as f64),
-    );
-    put(
-        "pool_shed_level",
-        "gauge",
-        "DSP worker load shedding level.",
-        &per(&|w| w.shed as f64),
-    );
-    put(
-        "pool_backlog_blocks",
-        "gauge",
-        "Most RX blocks a DSP worker had waiting in the last second.",
-        &per(&|w| w.backlog as f64),
-    );
-    put(
-        "pool_rx_dropped_total",
-        "counter",
-        "RX blocks a DSP worker lost.",
-        &per(&|w| w.rx_dropped as f64),
-    );
-    put(
-        "pool_wf_dropped_total",
-        "counter",
-        "WF blocks a DSP worker lost.",
-        &per(&|w| w.wf_dropped as f64),
-    );
-    if let Some(sk) = sh.skim.as_ref().and_then(|k| k.skimmers.as_ref()) {
-        let bands = sk.bands();
-        let per = |f: &dyn Fn(&web888_skim::BandStatus) -> f64| -> Vec<(String, f64)> {
-            bands
-                .iter()
-                .map(|b| (format!("{{band=\"{}\"}}", b.label), f(&b.status)))
-                .collect()
-        };
-        let n = |a: &AtomicU64| a.load(Ordering::Relaxed) as f64;
-        put(
-            "skim_slots_total",
-            "counter",
-            "Slots a skimmer band decoded.",
-            &per(&|s| n(&s.slots)),
-        );
-        put(
-            "skim_spots_total",
-            "counter",
-            "Spots a skimmer band decoded.",
-            &per(&|s| n(&s.spots)),
-        );
-        put(
-            "skim_slots_dropped_total",
-            "counter",
-            "Slots dropped: the decoders were behind.",
-            &per(&|s| n(&s.dropped)),
-        );
-        put(
-            "skim_slots_cut_total",
-            "counter",
-            "Slots whose decoding the deadline cut short.",
-            &per(&|s| n(&s.cut_short)),
-        );
-        put(
-            "skim_slots_shed_total",
-            "counter",
-            "Slots not decoded: the band was shed (the decoders short of time).",
-            &per(&|s| n(&s.shed_slots)),
-        );
-        put(
-            "skim_shed",
-            "gauge",
-            "The band is shed for now (1).",
-            &per(&|s| s.shed.load(Ordering::Relaxed) as u8 as f64),
-        );
-        put(
-            "skim_cpu_seconds_total",
-            "counter",
-            "Decoder CPU time of a skimmer band.",
-            &per(&|s| n(&s.cpu_us) / 1e6),
-        );
-    }
-    if let Some(p) = sh.skim.as_ref().and_then(|k| k.pskreporter.as_ref()) {
-        let p = p.lock().unwrap().clone();
-        put(
-            "pskreporter_reports_total",
-            "counter",
-            "Spots sent to PSKReporter.",
-            &one(p.reports as f64),
-        );
-    }
-    if let Some(w) = sh.skim.as_ref().and_then(|k| k.wsprnet.as_ref()) {
-        let w = w.lock().unwrap().clone();
-        put(
-            "wsprnet_spots_total",
-            "counter",
-            "WSPR spots sent to WSPRnet.",
-            &one(w.sent as f64),
-        );
-    }
-    let hz = clock_ticks();
-    let mut by_name: BTreeMap<String, u64> = BTreeMap::new();
-    for (_, name, ticks) in threads() {
-        *by_name.entry(name).or_default() += ticks;
-    }
-    let rows: Vec<(String, f64)> = by_name
-        .into_iter()
-        .map(|(n, t)| {
-            (
-                format!("{{thread=\"{}\"}}", n.replace(['"', '\\'], "_")),
-                t as f64 / hz,
-            )
-        })
-        .collect();
-    put(
-        "thread_cpu_seconds_total",
-        "counter",
-        "CPU time per thread name.",
-        &rows,
-    );
-    ([(header::CONTENT_TYPE, "text/plain; version=0.0.4")], m).into_response()
+    (
+        [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],
+        crate::metrics::render(&sh),
+    )
+        .into_response()
 }

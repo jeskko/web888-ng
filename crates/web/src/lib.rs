@@ -9,6 +9,7 @@ pub mod auth;
 pub mod binview;
 pub mod kiwi;
 pub mod markers;
+pub mod metrics;
 pub mod proto;
 pub mod session;
 pub mod sysstat;
