@@ -41,6 +41,10 @@ test("skimmer spots: senders with a locator, now or heard before", () => {
   assert.equal(p[0].spot?.msg, "OH2XYZ K1ABC -12");
   // the old spot still taught the book
   assert.equal(book.get("JA1AAA"), "PM95");
+  // RR73 as a locator: the sign-off, nobody placed there or remembered
+  const b2 = new GridBook();
+  assert.deepEqual(skimmerPoints([spot(100, "CQ X1XX RR73", { call: "X1XX", grid: "RR73" })], b2, rx, 0), []);
+  assert.equal(b2.get("X1XX"), undefined);
 });
 
 test("this browser's decodes", () => {

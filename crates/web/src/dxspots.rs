@@ -111,7 +111,9 @@ impl DxSpot {
             ((-90.0..=90.0).contains(&la) && (-180.0..=180.0).contains(&lo)).then_some((la, lo))
         };
         let good = v.get("dx_location_good").and_then(|g| g.as_bool()) != Some(false);
-        let dx_pos = pos("dx_latitude", "dx_longitude").filter(|_| good);
+        // a locator of RR73 is FT8's sign-off read as one
+        let rr73 = s("dx_grid").to_ascii_uppercase().starts_with("RR73");
+        let dx_pos = pos("dx_latitude", "dx_longitude").filter(|_| good && !rr73);
         let de_pos = pos("de_latitude", "de_longitude");
         let mut id = s("id");
         if id.is_empty() {
@@ -809,6 +811,10 @@ mod tests {
             "dx_latitude": 1.0, "dx_longitude": 2.0, "dx_location_good": false}))
         .unwrap();
         assert_eq!(rough.dx_pos, None);
+        let rr73 = DxSpot::from_json(&json!({"dx_call": "X", "freq": 14.074e6, "dx_grid": "RR73",
+            "dx_latitude": 83.5, "dx_longitude": 175.0, "dx_location_good": true}))
+        .unwrap();
+        assert_eq!(rr73.dx_pos, None);
         assert_eq!(
             (s.dx.as_str(), s.hz, s.tune()),
             ("KE5AKL", 7.063e6, Tune::Cw)

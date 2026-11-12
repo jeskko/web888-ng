@@ -208,6 +208,13 @@ fn grid4(n: u32) -> String {
     String::from_utf8_lossy(&c).into_owned()
 }
 
+/// A locator sent with a message, for the spot. RR73 (in the Arctic
+/// Ocean) is almost always the sign-off packed as a locator by some
+/// software, not a station there: no locator.
+fn locator(g4: &str) -> Option<String> {
+    (g4 != "RR73").then(|| g4.to_string())
+}
+
 fn report(r: i32) -> String {
     format!("{}{:02}", if r < 0 { '-' } else { '+' }, r.abs())
 }
@@ -353,7 +360,7 @@ pub fn peek(m: u128, hashes: &CallHashes) -> Option<Message> {
             sender = Some(c2.clone()).filter(|c| is_call(c));
             let extra = if g < MAXGRID4 {
                 let g4 = grid4(g);
-                grid = Some(g4.clone());
+                grid = locator(&g4);
                 if ir {
                     format!(" R {g4}")
                 } else {
@@ -635,6 +642,12 @@ pub fn pack(text: &str) -> Option<u128> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn rr73_is_no_locator() {
+        assert_eq!(locator("FN42"), Some("FN42".into()));
+        assert_eq!(locator("RR73"), None);
+    }
 
     fn bits_of(s: &str) -> u128 {
         u128::from_str_radix(s, 2).unwrap()

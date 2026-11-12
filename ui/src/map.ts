@@ -93,7 +93,9 @@ function latestEach(points: MapPoint[]): MapPoint[] {
   return [...by.values()];
 }
 
-const place = (grid: string | undefined) => (grid ? gridToLatLon(grid) : null);
+/** Where a locator is; none for RR73 (FT8's sign-off sent as a locator
+ * by some software: nobody is in the Arctic Ocean there). */
+const place = (grid: string | undefined) => (grid && !grid.toUpperCase().startsWith("RR73") ? gridToLatLon(grid) : null);
 
 /** Skimmer spots heard since `oldest` from senders with a known locator
  * (said in this spot or an earlier one: `book` learns them all). */
@@ -101,7 +103,7 @@ export function skimmerPoints(spots: Spot[], book: GridBook, rx: LatLon | null, 
   const out: MapPoint[] = [];
   for (const s of spots) {
     const call = s.call ?? (s.mode === "WSPR" ? wsprSender(s.msg) : ftxSender(s.msg)).call;
-    book.note(call, s.grid);
+    if (place(s.grid)) book.note(call, s.grid);
     if (s.t < oldest || !call) continue;
     const grid = s.grid ?? book.get(call);
     const pos = place(grid);
