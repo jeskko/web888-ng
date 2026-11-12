@@ -415,12 +415,29 @@ async fn admin_api() {
     // metrics: off, then switched on by saving the config
     assert_eq!(http(addr, "GET", "/metrics", None, None).await.status, 404);
     file["web"]["metrics"] = json!(true);
-    let r = me("PUT", "/api/admin/config", Some(file)).await;
+    let r = me("PUT", "/api/admin/config", Some(file.clone())).await;
     assert_eq!(r.status, 200, "{}", r.body);
     let saved = Config::load(&path).unwrap();
     assert_eq!(saved.limits.per_ip, 9);
     assert!(saved.auth.admin_hash.is_some(), "the hash stays");
     assert_eq!(me("GET", "/api/auth", None).await.json()["role"], "admin");
+    // on, but nobody is allowed yet; then loopback is
+    assert_eq!(http(addr, "GET", "/metrics", None, None).await.status, 403);
+    file["web"]["metrics_allow"] = json!(["10.0.0.0/8"]);
+    assert_eq!(
+        me("PUT", "/api/admin/config", Some(file.clone()))
+            .await
+            .status,
+        200
+    );
+    assert_eq!(http(addr, "GET", "/metrics", None, None).await.status, 403);
+    file["web"]["metrics_allow"] = json!(["10.0.0.0/8", "127.0.0.1"]);
+    assert_eq!(
+        me("PUT", "/api/admin/config", Some(file.clone()))
+            .await
+            .status,
+        200
+    );
     let m = http(addr, "GET", "/metrics", None, None).await;
     assert_eq!(m.status, 200);
     let has = |l: &str| m.body.lines().any(|x| x == l);

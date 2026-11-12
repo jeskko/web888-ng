@@ -340,6 +340,10 @@ pub struct Web {
     pub wf_budget: usize,
     /// Serve Prometheus metrics at `/metrics` (no login).
     pub metrics: bool,
+    /// Clients (addresses or networks, e.g. "192.168.1.0/24") allowed to
+    /// read `/metrics`; others get 403. Empty: nobody.
+    #[schemars(with = "Vec<String>")]
+    pub metrics_allow: Vec<IpNet>,
     /// Reverse proxies (addresses or networks, e.g. "10.0.0.5",
     /// "192.168.0.0/16") whose X-Forwarded-For and X-Forwarded-Proto are
     /// believed: for requests from them, the client is the rightmost
@@ -361,6 +365,7 @@ impl Default for Web {
             default_freq: None,
             wf_budget: if cfg!(target_arch = "arm") { 6 } else { 30 },
             metrics: false,
+            metrics_allow: Vec::new(),
             trusted_proxies: Vec::new(),
         }
     }
@@ -738,6 +743,7 @@ impl Config {
             default_freq: None,
             wf_budget: 0,
             metrics: false,
+            metrics_allow: Vec::new(),
             trusted_proxies: Vec::new(),
             ..w.clone()
         };
@@ -754,6 +760,7 @@ impl Config {
             || a.default_freq != b.default_freq
             || a.wf_budget != b.wf_budget
             || a.metrics != b.metrics
+            || a.metrics_allow != b.metrics_allow
             || a.trusted_proxies != b.trusted_proxies
             || self.limits != new.limits
             || self.auth != new.auth;
@@ -879,6 +886,7 @@ mod tests {
         b.limits.per_ip = 1;
         b.web.wf_budget = 10;
         b.web.metrics = true;
+        b.web.metrics_allow = vec!["10.0.0.0/8".parse().unwrap()];
         b.web.trusted_proxies = vec!["10.0.0.1".parse().unwrap()];
         assert_eq!(
             a.changes(&b),

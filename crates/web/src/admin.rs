@@ -711,9 +711,19 @@ async fn restart(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Response {
     Json(json!({})).into_response()
 }
 
-async fn metrics(State(sh): State<Arc<Shared>>) -> Response {
-    if !sh.live.borrow().web.metrics {
-        return StatusCode::NOT_FOUND.into_response();
+async fn metrics(
+    State(sh): State<Arc<Shared>>,
+    ConnectInfo(peer): ConnectInfo<SocketAddr>,
+) -> Response {
+    {
+        let w = &sh.live.borrow().web;
+        if !w.metrics {
+            return StatusCode::NOT_FOUND.into_response();
+        }
+        // the client (behind a trusted proxy: the forwarded one)
+        if !w.metrics_allow.iter().any(|n| n.contains(peer.ip())) {
+            return StatusCode::FORBIDDEN.into_response();
+        }
     }
     (
         [(header::CONTENT_TYPE, "text/plain; version=0.0.4")],

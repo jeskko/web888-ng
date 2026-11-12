@@ -1,8 +1,17 @@
 # Metrics
 
 `GET /metrics` serves the server's state in Prometheus' text format when
-`[web] metrics = true` (live, no restart; no login, so keep it to a
-trusted network or a proxy). Each scrape reads the counters and gauges as
+`[web] metrics = true`, to the clients `[web] metrics_allow` lists
+(addresses or networks; empty, the default: nobody, 403). Both apply
+live, without a restart. There's no login. Behind a proxy listed in
+`trusted_proxies` the forwarded client is the one checked.
+
+```toml
+[web]
+metrics = true
+metrics_allow = ["192.168.1.0/24", "127.0.0.1"]
+```
+ Each scrape reads the counters and gauges as
 they are then; the history is the scraper's. A 15 s scrape interval is
 plenty. Every name starts with `web888d_`. The code is
 `crates/web/src/metrics.rs`.
