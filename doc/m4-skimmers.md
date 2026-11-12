@@ -124,6 +124,34 @@ The scores go in this doc at each improvement step.
 | 2026-10-23 | subtracted positions retried, LLR scale 5.5, sub-sample timing, OSD order 2 (60) with a plausibility filter | 86.8 %, 30 extra | 90.1 %, 12 extra | 0.7 |
 | 2026-10-23 | OSD by CRC syndromes (orders 2 and 3 over all 91 bits), acceptance by distance ratio to the runner-up; subtraction in the frequency domain | 91.3 %, 54 extra | 92.3 %, 17 extra | 0.25 |
 | 2026-10-29 | for the A9's time: soft bits from squared magnitudes and shared partial sums, the fine time search by a sliding DFT, the frequency step as a rotation and the sub-sample step as an 8-tap fractional delay (one inverse FFT per candidate, not three), min-sum BP (0.8) with WSJT-X's early stop | 91.1 %, 56 extra (FT4 unchanged: 89.3 %) | – | 0.10; A9 3.4 s/slot (5.0 before) |
+| 2026-11-12 | sync symbol gates: a candidate needs 5 of the 21 Costas symbols on top at the coarse time peak (before the fine sync) and 8 after it (before: 7, after it only) | 91.1 %, 56 extra | 92.4 %, 15 extra | 0.078 (40 m), 0.063 (30 m): -26 %, -31 % |
+
+**Sync symbol gates (2026-11-12).** Of the candidates on a busy band
+95 % never decode, and they took two thirds of the time: 80 % failed
+the hard sync check only after the whole fine sync, and those that
+passed it without decoding (BP and OSD three times each) took 39 %.
+No decode of the first set has fewer than 5 Costas symbols at the
+coarse peak, and 3 of 2700 have exactly 7 after the fine sync. FT4's
+gate was 5 of 16, close to what chance gives with four tones (4); it
+is now 7 at the coarse peak and 8 after. `Config::sync_symbols_coarse`
+and `sync_symbols` (`FTX_SET` in the examples).
+
+| set | mode | before | after | time |
+|---|---|---|---|---|
+| first, 40 m | FT8 | 1458 of 1600 | 1458 | -26 % |
+| first, 30 m | FT8 | 1171 of 1267 | 1171 | -31 % |
+| second (71 slots) | FT8 | 1626 of 1842 (88.3 %) | 1622 (88.1 %) | -26 % |
+| first, 40 m | FT4 | 268 of 300 | 268 | -45 % |
+| second (142 slots) | FT4 | 468 of 488 (95.9 %) | 468 | -58 % |
+
+The four FT8 decodes lost on the second set are the price of the gate
+at 8 (the coarse gate alone loses none there, for -14 %).
+
+**Second set (2026-11-12).** `corpus/short-captures`: FT8 and FT4 on
+160-10 m from 15 short captures (1-7 slots each; day, evening and
+night; quiet bands too), with `cut.sh`, `ref.sh` (jt9 per WAV) and
+`score.sh` beside the WAVs. It wasn't used for tuning. FT8 scores lower
+there than on the first set, lowest on 20 m by day (82 % of 336): open.
 
 OSD at that depth meets about 8 chance CRC-valid codewords per call. A
 real decode is much closer to the received bits than the runner-up (median

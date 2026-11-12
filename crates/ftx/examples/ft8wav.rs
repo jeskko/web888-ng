@@ -32,6 +32,8 @@ fn main() {
             "sync_min" => cfg.sync_min = f,
             "max_candidates" => cfg.max_candidates = f as usize,
             "passes" => cfg.passes = f as usize,
+            "sync_symbols" => cfg.sync_symbols = f as usize,
+            "sync_symbols_coarse" => cfg.sync_symbols_coarse = f as usize,
             "osd_order2" => {
                 cfg.osd
                     .get_or_insert(web888_ftx::osd::Depth {

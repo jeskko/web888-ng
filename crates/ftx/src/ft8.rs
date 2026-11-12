@@ -64,6 +64,12 @@ pub struct Config {
     /// Normalised sync score a candidate needs.
     pub sync_min: f32,
     pub max_candidates: usize,
+    /// Costas symbols (of 21) that must have their tone on top at the
+    /// coarse time peak, before the fine sync is spent on the candidate,
+    /// and after it, before the soft bits and the decoders. No decode of
+    /// the corpora has fewer (doc/m4-skimmers.md §3.3).
+    pub sync_symbols_coarse: usize,
+    pub sync_symbols: usize,
     /// Decoding passes, with subtraction between them.
     pub passes: usize,
     pub bp_iterations: usize,
@@ -92,6 +98,8 @@ impl Default for Config {
             f_max: 3000.0,
             sync_min: 1.5,
             max_candidates: 400,
+            sync_symbols_coarse: 5,
+            sync_symbols: 8,
             passes: 3,
             bp_iterations: 30,
             osd: Some(osd::Depth {
@@ -329,14 +337,17 @@ impl Decoder {
         let n = audio.len().min(SLOT);
         x[..n].copy_from_slice(&audio[..n]);
         let spectrum = self.spectrum(&x);
-        let d = self.demod(
-            &spectrum,
-            Candidate {
-                freq,
-                dt,
-                sync: 0.0,
-            },
-        );
+        let d = self
+            .demod(
+                &spectrum,
+                Candidate {
+                    freq,
+                    dt,
+                    sync: 0.0,
+                },
+                0,
+            )
+            .expect("no gate");
         Analysis {
             freq: d.f0,
             dt: d.t - T0,
@@ -643,6 +654,33 @@ impl Decoder {
         sum
     }
 
+    /// How many of the 21 Costas symbols of a signal starting at sample
+    /// `i0` have their tone on top: the hard sync check on the sync
+    /// symbols alone.
+    fn sync_hits(&self, cd: &[C32], i0: i64) -> usize {
+        let mut n = 0;
+        let mut buf = [C32::default(); DS_NSPS];
+        for a in 0..3 {
+            for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+                let start = i0 + (DS_NSPS * (36 * a + k)) as i64;
+                for (j, b) in buf.iter_mut().enumerate() {
+                    let idx = start + j as i64;
+                    *b = if idx >= 0 && (idx as usize) < cd.len() {
+                        cd[idx as usize]
+                    } else {
+                        C32::default()
+                    };
+                }
+                self.fft32.process(&mut buf);
+                let top = (0..8)
+                    .max_by(|&x, &y| buf[x].norm_sqr().total_cmp(&buf[y].norm_sqr()))
+                    .unwrap();
+                n += (top == tone as usize) as usize;
+            }
+        }
+        n
+    }
+
     /// Each symbol's 8 tone amplitudes for a signal starting at sample
     /// `i0`, and how many Costas symbols have their tone on top.
     fn symbols(&self, cd: &[C32], i0: i64) -> ([[C32; 8]; 79], Vec<[f32; 8]>, usize) {
@@ -680,8 +718,11 @@ impl Decoder {
         (cs, s8, nsync)
     }
 
-    /// Refine a candidate and take its symbols' tone amplitudes.
-    fn demod(&mut self, spectrum: &[C32], c: Candidate) -> Demod {
+    /// Refine a candidate and take its symbols' tone amplitudes. `None`
+    /// for one with fewer than `coarse_min` Costas symbols right at the
+    /// coarse time peak: most candidates are sidelobes of other signals
+    /// or noise, and stop here, before the fine sync and the 79 symbols.
+    fn demod(&mut self, spectrum: &[C32], c: Candidate, coarse_min: usize) -> Option<Demod> {
         let t = Instant::now();
         let mut f0 = c.freq;
         let mut cd = self.downsample(spectrum, f0);
@@ -699,6 +740,13 @@ impl Decoder {
         };
         let mut lags = (nominal - 11, self.sync_lags(&cd, nominal - 11, 23));
         let (mut i0, mut best) = peak(&lags.1[1..22], nominal - 10);
+        if coarse_min > 0 && self.sync_hits(&cd, i0) < coarse_min {
+            self.stats.sync += t.elapsed();
+            if self.cfg.trace.is_some_and(|f| (f - c.freq).abs() < 5.0) {
+                eprintln!("  too few sync symbols at the coarse peak");
+            }
+            return None;
+        }
         // Frequency in 0.5 Hz steps, then a parabola through the peak.
         let fs = self.sync_fine_df(&cd, i0);
         let kb = (0..fs.len())
@@ -739,14 +787,14 @@ impl Decoder {
             eprintln!("  fine: f0 {f0:.2} i0 {i0} sync {best:.3e} nsync {nsync}\n  hard {hard}");
         }
         self.stats.metrics += t.elapsed();
-        Demod {
+        Some(Demod {
             f0,
             t: (i0 as f32 + frac) / DS_RATE,
             sync: best,
             cs,
             s8,
             nsync,
-        }
+        })
     }
 
     fn decode_candidate(
@@ -763,8 +811,8 @@ impl Decoder {
             cs,
             s8,
             nsync,
-        } = self.demod(spectrum, c);
-        if nsync <= 6 {
+        } = self.demod(spectrum, c, self.cfg.sync_symbols_coarse)?;
+        if nsync < self.cfg.sync_symbols {
             return None;
         }
         let t = Instant::now();
