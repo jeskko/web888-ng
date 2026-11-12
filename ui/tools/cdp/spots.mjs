@@ -13,7 +13,7 @@ const p = await launch({
 });
 await p.goto(url);
 await sleep(4000);
-const button = "[...document.querySelectorAll('.controls button')].find(b => b.textContent === 'Spots')";
+const button = "[...document.querySelectorAll('header .tools button')].find(b => b.textContent === 'Spots')";
 console.log("spots button:", await p.ev(`!!${button}`));
 if (!(await p.ev("!!document.querySelector('.spots')"))) await p.ev(`${button}.click()`);
 await sleep(1000);

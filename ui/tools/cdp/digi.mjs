@@ -11,7 +11,7 @@ await p.goto(url);
 await sleep(3000);
 await p.ev(`${q(".start")}?.click()`);
 await sleep(2000);
-await p.ev(`[...document.querySelectorAll('.controls button')].find((b) => b.textContent === 'FT8/FT4/WSPR').click()`);
+await p.ev(`[...document.querySelectorAll('header .tools button')].find((b) => b.textContent === 'FT8/FT4/WSPR').click()`);
 await sleep(500);
 const pick = (sel, v) => p.ev(`(() => { const s = document.querySelectorAll('.digi .spots-bar select')[${sel}]; s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 await pick(0, mode);

@@ -11,7 +11,7 @@ await sleep(3000);
 console.log("secure:", await p.ev("window.isSecureContext"));
 await p.ev(`${q(".start")}?.click()`);
 await sleep(2000);
-await p.ev(`[...document.querySelectorAll('.controls button')].find((b) => b.textContent === 'JTTY').click()`);
+await p.ev(`[...document.querySelectorAll('header .tools button')].find((b) => b.textContent === 'JTTY').click()`);
 await sleep(500);
 await p.ev(`(() => { const s = ${q(".jtty select")}; s.value = ${JSON.stringify(dial)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 await sleep(Number(secs) * 1000);

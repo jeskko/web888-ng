@@ -45,11 +45,13 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .users-pop tr.pick:hover td { background: var(--accent-bg); }
 .users-pop tr.me td { color: #ff8a8a; }
 .labels-ctl { position: relative; }
+header .labels-pop { top: calc(100% + 6px); bottom: auto; left: auto; right: 0; }
 .labels-pop { position: absolute; bottom: calc(100% + 6px); left: 0; z-index: 10; padding: 8px 12px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-size: 13px; white-space: nowrap; }
 .labels-opts { display: flex; flex-direction: column; gap: 6px; }
 .labels-opts label { display: flex; align-items: center; gap: 6px; }
 .labels-opts p { margin: 2px 0 0; font-size: 12px; white-space: normal; max-width: 240px; }
-.smeter { display: flex; align-items: center; gap: 8px; margin-left: auto; }
+.smeter { display: flex; align-items: center; gap: 8px; }
+header .tools { margin-left: auto; }
 .smeter .bar { position: relative; width: 140px; height: 10px; background: #0a0d14; border: 1px solid var(--line); border-radius: 2px; overflow: hidden; }
 .smeter .sql { position: absolute; top: 0; bottom: 0; width: 2px; margin-left: -1px; background: var(--warn); }
 .seg { display: inline-flex; }

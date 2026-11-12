@@ -138,6 +138,15 @@ function App() {
         <Bandwidth />
         <UsersCtl />
         <SMeter />
+        {/* what opens beside the waterfall, and sharing */}
+        <div class="group tools">
+          <ShareCtl />
+          <SpotsCtl />
+          <MapCtl />
+          <DigiCtl />
+          <JttyCtl />
+          <LabelsCtl />
+        </div>
       </header>
       <LeaseBanner />
       <main>
@@ -156,12 +165,6 @@ function App() {
           <DspCtl />
           <ZoomCtl />
           <ContrastCtl />
-          <ShareCtl />
-          <SpotsCtl />
-          <LabelsCtl />
-          <JttyCtl />
-          <DigiCtl />
-          <MapCtl />
         </div>
         <StatusBar />
       </footer>
