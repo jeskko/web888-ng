@@ -62,6 +62,13 @@ a touch device held sideways (`pointer: coarse` and at most 500 px high).
   JTTY button and its list, from v0.6.0) are reused in the *More* sheet, so what they do is the same as on the desktop; only
   their sizes change (`.m-app` in `style.css`: 44 px keys, no `:hover`
   styles, `touch-action: manipulation`, safe-area insets).
+* The panels added since (Spots with DX spots, Map, FT8/FT4/WSPR, JTTY)
+  open in *More* under a 3-column grid of their buttons. The map takes
+  70 % of the screen height; drag turns or pans it, pinch zooms. A phone
+  has no hover, so a tap shows the nearest station within 24 px (its
+  details placed on the side with room), and a second tap on it tunes
+  there; a drag hides them. Checked at 390 × 844 with touch events
+  (`ui/tools/cdp/phone.mjs`).
 * Tuning faster than the server answers (the wheel sends a `tune` per
   click): its `state` for an earlier tune arrived after we had tuned on and
   put the dial back. `ui/src/tunesync.ts` remembers the frequencies sent in

@@ -298,12 +298,12 @@ function More({ close }: { close: () => void }) {
       <LabelsCtl inline />
       <h4>You</h4>
       <UsersCtl />
-      <div class="m-row">
+      <div class="m-panels">
         <ShareCtl />
         <SpotsCtl />
-        <JttyCtl />
-        <DigiCtl />
         <MapCtl />
+        <DigiCtl />
+        <JttyCtl />
       </div>
       {spotsOpen.value && <SpotPanel />}
       <JttyPanel />

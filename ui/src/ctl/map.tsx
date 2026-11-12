@@ -209,6 +209,19 @@ function Tooltip({ p, rx }: { p: MapPoint; rx: LatLon | null }) {
   );
 }
 
+/** Where a station's details go: beside the point, on the side with room
+ * (a phone's map is narrow). */
+function tipPlace(x: number, y: number, c: HTMLCanvasElement | null): Record<string, string> {
+  const w = c?.clientWidth ?? 0;
+  const h = c?.clientHeight ?? 0;
+  const st: Record<string, string> = {};
+  if (x > w / 2) st.right = `${Math.max(4, w - x + 12)}px`;
+  else st.left = `${x + 12}px`;
+  if (y > h / 2) st.bottom = `${Math.max(4, h - y + 12)}px`;
+  else st.top = `${y + 12}px`;
+  return st;
+}
+
 export function MapPanel() {
   const canvas = useRef<HTMLCanvasElement>(null);
   const box = useRef<HTMLDivElement>(null);
@@ -225,7 +238,10 @@ export function MapPanel() {
   const pinch = useRef(0);
   /** Where a press began and the station under it (a click, if it
    * doesn't move). */
-  const press = useRef<{ x: number; y: number; hit: MapPoint | null } | null>(null);
+  const press = useRef<{ x: number; y: number; hit: MapPoint | null; touch: boolean } | null>(null);
+  /** On a touch screen (no hover): the station a tap picked, shown until
+   * the next tap; a second tap on it tunes there. */
+  const picked = useSignal<MapPoint | null>(null);
   /** Labels' widths (measuring text is slow), and the wheel's end. */
   const widths = useRef(new Map<string, number>());
   const wheelEnd = useRef(0);
@@ -443,13 +459,28 @@ export function MapPanel() {
 
   if (!open) return null;
 
+  /** The station drawn nearest to (x, y) within `r` px, in the canvas. */
+  const nearest = (x: number, y: number, r: number) => {
+    let best: { p: MapPoint; x: number; y: number } | null = null;
+    let bd = r * r;
+    for (const s of shown.current) {
+      const d = (s.x - x) ** 2 + (s.y - y) ** 2;
+      if (d < bd) {
+        bd = d;
+        best = s;
+      }
+    }
+    return best;
+  };
+
   // drag turns or pans, the wheel and pinches zoom
   const onDown = (e: PointerEvent) => {
     (e.currentTarget as HTMLElement).setPointerCapture(e.pointerId);
     pointers.current.set(e.pointerId, [e.clientX, e.clientY]);
-    press.current = { x: e.clientX, y: e.clientY, hit: hover.value?.p ?? null };
+    const touch = e.pointerType !== "mouse";
+    press.current = { x: e.clientX, y: e.clientY, hit: touch ? null : (hover.value?.p ?? null), touch };
     moving.value = true;
-    hover.value = null;
+    if (!touch) hover.value = null;
   };
   const onMove = (e: PointerEvent) => {
     const v = view.value;
@@ -458,21 +489,19 @@ export function MapPanel() {
     const ps = pointers.current;
     const last = ps.get(e.pointerId);
     if (!last) {
-      // hover: the nearest point within 10 px
+      // hover (a mouse): the nearest point within 10 px
+      if (e.pointerType !== "mouse") return;
       const r = c.getBoundingClientRect();
       const x = e.clientX - r.left;
       const y = e.clientY - r.top;
-      let best: { p: MapPoint; x: number; y: number } | null = null;
-      let bd = 100;
-      for (const s of shown.current) {
-        const d = (s.x - x) ** 2 + (s.y - y) ** 2;
-        if (d < bd) {
-          bd = d;
-          best = s;
-        }
-      }
+      const best = nearest(x, y, 10);
       hover.value = best ? { p: best.p, x, y } : null;
       return;
+    }
+    // a drag hides a tapped station's details
+    if (picked.value && Math.hypot(e.clientX - (press.current?.x ?? 0), e.clientY - (press.current?.y ?? 0)) > 8) {
+      picked.value = null;
+      hover.value = null;
     }
     const cur: [number, number] = [e.clientX, e.clientY];
     ps.set(e.pointerId, cur);
@@ -511,7 +540,25 @@ export function MapPanel() {
   const onClick = (e: MouseEvent) => {
     const pr = press.current;
     press.current = null;
-    if (pr?.hit && Math.hypot(e.clientX - pr.x, e.clientY - pr.y) < 5) pickMapPoint(pr.hit);
+    if (!pr) return;
+    if (!pr.touch) {
+      if (pr.hit && Math.hypot(e.clientX - pr.x, e.clientY - pr.y) < 5) pickMapPoint(pr.hit);
+      return;
+    }
+    // a tap: show the station under the finger; the same one again tunes
+    if (Math.hypot(e.clientX - pr.x, e.clientY - pr.y) >= 10) return;
+    const c = canvas.current;
+    if (!c) return;
+    const r = c.getBoundingClientRect();
+    const x = e.clientX - r.left;
+    const y = e.clientY - r.top;
+    const best = nearest(x, y, 24);
+    if (best && best.p === picked.value && (best.p.spot || best.p.tune)) {
+      pickMapPoint(best.p);
+      return;
+    }
+    picked.value = best?.p ?? null;
+    hover.value = best ? { p: best.p, x: best.x, y: best.y } : null;
   };
   const home = () => (view.value = { lon: rx?.[1] ?? 0, lat: o.proj === "merc" ? 30 : (rx?.[0] ?? 0), k: 1 });
   const toggle = (id: Layer) => setMapOpts({ layers: o.layers.includes(id) ? o.layers.filter((l) => l !== id) : [...o.layers, id] });
@@ -565,13 +612,14 @@ export function MapPanel() {
           onPointerMove={onMove}
           onPointerUp={onUp}
           onPointerCancel={onUp}
-          onPointerLeave={() => (hover.value = null)}
+          onPointerLeave={(e) => e.pointerType === "mouse" && (hover.value = null)}
           onWheel={onWheel}
           onClick={onClick}
         />
         {hv && (
-          <div class="map-tip" style={{ left: `${hv.x + 12}px`, top: `${hv.y + 12}px` }}>
+          <div class="map-tip" style={tipPlace(hv.x, hv.y, canvas.current)}>
             <Tooltip p={hv.p} rx={rx} />
+            {picked.value === hv.p && (hv.p.spot || hv.p.tune) && <div class="dim">Tap it again to tune there.</div>}
           </div>
         )}
         {err.value && <p class="warn map-note">{err.value}</p>}

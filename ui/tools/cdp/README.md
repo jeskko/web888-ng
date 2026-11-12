@@ -34,6 +34,7 @@ kill $P
 | `shot.mjs` | one screenshot at a size, canvas sizes, horizontal scroll | — |
 | `login.mjs` | listener-password form, wrong then right | `web888d passwd --listener`; `LISTENER_PW` |
 | `admin.mjs` | admin pages, config form, phone layout | an admin password; `ADMIN_PW` |
+| `phone.mjs` | the phone layout's panels with touch: More, Spots, Map (tap, tap again to tune), FT8/FT4/WSPR, Labels, status | a running server; `OUT` dir as the 2nd argument |
 | `update.mjs` | the Update tab: look for an OS release; `ACT=install` installs it into the other slot, `ACT=reboot` reboots | the OS image with RAUC (the emulator); `ADMIN_PW` |
 | `idle.mjs` | idle limit ends the session, no auto-reconnect | `[limits] idle_minutes = 1` |
 | `features.mjs` | name, users list, hover preview, tuning step, AM/SAM/SAL/SAR/SAS cycle, CPU/temperature | — (the iq backend on a recording shows AM stations) |
