@@ -38,8 +38,8 @@ pub(crate) async fn upgrade(
 
 /// A Kiwi mode name: web888d's demodulator, the mode others see, and the
 /// passband if the client gives none. Kiwi's CW is USB around +500 Hz
-/// (its passband says where); NBFM and the rest web888d lacks fall back
-/// to AM, as upstream does with unknown modes.
+/// (its passband says where); the modes web888d lacks fall back to AM, as
+/// upstream does with unknown modes.
 fn mode(name: &str) -> (Mode, proto::Mode, (f64, f64)) {
     match name {
         "usb" | "usn" => (Mode::Usb, proto::Mode::Usb, (300.0, 2700.0)),
@@ -50,6 +50,7 @@ fn mode(name: &str) -> (Mode, proto::Mode, (f64, f64)) {
         "sau" => (Mode::Sar, proto::Mode::Sar, (-50.0, 4900.0)),
         "sas" => (Mode::Sas, proto::Mode::Sas, (-4900.0, 4900.0)),
         "iq" | "drm" => (Mode::Iq, proto::Mode::Iq, (-5000.0, 5000.0)),
+        "nbfm" | "nnfm" => (Mode::Nbfm, proto::Mode::Nbfm, (-5000.0, 5000.0)),
         _ => (Mode::Am, proto::Mode::Am, (-4900.0, 4900.0)),
     }
 }
@@ -409,7 +410,8 @@ mod tests {
         assert_eq!(mode("sau").0, Mode::Sar);
         assert_eq!(mode("iq").0, Mode::Iq);
         assert_eq!(mode("drm").0, Mode::Iq);
-        assert_eq!(mode("nbfm").0, Mode::Am);
+        assert_eq!(mode("nbfm").0, Mode::Nbfm);
+        assert_eq!(mode("nnfm").0, Mode::Nbfm);
         assert_eq!(mode("whatever").0, Mode::Am);
     }
 

@@ -9,6 +9,62 @@ pub fn ssb(input: &[C32], out: &mut Vec<f32>) {
     out.extend(input.iter().map(|z| z.re));
 }
 
+/// Narrow-band FM: a quadrature discriminator (the phase step between
+/// samples), a DC blocker (a carrier off the dial), and de-emphasis of 6
+/// dB/octave above 300 Hz (as NBFM transmitters pre-emphasise), unity at
+/// 1 kHz. A deviation of `FM_DEV_HZ` reads 0.5.
+pub struct Fm {
+    prev: C32,
+    /// Phase step of a full deviation (rad/sample).
+    k: f32,
+    dc: f32,
+    a_dc: f32,
+    de: f32,
+    a_de: f32,
+    /// The de-emphasis's gain at 1 kHz, undone.
+    g_de: f32,
+}
+
+/// The NBFM deviation that reads 0.5 (25 kHz channels; 12.5 kHz ones
+/// use 2.5 kHz and read 0.25).
+pub const FM_DEV_HZ: f64 = 5_000.0;
+
+impl Fm {
+    pub fn new(fs: f64) -> Self {
+        let tau = 1.0 / (2.0 * std::f64::consts::PI * 300.0);
+        let a_de = (-1.0 / (fs * tau)).exp();
+        // |H(1 kHz)| of y = (1 - a) x + a y
+        let w = 2.0 * std::f64::consts::PI * 1000.0 / fs;
+        let h = (1.0 - a_de) / (1.0 - 2.0 * a_de * w.cos() + a_de * a_de).sqrt();
+        Fm {
+            prev: C32::new(0.0, 0.0),
+            k: (2.0 * std::f64::consts::PI * FM_DEV_HZ / fs) as f32,
+            dc: 0.0,
+            // ~5 Hz corner
+            a_dc: (2.0 * std::f64::consts::PI * 5.0 / fs) as f32,
+            de: 0.0,
+            a_de: a_de as f32,
+            g_de: (1.0 / h) as f32,
+        }
+    }
+
+    pub fn process(&mut self, input: &[C32], out: &mut Vec<f32>) {
+        out.reserve(input.len());
+        for &z in input {
+            let d = z * self.prev.conj();
+            self.prev = z;
+            let f = if d.norm_sqr() > 0.0 {
+                d.im.atan2(d.re) / self.k * 0.5
+            } else {
+                0.0
+            };
+            self.dc += self.a_dc * (f - self.dc);
+            self.de = (1.0 - self.a_de) * (f - self.dc) + self.a_de * self.de;
+            out.push((self.de * self.g_de).clamp(-1.0, 1.0));
+        }
+    }
+}
+
 /// AM envelope detector with a DC (carrier) blocker.
 pub struct Am {
     dc: f32,

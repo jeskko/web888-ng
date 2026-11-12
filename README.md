@@ -18,6 +18,10 @@ Status (see `doc/design.md` §11), release v0.9.0:
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
   on ten bands. From v0.9.0 zoomed views take their spectra from the
   FPGA's zoom engine (web888-ng-hw v0.4.0).
+* **VHF** (`doc/m6-channelizer.md` §7, not yet on a board): `[radio]
+  band = "vhf"`, 98.304-147.456 MHz by undersampling (airband AM, 2 m
+  NBFM), on the VHF channelizer (web888-ng-hw `websdr_pfb_vhf.bit`) or
+  the tuned VHF bitstream.
 * **Done: M5**, the KiwiSDR protocol (`doc/m5-kiwi.md`, v0.8.0):
   kiwirecorder and SuperSDR get audio (PCM, ADPCM, IQ) and the
   waterfall.

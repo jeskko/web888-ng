@@ -46,7 +46,7 @@ import {
 import { AdminApp } from "./admin/admin.tsx";
 import { Pane } from "./view/pane.tsx";
 
-const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw" };
+const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm" };
 
 function useKeys() {
   useEffect(() => {

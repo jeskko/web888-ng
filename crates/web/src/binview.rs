@@ -1056,6 +1056,39 @@ mod tests {
     }
 
     #[test]
+    fn a_vhf_view_starts_at_the_zone_edge() {
+        // the VHF channelizer: 24 kHz bins from 98.304 MHz (undersampled)
+        let vhf = BinCaps {
+            bin_hz: 24e3,
+            frame_rate: 48e3,
+            first_hz: 98.304e6,
+            ..CAPS
+        };
+        let tap = BinTap::new(vhf);
+        // 12.288 MHz (512 bins): too many to zoom, the power line
+        let (mut j, mut rx, _ctx) = job(&tap, 125e6, 12.288e6);
+        let t0 = Instant::now();
+        j.tick(t0, Ctx::default());
+        assert!(!tap.wants_frames());
+        // 125 MHz is in bin 1112 (124.992 MHz)
+        let mut p = vec![1e-12f32; 2048];
+        p[1112] = 1e-2;
+        tap.send_power(Arc::new(p));
+        j.tick(t0 + Duration::from_millis(200), Ctx::default());
+        let l = newest(&mut rx);
+        // on the bins' grid, counted from the zone's edge
+        assert_eq!(l.bin_hz, 24e3);
+        let k = (l.first_hz - 98.304e6) / 24e3;
+        assert!(
+            (k - k.round()).abs() < 1e-6 && l.first_hz > 118e6,
+            "{}",
+            l.first_hz
+        );
+        assert!((l.at(125e6) + 20.0).abs() < 0.5, "{}", l.at(125e6));
+        assert!(l.at(125.1e6) < -110.0);
+    }
+
+    #[test]
     fn a_7_68_mhz_view_is_zoomed_unless_the_pool_sheds() {
         let tap = BinTap::new(CAPS);
         let (mut j, mut rx, _ctx) = job(&tap, 7.68e6, 7.68e6);

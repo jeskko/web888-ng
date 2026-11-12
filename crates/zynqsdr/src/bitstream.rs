@@ -33,6 +33,15 @@ pub fn file_name(variant: Variant) -> &'static str {
     }
 }
 
+/// The channelizer bitstream's file name for a variant (web888-ng-hw):
+/// `websdr_pfb.bit` (122.88 MHz) / `websdr_pfb_vhf.bit` (98.304 MHz).
+pub fn channelizer_name(variant: Variant) -> &'static str {
+    match variant {
+        Variant::Hf => "websdr_pfb.bit",
+        Variant::Vhf => "websdr_pfb_vhf.bit",
+    }
+}
+
 /// Stock location for a variant, on the SD card.
 pub fn default_path(variant: Variant) -> PathBuf {
     Path::new(SD_DIR).join(file_name(variant))

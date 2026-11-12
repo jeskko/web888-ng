@@ -6,10 +6,11 @@
 
 export const PROTO = 2;
 
-/** "iq": Kiwi protocol clients only (not offered in the UI). */
-export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas" | "iq";
+/** "iq": Kiwi protocol clients only (not offered in the UI). "nbfm":
+ * narrow-band FM (VHF voice). */
+export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas" | "iq" | "nbfm";
 export type AgcSpeed = "fast" | "medium" | "slow";
-export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas"];
+export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas", "nbfm"];
 /** The AM family, in the order the AM button cycles through: envelope,
  * then synchronous (both sidebands, lower, upper, stereo). */
 export const AM_MODES: Mode[] = ["am", "sam", "sal", "sar", "sas"];

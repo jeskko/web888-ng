@@ -375,3 +375,72 @@ fn iq_is_the_channel_with_both_sides_apart() {
     assert!((peak - 0.3).abs() < 0.05, "{peak}");
     assert!(db(camp(a, 1000.0) / camp(a, 0.0)) < -60.0);
 }
+
+/// An FM carrier `off` Hz from the dial at `fs`: a `tone` Hz tone at
+/// `dev` Hz deviation, amplitude `a`, for `secs`.
+fn fm(off: f64, tone: f64, dev: f64, a: f32, fs: f64, secs: f64) -> Vec<web888_dsp::C32> {
+    let n = (fs * secs) as usize;
+    let mut ph = 0.0f64;
+    (0..n)
+        .map(|k| {
+            let f = off + dev * (2.0 * std::f64::consts::PI * tone * k as f64 / fs).sin();
+            ph += 2.0 * std::f64::consts::PI * f / fs;
+            web888_dsp::C32::from_polar(a, ph as f32)
+        })
+        .collect()
+}
+
+#[test]
+fn nbfm_demodulates_the_deviation() {
+    use web888_dsp::demod::FM_DEV_HZ;
+    let fs = 48_000.0;
+    let level = |off: f64, a: f32| {
+        let mut chain = AudioChain::new(AudioSpec::new(Mode::Nbfm), fs, Droop::None);
+        let mut out = Vec::new();
+        chain.process_c32(fm(off, 1000.0, 2500.0, a, fs, 2.0), &mut out);
+        let x = &out[6000..];
+        // the tone, and what isn't it (distortion and noise)
+        let t = amp(x, 1000.0);
+        let h = amp(x, 2000.0).max(amp(x, 3000.0));
+        (t, h)
+    };
+    // 2.5 kHz deviation reads half of FM_DEV_HZ's 0.5; the de-emphasis is
+    // unity at 1 kHz; the level doesn't follow the signal's
+    let want = 0.5 * 2500.0 / FM_DEV_HZ;
+    for a in [1e-1, 1e-4] {
+        let (t, h) = level(0.0, a);
+        assert!((db(t) - db(want)).abs() < 0.5, "{a}: {:.2} dB", db(t));
+        assert!(
+            db(t) - db(h) > 30.0,
+            "{a}: harmonics {:.1} dB down",
+            db(t) - db(h)
+        );
+    }
+    // a carrier 1 kHz off the dial: the same tone (DC blocked)
+    let (t, _) = level(1000.0, 1e-2);
+    assert!((db(t) - db(want)).abs() < 0.5, "{:.2} dB", db(t));
+}
+
+#[test]
+fn nbfm_squelch_closes_on_noise() {
+    let fs = 48_000.0;
+    let mut spec = AudioSpec::new(Mode::Nbfm);
+    assert!(spec.agc.is_none());
+    spec.squelch_db = Some(-60.0);
+    let mut chain = AudioChain::new(spec, fs, Droop::None);
+    // noise at about -80 dBFS in the channel
+    let mut s = 1u32;
+    let mut rnd = || {
+        s ^= s << 13;
+        s ^= s >> 17;
+        s ^= s << 5;
+        s as f32 / u32::MAX as f32 - 0.5
+    };
+    let x: Vec<_> = (0..96_000)
+        .map(|_| web888_dsp::C32::new(rnd(), rnd()) * 2e-4)
+        .collect();
+    let mut out = Vec::new();
+    chain.process_c32(x, &mut out);
+    assert!(chain.squelched());
+    assert!(out[out.len() - 6000..].iter().all(|&v| v == 0.0));
+}

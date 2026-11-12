@@ -18,11 +18,17 @@
 //!
 //! IQ: the filtered channel itself, I and Q interleaved (two channels),
 //! with the AGC on its magnitude; no demodulator, NR or pitch shift.
+//!
+//! NBFM (`demod::Fm`): ±5 kHz around the carrier, the most 12 kS/s holds
+//! (Carson's rule wants ±8 kHz at 5 kHz deviation: the peaks are
+//! clipped, as on a KiwiSDR). No AGC by default (an FM signal has a
+//! constant level; a session's AGC switch works as for SSB), the squelch
+//! for the noise between transmissions.
 
 use crate::agc::{Agc, AgcSpec};
 use crate::chan::{ChannelSpec, Droop, design};
 use crate::decim::Decimator;
-use crate::demod::{Am, Sync, SyncOut, ssb};
+use crate::demod::{Am, Fm, Sync, SyncOut, ssb};
 use crate::nb::NoiseBlanker;
 use crate::nco::Shifter;
 use crate::nr::NoiseReduction;
@@ -49,6 +55,8 @@ pub enum Mode {
     Sas,
     /// The channel's I/Q (Kiwi protocol clients).
     Iq,
+    /// Narrow-band FM (VHF voice).
+    Nbfm,
 }
 
 impl Mode {
@@ -100,13 +108,15 @@ impl AudioSpec {
             // the carrier stays inside, 50 Hz from the edge
             Mode::Sal => (-5000.0, 50.0, AgcSpec::am()),
             Mode::Sar => (-50.0, 5000.0, AgcSpec::am()),
+            Mode::Nbfm => (-5000.0, 5000.0, AgcSpec::ssb()),
         };
         AudioSpec {
             mode,
             lo_hz: lo,
             hi_hz: hi,
             pitch_hz: 700.0,
-            agc: Some(agc),
+            // FM's level is its deviation: no AGC
+            agc: (mode != Mode::Nbfm).then_some(agc),
             gain_db: 0.0,
             nb: None,
             nr: 0.0,
@@ -137,7 +147,10 @@ impl AudioSpec {
             hi_hz: self.hi_hz,
             // AM's wider transitions are shorter filters; one sideband
             // needs a sharp edge by the carrier
-            transition_hz: if matches!(self.mode, Mode::Am | Mode::Sam | Mode::Sas | Mode::Iq) {
+            transition_hz: if matches!(
+                self.mode,
+                Mode::Am | Mode::Sam | Mode::Sas | Mode::Iq | Mode::Nbfm
+            ) {
                 500.0
             } else {
                 200.0
@@ -166,6 +179,7 @@ pub struct AudioChain {
     shift: Shifter,
     am: Am,
     sync: Sync,
+    fm: Fm,
     agc: Option<Agc>,
     gain: f32,
     nb: Option<NoiseBlanker>,
@@ -204,6 +218,7 @@ impl AudioChain {
             shift: Shifter::new(spec.pitch_hz, AUDIO_RATE),
             am: Am::new(AUDIO_RATE),
             sync: Sync::new(AUDIO_RATE),
+            fm: Fm::new(AUDIO_RATE),
             agc: spec.agc.map(|a| Agc::new(a, AUDIO_RATE)),
             gain: Self::gain(&spec),
             nb: spec.nb.map(NoiseBlanker::new),
@@ -255,6 +270,7 @@ impl AudioChain {
         if spec.mode != old.mode || spec.agc != old.agc {
             self.agc = spec.agc.map(|a| Agc::new(a, AUDIO_RATE));
             self.am = Am::new(AUDIO_RATE);
+            self.fm = Fm::new(AUDIO_RATE);
             if !(spec.mode.is_am() && old.mode.is_am()) {
                 // between AM modes the loop stays locked
                 self.sync = Sync::new(AUDIO_RATE);
@@ -372,6 +388,7 @@ impl AudioChain {
                 self.sync.process(&self.z, kind, agc, out);
             }
             Mode::Iq => out.extend(self.z.iter().flat_map(|s| [s.re, s.im])),
+            Mode::Nbfm => self.fm.process(&self.z, out),
         }
         let a = &mut out[start..];
         let iq = self.spec.mode == Mode::Iq;

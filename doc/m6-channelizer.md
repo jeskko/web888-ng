@@ -436,3 +436,45 @@ the metrics instead:
   sooner.
 * The driver for step 6: settled by running our own OS and driver (the
   stock module's buffers couldn't serve another layout).
+
+## 7. VHF (2026-11-12: unit-tested, not yet on a board)
+
+The VHF input by undersampling, with the channelizer built for it
+(web888-ng-hw `docs/channelizer.md` §3.10: `websdr_pfb_vhf.bit`, a
+98.304 MHz ADC clock, 24 kHz bins at 48 kS/s, the tuner ÷4 to 12 kS/s).
+
+* **Configuration**: `[radio] band = "vhf"` (or `--band vhf`). web888d
+  programs the Si5351 to 98.304 MHz (unless `si5351_adc` says another
+  clock) before the bitstream loads, keeps the RF switch on the VHF path
+  (`MODE_SET`, whatever the front end asks), and tunes 98.304..147.456
+  MHz. `bitstream = "channelizer"` takes the image's channelizer for the
+  band, `auto` its tuned bitstream (`websdr_vhf.bit`, 13 RX: the same
+  mapping works there, RX at 48 kS/s).
+* **Back to HF**: U-Boot sets 122.88 MHz only at boot. web888d notes the
+  clock it programmed in `/run/web888/adc-clock`; an HF start finding
+  another clock there programs 122.88 MHz again. An HF start without the
+  note leaves the clock alone, as before.
+* **Mapping** (`ZynqConfig::nyquist_zone`, even zones only: an odd one is
+  mirrored): RF = zone/2 · fs + baseband, with the PPS-corrected fs, in
+  the RX and WF NCO words, the tuner's words and `BinCaps::first_hz`.
+  `Caps::rf_range` is the zone, so the web UI, Kiwi's `freq_offset` and
+  HPSDR see RF frequencies.
+* **Checks**: the channelizer's signature carries its clock plan
+  (`channelizer_clock`); web888d refuses a channelizer whose clock isn't
+  the one programmed (the tuner's rate would not be 12 kS/s). Skimmer
+  bands outside the range aren't run (logged once): on VHF an HF dial
+  would be another frequency, and its spots would be wrong.
+* **NBFM** (`demod::Fm`, mode `nbfm`, Kiwi's `nbfm`): a quadrature
+  discriminator, 5 kHz deviation reads 0.5, a DC blocker, 300 Hz
+  de-emphasis (unity at 1 kHz); no AGC of its own (the UI's AGC switch
+  works as for SSB), the squelch for the gaps. ±5 kHz
+  at 12 kS/s, as a KiwiSDR does: 5 kHz deviation's peaks (Carson ±8
+  kHz) are clipped, 2.5 kHz (12.5 kHz channels) fits. UI: an FM button
+  (key f), steps of 12.5 kHz; the band picker offers the bands in the
+  radio's range (Air 118-137 MHz in AM, 2 m in FM).
+* **End to end** (a synthetic recording, the iq backend at 145.4 MHz in
+  bins mode, a WebSocket client): NBFM at 145.5 MHz (1 kHz, 2.5 kHz
+  deviation) gives the tone with its 2nd harmonic 62 dB down; AM at
+  145.3 MHz its 400 Hz tone.
+* **Open**: the VHF input's filter and level on a board; whether 25 kHz
+  channels' NBFM needs a wider audio chain (24 kS/s) to be clean.

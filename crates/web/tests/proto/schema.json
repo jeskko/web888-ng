@@ -9,6 +9,7 @@
       "default": {
         "backend": "zynqsdr",
         "bitstream": "auto",
+        "band": "hf",
         "si5351_adc": null,
         "bins": null,
         "zoom_engine": true,
@@ -160,9 +161,14 @@
           "default": "zynqsdr"
         },
         "bitstream": {
-          "description": "zynqsdr: a path, `auto` (the image's or the stock one) or `none`.",
+          "description": "zynqsdr: a path, `auto` (the image's or the stock one for the\nband), `channelizer` (the image's channelizer for the band) or\n`none`.",
           "type": "string",
           "default": "auto"
+        },
+        "band": {
+          "description": "zynqsdr: `hf`, or `vhf`: the VHF RF path, the Si5351 ADC clock at\n98.304 MHz, 98.304..147.456 MHz tunable (undersampled).",
+          "$ref": "#/$defs/Band",
+          "default": "hf"
         },
         "si5351_adc": {
           "description": "EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock (Hz).",
@@ -228,6 +234,21 @@
           "description": "Wideband IQ from an SDR or a recording, channelized like the FPGA.",
           "type": "string",
           "const": "iq"
+        }
+      ]
+    },
+    "Band": {
+      "description": "The band the antenna input is used for (zynqsdr backend).",
+      "oneOf": [
+        {
+          "description": "0..61.44 MHz at the 122.88 MHz ADC clock (the HF path).",
+          "type": "string",
+          "const": "hf"
+        },
+        {
+          "description": "98.304..147.456 MHz (airband, 2 m) by undersampling at a 98.304\nMHz ADC clock (the VHF path; the stock airband profile 0).",
+          "type": "string",
+          "const": "vhf"
         }
       ]
     },

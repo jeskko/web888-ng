@@ -1,11 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// Amateur bands (IARU region 1 edges, Hz) for the phone's band picker
-// (pure, unit-tested).
+// Amateur bands (IARU region 1 edges, Hz) and the VHF airband for the
+// phone's band picker (pure, unit-tested); the picker offers the ones in
+// the radio's range.
 
 import type { Mode } from "./proto.ts";
 
 export interface Band {
   name: string;
+  /** The picker's label (default: the name in metres). */
+  label?: string;
   lo: number;
   hi: number;
   /** Where the band picker lands the first time, and its mode. */
@@ -25,7 +28,20 @@ export const BANDS: Band[] = [
   { name: "12", lo: 24_890_000, hi: 24_990_000, hz: 24_950_000, mode: "usb" },
   { name: "10", lo: 28_000_000, hi: 29_700_000, hz: 28_400_000, mode: "usb" },
   { name: "6", lo: 50_000_000, hi: 52_000_000, hz: 50_150_000, mode: "usb" },
+  // VHF (the VHF band: 98.304..147.456 MHz, undersampled)
+  { name: "air", label: "Air", lo: 118_000_000, hi: 137_000_000, hz: 124_000_000, mode: "am" },
+  { name: "2", lo: 144_000_000, hi: 146_000_000, hz: 145_500_000, mode: "nbfm" },
 ];
+
+/** The picker's label of `b`. */
+export function bandLabel(b: Band): string {
+  return b.label ?? `${b.name} m`;
+}
+
+/** The bands a radio tuning `lo..hi` (Hz) covers. */
+export function bandsIn(lo: number, hi: number): Band[] {
+  return BANDS.filter((b) => b.lo >= lo && b.hi <= hi);
+}
 
 /** The band containing `hz`, if any. */
 export function bandOf(hz: number): Band | null {

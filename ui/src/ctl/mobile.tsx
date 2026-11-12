@@ -8,7 +8,7 @@
 import { useSignal, type Signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useRef } from "preact/hooks";
-import { BANDS, bandOf } from "../bands.ts";
+import { BANDS, bandLabel, bandOf, bandsIn } from "../bands.ts";
 import { bandwidths, formatKhz, stepTo } from "../fmt.ts";
 import { keypadHz, keypadPress } from "../keypad.ts";
 import { isAm, type Mode } from "../proto.ts";
@@ -19,6 +19,7 @@ import {
   goBand,
   muted,
   overloadAt,
+  radio,
   rssi,
   setMode,
   setPassband,
@@ -166,6 +167,9 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
           <button class={am ? "on" : ""} onClick={cycleAm}>
             {(am ?? "am").toUpperCase()}
           </button>
+          <button class={s?.mode === "nbfm" ? "on" : ""} onClick={() => setMode("nbfm")}>
+            FM
+          </button>
         </div>
         <div class="m-row">
           <button onClick={() => s && tuneInView(stepTo(s.hz, step, -1))} aria-label="Down one step">
@@ -256,10 +260,12 @@ function Keypad({ close }: { close: () => void }) {
 
 function Bands({ close }: { close: () => void }) {
   const here = st.value ? bandOf(st.value.hz) : null;
+  const r = radio.value;
+  const bands = r ? bandsIn(r.rf_lo, r.rf_hi) : BANDS;
   return (
     <Sheet title="Band" close={close}>
       <div class="m-bands">
-        {BANDS.map((b) => (
+        {bands.map((b) => (
           <button
             key={b.name}
             class={here?.name === b.name ? "on" : ""}
@@ -268,7 +274,7 @@ function Bands({ close }: { close: () => void }) {
               close();
             }}
           >
-            {b.name} m
+            {bandLabel(b)}
           </button>
         ))}
       </div>

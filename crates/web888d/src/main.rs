@@ -84,10 +84,15 @@ struct ServeArgs {
     #[arg(long)]
     backend: Option<Backend>,
     /// Bitstream to load first (zynqsdr backend): a path, `auto` for the
-    /// variant's file in /usr/share/web888 (web888-ng-os image) or else the
-    /// stock one on the SD card, or `none` if it's already loaded.
+    /// band's file in /usr/share/web888 (web888-ng-os image) or else the
+    /// stock one on the SD card, `channelizer` for the image's channelizer
+    /// for the band, or `none` if it's already loaded.
     #[arg(long)]
     bitstream: Option<String>,
+    /// Band (zynqsdr backend): hf, or vhf (the VHF path, a 98.304 MHz ADC
+    /// clock, 98.304..147.456 MHz undersampled).
+    #[arg(long)]
+    band: Option<web888_config::Band>,
     /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock to this
     /// frequency before loading the bitstream. Default: keep the FSBL setting.
     #[arg(long)]
@@ -183,6 +188,7 @@ impl ServeArgs {
         let r = &mut c.radio;
         set(&mut r.backend, &self.backend);
         set(&mut r.bitstream, &self.bitstream);
+        set(&mut r.band, &self.band);
         if self.si5351_adc.is_some() {
             r.si5351_adc = self.si5351_adc;
         }
@@ -535,9 +541,10 @@ fn start_skimmers(
     pool: Arc<web888_core::pool::DspPool>,
     rx_rate: f64,
     radio_live: bool,
+    rf: std::ops::RangeInclusive<f64>,
 ) -> AnyResult<web888_web::session::Skim> {
     let threads = pool.workers();
-    let sk = web888_skim::Skimmers::new(channels, pool, rx_rate, radio_live, threads)?;
+    let sk = web888_skim::Skimmers::new(channels, pool, rx_rate, radio_live, rf, threads)?;
     let hour = || {
         (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -649,9 +656,23 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
         }
         Backend::Iq => open_iq(&a.iq, a.bins, a.zoom_engine),
         Backend::Zynqsdr => {
+            use web888_config::Band;
             use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, bitstream, dev::ZynqsdrDev, si5351};
-            let mut cfg = ZynqConfig::default();
-            if let Some(f) = a.si5351_adc {
+            let mut cfg = match a.band {
+                Band::Hf => ZynqConfig::default(),
+                Band::Vhf => ZynqConfig::vhf(),
+            };
+            // the ADC clock: as configured, the band's, or for HF the
+            // FSBL's/U-Boot's 122.88 MHz back if a VHF run left another
+            let left = std::fs::read_to_string(ADC_CLOCK_MARK)
+                .ok()
+                .and_then(|s| s.trim().parse::<f64>().ok());
+            let clock = match (a.si5351_adc, a.band) {
+                (Some(f), _) => Some(f),
+                (None, Band::Vhf) => Some(web888_zynqsdr::ADC_HZ_VHF),
+                (None, Band::Hf) => left.filter(|&f| f != ADC_HZ_HF).map(|_| ADC_HZ_HF),
+            };
+            if let Some(f) = clock {
                 let p =
                     si5351::plan(f, si5351::REF_HZ).ok_or("no Si5351 plan for that frequency")?;
                 si5351::program("/dev/i2c-0", &p).map_err(|e| format!("si5351: {e}"))?;
@@ -659,19 +680,38 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
                     "si5351: CLK0 {:.3} Hz (PLLA {}+{}/{}, MS0 {})",
                     p.out_hz, p.pll.a, p.pll.b, p.pll.c, p.ms.a
                 );
+                // for the next start (/run: until a reboot, which sets
+                // 122.88 MHz again)
+                let mark = std::path::Path::new(ADC_CLOCK_MARK);
+                if let Err(e) = mark
+                    .parent()
+                    .map_or(Ok(()), std::fs::create_dir_all)
+                    .and_then(|()| std::fs::write(mark, format!("{}\n", p.out_hz)))
+                {
+                    eprintln!(
+                        "si5351: {ADC_CLOCK_MARK}: {e} (a later HF start won't restore 122.88 MHz)"
+                    );
+                }
                 cfg.adc_hz = p.out_hz;
                 if p.out_hz < 100e6 {
                     cfg.variant = Variant::Vhf; // stock rule: ADC < 100 MHz uses the VHF bitstream
                 }
             }
+            let image = std::path::Path::new(bitstream::IMAGE_DIR);
             let bit = match a.bitstream.as_str() {
                 "none" => None,
-                "auto" => Some(bitstream::auto_path(
-                    cfg.variant,
-                    &[std::path::Path::new(bitstream::IMAGE_DIR)],
-                )),
+                "auto" => Some(bitstream::auto_path(cfg.variant, &[image])),
+                "channelizer" => Some(image.join(bitstream::channelizer_name(cfg.variant))),
                 p => Some(std::path::PathBuf::from(p)),
             };
+            if a.band == Band::Vhf {
+                eprintln!(
+                    "band: VHF, {:.3}..{:.3} MHz (the VHF path, Nyquist zone {})",
+                    cfg.rf_base(cfg.adc_hz) / 1e6,
+                    (cfg.rf_base(cfg.adc_hz) + cfg.adc_hz / 2.0) / 1e6,
+                    cfg.nyquist_zone
+                );
+            }
             if let Some(bit) = bit {
                 use std::path::Path;
                 let (n, via) = if bitstream::has_devcfg() {
@@ -720,6 +760,9 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
         }
     }
 }
+
+/// The ADC clock web888d last programmed (Hz), until a reboot.
+const ADC_CLOCK_MARK: &str = "/run/web888/adc-clock";
 
 fn eth0_mac() -> [u8; 6] {
     let mut mac = [0x02, 0, 0, 0x88, 0x88, 0x01];
@@ -910,6 +953,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         pool.clone(),
         rx_rate(caps.adc_hz, r2),
         id.live,
+        caps.rf_range.clone(),
     )?;
     if cfg.hpsdr.enabled {
         let h = &cfg.hpsdr;

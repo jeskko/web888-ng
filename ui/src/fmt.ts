@@ -45,12 +45,13 @@ export function parseFreq(s: string): number | null {
 
 /** Click-tune snap per mode. */
 export function snapFor(mode: Mode): number {
-  return isAm(mode) ? 1000 : 10;
+  return mode === "nbfm" ? 6250 : isAm(mode) ? 1000 : 10;
 }
 
 /** Arrow-key tuning step per mode. */
 export function stepFor(mode: Mode): number {
-  return isAm(mode) ? 1000 : mode === "cw" ? 10 : 100;
+  // FM channels: 12.5 kHz apart (and 25, 6.25)
+  return mode === "nbfm" ? 12500 : isAm(mode) ? 1000 : mode === "cw" ? 10 : 100;
 }
 
 export function snap(hz: number, step: number): number {
@@ -90,6 +91,7 @@ export function bandwidths(mode: Mode): { label: string; lo: number; hi: number 
     case "sam":
     case "sas":
     case "iq":
+    case "nbfm":
       return [6, 8, 10].map((k) => ({ label: `${k}k`, lo: (-k * 1000) / 2, hi: (k * 1000) / 2 }));
     // one sideband and the carrier (50 Hz inside the edge)
     case "sal":

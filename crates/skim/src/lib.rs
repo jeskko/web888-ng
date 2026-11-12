@@ -441,18 +441,24 @@ pub struct Skimmers {
     pool: Arc<DspPool>,
     rx_rate: f64,
     live: bool,
+    /// What the radio can tune (RF): bands outside are not run.
+    rf: std::ops::RangeInclusive<f64>,
+    /// The bands out of range already logged.
+    out_of_range: Mutex<Vec<Skimmer>>,
     queue: Arc<Queue>,
     pub bus: Arc<SpotBus>,
     running: Mutex<Vec<Running>>,
 }
 
 impl Skimmers {
-    /// `live`: the radio receives live signals (see `Identity::live`).
+    /// `live`: the radio receives live signals (see `Identity::live`);
+    /// `rf`: the frequencies it can tune (`Caps::rf_range`).
     pub fn new(
         channels: Arc<Channels>,
         pool: Arc<DspPool>,
         rx_rate: f64,
         live: bool,
+        rf: std::ops::RangeInclusive<f64>,
         threads: usize,
     ) -> std::io::Result<Arc<Self>> {
         let queue = Arc::new(Queue::default());
@@ -468,6 +474,8 @@ impl Skimmers {
             pool,
             rx_rate,
             live,
+            rf,
+            out_of_range: Mutex::new(vec![]),
             queue,
             bus,
             running: Mutex::new(vec![]),
@@ -480,6 +488,7 @@ impl Skimmers {
         let want: Vec<&Skimmer> = cfg
             .iter()
             .filter(|s| s.enabled && s.dial > 0.0 && s.runs_at(hour))
+            .filter(|s| self.in_range(s))
             .collect();
         let mut running = self.running.lock().unwrap();
         running.retain(|r| {
@@ -531,6 +540,32 @@ impl Skimmers {
             running.push(Running { band, stop });
         }
         self.queue.shedder.lock().unwrap().bands = running.iter().map(|r| r.band.clone()).collect();
+    }
+
+    /// Whether the radio can tune `s`'s passband (the dial and 3 kHz
+    /// above); a band that can't is logged once (a VHF radio would hear
+    /// another band there, and spots would be wrong).
+    fn in_range(&self, s: &Skimmer) -> bool {
+        if self.rf.contains(&s.dial) && self.rf.contains(&(s.dial + 3_000.0)) {
+            return true;
+        }
+        let mut logged = self.out_of_range.lock().unwrap();
+        if !logged.contains(s) {
+            events::emit(
+                events::Level::Warning,
+                "skim",
+                format!(
+                    "{:?} {:.1} kHz: outside the radio's {:.3}..{:.3} MHz, not run",
+                    s.mode,
+                    s.dial / 1e3,
+                    self.rf.start() / 1e6,
+                    self.rf.end() / 1e6
+                )
+                .to_lowercase(),
+            );
+            logged.push(s.clone());
+        }
+        false
     }
 
     /// The bands running now.

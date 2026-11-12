@@ -149,6 +149,13 @@ export function ModeBar() {
       >
         {(am ?? "am").toUpperCase()}
       </button>
+      <button
+        class={s?.mode === "nbfm" ? "on" : ""}
+        onClick={() => setMode("nbfm")}
+        title="Narrow-band FM (VHF voice; key f)"
+      >
+        FM
+      </button>
     </div>
   );
 }

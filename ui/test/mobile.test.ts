@@ -109,3 +109,15 @@ test("colour range: a bad one doesn't blank the view", async () => {
   assert.deepEqual(setTop({ min: -120, max: -60 }, -130), { min: -140, max: -130 });
   assert.deepEqual(setFloor({ min: -120, max: -60 }, -100), { min: -100, max: -60 });
 });
+
+test("VHF bands: only those in the radio's range", async () => {
+  const { bandsIn, bandLabel } = await import("../src/bands.ts");
+  const hf = bandsIn(0, 61.44e6).map((b) => b.name);
+  assert.ok(hf.includes("40") && hf.includes("6") && !hf.includes("air"));
+  const vhf = bandsIn(98.304e6, 147.456e6);
+  assert.deepEqual(vhf.map((b) => b.name), ["air", "2"]);
+  assert.deepEqual(vhf.map(bandLabel), ["Air", "2 m"]);
+  assert.equal(bandOf(125e6)?.mode, "am");
+  assert.equal(bandOf(145.5e6)?.mode, "nbfm");
+  assert.ok(MODES.includes("nbfm"));
+});

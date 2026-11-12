@@ -18,6 +18,16 @@
 //!   its zoom engine where the driver reports one (`PFB_ZOOM_INFO`). The
 //!   results come on the power ring: once a job is submitted the power
 //!   stream stays on, at its slowest line rate when no lines are wanted.
+//!   Its signature's clock plan ([11:8]) says the ADC clock it is built
+//!   for: 0 HF (122.88 MHz, the tuner decimating the 60 kS/s bins by 5),
+//!   1 VHF (98.304 MHz, 48 kS/s bins by 4); either way the tuner gives 12
+//!   kS/s.
+//! * VHF by undersampling (`ZynqConfig::nyquist_zone`): with the RF switch
+//!   on its VHF path and an ADC clock fs, the band from zone/2 · fs to
+//!   (zone/2 + 1/2) · fs lands upright at 0..fs/2 (an even zone; an odd
+//!   one would be mirrored). Frequencies in and out of this backend are
+//!   RF; the NCO words and bins are the baseband's. As the stock airband
+//!   mode: zone 2, 98.304..147.456 MHz at 98.304 MHz.
 
 pub mod abi;
 pub mod bitstream;
@@ -38,6 +48,11 @@ pub struct ZynqConfig {
     pub variant: Variant,
     /// Nominal ADC clock as programmed (Si5351 / FSBL).
     pub adc_hz: f64,
+    /// The Nyquist zone the antenna's band is in, even (upright): 0 for
+    /// HF, 2 for the VHF path's fs..1.5 fs (undersampling).
+    pub nyquist_zone: u8,
+    /// The HF/VHF RF switch on its VHF path.
+    pub vhf_path: bool,
 }
 
 impl Default for ZynqConfig {
@@ -45,9 +60,34 @@ impl Default for ZynqConfig {
         ZynqConfig {
             variant: Variant::Hf,
             adc_hz: ADC_HZ_HF,
+            nyquist_zone: 0,
+            vhf_path: false,
         }
     }
 }
+
+impl ZynqConfig {
+    /// The stock airband profile 0 for the channelizer: the VHF path,
+    /// 98.304 MHz, 98.304..147.456 MHz in the third Nyquist zone.
+    pub fn vhf() -> Self {
+        ZynqConfig {
+            variant: Variant::Vhf,
+            adc_hz: ADC_HZ_VHF,
+            nyquist_zone: 2,
+            vhf_path: true,
+        }
+    }
+
+    /// The RF frequency at baseband 0 (the zone's lower edge) at ADC
+    /// rate `fs`.
+    pub fn rf_base(&self, fs: f64) -> f64 {
+        (self.nyquist_zone / 2) as f64 * fs
+    }
+}
+
+/// The VHF channelizer's ADC clock (the stock airband profile 0): 48 kS/s
+/// bins, 12 kS/s from the tuner.
+pub const ADC_HZ_VHF: f64 = 98_304_000.0;
 
 struct WfState {
     decim: u16,
@@ -80,6 +120,9 @@ pub struct ZynqsdrRadio<D: Device> {
     has_stats: bool,
     /// The channelizer bitstream.
     pfb: Option<Pfb>,
+    /// The bins tuner's rate as a stage-2 decimation (12 kS/s at its
+    /// clock).
+    tuner_r2: u16,
 }
 
 /// The channelizer's state (`BinRadio`).
@@ -157,8 +200,31 @@ pub fn tuner_users(signature: u32) -> usize {
     }
 }
 
-/// The tuner's rate as a stage-2 decimation: 12 kS/s.
+/// The tuner's rate as a stage-2 decimation at the HF clock: 12 kS/s.
 pub const TUNER_R2: u16 = 40;
+
+/// The ADC clock a channelizer bitstream is built for (its signature's
+/// clock plan, [11:8]); none for another bitstream or an unknown plan.
+pub fn channelizer_clock(signature: u32) -> Option<f64> {
+    if !is_channelizer(signature) {
+        return None;
+    }
+    match (signature >> 8) & 0xf {
+        0 => Some(ADC_HZ_HF),
+        1 => Some(ADC_HZ_VHF),
+        _ => None,
+    }
+}
+
+/// The bins tuner's rate as a stage-2 decimation (total decimation 256 ·
+/// r2): the frame rate (fs / 2048) over its decimation, 5 at the HF clock
+/// and 4 at the VHF one: 12 kS/s either way.
+pub fn tuner_r2(signature: u32) -> u16 {
+    match (signature >> 8) & 0xf {
+        1 => 32,
+        _ => TUNER_R2,
+    }
+}
 
 fn io(e: std::io::Error) -> Error {
     Error::Io(e)
@@ -168,15 +234,42 @@ impl<D: Device> ZynqsdrRadio<D> {
     /// Identify the bitstream, enable PPS and start RX at 24 kS/s.
     pub fn new(mut dev: D, cfg: ZynqConfig) -> Result<Self> {
         let signature = dev.get_u32(GET_SIGNATURE).map_err(io)?;
-        let (mut rx_ch, wf_ch) = signature_counts(signature);
+        let (mut rx_ch, mut wf_ch) = signature_counts(signature);
         let channelizer = is_channelizer(signature);
         if channelizer {
+            // [11:8] is the clock plan there: no WF channels
             rx_ch = tuner_users(signature);
+            wf_ch = 0;
         }
         if !channelizer && (rx_ch == 0 || rx_ch > 15 || wf_ch == 0) {
             return Err(Error::Unsupported(
                 "FPGA signature reports no channels (bitstream loaded?)",
             ));
+        }
+        if !cfg.nyquist_zone.is_multiple_of(2) {
+            return Err(Error::InvalidParam(
+                "Nyquist zone: an even one (an odd one is mirrored)",
+            ));
+        }
+        if channelizer {
+            match channelizer_clock(signature) {
+                Some(f) if ((cfg.adc_hz - f) / f).abs() < 1e-3 => {}
+                Some(_) if f_is_vhf(signature) => {
+                    return Err(Error::Unsupported(
+                        "the VHF channelizer bitstream needs the 98.304 MHz ADC clock ([radio] band = \"vhf\")",
+                    ));
+                }
+                Some(_) => {
+                    return Err(Error::Unsupported(
+                        "the HF channelizer bitstream needs the 122.88 MHz ADC clock (for VHF, websdr_pfb_vhf.bit)",
+                    ));
+                }
+                None => {
+                    return Err(Error::Unsupported(
+                        "a channelizer bitstream for an unknown ADC clock (signature [11:8])",
+                    ));
+                }
+            }
         }
         let dna = dev.get_dna().map_err(io)?;
         let gpio = dev.get_u32(GET_GPIO_MASK).map_err(io)?;
@@ -218,6 +311,7 @@ impl<D: Device> ZynqsdrRadio<D> {
             gpio,
             build_id: stats.filter(|s| s.ext != 0).map(|s| s.build_id),
             has_stats: stats.is_some(),
+            tuner_r2: tuner_r2(signature),
             pfb: channelizer.then(|| Pfb {
                 generation: 0,
                 streams: 0,
@@ -231,7 +325,7 @@ impl<D: Device> ZynqsdrRadio<D> {
         };
         if channelizer {
             if rx_ch > 0 {
-                r.set_rx_rate(TUNER_R2)?;
+                r.set_rx_rate(r.tuner_r2)?;
             }
             return Ok(r);
         }
@@ -260,6 +354,11 @@ impl<D: Device> ZynqsdrRadio<D> {
         Ok(())
     }
 
+    /// The RF frequency at baseband 0 with the ADC rate now assumed.
+    fn rf_base(&self) -> f64 {
+        self.cfg.rf_base(self.adc_assumed)
+    }
+
     /// Stall time after which a continuous waterfall is restarted.
     fn wf_stall_limit(&self, slot: usize) -> Duration {
         let block = WF_BLOCK as f64 * self.wf[slot].decim as f64 / self.adc_assumed;
@@ -276,7 +375,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             adc_hz: self.cfg.adc_hz,
             // the channelizer's tuner: 12 kS/s only
             rx_r2: if self.pfb.is_some() {
-                TUNER_R2..=TUNER_R2
+                self.tuner_r2..=self.tuner_r2
             } else {
                 5..=40
             },
@@ -284,8 +383,11 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
             wf_decim_max: 8192,
             wf_block: WF_BLOCK,
             sample_counter: false,
-            // the VHF bitstream's higher zones (undersampling) come later
-            rf_range: 0.0..=self.cfg.adc_hz / 2.0,
+            // the Nyquist zone the antenna's band is in
+            rf_range: {
+                let base = self.cfg.rf_base(self.cfg.adc_hz);
+                base..=base + self.cfg.adc_hz / 2.0
+            },
         }
     }
 
@@ -303,8 +405,8 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
                 "the channelizer bitstream has no RX channels (no tuner)",
             ));
         }
-        if self.pfb.is_some() && r2 != TUNER_R2 {
-            return Err(Error::Unsupported("the bins tuner runs at 12 kS/s (r2 40)"));
+        if self.pfb.is_some() && r2 != self.tuner_r2 {
+            return Err(Error::Unsupported("the bins tuner runs at 12 kS/s only"));
         }
         if self.pfb.is_some() && r2 == self.r2 {
             // running at its one rate already: a restart could split a
@@ -329,7 +431,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         if ch >= self.rx_ch {
             return Err(Error::InvalidChannel(ch));
         }
-        let w = nco_word(f_hz, self.adc_assumed);
+        let w = nco_word(f_hz - self.rf_base(), self.adc_assumed);
         self.dev.rx_param(ch as u32, w).map_err(io)?;
         self.words[ch] = w;
         Ok(())
@@ -374,7 +476,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
                 "WF decimation must be a power of two 1..=8192",
             ));
         }
-        let word = nco_word(f_hz, self.adc_assumed);
+        let word = nco_word(f_hz - self.rf_base(), self.adc_assumed);
         let s = &mut self.wf[slot];
         s.decim = decim;
         s.mode = mode;
@@ -445,7 +547,11 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         self.dev
             .set(AD8370_SET, atten_code(fe.atten_db))
             .map_err(io)?;
-        self.dev.set(MODE_SET, fe.vhf_path as u32).map_err(io)?;
+        // the configured path whatever `fe` says (the hw thread knows
+        // nothing of bands)
+        self.dev
+            .set(MODE_SET, (fe.vhf_path || self.cfg.vhf_path) as u32)
+            .map_err(io)?;
         self.dev.set(CLK_SET, (!fe.ext_ref) as u32).map_err(io)?;
         let mut g = self.gpio & !(GPIO_ANTENNA_MASK | GPIO_DITHER | GPIO_PGA | GPIO_LED);
         g |= fe.antenna as u32 & GPIO_ANTENNA_MASK;
@@ -503,7 +609,7 @@ impl<D: Device> BinRadio for ZynqsdrRadio<D> {
             frame_rate: self.adc_assumed / 2048.0,
             // bin 2047's slot carries the next frame's header
             bins: if on { pfb::POWER_BINS - 1 } else { 0 },
-            first_hz: 0.0,
+            first_hz: self.rf_base(),
             wraps: false,
             max_selected: if on { 64 } else { 0 },
         }
@@ -625,6 +731,10 @@ impl<D: Device> BinRadio for ZynqsdrRadio<D> {
         out.extend(std::iter::from_fn(|| p.power.pop_zoom()));
         Ok(out.len() - before)
     }
+}
+
+fn f_is_vhf(signature: u32) -> bool {
+    channelizer_clock(signature) == Some(ADC_HZ_VHF)
 }
 
 fn pfb_mut(p: &mut Option<Pfb>) -> Result<&mut Pfb> {

@@ -11,11 +11,15 @@ use web888_radio::bins::{BinFrames, BinRadio, ZoomCaps, ZoomJob, ZoomResult};
 use web888_radio::*;
 use web888_zynqsdr::abi::*;
 use web888_zynqsdr::dev::Device;
-use web888_zynqsdr::{ZynqConfig, ZynqsdrRadio, is_channelizer, tuner_users};
+use web888_zynqsdr::{
+    ZynqConfig, ZynqsdrRadio, channelizer_clock, is_channelizer, tuner_r2, tuner_users,
+};
 
 const SIG: u32 = 0x0E5D_0010;
 /// With the bins tuner: 32 users.
 const SIG_TUNER: u32 = 0x0E5D_2010;
+/// The VHF build (clock plan 1: 98.304 MHz, the tuner by 4).
+const SIG_VHF: u32 = 0x0E5D_2110;
 
 struct FakePfb {
     sig: u32,
@@ -144,7 +148,7 @@ impl Device for FakePfb {
         Ok(1)
     }
     fn rx_param(&mut self, ch: u32, word: u64) -> io::Result<()> {
-        if self.sig != SIG_TUNER {
+        if tuner_users(self.sig) == 0 {
             return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
         }
         self.rx_params.push((ch, word));
@@ -155,7 +159,7 @@ impl Device for FakePfb {
     }
     /// The tuner: three frames, user u reads {I: u, Q: -u}.
     fn rx_read(&mut self, dst: &mut [u8]) -> io::Result<usize> {
-        if self.sig != SIG_TUNER {
+        if tuner_users(self.sig) == 0 {
             return Err(io::Error::from_raw_os_error(libc::EOPNOTSUPP));
         }
         let words: Vec<u8> = (0..3 * 32i32)
@@ -294,6 +298,68 @@ fn the_tuner_is_the_rx() {
     assert_eq!(buf[33], Iq32 { i: 1, q: -1 });
     // the bins are still there for the waterfall
     assert_eq!(r.bin_caps().bins, 2047);
+}
+
+#[test]
+fn the_vhf_build_undersamples_at_98_304_mhz() {
+    assert_eq!(channelizer_clock(SIG_TUNER), Some(122.88e6));
+    assert_eq!(channelizer_clock(SIG_VHF), Some(98.304e6));
+    assert_eq!(channelizer_clock(0x0E5D_020D), None); // the tuned VHF build
+    assert_eq!((tuner_r2(SIG_TUNER), tuner_r2(SIG_VHF)), (40, 32));
+    let vhf = || {
+        let mut d = FakePfb::new();
+        d.sig = SIG_VHF;
+        d
+    };
+    // each bitstream needs its clock
+    let e = |r: Result<ZynqsdrRadio<FakePfb>>| match r {
+        Err(Error::Unsupported(m)) => m,
+        _ => panic!("expected an error"),
+    };
+    assert!(e(ZynqsdrRadio::new(vhf(), ZynqConfig::default())).contains("98.304"));
+    let mut hf = FakePfb::new();
+    hf.sig = SIG_TUNER;
+    assert!(e(ZynqsdrRadio::new(hf, ZynqConfig::vhf())).contains("122.88"));
+
+    let mut r = ZynqsdrRadio::new(vhf(), ZynqConfig::vhf()).unwrap();
+    let c = r.caps();
+    assert_eq!(c.variant, Variant::Vhf);
+    assert_eq!((c.rx_channels, c.wf_channels), (32, 0));
+    // the tuner at 12 kS/s: 98.304 MHz / (256 * 32)
+    assert_eq!(c.rx_r2, 32..=32);
+    assert_eq!(rx_rate(c.adc_hz, 32), 12e3);
+    assert_eq!(c.rf_range, 98.304e6..=147.456e6);
+    let starts: Vec<_> = r.device().sets.iter().filter(|s| s.0 == RX_START).collect();
+    assert_eq!(starts, vec![&(RX_START, 32)]);
+    // RF in, the baseband's word out: 125 MHz is 26.696 MHz upright
+    r.tune_rx(3, 125.0e6).unwrap();
+    let w = r.device().rx_params[0];
+    assert_eq!(w.0, 3);
+    assert!((nco_freq(w.1, 98.304e6) - 26.696e6).abs() < 1e-3);
+    // the bins: 24 kHz apart at 48 kS/s, from the zone's edge
+    let b = r.bin_caps();
+    assert_eq!((b.bin_hz, b.frame_rate, b.first_hz), (24e3, 48e3, 98.304e6));
+    let (k, off) = b.bin_of(125.0e6).unwrap();
+    assert_eq!(k, 1112); // 26.688 MHz
+    assert!((off - 8e3).abs() < 1e-6);
+    assert!(b.bin_of(97e6).is_none());
+    // the RF switch on the VHF path whatever the front end says
+    r.front_end(FrontEnd::default()).unwrap();
+    assert!(r.device().sets.contains(&(MODE_SET, 1)));
+}
+
+#[test]
+fn odd_nyquist_zones_are_refused() {
+    let mut d = FakePfb::new();
+    d.sig = SIG_VHF;
+    let cfg = ZynqConfig {
+        nyquist_zone: 1,
+        ..ZynqConfig::vhf()
+    };
+    assert!(matches!(
+        ZynqsdrRadio::new(d, cfg),
+        Err(Error::InvalidParam(_))
+    ));
 }
 
 #[test]

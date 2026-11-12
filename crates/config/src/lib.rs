@@ -41,6 +41,29 @@ impl FromStr for Backend {
     }
 }
 
+/// The band the antenna input is used for (zynqsdr backend).
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum Band {
+    /// 0..61.44 MHz at the 122.88 MHz ADC clock (the HF path).
+    #[default]
+    Hf,
+    /// 98.304..147.456 MHz (airband, 2 m) by undersampling at a 98.304
+    /// MHz ADC clock (the VHF path; the stock airband profile 0).
+    Vhf,
+}
+
+impl FromStr for Band {
+    type Err = String;
+    fn from_str(s: &str) -> Result<Self, String> {
+        match s {
+            "hf" => Ok(Band::Hf),
+            "vhf" => Ok(Band::Vhf),
+            _ => Err(format!("unknown band {s:?} (hf, vhf)")),
+        }
+    }
+}
+
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Config {
@@ -179,8 +202,13 @@ impl Default for Syslog {
 pub struct Radio {
     /// Where the samples come from.
     pub backend: Backend,
-    /// zynqsdr: a path, `auto` (the image's or the stock one) or `none`.
+    /// zynqsdr: a path, `auto` (the image's or the stock one for the
+    /// band), `channelizer` (the image's channelizer for the band) or
+    /// `none`.
     pub bitstream: String,
+    /// zynqsdr: `hf`, or `vhf`: the VHF RF path, the Si5351 ADC clock at
+    /// 98.304 MHz, 98.304..147.456 MHz tunable (undersampled).
+    pub band: Band,
     /// EXPERIMENTAL (test unit only): reprogram the Si5351 ADC clock (Hz).
     pub si5351_adc: Option<f64>,
     /// RX channels from a channelizer's bins (`doc/m6-channelizer.md`):
@@ -202,6 +230,7 @@ impl Default for Radio {
         Radio {
             backend: Backend::default(),
             bitstream: "auto".into(),
+            band: Band::Hf,
             si5351_adc: None,
             bins: None,
             zoom_engine: true,

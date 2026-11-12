@@ -25,6 +25,8 @@ pub enum Mode {
     Sas,
     /// The channel's I/Q, stereo (Kiwi protocol clients).
     Iq,
+    /// Narrow-band FM (VHF voice).
+    Nbfm,
 }
 
 impl Mode {
@@ -47,6 +49,7 @@ impl From<Mode> for web888_dsp::audio::Mode {
             Mode::Sar => M::Sar,
             Mode::Sas => M::Sas,
             Mode::Iq => M::Iq,
+            Mode::Nbfm => M::Nbfm,
         }
     }
 }
