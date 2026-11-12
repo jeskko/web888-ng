@@ -498,15 +498,30 @@ that can't go are dropped. It applies live.
     not the additions. A search is now 0.29 s (FT8; 0.46 before):
     decimation 33 ms, the frames' FFTs 92 ms, the sums and lags 155 ms.
 
+* All of 160-6 m FT8 and FT4 on the unit (2026-11-12 afternoon, nobody
+  on the web UI; 11 FT8 + 9 FT4 bands, 12-minute windows):
+
+  | build | FT8 slots decoded | FT4 slots decoded | cut short | shed | spots/min | decoder CPU (of 200 %) | idle |
+  |---|---|---|---|---|---|---|---|
+  | d6b010e (13:00 UTC) | 352 of 530 | 166 of 872 | 7 + 77 | 178 + 706 | 879 | 144 % | 11 % |
+  | c54b5e5 (14:17) | 462 of 529 | 421 of 869 | 0 + 92 | 67 + 448 | 811 | 107 % | 31 % |
+  | 74b9c18 (14:39) | 529 of 529 | 864 of 864 | 0 | 0 | 821 | 126 % | 21 % |
+
+  c54b5e5 had the time but still cut FT4 slots short: a slot's share
+  of the time counted all the work waiting, and an FT4 slot waits next
+  to ten FT8 slots that are due 7 s after it. 74b9c18 counts the work
+  due by the slot's own deadline. The unit keeps the twenty bands. With
+  listeners the decoders get less (they run at `SCHED_IDLE`) and the
+  shedding takes the quiet bands first, as before.
+
 ## 8. Open
 
 * FST4W (step 8) is left for later.
 * Decoder scheduling: WSPR could run on a thread of its own, or FT8/FT4
   slots could pre-empt it, so a WSPR decode doesn't cost FT8 slots
   (step 9 bench).
-* All FT8 and FT4 bands at once on the A9 need about a third less
-  decoder time than d6b010e takes (above); the next build takes a third
-  less on busy slots. What is left is mostly the search (38 % of a busy
+* All FT8 and FT4 bands at once fit on the A9 since 74b9c18 (above),
+  without listeners. What is left is mostly the search (38 % of a busy
   FT8 slot, 76 % of a quiet one, three searches a slot): fewer steps in
   time or bins in frequency would need scoring.
 * Board CPU next to users: how many FT8 bands fit next to 12 users
