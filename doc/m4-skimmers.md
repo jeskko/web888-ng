@@ -420,12 +420,34 @@ that can't go are dropped. It applies live.
   bands with WSPR; the full mix above is over it. The channelizer (M6)
   frees channels, not decoder CPU.
 
+* Sync symbol gates on the unit (2026-11-12, d6b010e, the channelizer,
+  nobody on the web UI, early afternoon: 20-10 m busy, 160-60 m quiet).
+  CPU per thread from `/proc`, slots from `/metrics`:
+
+  | decoder, bands | window | slots decoded | cut short | shed | spots/min | decoder CPU (of 200 %) | idle |
+  |---|---|---|---|---|---|---|---|
+  | before, FT8 x10 | 8 min | 257 of 321 | 29 | 64 (160, 60 m) | 798 | 153 % | 9 % |
+  | gates, FT8 x10 | 8 min | 321 of 321 | 2 | 0 | 773 | 139 % | 17 % |
+  | gates, FT8 x11 + FT4 x9 (160-6 m) | 12 min | FT8 352 of 530, FT4 166 of 872 | 7, 77 | 178, 706 | 827 + 52 | 144 % | 11 % |
+
+  With the gates the ten FT8 bands all decode by day (2.1-3.1 s of A9
+  time per slot on the busy ones, 0.5-1.0 s on the quiet ones; before,
+  3.3 s and held there by the deadline). On the A9 the gates save less
+  than on the desktop (roughly 15 % per busy slot, against 26-31 %).
+  All of 160-6 m FT8 and FT4 doesn't fit: twelve of the twenty bands
+  were shed (all the quiet ones, and FT4 except 15 m), and the seven
+  busy FT8 bands kept their decodes. The decoders then have about 22 s
+  of CPU per 15 s for a demand near 30 s.
+
 ## 8. Open
 
 * FST4W (step 8) is left for later.
 * Decoder scheduling: WSPR could run on a thread of its own, or FT8/FT4
   slots could pre-empt it, so a WSPR decode doesn't cost FT8 slots
   (step 9 bench).
+* All FT8 and FT4 bands at once on the A9 need about a third less
+  decoder time than d6b010e takes (above). Not measured there yet: where
+  the A9's time goes per stage (the FFTs weigh more than on the desktop).
 * Board CPU next to users: how many FT8 bands fit next to 12 users
   (measured without users so far).
 * CW/RTTY skimmers (S2) come after M4 (feature-gap §5, question 8).
