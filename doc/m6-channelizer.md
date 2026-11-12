@@ -437,7 +437,7 @@ the metrics instead:
 * The driver for step 6: settled by running our own OS and driver (the
   stock module's buffers couldn't serve another layout).
 
-## 7. VHF (2026-11-12: unit-tested, not yet on a board)
+## 7. VHF (2026-11-12: ran on the project's unit, no VHF antenna yet)
 
 The VHF input by undersampling, with the channelizer built for it
 (web888-ng-hw `docs/channelizer.md` §3.10: `websdr_pfb_vhf.bit`, a
@@ -476,5 +476,12 @@ The VHF input by undersampling, with the channelizer built for it
   bins mode, a WebSocket client): NBFM at 145.5 MHz (1 kHz, 2.5 kHz
   deviation) gives the tone with its 2nd harmonic 62 dB down; AM at
   145.3 MHz its 400 Hz tone.
-* **Open**: the VHF input's filter and level on a board; whether 25 kHz
+* **On the unit** (2026-11-12, `--band vhf`, VHF connector open; hw
+  `docs/channelizer.md` §3.10): the clock, the bitstream and the RF
+  switch as planned, RX 12 035 frames/s, the HF skimmers not run, channels
+  at -107 dBFS of noise, the zoom engine on 24 kHz bins; back to HF by a
+  service restart (122.88 MHz again). A first try failed cleanly: the
+  driver takes only `RX_START` 40 for the tuner, so web888d sends 40 at
+  either clock.
+* **Open**: real VHF signals; the VHF input's filter and level; whether 25 kHz
   channels' NBFM needs a wider audio chain (24 kS/s) to be clean.
