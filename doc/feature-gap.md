@@ -1,9 +1,11 @@
 # Feature gap: web888-ng vs the stock Web-888 server and KiwiSDR
 
 Status: **proposal** (2026-10-22), **revisited 2026-11-12** for web888-ng
-v0.10.0. Done since: S (skimmers, M4), K (the Kiwi protocol, M5), the
-channelizer with its zoom engine (M6), VHF (experimental), most of the
-os side of O, and parts of R and B. The ng column shows v0.10.0; the
+v0.10.0 and brought up to v0.12.0. Done since: S (skimmers, M4), K (the
+Kiwi protocol, M5), the channelizer with its zoom engine (M6), VHF
+(experimental), the os side of O with metrics and OS updates from the
+admin page, a first map (M), and parts of R and B. The ng column shows
+v0.12.0; the
 stock, Kiwi and OWRX+ columns are still the 2026-10-22 survey (not
 re-checked). Milestone letters here are this proposal's; `design.md` §11
 has the numbered milestones. §3 is the remaining order, proposed again;
@@ -17,8 +19,8 @@ Compared:
 * **OWRX+**: OpenWebRX+ 1.2.127 (2026-10), the active fork of OpenWebRX.
   Upstream OpenWebRX is dormant: its last release is 1.2.2 (2023), and
   develop was last touched in 2024. §4 covers both.
-* **ng**: web888-ng v0.10.0 with web888-ng-hw v0.5.0 and web888-ng-os
-  v0.7.0 (2026-11-12; the 2026-10-22 survey had v0.2.0).
+* **ng**: web888-ng v0.12.0 with web888-ng-hw v0.5.0 and web888-ng-os
+  v0.9.0 (2026-11-12; the 2026-10-22 survey had v0.2.0).
 
 Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 
@@ -94,7 +96,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Chat | ✗ | ✗ | ✓ | ✗ | omit |
 | Mobile layout, keyboard shortcuts, URL state | ✓ | ✓ | ✓ | ✓ phone layout (PR #1), keys (u/l/c/a/f, arrows), `#f=&m=&z=&c=` links, tuning steps, hover preview | – (a key help overlay: **R**) |
 | Themes | ✓ | ~ | ✓ | ✗ (dark) | later |
-| Map (receivers, spots, aircraft) | ✗ | TDoA map | ✓ | ✓ skimmer spots, the browser's own decodes and live DX spots with great circle lines; Mercator or azimuthal equidistant, greyline (no aircraft, no other receivers) | **M** (more layers) |
+| Map (receivers, spots, aircraft) | ✗ | TDoA map | ✓ | ✓ skimmer spots, the browser's own decodes and live DX spots with great circle lines; great circle (azimuthal equidistant), globe or Mercator, greyline; on phones too (tap, tap again to tune) (no aircraft, no other receivers) | **M** (more layers) |
 | Languages | ✗ | ✗ | ✗ | ✗ | omit |
 
 ### 2.4 Decoders
@@ -175,9 +177,13 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 * **R, in part**: SAM family, NBFM, band ribbon and plan, own + EiBi +
   utility labels, the phone layout, URL state, tuning steps, the HTTP
   audio fallback.
-* **B, a first one**: JTTY in the browser.
+* **B**: JTTY, and FT8/FT4/WSPR on the listener's own frequency, in the
+  browser.
 * **O, the os side**: A/B updates with rollback, network settings,
-  tunnels.
+  tunnels; OS updates from the admin page; Prometheus metrics with a
+  Grafana dashboard.
+* **M, a first map**: skimmer spots, the browser's decodes and live DX
+  cluster spots (Spothole), also in the spot list.
 * **V, a first step**: VHF by undersampling, experimental.
 
 ### 3.2 Proposed next
@@ -200,11 +206,10 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 3. **O — access and presentation** (for public receivers):
    * per-IP daily limit, a block list, open + private channel sets;
    * a receiver info page (name, location, antenna);
-   * logs in the admin page; config download/upload; an update button
-     (RAUC) in the admin page.
+   * logs in the admin page; config download/upload.
 4. **B — more decoders in the browser**: CW, RTTY/NAVTEX/DSC, FAX/SSTV,
    time codes, as JTTY was done (WASM/JS on the page's own audio).
-5. **M — map**: spots with locators, EiBi transmitters on air.
+5. **M — more map layers**: EiBi transmitters on air, other receivers.
 6. **D — heavy server-side decoders**: HFDL (dumphfdl), DRM (FDK-AAC
    strictly out of process); measure the A9 first.
 7. **V — the rest**: the external 10 MHz reference, ACARS on VHF,
@@ -272,7 +277,7 @@ decoders in the browser (yes, JTTY was the first).
    marine VHF (156-162 MHz) worth a 110.592 MHz channelizer (54 kS/s
    bins: a fractional resampler)?
 4. Anything in the omit list that you use?
-5. A map page (**M**)? Chat? Whisper through an external server (§4)?
+5. Chat? Whisper through an external server (§4)? (The map is done.)
 6. CW/RTTY skimmers (**S2**): the channelizer freed the CPU that the
    receivers took; worth measuring the A9 for them now?
 7. FST4W: wanted by anyone?
