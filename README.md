@@ -291,6 +291,20 @@ API (admin): `GET /api/admin/update`, `POST /api/admin/update/check`,
 last), `POST /api/admin/update/reboot`. Elsewhere (a development machine)
 the tab says updates aren't available.
 
+### Safe mode
+
+`web888d serve --safe` runs the web and admin pages (settings, logs, OS
+updates) without the radio: no hardware is touched (a silent simulated
+radio stands in), and skimmers, uploads, live DX spots and HPSDR stay
+off whatever the configuration says. The pages show a notice. The
+web888-ng-os image starts web888d this way when its system has failed
+to start several times in a row, or when `web888.txt` says `safe = yes`
+([its docs/safe-mode.md](https://github.com/jeskko/web888-ng-os/blob/main/docs/safe-mode.md)).
+
+API: `GET /api/safe` (`{"safe": true, "reason": "..."}`), `POST
+/api/admin/safe/leave` (admin; runs the image's `web888-safe leave`: the
+unit reboots into the normal system).
+
 ### Skimmers
 
 Background decoders on RX channels of their own, in UTC slots, low

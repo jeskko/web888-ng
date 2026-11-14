@@ -46,6 +46,7 @@ import {
   tune,
 } from "./state.ts";
 import { AdminApp } from "./admin/admin.tsx";
+import { SafeBanner } from "./ctl/safe.tsx";
 import { Pane } from "./view/pane.tsx";
 
 const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm" };
@@ -180,8 +181,20 @@ window.addEventListener("hashchange", () => {
 });
 if (admin) {
   document.title = "web888d admin";
-  render(<AdminApp />, document.getElementById("app")!);
+  render(
+    <>
+      <SafeBanner admin />
+      <AdminApp />
+    </>,
+    document.getElementById("app")!,
+  );
 } else {
   void start();
-  render(<App />, document.getElementById("app")!);
+  render(
+    <>
+      <SafeBanner />
+      <App />
+    </>,
+    document.getElementById("app")!,
+  );
 }

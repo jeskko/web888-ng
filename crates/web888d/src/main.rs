@@ -83,6 +83,12 @@ struct ServeArgs {
     /// first), iq (wideband IQ from an SDR or a recording, --iq ...).
     #[arg(long)]
     backend: Option<Backend>,
+    /// Safe mode: the web and admin pages (settings, logs, OS updates)
+    /// without the radio: no hardware touched, no skimmers, uploads, DX
+    /// spots or HPSDR. For a unit whose normal start keeps failing
+    /// (web888-ng-os docs/safe-mode.md).
+    #[arg(long)]
+    safe: bool,
     /// Bitstream to load first (zynqsdr backend): a path, `auto` for the
     /// band's file in /usr/share/web888 (web888-ng-os image) or else the
     /// stock one on the SD card, `channelizer` for the image's channelizer
@@ -185,8 +191,22 @@ impl ServeArgs {
                 *dst = v.clone();
             }
         }
+        if self.safe {
+            // nothing of the hardware, nothing that runs by itself: a
+            // silent simulated radio keeps the pages working
+            c.radio.backend = Backend::Sim;
+            c.radio.sim.tones.clear();
+            c.radio.sim.noise = false;
+            c.hpsdr.enabled = false;
+            c.skimmer.clear();
+            c.report.pskreporter = false;
+            c.report.wsprnet = false;
+            c.dxspots.enabled = false;
+        }
         let r = &mut c.radio;
-        set(&mut r.backend, &self.backend);
+        if !self.safe {
+            set(&mut r.backend, &self.backend);
+        }
         set(&mut r.bitstream, &self.bitstream);
         set(&mut r.band, &self.band);
         if self.si5351_adc.is_some() {
@@ -892,6 +912,13 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         )?;
     }
     let cfg = a.effective()?;
+    if a.safe {
+        web888_web::safe::enter(&web888_web::safe::default_file());
+        let why = web888_web::safe::state()
+            .map(|s| s.reason.as_str())
+            .unwrap_or("");
+        eprintln!("safe mode: no radio, skimmers, uploads or HPSDR ({why})");
+    }
     if a.print_config {
         print!("{}", cfg.to_toml());
         return Ok(());

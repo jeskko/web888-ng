@@ -254,3 +254,25 @@ table.wide { width: 100%; }
 .overlay .start { display: inline-flex; align-items: center; gap: 8px; }
 .overlay .start .ico { margin: 0; }
 
+
+/* safe mode's notice: over the page, bottom centre */
+.safe-banner {
+  position: fixed;
+  left: 50%;
+  bottom: 2.6rem;
+  transform: translateX(-50%);
+  z-index: 50;
+  max-width: calc(100vw - 32px);
+  padding: 0.5rem 0.9rem;
+  border: 1px solid #ffa94d;
+  border-radius: 6px;
+  background: #3b2a12;
+  color: #ffe8cc;
+  box-shadow: 0 2px 12px rgba(0, 0, 0, 0.5);
+}
+.safe-banner a {
+  color: #ffd8a8;
+}
+.safe-banner button {
+  margin-left: 0.4rem;
+}
