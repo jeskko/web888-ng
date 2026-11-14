@@ -1826,6 +1826,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-fsk"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+ "web888-cw",
+]
+
+[[package]]
+name = "web888-fsk-wasm"
+version = "0.13.0"
+dependencies = [
+ "web888-fsk",
+]
+
+[[package]]
 name = "web888-ftx"
 version = "0.13.0"
 dependencies = [

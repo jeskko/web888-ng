@@ -23,6 +23,7 @@ import { MobileApp, PlayIcon } from "./ctl/mobile.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
 import { CwCtl, CwPanel } from "./ctl/cw.tsx";
+import { RttyCtl, RttyPanel } from "./ctl/rtty.tsx";
 import { DigiCtl, DigiPanel } from "./ctl/digi.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
@@ -147,6 +148,7 @@ function App() {
           <MapCtl />
           <DigiCtl />
           <CwCtl />
+          <RttyCtl />
           <JttyCtl />
           <LabelsCtl />
         </div>
@@ -159,6 +161,7 @@ function App() {
         </div>
         <SpotPanel />
         <CwPanel />
+        <RttyPanel />
         <JttyPanel />
         <DigiPanel />
         <MapPanel />

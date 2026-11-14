@@ -1,7 +1,10 @@
 # M8: more decoders in the browser (plan B)
 
-Status: in progress (planned 2026-11-15). Item 1 (CW) done: `crates/cw`,
-`crates/cw-wasm`, `ui/src/cw.ts`, `ui/src/ctl/cw.tsx` (§2.1). This is
+Status: in progress (planned 2026-11-15). Done: item 1 (CW; `crates/cw`,
+`crates/cw-wasm`, `ui/src/cw.ts`, `ui/src/ctl/cw.tsx`, §2.1) and item 2
+(FSK/RTTY; `crates/fsk`, `crates/fsk-wasm`, `ui/src/rtty.ts`,
+`ui/src/ctl/rtty.tsx`, §2.2); item 5 partly (SITOR-B decodes, no NAVTEX
+view yet, not tried on air). This is
 `feature-gap.md` §4 item B: more decoders that run on the page's own
 audio, as JTTY and FT8/FT4/WSPR do. Nothing here runs on the unit, so the
 A9's CPU limits don't apply.
@@ -91,6 +94,28 @@ Everything detected from the signal, with manual overrides:
   SITOR-A identified only.
 * UI: the detected parameters shown (and lockable), then streaming text;
   re-detection when framing errors pile up.
+* **Done (2026-11-15)**, without the manual overrides (not needed so
+  far). The skimmer on 12 kHz audio: a 768-point spectrogram (15.6 Hz
+  lines) of the passband, tone pairs every 2 s from the last 8 s; each
+  gets a 4 kS/s channel (primed from the last 8 s), analysed once 4 s are
+  in, locked when believable, then decoded as a stream. Identified but
+  undecodable signals (reversals, 4-of-7 codes) are listed as such. The
+  panel shows each signal's rate, shift, framing, polarity (in RF terms:
+  LSB mirrors) and character set, its SNR and framing errors, and the
+  text; a list of stations (DWD, NAVTEX, ham RTTY) tunes USB with the
+  centre at 1 kHz. All of datarx's FSK tests pass (five framings with
+  polarity, idle gaps, −5 dB, selective fading, SITOR-B, reversals,
+  noise, USOS from the text, streaming in blocks), plus two signals and
+  reversals in SSB audio. Ham RTTY (`cargo run --release -p web888-fsk
+  --example cer`, five runs each): every parameter found at 0 to −7 dB
+  (4 of 5 at −5 dB), none at −9 dB; character errors with known
+  parameters 0 % at −3 dB, 0.1 % at −5, 3.5 % at −7, 25 % at −9 (datarx:
+  0, ~1, ~5, ~28 %). One fix over datarx: before the first space tone
+  (an idle mark), the detector divided noise by an unknown level and
+  decoded garbage; the heard tone's levels now stand in. In the page on
+  the 40 m/30 m recording: DWD 10100.8 kHz locks within 15 s as 50 Bd,
+  450 Hz, 5N1.5, mark lower, ITA2 (as datarx), with the Baltic sea
+  forecast as text.
 
 ### 2.3 SSTV (new)
 

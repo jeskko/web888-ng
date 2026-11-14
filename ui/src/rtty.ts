@@ -1,0 +1,130 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// FSK / RTTY decoding in the browser (pure parts, unit-tested): stations
+// to tune to, the skimmer's parameters in RF terms (the sideband decides
+// which RF tone is mark), and its output (rtty/worker.ts, the web888-fsk
+// crate in WebAssembly) merged into one entry per signal.
+
+import type { Mode } from "./proto.ts";
+
+/** Parameters as the worker reports them (tones in audio Hz). */
+export interface FskP {
+  baud: number;
+  shift: number;
+  lo: number;
+  hi: number;
+  /** Mark is the upper audio tone. */
+  markHigh: boolean;
+  framing: string;
+  charset: string;
+  usos: boolean;
+  msb: boolean;
+  mode: "async" | "sitor" | "sync";
+}
+
+export type FskEv =
+  | { k: "lock"; id: number; hz: number; p: FskP }
+  | { k: "text"; id: number; hz: number; t: number; text: string }
+  | { k: "ident"; hz: number; p: FskP };
+
+/** What the worker posts. */
+export interface FskRun {
+  ev: FskEv[];
+  act: { id: number; hz: number; locked: boolean; snr: number; fe: number; p: FskP }[];
+  now: number;
+}
+
+/** A signal as listed. */
+export interface FskSignal {
+  /** 0: identified, not decoded. */
+  id: number;
+  /** RF frequency of the centre between the tones (Hz). */
+  rf: number;
+  p: FskP;
+  snr: number;
+  fe: number;
+  text: string;
+  locked: boolean;
+  /** Still in the skimmer's list. */
+  active: boolean;
+  /** UTC seconds of the last change. */
+  last: number;
+}
+
+/** Text kept per signal (characters). */
+export const RTTY_TEXT = 4000;
+/** A signal gone from the skimmer stays listed this long (s). */
+export const RTTY_LINGER = 300;
+
+/** Stations to tune to: the centre between the tones (Hz). */
+export const RTTY_STATIONS: { name: string; hz: number }[] = [
+  { name: "NAVTEX 518 kHz", hz: 518_000 },
+  { name: "NAVTEX 490 kHz", hz: 490_000 },
+  { name: "DWD 4583 kHz", hz: 4_583_000 },
+  { name: "DWD 7646 kHz", hz: 7_646_000 },
+  { name: "DWD 10100.8 kHz", hz: 10_100_800 },
+  { name: "DWD 11039 kHz", hz: 11_039_000 },
+  { name: "DWD 14467.3 kHz", hz: 14_467_300 },
+  { name: "20 m RTTY 14.080 MHz", hz: 14_081_000 },
+  { name: "40 m RTTY 7.040 MHz", hz: 7_041_000 },
+];
+
+/** Audio frequency the station's centre is tuned to (USB). */
+export const RTTY_AUDIO = 1000;
+
+/** RF of an audio frequency in this mode (CW: its pitch at the dial). */
+export function rfOf(mode: Mode, dial: number, pitch: number, hz: number): number {
+  if (mode === "lsb") return dial - hz;
+  if (mode === "cw") return dial + hz - pitch;
+  return dial + hz;
+}
+
+/** One line about a signal's parameters, in RF terms. */
+export function describe(p: FskP, mode: Mode): string {
+  const parts = [`${p.baud} Bd`, `${Math.round(p.shift)} Hz`];
+  if (p.mode === "sitor") parts.push("SITOR-B");
+  else if (p.mode === "async") parts.push(p.framing);
+  // LSB mirrors: the upper audio tone is the lower RF one
+  const upper = mode === "lsb" ? !p.markHigh : p.markHigh;
+  if (p.mode !== "sync") parts.push(`mark ${upper ? "upper" : "lower"}`);
+  let cs = p.charset;
+  if (p.msb) cs += " MSB first";
+  if (cs === "ITA2" || cs === "US-TTY") cs += p.usos ? "" : ", no USOS";
+  parts.push(cs);
+  return parts.join(" · ");
+}
+
+/** The signals after a run. `rf` maps an audio frequency to RF; `now`
+ * is UTC seconds. */
+export function applyFsk(prev: FskSignal[], run: FskRun, now: number, rf: (hz: number) => number): FskSignal[] {
+  const by = new Map<string, FskSignal>(prev.map((s) => [key(s), { ...s }]));
+  const get = (id: number, hz: number, p: FskP): FskSignal => {
+    const k = id ? `#${id}` : `@${Math.round(rf(hz) / 100)}`;
+    let s = by.get(k);
+    if (!s) {
+      s = { id, rf: rf(hz), p, snr: -99, fe: 0, text: "", locked: id !== 0, active: true, last: now };
+      by.set(k, s);
+    }
+    return s;
+  };
+  for (const e of run.ev) {
+    if (e.k === "lock") Object.assign(get(e.id, e.hz, e.p), { p: e.p, rf: rf(e.hz), locked: true, last: now });
+    else if (e.k === "ident") Object.assign(get(0, e.hz, e.p), { p: e.p, last: now });
+    else {
+      const s = by.get(`#${e.id}`);
+      if (!s) continue;
+      let text = s.text + e.text;
+      if (text.length > RTTY_TEXT) text = text.slice(text.length - RTTY_TEXT);
+      Object.assign(s, { text, last: now });
+    }
+  }
+  for (const s of by.values()) s.active = false;
+  for (const a of run.act) {
+    const s = get(a.id, a.hz, a.p);
+    Object.assign(s, { rf: rf(a.hz), p: a.p, snr: a.snr, fe: a.fe, locked: a.locked, active: true });
+  }
+  return [...by.values()].filter((s) => s.active || now - s.last < RTTY_LINGER).sort((a, b) => a.rf - b.rf);
+}
+
+function key(s: FskSignal): string {
+  return s.id ? `#${s.id}` : `@${Math.round(s.rf / 100)}`;
+}

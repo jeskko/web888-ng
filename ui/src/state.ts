@@ -15,6 +15,7 @@ import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
+import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
@@ -222,6 +223,7 @@ export function connect(): void {
       if (f.flags & FLAG_GAP) audioGaps.value++;
       jttyAudio(f); // first: the player hands the samples to the worklet
       cwAudio(f);
+      rttyAudio(f);
       digiAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
@@ -537,6 +539,83 @@ export function pickCw(rf: number): void {
 
 export function clearCw(): void {
   cwSignals.value = cwSignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "" }));
+}
+
+// ------------------------------------------------------------ FSK / RTTY
+
+/** FSK/RTTY decoding of every two-tone signal in this receiver's
+ * passband, its parameters worked out, in this browser (remembered). */
+export const rttyOn = signal(load("rtty") === "1");
+export const rttySignals = signal<FskSignal[]>([]);
+export const rttyError = signal("");
+let rttyWorker: Worker | null = null;
+const rttyFeed = new JttyFeed();
+let rttyKey = "";
+let rttyBand = "";
+let rttyGen = 0;
+let rttyRf: (hz: number) => number = (hz) => hz;
+
+function rttyStart(): Worker {
+  const w = new Worker("rtty-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: FskRun; gen?: number; error?: string };
+    if (d.error) rttyError.value = d.error;
+    if (!d.run || d.gen !== rttyGen) return;
+    rttySignals.value = applyFsk(rttySignals.value, d.run, Date.now() / 1000, rttyRf);
+  };
+  return w;
+}
+
+function rttyAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!rttyOn.value || !s) return;
+  const band = audioBand(s.mode, s.lo, s.hi, s.pitch);
+  if (!band) return;
+  rttyWorker ??= rttyStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== rttyKey) {
+    rttyKey = key;
+    rttyGen++;
+    const { mode, hz, pitch } = s;
+    rttyRf = (a) => rfOf(mode, hz, pitch, a);
+    rttySignals.value = rttySignals.value.filter((x) => !x.active);
+    rttyWorker.postMessage({ reset: true });
+  }
+  const b = `${band.lo}|${band.hi}`;
+  if (b !== rttyBand) {
+    rttyBand = b;
+    rttyWorker.postMessage({ band: [band.lo, band.hi] });
+  }
+  const pcm = rttyFeed.push(f.pcm, f.rate, f.stereo);
+  rttyWorker.postMessage({ pcm, gen: rttyGen }, [pcm.buffer]);
+}
+
+export function setRtty(on: boolean): void {
+  rttyOn.value = on;
+  save("rtty", on ? "1" : "0");
+  if (!on && rttyWorker) {
+    rttyWorker.terminate();
+    rttyWorker = null;
+    rttyKey = "";
+    rttyBand = "";
+  }
+}
+
+export function clearRtty(): void {
+  rttySignals.value = rttySignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "" }));
+}
+
+/** A station was picked (the centre between its tones): USB with a 3 kHz
+ * passband, the centre at RTTY_AUDIO, the signal in view. */
+export function pickRtty(centre: number): void {
+  const dial = centre - RTTY_AUDIO;
+  tune(dial);
+  setModePassband("usb", 300, 3300);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  if (Math.abs(centre - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: centre });
 }
 
 // ------------------------------------------------- FT8, FT4, WSPR (browser)
