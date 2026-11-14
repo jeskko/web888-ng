@@ -1,0 +1,100 @@
+# M8: more decoders in the browser (plan B)
+
+Status: **todo** (planned 2026-11-15, nothing started). This is
+`feature-gap.md` §4 item B: more decoders that run on the page's own
+audio, as JTTY and FT8/FT4/WSPR do. Nothing here runs on the unit, so the
+A9's CPU limits don't apply.
+
+## 1. Todo
+
+| # | decoder | source to start from | done when |
+|---|---|---|---|
+| 1 | **CW** | datarx `wahrx/cw.py` (+ `cwskim.py` for several signals in the passband) | text and WPM for the signal at the CW offset; others in the passband listed too |
+| 2 | **FSK / RTTY**, with parameter detection | datarx `wahrx/fsk.py` | shift, baud, framing (data bits, parity, stop bits), polarity and charset found from the signal; ham RTTY and DWD decode with no settings |
+| 3 | **SSTV** | new (nothing in datarx) | VIS-detected Martin, Scottie, Robot and PD modes as images, slant corrected |
+| 4 | **HF fax** | new (nothing in datarx) | DWD/NOAA-style charts as images: start/stop tones, phasing, IOC 576/288, 60/90/120 LPM, slant corrected |
+| 5 | NAVTEX / SITOR-B | datarx `wahrx/fsk.py` (already decodes it) | falls out of item 2; a NAVTEX view (B1-B4 header, message list) |
+| 6 | later: DSC, time codes (DCF77, MSF, WWVB...) | new | as in `feature-gap.md` §2.4 |
+
+Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
+(images, a new panel type), then the rest.
+
+## 2. How (same pattern as JTTY)
+
+* A Rust crate per decoder in `crates/` (DSP only, no I/O; streaming
+  `push(&[f32])` API like `jtty::Receiver`), a `*-wasm` crate, a worker in
+  `ui/src/<name>/worker.ts` fed from the page's audio resampled to 12 kHz
+  (`jtty.ts`'s resampler).
+* datarx (the author's own SDR toolkit, Python package `wahrx`) is ported to Rust, not
+  shipped as Python. Its tests (`tests/test_cw.py`, `test_fsk.py`,
+  `tests/synth.py`) become the crates' tests: synthetic signals at given
+  SNR, fading and keying jitter, with datarx's character error rates as
+  the bar (README "CW decoder" and "FSK / RTTY" sections). datarx has no
+  licence file; state its origin in the crate header as `jtty` does and
+  release it under this repo's GPL-3.0+.
+* datarx works on complex baseband from a wideband capture; here the
+  input is real audio from one passband. Take the CW and FSK cores (tone
+  estimation, demodulation, framing, charset), not the skimmers' FFT
+  banks; the passband (≤ ~3 kHz) is analysed whole for several signals.
+
+### 2.1 CW (from `cw.py`)
+
+* Carrier: strongest keyed line in the passband (default: the CW mode's
+  pitch offset); speed hypotheses 9-45 WPM, matched filter per speed,
+  adaptive dot length, learned character/word gap; threshold from the
+  tracked noise floor (nothing decoded without a keyed signal).
+* Several signals in the passband: one decoder per keyed line (QSO both
+  sides 20-25 Hz apart decode in datarx).
+* UI: text per signal, WPM and SNR; click a line to pick it.
+
+### 2.2 FSK / RTTY (from `fsk.py`)
+
+Everything detected from the signal, with manual overrides:
+* tones (pair whose energies alternate; refined from phase), so shift and
+  centre are known; sideband (USB/LSB) folded into the polarity;
+* baud: shortest transition interval, refined and snapped to standard
+  rates (45.45, 50, 75, 100, 110, 150, 200, 300...);
+* async framing: 5-9 data bits, parity (none/even/odd), stop bits
+  (1/1.5/2), polarity, chosen by fewest framing errors;
+* charset: ITA2 / US-TTY figures, ASCII 7/8 bit LSB/MSB first; unshift on
+  space decided from the text;
+* synchronous: reversals identified; SITOR-B / NAVTEX decoded; ARQ-E,
+  SITOR-A identified only.
+* UI: the detected parameters shown (and lockable), then streaming text;
+  re-detection when framing errors pile up.
+
+### 2.3 SSTV (new)
+
+* VIS code (1900 Hz leader, 1200 Hz break) picks the mode; mode table for
+  Martin 1/2, Scottie 1/2/DX, Robot 36/72, PD 90/120/180 at least.
+* FM demodulation of 1500-2300 Hz luminance, sync at 1200 Hz; line timing
+  from the sync pulses, slant from a fit over lines (the sound card clock
+  and the receiver's rate differ a little).
+* Image drawn as it arrives; PNG save. A mode can be forced without VIS.
+
+### 2.4 HF fax (new)
+
+* FM demodulation, 1500 Hz black / 2300 Hz white (dial = carrier
+  − 1.9 kHz on USB).
+* APT start tones (300 Hz for IOC 576, 675 Hz for IOC 288) and stop tone
+  (450 Hz); phasing lines set the line start; LPM 60/90/120 (default 120).
+* Slant from the phasing signal and adjustable by hand; image drawn line
+  by line; PNG save. Starts without the start tone too (manual).
+
+## 3. Shared UI
+
+* A decoder panel the text decoders share (CW, RTTY, NAVTEX, JTTY), and
+  an image panel (SSTV, FAX) with a save button.
+* The audio-passband waterfall (`feature-gap.md` §2.4, "secondary
+  waterfall"): shows the tones and lets a click set the decoder's
+  frequency; useful for all of the above.
+* Images and logs stay in the browser (download); the server-side files
+  gallery is a separate item.
+
+## 4. Test material
+
+* Synthetic: ported from datarx's tests; SSTV and FAX encoders in the
+  test code (a known image round-trips).
+* On air: the HackRF dev source (`--backend iq`) and recordings under
+  `/data/iq`: 20 m CW, DWD RTTY (10100.8 / 11039 / 14467.3 kHz), DWD fax
+  (3855 / 7880 / 13882.5 kHz), NAVTEX 518 kHz, SSTV on 14.230 MHz.

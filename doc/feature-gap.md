@@ -208,7 +208,8 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
    * a receiver info page (name, location, antenna);
    * logs in the admin page; config download/upload.
 4. **B — more decoders in the browser**: CW, RTTY/NAVTEX/DSC, FAX/SSTV,
-   time codes, as JTTY was done (WASM/JS on the page's own audio).
+   time codes, as JTTY was done (WASM/JS on the page's own audio); the
+   todo and plan: `m8-browser-decoders.md`.
 5. **M — more map layers**: EiBi transmitters on air, other receivers.
 6. **D — heavy server-side decoders**: HFDL (dumphfdl), DRM (FDK-AAC
    strictly out of process); measure the A9 first.
