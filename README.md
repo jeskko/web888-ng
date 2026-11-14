@@ -7,7 +7,7 @@ on [web888-ng-os](https://github.com/jeskko/web888-ng-os), the open SD card
 image, with the open driver and bitstreams from
 [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status (see `doc/design.md` §11), release v0.12.0:
+Status (see `doc/design.md` §11), release v0.12.1:
 
 * **Done:** **M1** stock-driver backend and HPSDR, **M2** web UI, **M3**
   multi-user, **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet,
@@ -15,7 +15,7 @@ Status (see `doc/design.md` §11), release v0.12.0:
   from jtty-cuf; v0.6.0). FT8, FT4 and WSPR on the user's own frequency
   in the browser too (`doc/m4-skimmers.md` §10; not reported anywhere).
   Live DX cluster spots, a map of the stations heard, Prometheus
-  metrics and OS updates from the admin page (v0.12.0).
+  metrics and OS updates from the admin page (v0.12.0), safe mode (v0.12.1).
 * **Mostly done: M6**, bins mode for the channelizer bitstream (30 kHz
   bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8

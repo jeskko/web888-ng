@@ -259,9 +259,10 @@ table.wide { width: 100%; }
 .safe-banner {
   position: fixed;
   left: 50%;
-  bottom: 2.6rem;
+  top: 55%; /* over the waterfall: clear of the controls, also on a phone */
   transform: translateX(-50%);
   z-index: 50;
+  width: max-content;
   max-width: calc(100vw - 32px);
   padding: 0.5rem 0.9rem;
   border: 1px solid #ffa94d;
