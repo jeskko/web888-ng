@@ -366,10 +366,10 @@ mod tests {
 
     #[test]
     fn ita2_round_trip() {
-        let codes = ita2_encode("CQ DE OH8ABC 599 73", true);
+        let codes = ita2_encode("CQ DE N0CALL 599 73", true);
         let mut d = Ita2::new(true, false);
         let s: String = codes.iter().filter_map(|&c| d.char(c)).collect();
-        assert_eq!(s, "CQ DE OH8ABC 599 73");
+        assert_eq!(s, "CQ DE N0CALL 599 73");
     }
 
     #[test]
@@ -377,7 +377,7 @@ mod tests {
         // DWD style: figures kept across spaces (no USOS)
         let codes = ita2_encode("TEMP 12 15 18 1022 HPA 1018 1009 23 25", false);
         assert!(!ita2_usos(&codes, false));
-        let codes = ita2_encode("CQ CQ DE OH8ABC 599 TNX FER CALL 73 ES GL", true);
+        let codes = ita2_encode("CQ CQ DE N0CALL 599 TNX FER CALL 73 ES GL", true);
         assert!(ita2_usos(&codes, false));
     }
 
@@ -402,7 +402,7 @@ mod tests {
 
     #[test]
     fn scores() {
-        assert!(text_score("CQ CQ DE OH8ABC OH8ABC PSE K") > 0.9);
+        assert!(text_score("CQ CQ DE N0CALL N0CALL PSE K") > 0.9);
         assert!(text_score("GIBRALTAR OST 4 // 23 GRAD 1022 HPA") > 0.9);
         assert!(text_score("XQZTRWPLKJHGFDSXCVBNMQWRTZPS") < 0.2);
         assert!(text_score("RYRYRYRYRYRYRYRYRYRY") > 0.9);
