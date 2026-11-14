@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm", "crates/markers", "crates/clock", "crates/digi-wasm"]
+members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm", "crates/markers", "crates/clock", "crates/digi-wasm", "crates/cw", "crates/cw-wasm"]
 
 [workspace.package]
 version = "0.13.0"
@@ -26,6 +26,7 @@ web888-jtty = { path = "crates/jtty" }
 web888-markers = { path = "crates/markers" }
 web888-clock = { path = "crates/clock" }
 web888-digi-wasm = { path = "crates/digi-wasm" }
+web888-cw = { path = "crates/cw" }
 libc = "0.2.190"
 num-complex = "0.4.6"
 rustfft = "6.4.1"

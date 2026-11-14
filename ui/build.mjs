@@ -2,7 +2,8 @@
 // Bundles the UI into dist/: app.js (Preact app), worklet.js (audio
 // worklet, loaded separately by the browser), jtty-worker.js (the JTTY
 // decoder's worker) with jtty.wasm, digi-worker.js (the FT8/FT4/WSPR
-// decoders' worker) with digi.wasm (both from scripts/build-wasm.sh, in
+// decoders' worker) with digi.wasm, cw-worker.js (the CW skimmer) with
+// cw.wasm (all from scripts/build-wasm.sh, in
 // wasm/), index.html, style.css, and the map's world (map/*.json).
 // `node build.mjs --watch` rebuilds on change (development).
 import * as esbuild from "esbuild";
@@ -23,6 +24,7 @@ const copyStatic = {
       for (const [f, what] of [
         ["jtty.wasm", "JTTY decoding"],
         ["digi.wasm", "FT8/FT4/WSPR decoding"],
+        ["cw.wasm", "CW decoding"],
       ]) {
         try {
           await access(`wasm/${f}`);
@@ -36,7 +38,7 @@ const copyStatic = {
 };
 
 const options = {
-  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts" },
+  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts" },
   outdir: out,
   bundle: true,
   format: "esm",

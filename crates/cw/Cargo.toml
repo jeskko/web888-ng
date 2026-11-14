@@ -1,0 +1,11 @@
+[package]
+name = "web888-cw"
+description = "CW (Morse) decoder and passband skimmer, after datarx's wahrx.cw"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true

@@ -43,6 +43,7 @@ kill $P
 | `map.mjs` | the map: stations shown, the three projections, drag, zoom, hover tooltip (screenshots) | `[dxspots]` (internet) or skimmer spots; `[station] locator` |
 | `dxspots.mjs` | DX spot labels near 40 m, a typed frequency in view (the view stays) and off it (the view follows) | `[dxspots]` on (the default) and internet |
 | `digi.mjs` | FT8/FT4/WSPR decoding in the page: mode, dial, Deep, the status line and the rows | real signals: live, or a recording replayed from the same second of the slot as it was recorded (`2026-10-22_..._60s.cs8` started 8.7 s into a 15 s slot) |
+| `cw.mjs` | CW decoding in the page: the signals' rows (frequency, WPM, dB, text) every 15 s; tune with the URL's hash (`#f=7018.0&m=usb`), a passband button label as the 2nd argument | real CW (live or a recording, e.g. 40 m in `2026-10-22_..._60s.cs8`) |
 
 Set passwords in the throwaway config with
 `echo PASSWORD | web888d passwd --config /tmp/t/c.toml` (and

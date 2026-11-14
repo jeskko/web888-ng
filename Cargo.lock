@@ -1791,6 +1791,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-cw"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+]
+
+[[package]]
+name = "web888-cw-wasm"
+version = "0.13.0"
+dependencies = [
+ "web888-cw",
+]
+
+[[package]]
 name = "web888-digi-wasm"
 version = "0.13.0"
 dependencies = [

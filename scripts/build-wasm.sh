@@ -2,7 +2,8 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 # The web UI's WebAssembly, to ui/wasm/, which `pnpm build` copies into
 # dist/: the JTTY receiver (crates/jtty-wasm) as jtty.wasm, and the FT8,
-# FT4 and WSPR decoders (crates/digi-wasm) as digi.wasm.
+# FT4 and WSPR decoders (crates/digi-wasm) as digi.wasm, and the CW
+# skimmer (crates/cw-wasm) as cw.wasm.
 #
 #   scripts/build-wasm.sh
 #
@@ -13,7 +14,7 @@ set -eu
 src=$(cd "$(dirname "$0")/.." && pwd)
 target=wasm32-unknown-unknown
 out=$src/ui/wasm
-crates="-p web888-jtty-wasm -p web888-digi-wasm"
+crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm"
 mkdir -p "$out"
 if [ -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/$target" ]; then
 	(cd "$src" && cargo build --release --target $target $crates)
@@ -30,4 +31,5 @@ else
 fi
 cp "$built/web888_jtty_wasm.wasm" "$out/jtty.wasm"
 cp "$built/web888_digi_wasm.wasm" "$out/digi.wasm"
-ls -l "$out/jtty.wasm" "$out/digi.wasm"
+cp "$built/web888_cw_wasm.wasm" "$out/cw.wasm"
+ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm"

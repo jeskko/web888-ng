@@ -14,6 +14,7 @@ import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./pr
 import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
+import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
@@ -220,6 +221,7 @@ export function connect(): void {
       if (f.flags & FLAG_OVERLOAD) overloadAt.value = performance.now();
       if (f.flags & FLAG_GAP) audioGaps.value++;
       jttyAudio(f); // first: the player hands the samples to the worklet
+      cwAudio(f);
       digiAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
@@ -459,6 +461,82 @@ export function pickJtty(dial: number): void {
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
   if (Math.abs(dial + 1600 - v.center_hz) > 0.45 * span - 1600) setView({ ...v, center_hz: dial + 1600 });
+}
+
+// ----------------------------------------------------------------- CW
+
+/** CW decoding of every keyed carrier in this receiver's passband, in
+ * this browser (remembered). */
+export const cwOn = signal(load("cw") === "1");
+export const cwSignals = signal<CwSignal[]>([]);
+export const cwError = signal("");
+let cwWorker: Worker | null = null;
+const cwFeed = new JttyFeed();
+/** Dial, mode and listen-along of the skimmer's stream (a change resets
+ * it; `cwGen` tells late results from the new stream's), and the band it
+ * searches. */
+let cwKey = "";
+let cwBand = "";
+let cwGen = 0;
+let cwRf: (hz: number) => number = (hz) => hz;
+
+function cwStart(): Worker {
+  const w = new Worker("cw-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: CwRun; gen?: number; error?: string };
+    if (d.error) cwError.value = d.error;
+    if (!d.run || d.gen !== cwGen) return;
+    cwSignals.value = applyRun(cwSignals.value, d.run, Date.now() / 1000, cwRf);
+  };
+  return w;
+}
+
+function cwAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!cwOn.value || !s) return;
+  const band = audioBand(s.mode, s.lo, s.hi, s.pitch);
+  if (!band) return;
+  cwWorker ??= cwStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== cwKey) {
+    cwKey = key;
+    cwGen++;
+    const { mode, hz, pitch } = s;
+    cwRf = (a) => rfOf(mode, hz, pitch, a);
+    cwSignals.value = cwSignals.value.filter((x) => !x.active);
+    cwWorker.postMessage({ reset: true });
+  }
+  const b = `${band.lo}|${band.hi}`;
+  if (b !== cwBand) {
+    cwBand = b;
+    cwWorker.postMessage({ band: [band.lo, band.hi] });
+  }
+  const pcm = cwFeed.push(f.pcm, f.rate, f.stereo);
+  cwWorker.postMessage({ pcm, gen: cwGen }, [pcm.buffer]);
+}
+
+export function setCw(on: boolean): void {
+  cwOn.value = on;
+  save("cw", on ? "1" : "0");
+  if (!on && cwWorker) {
+    cwWorker.terminate();
+    cwWorker = null;
+    cwKey = "";
+    cwBand = "";
+  }
+}
+
+/** A decoded signal was picked: CW mode on it (it then sounds at the
+ * pitch). */
+export function pickCw(rf: number): void {
+  const s = st.value;
+  if (!s) return;
+  if (s.mode !== "cw") setMode("cw");
+  tune(rf);
+}
+
+export function clearCw(): void {
+  cwSignals.value = cwSignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "" }));
 }
 
 // ------------------------------------------------- FT8, FT4, WSPR (browser)

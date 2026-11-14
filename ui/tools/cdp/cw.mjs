@@ -1,0 +1,26 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+// CW decoding in the page: open URL (tune with its hash, e.g.
+// #f=7018.0&m=usb), start audio, pick a passband button, turn CW on, wait,
+// print the signals' rows; saves cw.png in OUT.
+//   CHROME=... node cw.mjs URL [PASSBAND_LABEL] [SECONDS]
+import { launch, q, sleep } from "./lib.mjs";
+const [url, bw = "", secs = "60"] = process.argv.slice(2);
+const out = process.env.OUT ?? ".";
+const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
+await p.goto(url);
+await sleep(3000);
+await p.ev(`${q(".start")}?.click()`);
+await sleep(1500);
+if (bw) await p.ev(`[...document.querySelectorAll('header button')].find((b) => b.textContent === ${JSON.stringify(bw)})?.click()`);
+await sleep(500);
+await p.ev(`[...document.querySelectorAll('header .tools button')].find((b) => b.textContent === 'CW').click()`);
+const t0 = Date.now();
+while (Date.now() - t0 < Number(secs) * 1000) {
+  await sleep(15000);
+  console.log(`--- ${Math.round((Date.now() - t0) / 1000)} s`);
+  console.log(await p.ev(`[...document.querySelectorAll('.cw tbody tr')].map((r) => [...r.children].map((c) => c.textContent).join(' | ')).join('\\n')`));
+}
+console.log("freq:", await p.ev(`${q(".freq")}.textContent`), "status:", await p.ev(`${q(".status")}.textContent`));
+console.log("panel:", await p.ev(`${q(".cw .spots-list")}.textContent.slice(0, 200)`));
+await p.shot(`${out}/cw.png`);
+p.close();

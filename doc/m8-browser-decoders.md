@@ -1,6 +1,7 @@
 # M8: more decoders in the browser (plan B)
 
-Status: **todo** (planned 2026-11-15, nothing started). This is
+Status: in progress (planned 2026-11-15). Item 1 (CW) done: `crates/cw`,
+`crates/cw-wasm`, `ui/src/cw.ts`, `ui/src/ctl/cw.tsx` (§2.1). This is
 `feature-gap.md` §4 item B: more decoders that run on the page's own
 audio, as JTTY and FT8/FT4/WSPR do. Nothing here runs on the unit, so the
 A9's CPU limits don't apply.
@@ -15,6 +16,8 @@ A9's CPU limits don't apply.
 | 4 | **HF fax** | new (nothing in datarx) | DWD/NOAA-style charts as images: start/stop tones, phasing, IOC 576/288, 60/90/120 LPM, slant corrected |
 | 5 | NAVTEX / SITOR-B | datarx `wahrx/fsk.py` (already decodes it) | falls out of item 2; a NAVTEX view (B1-B4 header, message list) |
 | 6 | later: DSC, time codes (DCF77, MSF, WWVB...) | new | as in `feature-gap.md` §2.4 |
+| 7 | optional: **neural CW** | trained on datarx-style synthetic CW (§5) | beats item 1 on the synthetic sets and on real recordings; shipped only then |
+| 8 | optional: **signal identifier** | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 (images, a new panel type), then the rest.
@@ -48,6 +51,30 @@ Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 * Several signals in the passband: one decoder per keyed line (QSO both
   sides 20-25 Hz apart decode in datarx).
 * UI: text per signal, WPM and SNR; click a line to pick it.
+* **Done (2026-11-15).** The skimmer on 12 kHz audio: a 512-point
+  spectrogram of the passband (21 ms hop, so 40 WPM key-up gaps show)
+  finds keyed lines; each gets a 500 S/s complex channel (289-tap FIR,
+  primed from the last 8 s of audio), re-decoded over its last 30 s every
+  2 s; characters are emitted once 3 s (40 dots) old. Ported tests pass
+  (speeds, prosigns, jitter, noise only, a two-operator QSO, two signals
+  in SSB audio, a steady carrier ignored). Character error rates
+  (`cargo run --release -p web888-cw --example cer`, 20 WPM, 20
+  messages each; SNR in 2500 Hz):
+
+  | SNR | clean | 10 % jitter | QSB 0.2 Hz |
+  |---|---|---|---|
+  | +6 dB | 0.0 % | 2.2 % | 9.8 % |
+  | 0 dB | 0.0 % | 2.4 % | 26.2 % |
+  | −3 dB | 0.4 % | 2.2 % | 38.1 % |
+  | −6 dB | 10.2 % | 16.2 % | 57.2 % |
+  | −8 dB | 57.8 % | 61.7 % | 67.2 % |
+
+  Four signals in 60 s of audio: 4 % of real time natively. In the page
+  (`ui/tools/cdp/cw.mjs`) on the 40 m recording: a contest exchange at
+  7018.9 kHz (20 WPM, USB) and a weak CQ at 7022.3 kHz (26 WPM, CW mode)
+  decode as datarx reads them. One difference from datarx: the levels
+  ignore the filters' start-up at the window's ends (datarx decoded a
+  spurious E there). These numbers are item 7's baseline.
 
 ### 2.2 FSK / RTTY (from `fsk.py`)
 
@@ -100,3 +127,20 @@ Everything detected from the signal, with manual overrides:
 * On air: the HackRF dev source (`--backend iq`) and recordings under
   `/data/iq`: 20 m CW, DWD RTTY (10100.8 / 11039 / 14467.3 kHz), DWD fax
   (3855 / 7880 / 13882.5 kHz), NAVTEX 518 kHz, SSTV on 14.230 MHz.
+
+## 5. Neural decoders (optional, after the classical ones)
+
+* **Neural CW**: log spectrogram of the passband around the signal →
+  small CNN + bidirectional GRU/LSTM → CTC over the Morse alphabet; beam
+  search with a small language model (callsigns, Q codes, QSO phrases).
+  Trained on synthetic CW from the classical crate's test generator
+  (SNR, QSB, keying jitter, speed 10-45 WPM, QRM, QRN), so labels are
+  free. The classical decoder (item 1) is the baseline and the fallback.
+* **Signal identifier**: a small CNN on a few seconds of spectrogram;
+  classes from the decoders we have plus common utility modes.
+* Not neural: RTTY (the demodulator is near optimal; a language model
+  for lost LTRS/FIGS shifts helps more), SSTV/FAX (an enhancing network
+  would invent detail in charts), FT8/FT4/WSPR/JTTY (strong FEC already).
+* Training: PyTorch on the workstation's GPU (`tools/ml/`, not shipped),
+  export to ONNX. Inference in the browser: `tract` in the wasm crate (one
+  test path through `cargo test`), weights fetched lazily (< 1 MB).
