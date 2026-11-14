@@ -29,9 +29,11 @@ Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
   shipped as Python. Its tests (`tests/test_cw.py`, `test_fsk.py`,
   `tests/synth.py`) become the crates' tests: synthetic signals at given
   SNR, fading and keying jitter, with datarx's character error rates as
-  the bar (README "CW decoder" and "FSK / RTTY" sections). datarx has no
-  licence file; state its origin in the crate header as `jtty` does and
-  release it under this repo's GPL-3.0+.
+  the bar (README "CW decoder" and "FSK / RTTY" sections). datarx is MIT
+  (its author's choice, 2026-11-15), so the ports are GPL-3.0-or-later
+  like the rest of web888d; each crate header names datarx's module as
+  its origin, as `jtty` does for jtty-cuf. Same author, so no separate
+  MIT notice is needed.
 * datarx works on complex baseband from a wideband capture; here the
   input is real audio from one passband. Take the CW and FSK cores (tone
   estimation, demodulation, framing, charset), not the skimmers' FFT
