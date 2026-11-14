@@ -6,9 +6,12 @@
 
 pub mod admin;
 pub mod auth;
+pub mod backup;
 pub mod binview;
+pub mod bootloader;
 pub mod dxspots;
 pub mod kiwi;
+pub mod logs;
 pub mod markers;
 pub mod metrics;
 pub mod proto;
@@ -62,6 +65,9 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .merge(markers::routes())
         .merge(kiwi::routes())
         .merge(update::routes())
+        .merge(logs::routes())
+        .merge(backup::routes())
+        .merge(bootloader::routes())
         .merge(safe::routes())
         .fallback_service(ui)
         // revalidate every load (cheap with ETags): a new UI build is
@@ -172,6 +178,7 @@ async fn status(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
         "clock_ppm": s.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
         "hw_rate_ok": s.rx_rate_ok.load(Ordering::Relaxed),
         "rx_frames": s.rx_frames.load(Ordering::Relaxed),
+        "rx_lost_frames": s.rx_lost_frames.load(Ordering::Relaxed),
     }))
 }
 

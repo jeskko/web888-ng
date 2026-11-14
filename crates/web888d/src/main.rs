@@ -90,9 +90,11 @@ struct ServeArgs {
     #[arg(long)]
     safe: bool,
     /// Bitstream to load first (zynqsdr backend): a path, `auto` for the
-    /// band's file in /usr/share/web888 (web888-ng-os image) or else the
-    /// stock one on the SD card, `channelizer` for the image's channelizer
-    /// for the band, or `none` if it's already loaded.
+    /// image's channelizer for the band (web888-ng-os, /usr/share/web888)
+    /// or else `standard`, `standard` for the band's standard file in
+    /// /usr/share/web888 or else the stock one on the SD card,
+    /// `channelizer` for the image's channelizer for the band, or `none`
+    /// if it's already loaded.
     #[arg(long)]
     bitstream: Option<String>,
     /// Band (zynqsdr backend): hf, or vhf (the VHF path, a 98.304 MHz ADC
@@ -721,6 +723,7 @@ fn open_radio(a: &web888_config::Radio) -> AnyResult<Opened> {
             let bit = match a.bitstream.as_str() {
                 "none" => None,
                 "auto" => Some(bitstream::auto_path(cfg.variant, &[image])),
+                "standard" => Some(bitstream::standard_path(cfg.variant, &[image])),
                 "channelizer" => Some(image.join(bitstream::channelizer_name(cfg.variant))),
                 p => Some(std::path::PathBuf::from(p)),
             };

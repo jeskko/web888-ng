@@ -53,6 +53,7 @@ Prometheus); `$__rate_interval` then follows it.
 | `audio_frames_dropped_total`, `wf_frames_dropped_total` | counter | `protocol` | frames dropped: the client didn't keep up |
 | `adc_overloads_total` | counter | | blocks with an ADC overload |
 | `rx_frames_total` | counter | | RX frames from the hardware |
+| `rx_lost_frames_total` | counter | | RX frames lost to ring overruns (a gap in every listener's audio) |
 | `clock_ppm` | gauge | | the ADC clock's error from the GPS PPS (0 without one) |
 | `hw_rate_ok` | gauge | | the hardware keeps up with the RX rate |
 | `pool_busy_seconds_total` | counter | `worker` | DSP worker busy time |

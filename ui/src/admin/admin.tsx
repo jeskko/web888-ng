@@ -6,10 +6,10 @@
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
-import { call, get, href, loggedOut, putText, type Auth, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
+import { call, get, href, loggedOut, putText, type Auth, type Changes, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
-type Tab = "status" | "sessions" | "config" | "labels" | "passwords" | "update";
+type Tab = "status" | "sessions" | "config" | "labels" | "passwords" | "update" | "logs";
 const TABS: { id: Tab; name: string }[] = [
   { id: "status", name: "Status" },
   { id: "sessions", name: "Sessions" },
@@ -17,6 +17,7 @@ const TABS: { id: Tab; name: string }[] = [
   { id: "labels", name: "Labels" },
   { id: "passwords", name: "Passwords" },
   { id: "update", name: "Update" },
+  { id: "logs", name: "Logs" },
 ];
 
 function tabFromHash(): Tab {
@@ -160,6 +161,10 @@ function StatusPage() {
           <dd class={stats.hw.hw_rate_ok ? "" : "warn"}>
             {rates ? `${(rates.frames / 1e3).toFixed(1)} k frames/s` : "…"}
             {!stats.hw.hw_rate_ok && " (falling behind)"}
+          </dd>
+          <dt>Frames lost</dt>
+          <dd class={stats.hw.rx_lost_frames ? "warn" : ""} title="RX frames lost to ring overruns: the reader fell behind, a gap in every listener's audio">
+            {stats.hw.rx_lost_frames}
           </dd>
           <dt>ADC overloads</dt>
           <dd>{stats.hw.adc_overloads} blocks</dd>
@@ -814,11 +819,281 @@ function UpdatePage() {
           </tbody>
         </table>
         <p class="dim">
-          An update goes into the slot not running; the old one stays as it was, to go back to. The boot files on the card (BOOT.BIN,
-          u-boot.img) are never updated this way.
+          An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN,
+          u-boot.img) is not part of it: see Boot loader below.
         </p>
       </section>
       {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+    </div>
+  );
+}
+
+/** Settings backup (a JSON file to download) and restore (one uploaded). */
+function BackupCard() {
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const [busy, setBusy] = useState(false);
+  const restore = async (f: File) => {
+    setMsg(null);
+    let text: string;
+    try {
+      text = await f.text();
+      JSON.parse(text);
+    } catch {
+      setMsg({ ok: false, text: `${f.name}: not a settings backup (JSON)` });
+      return;
+    }
+    if (!confirm(`Restore the settings from ${f.name}? The configuration, the passwords and the own labels are replaced by the file's.`)) return;
+    setBusy(true);
+    try {
+      const r = await call<Changes & { labels: number | null; from: { server: string; created: number } }>(
+        "POST",
+        "api/admin/restore",
+        JSON.parse(text),
+      );
+      const when = new Date(r.from.created * 1000).toISOString().slice(0, 16).replace("T", " ");
+      const parts = [`Restored the settings saved by web888d ${r.from.server} on ${when} UTC`];
+      if (r.labels !== null) parts.push(`${r.labels} own labels`);
+      if (r.restart.length) parts.push(`restart web888d for: ${r.restart.join(", ")}`);
+      setMsg({ ok: true, text: parts.join("; ") + "." });
+    } catch (e) {
+      setMsg({ ok: false, text: `Not restored: ${(e as Error).message}` });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="cards">
+      <section class="card">
+        <h3>Backup</h3>
+        <p>
+          <a href={href("api/admin/backup")} download>
+            Download the settings
+          </a>
+          {" · "}
+          <label class="file">
+            {busy ? "Restoring…" : "Restore from a file"}{" "}
+            <input
+              type="file"
+              accept=".json,application/json"
+              disabled={busy}
+              onChange={(e) => {
+                const f = (e.currentTarget as HTMLInputElement).files?.[0];
+                (e.currentTarget as HTMLInputElement).value = "";
+                if (f) void restore(f);
+              }}
+            />
+          </label>
+        </p>
+        {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+        <p class="dim">
+          One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's
+          own settings (network, tunnels, SSH key) are in web888.txt on the card, not here.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+interface BootLoader {
+  available: boolean;
+  state?: "current" | "update" | "unsupported";
+  reason?: string;
+  blocked?: string;
+  slot?: string;
+  shipped_version?: string;
+  installed_spl?: string;
+  installed_uboot?: string;
+  shipped_spl?: string;
+  shipped_uboot?: string;
+  old_kept?: string;
+}
+
+/** The card's boot loader: written from the running slot's copy when the
+ * owner asks (os docs/updates.md). */
+function BootLoaderCard() {
+  const [b, setB] = useState<BootLoader | null>(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  usePoll(async () => {
+    if (!busy) setB(await get<BootLoader>("api/admin/bootloader"));
+  }, 30_000);
+  if (!b) return null;
+  const short = (h?: string) => (h ? h.slice(0, 12) : "?");
+  const install = async () => {
+    if (
+      !confirm(
+        "Write the boot loader to the card now?\n\n" +
+          "Unlike the system, the boot loader has no second copy to fall back to. If the unit loses power while it is written, " +
+          "or the new boot loader doesn't start, the unit won't boot until the card is fixed on a computer (rename boot.bin.old " +
+          "and u-boot.img.old back) or re-imaged. Download a settings backup first, and have a card reader at hand.\n\n" +
+          "The receiver keeps running; the new boot loader starts at the next reboot.",
+      )
+    )
+      return;
+    setBusy(true);
+    setMsg(null);
+    try {
+      const r = await call<{ output: string }>("POST", "api/admin/bootloader/install");
+      setMsg({ ok: true, text: r.output.split("\n").pop() ?? "done" });
+      setB(await get<BootLoader>("api/admin/bootloader"));
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <div class="cards">
+      <section class="card">
+        <h3>Boot loader</h3>
+        {!b.available || b.state === "unsupported" ? (
+          <p class="dim">Not updated from here: {b.reason}.</p>
+        ) : (
+          <>
+            <dl>
+              <dt>On the card</dt>
+              <dd>
+                {b.state === "current" ? (
+                  <span class="ok">this system's{b.shipped_version ? ` (web888-ng ${b.shipped_version})` : ""}</span>
+                ) : (
+                  <span class="warn">another one</span>
+                )}{" "}
+                <span class="dim">
+                  SPL {short(b.installed_spl)}, U-Boot {short(b.installed_uboot)}
+                </span>
+              </dd>
+              {b.state === "update" && (
+                <>
+                  <dt>This system's</dt>
+                  <dd>
+                    web888-ng {b.shipped_version ?? "?"}{" "}
+                    <span class="dim">
+                      SPL {short(b.shipped_spl)}, U-Boot {short(b.shipped_uboot)}
+                    </span>
+                  </dd>
+                </>
+              )}
+              {b.old_kept && (
+                <>
+                  <dt>Kept</dt>
+                  <dd class="dim">boot.bin.old, u-boot.img.old (the one before)</dd>
+                </>
+              )}
+            </dl>
+            {b.state === "update" && (
+              <>
+                {b.blocked && <p class="warn">Not now: {b.blocked}.</p>}
+                <p>
+                  <button class="on" onClick={() => void install()} disabled={busy || !!b.blocked}>
+                    {busy ? "Writing…" : "Write it to the card…"}
+                  </button>
+                </p>
+                <p class="dim">
+                  Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to
+                  re-image the card if something unexpected happens.
+                </p>
+              </>
+            )}
+          </>
+        )}
+        {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+      </section>
+    </div>
+  );
+}
+
+type LogSource = "web888d" | "boot" | "kernel" | "setup";
+const LOG_SOURCES: { id: LogSource; name: string }[] = [
+  { id: "web888d", name: "web888d" },
+  { id: "boot", name: "System (this boot)" },
+  { id: "kernel", name: "Kernel" },
+  { id: "setup", name: "web888-setup.log" },
+];
+
+interface Logs {
+  source: LogSource;
+  lines: string[];
+  error?: string;
+  sources: Record<LogSource, boolean>;
+}
+
+/** The system's logs: the last lines of one source, refreshed. */
+function LogsPage() {
+  const [src, setSrc] = useState<LogSource>("web888d");
+  const [n, setN] = useState(300);
+  const [filter, setFilter] = useState("");
+  const [follow, setFollow] = useState(true);
+  const [logs, setLogs] = useState<Logs | null>(null);
+  const [err, setErr] = useState("");
+  const pre = useRef<HTMLPreElement>(null);
+  usePoll(
+    async () => {
+      if (!follow && logs?.source === src) return;
+      try {
+        setLogs(await get<Logs>(`api/admin/logs?source=${src}&lines=${n}`));
+        setErr("");
+      } catch (e) {
+        setErr((e as Error).message);
+      }
+    },
+    5000,
+  );
+  // a new source or length: at once
+  useEffect(() => {
+    get<Logs>(`api/admin/logs?source=${src}&lines=${n}`)
+      .then((l) => {
+        setLogs(l);
+        setErr("");
+      })
+      .catch((e: Error) => setErr(e.message));
+  }, [src, n]);
+  const f = filter.trim().toLowerCase();
+  const lines = (logs?.source === src ? logs.lines : []).filter((l) => !f || l.toLowerCase().includes(f));
+  useEffect(() => {
+    if (follow && pre.current) pre.current.scrollTop = pre.current.scrollHeight;
+  }, [logs, follow, filter]);
+  const save = () => {
+    const blob = new Blob([lines.join("\n") + "\n"], { type: "text/plain" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = `web888-${src}-${new Date().toISOString().slice(0, 19).replace(/[:T]/g, "-")}.log`;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  };
+  return (
+    <div class="logs">
+      <div class="logbar">
+        <nav class="seg">
+          {LOG_SOURCES.map((s) => (
+            <button
+              key={s.id}
+              class={src === s.id ? "on" : ""}
+              disabled={logs ? !logs.sources[s.id] : false}
+              title={logs && !logs.sources[s.id] ? "not on this system" : ""}
+              onClick={() => setSrc(s.id)}
+            >
+              {s.name}
+            </button>
+          ))}
+        </nav>
+        <select value={n} onChange={(e) => setN(Number((e.currentTarget as HTMLSelectElement).value))}>
+          {[100, 300, 1000, 5000].map((k) => (
+            <option value={k}>{k} lines</option>
+          ))}
+        </select>
+        <input type="search" placeholder="Filter" value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
+        <label>
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow((e.currentTarget as HTMLInputElement).checked)} /> Follow
+        </label>
+        <button onClick={save} disabled={!lines.length}>
+          Download
+        </button>
+      </div>
+      {err && <p class="warn">{err}</p>}
+      {logs?.error && logs.source === src && <p class="warn">{logs.error}</p>}
+      <pre class="log" ref={pre}>
+        {lines.join("\n")}
+      </pre>
     </div>
   );
 }
@@ -862,10 +1137,21 @@ export function AdminApp() {
       <div class="page">
         {tab.value === "status" && <StatusPage />}
         {tab.value === "sessions" && <SessionsPage />}
-        {tab.value === "config" && <ConfigPage onRestart={() => void restart()} />}
+        {tab.value === "config" && (
+          <>
+            <ConfigPage onRestart={() => void restart()} />
+            <BackupCard />
+          </>
+        )}
         {tab.value === "labels" && <LabelsPage />}
         {tab.value === "passwords" && <PasswordsPage />}
-        {tab.value === "update" && <UpdatePage />}
+        {tab.value === "update" && (
+          <>
+            <UpdatePage />
+            <BootLoaderCard />
+          </>
+        )}
+        {tab.value === "logs" && <LogsPage />}
       </div>
     </div>
   );

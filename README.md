@@ -291,6 +291,26 @@ API (admin): `GET /api/admin/update`, `POST /api/admin/update/check`,
 last), `POST /api/admin/update/reboot`. Elsewhere (a development machine)
 the tab says updates aren't available.
 
+The card's boot loader (`BOOT.BIN`, `u-boot.img`; no A/B, so never by
+itself): **Update**, **Boot loader** shows whether the card has the
+running system's copy and writes it when asked, through the image's
+`web888-bootloader` (web888-ng-os v0.10.0 and later; the os
+`docs/updates.md`). API: `GET /api/admin/bootloader`, `POST
+/api/admin/bootloader/install`.
+
+### Logs, backup and restore
+
+**Logs** on the admin page shows the last lines of the system journal
+(web888d, the whole boot, the kernel) and the image's
+`web888-setup.log`, refreshed, with a filter and a download; also in
+safe mode. API: `GET /api/admin/logs?source=web888d|boot|kernel|setup&lines=300`.
+
+**Configuration**, **Backup** downloads one JSON file with the
+configuration file (passwords as their hashes) and the own labels, and
+restores one: both are checked first, then written as the page's own
+saves. API: `GET /api/admin/backup`, `POST /api/admin/restore` (that
+file, `application/json`).
+
 ### Safe mode
 
 `web888d serve --safe` runs the web and admin pages (settings, logs, OS

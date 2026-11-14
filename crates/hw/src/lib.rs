@@ -183,6 +183,12 @@ pub fn read_pause(got: usize, frames_per_s: f64) -> Duration {
     Duration::from_secs_f64(missing.clamp(0.0, batch))
 }
 
+/// RX frames in `bytes` lost from a ring of `nch` channels (8 bytes a
+/// sample), a part frame counted whole.
+fn lost_frames(bytes: u64, nch: usize) -> u64 {
+    bytes.div_ceil(8 * nch.max(1) as u64)
+}
+
 /// Health of the hw thread, readable by any consumer (status displays).
 #[derive(Debug, Default)]
 pub struct HwStatus {
@@ -193,6 +199,10 @@ pub struct HwStatus {
     /// The last rate window delivered the expected RX frames.
     pub rx_rate_ok: AtomicBool,
     pub rx_frames: AtomicU64,
+    /// RX frames lost to ring overruns (the reader fell behind). The
+    /// blocks' frame numbers skip them, so the audio after one is flagged
+    /// as a gap to its listener.
+    pub rx_lost_frames: AtomicU64,
 }
 
 pub struct HwLoop {
@@ -466,10 +476,17 @@ impl HwLoop {
                 if let Some(l) = last_stats {
                     overload = s.adc_overflows != l.adc_overflows;
                     if s.rx_overruns != l.rx_overruns {
+                        let bytes = s.rx_overrun_bytes.wrapping_sub(l.rx_overrun_bytes);
+                        let lost = lost_frames(bytes, n);
                         eprintln!(
-                            "rx: ring overrun, {} bytes skipped: the reader fell behind",
-                            s.rx_overrun_bytes.wrapping_sub(l.rx_overrun_bytes)
+                            "rx: ring overrun, {bytes} bytes ({lost} frames) skipped: the reader fell behind"
                         );
+                        // before this read's frames: their numbers skip
+                        // the lost ones (a gap for the readers)
+                        frames += lost;
+                        self.status
+                            .rx_lost_frames
+                            .fetch_add(lost, Ordering::Relaxed);
                     }
                     // reset at each RX start
                     if s.rx_frames_dropped > l.rx_frames_dropped {
@@ -597,6 +614,111 @@ mod tests {
         t.join().unwrap().unwrap();
         assert_eq!(a_drops.load(Ordering::Relaxed), 0);
         assert!(c_drops.load(Ordering::Relaxed) > 0);
+    }
+
+    /// A radio whose ring overruns once: `lose` frames at the `at`th
+    /// stats read.
+    struct Lossy {
+        sim: SimRadio,
+        reads: u32,
+        at: u32,
+        lose: u64,
+    }
+
+    impl Radio for Lossy {
+        fn caps(&self) -> Caps {
+            self.sim.caps()
+        }
+        fn adc_hz(&self) -> f64 {
+            self.sim.adc_hz()
+        }
+        fn set_adc_hz(&mut self, hz: f64) {
+            self.sim.set_adc_hz(hz)
+        }
+        fn set_rx_rate(&mut self, r2: u16) -> Result<()> {
+            self.sim.set_rx_rate(r2)
+        }
+        fn rx_r2(&self) -> u16 {
+            self.sim.rx_r2()
+        }
+        fn tune_rx(&mut self, ch: usize, f_hz: f64) -> Result<()> {
+            self.sim.tune_rx(ch, f_hz)
+        }
+        fn read_rx(&mut self, buf: &mut [Iq32]) -> Result<usize> {
+            self.sim.read_rx(buf)
+        }
+        fn start_wf(&mut self, slot: usize, f_hz: f64, decim: u16, mode: WfMode) -> Result<()> {
+            self.sim.start_wf(slot, f_hz, decim, mode)
+        }
+        fn read_wf(&mut self, slot: usize, buf: &mut [Iq16]) -> Result<usize> {
+            self.sim.read_wf(slot, buf)
+        }
+        fn front_end(&mut self, fe: FrontEnd) -> Result<()> {
+            self.sim.front_end(fe)
+        }
+        fn pps(&mut self) -> Result<Option<u32>> {
+            self.sim.pps()
+        }
+        fn hw_stats(&mut self) -> Result<Option<HwStats>> {
+            self.reads += 1;
+            let mut s = HwStats::default();
+            if self.reads >= self.at {
+                s.rx_overruns = 1;
+                s.rx_overrun_bytes = self.lose * 8 * self.caps().rx_channels as u64;
+            }
+            Ok(Some(s))
+        }
+        fn sample_counter(&mut self) -> Option<u64> {
+            self.sim.sample_counter()
+        }
+        fn identity(&self) -> Identity {
+            self.sim.identity()
+        }
+    }
+
+    #[test]
+    fn an_overrun_skips_the_lost_frames() {
+        let (tx, rx) = channel();
+        let stop = Arc::new(AtomicBool::new(false));
+        let status = Arc::new(HwStatus::default());
+        let hw = HwLoop {
+            radio: Box::new(Lossy {
+                sim: SimRadio::new(SimConfig::hf(Scene::new(), Pacing::RealTime)),
+                reads: 0,
+                at: 5,
+                lose: 100,
+            }),
+            ctl: rx,
+            stop: stop.clone(),
+            status: status.clone(),
+            verbose: false,
+        };
+        let t = std::thread::spawn(move || hw.run());
+        let (s, blocks, _) = Subscriber::new(256);
+        tx.send(HwCmd::SubscribeRx(s)).unwrap();
+        let mut next = None;
+        let mut jumps = vec![];
+        for _ in 0..20 {
+            let b = blocks.recv_timeout(Duration::from_secs(2)).unwrap();
+            if let Some(n) = next
+                && b.first_frame != n
+            {
+                jumps.push(b.first_frame - n);
+            }
+            next = Some(b.end_frame());
+        }
+        stop.store(true, Ordering::Relaxed);
+        t.join().unwrap().unwrap();
+        assert_eq!(jumps, [100], "one gap of the lost frames");
+        assert_eq!(status.rx_lost_frames.load(Ordering::Relaxed), 100);
+    }
+
+    #[test]
+    fn lost_frames_count_part_frames_whole() {
+        assert_eq!(lost_frames(0, 12), 0);
+        assert_eq!(lost_frames(96, 12), 1);
+        assert_eq!(lost_frames(97, 12), 2);
+        assert_eq!(lost_frames(8, 0), 1);
     }
 
     /// Mean phase step per sample of a complex stream (tone frequency / fs).

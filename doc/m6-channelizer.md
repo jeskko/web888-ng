@@ -448,8 +448,10 @@ The VHF input by undersampling, with the channelizer built for it
   clock) before the bitstream loads, keeps the RF switch on the VHF path
   (`MODE_SET`, whatever the front end asks), and tunes 98.304..147.456
   MHz. `bitstream = "channelizer"` takes the image's channelizer for the
-  band, `auto` its tuned bitstream (`websdr_vhf.bit`, 13 RX: the same
-  mapping works there, RX at 48 kS/s).
+  band, `standard` its tuned bitstream (`websdr_vhf.bit`, 13 RX: the
+  same mapping works there, RX at 48 kS/s), `auto` (the default) the
+  channelizer when the image has it (from server v0.13.0; before, `auto`
+  meant `standard`).
 * **Back to HF**: U-Boot sets 122.88 MHz only at boot. web888d notes the
   clock it programmed in `/run/web888/adc-clock`; an HF start finding
   another clock there programs 122.88 MHz again. An HF start without the

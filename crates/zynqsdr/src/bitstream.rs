@@ -47,13 +47,23 @@ pub fn default_path(variant: Variant) -> PathBuf {
     Path::new(SD_DIR).join(file_name(variant))
 }
 
-/// `--bitstream auto`: the image's bitstream if there is one in `dirs`
-/// (normally [`IMAGE_DIR`]), else the stock one on the SD card.
-pub fn auto_path(variant: Variant, dirs: &[&Path]) -> PathBuf {
+/// `--bitstream standard`: the image's standard bitstream if there is one
+/// in `dirs` (normally [`IMAGE_DIR`]), else the stock one on the SD card.
+pub fn standard_path(variant: Variant, dirs: &[&Path]) -> PathBuf {
     dirs.iter()
         .map(|d| d.join(file_name(variant)))
         .find(|p| p.is_file())
         .unwrap_or_else(|| default_path(variant))
+}
+
+/// `--bitstream auto`: the image's channelizer for the band if there is
+/// one in `dirs` (the web888-ng-os image's default since v0.7.0), else
+/// [`standard_path`].
+pub fn auto_path(variant: Variant, dirs: &[&Path]) -> PathBuf {
+    dirs.iter()
+        .map(|d| d.join(channelizer_name(variant)))
+        .find(|p| p.is_file())
+        .unwrap_or_else(|| standard_path(variant, dirs))
 }
 
 /// The vendor kernel's devcfg driver is there. Checks for a character
@@ -188,13 +198,28 @@ mod tests {
     }
 
     #[test]
-    fn auto_prefers_the_image_bitstream() {
-        let d = tmp("auto");
+    fn standard_prefers_the_image_bitstream() {
+        let d = tmp("standard");
         let none = d.join("none");
-        assert_eq!(auto_path(Variant::Hf, &[&none]), default_path(Variant::Hf));
+        assert_eq!(
+            standard_path(Variant::Hf, &[&none]),
+            default_path(Variant::Hf)
+        );
         std::fs::write(d.join("websdr_vhf.bit"), b"x").unwrap();
-        assert_eq!(auto_path(Variant::Vhf, &[&d]), d.join("websdr_vhf.bit"));
-        assert_eq!(auto_path(Variant::Hf, &[&d]), default_path(Variant::Hf));
+        assert_eq!(standard_path(Variant::Vhf, &[&d]), d.join("websdr_vhf.bit"));
+        assert_eq!(standard_path(Variant::Hf, &[&d]), default_path(Variant::Hf));
+        std::fs::remove_dir_all(&d).unwrap();
+    }
+
+    #[test]
+    fn auto_prefers_the_channelizer() {
+        let d = tmp("auto");
+        std::fs::write(d.join("websdr_hf.bit"), b"x").unwrap();
+        assert_eq!(auto_path(Variant::Hf, &[&d]), d.join("websdr_hf.bit"));
+        std::fs::write(d.join("websdr_pfb.bit"), b"x").unwrap();
+        assert_eq!(auto_path(Variant::Hf, &[&d]), d.join("websdr_pfb.bit"));
+        // VHF: no VHF channelizer here, no image VHF file: the stock one
+        assert_eq!(auto_path(Variant::Vhf, &[&d]), default_path(Variant::Vhf));
         std::fs::remove_dir_all(&d).unwrap();
     }
 

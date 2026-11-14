@@ -187,7 +187,7 @@
           "default": "zynqsdr"
         },
         "bitstream": {
-          "description": "zynqsdr: a path, `auto` (the image's or the stock one for the\nband), `channelizer` (the image's channelizer for the band) or\n`none`.",
+          "description": "zynqsdr: `auto` (the image's channelizer for the band if it has\none, else as `standard`), `channelizer`, `standard` (the image's or\nthe stock bitstream with the hardware's DDCs, 12 RX on HF), a path,\nor `none` (already loaded).",
           "type": "string",
           "default": "auto"
         },

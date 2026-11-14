@@ -229,6 +229,12 @@ fn hardware(o: &mut Out, sh: &Shared) {
         n(&s.rx_frames),
     );
     o.one(
+        "rx_lost_frames_total",
+        "counter",
+        "RX frames lost to ring overruns (the reader fell behind): a gap in every listener's audio.",
+        n(&s.rx_lost_frames),
+    );
+    o.one(
         "clock_ppm",
         "gauge",
         "ADC clock error (GPS PPS; 0 without one).",

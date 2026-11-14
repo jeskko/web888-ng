@@ -24,7 +24,7 @@ use axum::http::{HeaderMap, StatusCode, header};
 use axum::response::{IntoResponse, Json, Response};
 use axum::routing::get;
 use serde::Deserialize;
-use std::path::PathBuf;
+use std::path::{Path, PathBuf};
 use std::sync::{Arc, Mutex};
 use std::time::SystemTime;
 use web888_markers::{Marker, Query as Want, SOURCES, Utc, bandplan, eibi, own};
@@ -49,12 +49,32 @@ fn allowed(sh: &Shared, headers: &HeaderMap) -> bool {
 /// The own list's file: `[markers] file`, a relative path next to the
 /// configuration file (none without one).
 fn own_path(sh: &Shared) -> Option<PathBuf> {
-    let file = sh.live.borrow().markers.file.clone();
+    own_file(
+        &sh.live.borrow().markers.file,
+        sh.admin.hooks.config_path.as_deref(),
+    )
+}
+
+/// `[markers] file` (`file`) as a path: relative ones next to the
+/// configuration file `config` (none without one).
+pub(crate) fn own_file(file: &Path, config: Option<&Path>) -> Option<PathBuf> {
     if file.is_absolute() {
-        return Some(file);
+        return Some(file.to_path_buf());
     }
-    let dir = sh.admin.hooks.config_path.as_ref()?.parent()?.to_path_buf();
-    Some(dir.join(file))
+    Some(config?.parent()?.join(file))
+}
+
+/// Write the own list to `path` in place of the old one (a copy, then a
+/// rename).
+pub(crate) fn write_own(path: &Path, list: &[Marker]) -> Result<(), String> {
+    let tmp = path.with_extension("csv.new");
+    let saved = std::fs::write(&tmp, own::to_csv(list)).and_then(|_| std::fs::rename(&tmp, path));
+    if let Err(e) = saved {
+        let _ = std::fs::remove_file(&tmp);
+        return Err(format!("{}: {e}", path.display()));
+    }
+    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
+    Ok(())
 }
 
 /// The own list as last read: its file, that file's time, the list.
@@ -227,16 +247,9 @@ async fn own_put(_: AdminOnly, State(sh): State<Arc<Shared>>, body: Bytes) -> Re
         Ok(l) => l,
         Err(e) => return error(StatusCode::BAD_REQUEST, e),
     };
-    let tmp = path.with_extension("csv.new");
-    let saved = std::fs::write(&tmp, own::to_csv(&list)).and_then(|_| std::fs::rename(&tmp, &path));
-    if let Err(e) = saved {
-        let _ = std::fs::remove_file(&tmp);
-        return error(
-            StatusCode::INTERNAL_SERVER_ERROR,
-            format!("{}: {e}", path.display()),
-        );
+    if let Err(e) = write_own(&path, &list) {
+        return error(StatusCode::INTERNAL_SERVER_ERROR, e);
     }
-    *CACHE.lock().unwrap_or_else(|e| e.into_inner()) = None;
     Json(serde_json::json!({ "count": list.len() })).into_response()
 }
 

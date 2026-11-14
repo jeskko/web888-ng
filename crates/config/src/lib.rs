@@ -208,9 +208,10 @@ impl Default for Syslog {
 pub struct Radio {
     /// Where the samples come from.
     pub backend: Backend,
-    /// zynqsdr: a path, `auto` (the image's or the stock one for the
-    /// band), `channelizer` (the image's channelizer for the band) or
-    /// `none`.
+    /// zynqsdr: `auto` (the image's channelizer for the band if it has
+    /// one, else as `standard`), `channelizer`, `standard` (the image's or
+    /// the stock bitstream with the hardware's DDCs, 12 RX on HF), a path,
+    /// or `none` (already loaded).
     pub bitstream: String,
     /// zynqsdr: `hf`, or `vhf`: the VHF RF path, the Si5351 ADC clock at
     /// 98.304 MHz, 98.304..147.456 MHz tunable (undersampled).

@@ -99,15 +99,15 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/metrics", get(metrics))
 }
 
-fn error(code: StatusCode, msg: impl Into<String>) -> Response {
+pub(crate) fn error(code: StatusCode, msg: impl Into<String>) -> Response {
     (code, Json(json!({ "error": msg.into() }))).into_response()
 }
 
 /// An error answer, small enough to pass around in a `Result`.
-struct Fail(StatusCode, String);
+pub(crate) struct Fail(StatusCode, String);
 
 impl Fail {
-    fn new(code: StatusCode, msg: impl Into<String>) -> Self {
+    pub(crate) fn new(code: StatusCode, msg: impl Into<String>) -> Self {
         Fail(code, msg.into())
     }
 }
@@ -319,7 +319,7 @@ fn public(c: &Config) -> Value {
     v
 }
 
-fn file_config(sh: &Shared) -> Result<Config, Fail> {
+pub(crate) fn file_config(sh: &Shared) -> Result<Config, Fail> {
     match &sh.admin.hooks.config_path {
         Some(p) => {
             Config::load(p).map_err(|e| Fail::new(StatusCode::INTERNAL_SERVER_ERROR, e.to_string()))
@@ -376,7 +376,7 @@ fn parse(v: Value) -> Result<Config, Fail> {
 }
 
 /// What saving `file` would change in the running server.
-fn changes_json(sh: &Shared, file: &Config) -> Value {
+pub(crate) fn changes_json(sh: &Shared, file: &Config) -> Value {
     let mut new = file.clone();
     if let Some(o) = &sh.admin.hooks.overlay {
         o(&mut new);
@@ -400,7 +400,7 @@ async fn config_validate(
 }
 
 /// Write `c` to the config file and apply it.
-fn save(sh: &Shared, c: &Config) -> Result<(), Fail> {
+pub(crate) fn save(sh: &Shared, c: &Config) -> Result<(), Fail> {
     let Some(path) = &sh.admin.hooks.config_path else {
         return Err(Fail::new(
             StatusCode::NOT_IMPLEMENTED,
@@ -595,6 +595,7 @@ async fn stats(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
             "clock_ppm": s.clock_ppb.load(Ordering::Relaxed) as f64 / 1e3,
             "hw_rate_ok": s.rx_rate_ok.load(Ordering::Relaxed),
             "rx_frames": s.rx_frames.load(Ordering::Relaxed),
+            "rx_lost_frames": s.rx_lost_frames.load(Ordering::Relaxed),
         },
     }))
 }

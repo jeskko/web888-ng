@@ -870,3 +870,106 @@ async fn trusted_proxies_forward_the_client() {
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn settings_backup_and_restore() {
+    let path = temp("backup");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    c.kiwi.smeter_offset_db = -7.0;
+    let (addr, stop) = start(c, path.clone()).await;
+    let admin = http(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password": ADMIN_PW, "admin": true})),
+    )
+    .await
+    .token();
+    let csv = "khz,name\n7074,FT8 here\n";
+    let r = http_raw(
+        addr,
+        "PUT",
+        "/api/admin/markers",
+        Some(&admin),
+        csv,
+        "text/csv",
+        &[],
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.body);
+
+    assert_eq!(
+        http(addr, "GET", "/api/admin/backup", None, None)
+            .await
+            .status,
+        401
+    );
+    let r = http(addr, "GET", "/api/admin/backup", Some(&admin), None).await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(
+        r.header("content-disposition")
+            .is_some_and(|d| d.contains("web888d-settings-")),
+        "{:?}",
+        r.headers
+    );
+    let saved = r.json();
+    assert_eq!(saved["format"], "web888d-settings");
+    let toml = saved["config"].as_str().unwrap();
+    assert!(
+        toml.contains("smeter_offset_db = -7.0") && toml.contains("admin_hash"),
+        "{toml}"
+    );
+    assert!(saved["labels"].as_str().unwrap().contains("FT8 here"));
+
+    // change both, then restore
+    let mut other = Config::load(&path).unwrap();
+    other.kiwi.smeter_offset_db = -20.0;
+    other.save(&path).unwrap();
+    let dir = path.parent().unwrap();
+    std::fs::write(dir.join(&other.markers.file), "khz,name\n").unwrap();
+
+    // a broken one changes nothing
+    let mut bad = saved.clone();
+    bad["config"] = json!("[radio]\nno_such_key = 1\n");
+    let r = http(addr, "POST", "/api/admin/restore", Some(&admin), Some(bad)).await;
+    assert_eq!(r.status, 400, "{}", r.body);
+    assert_eq!(Config::load(&path).unwrap().kiwi.smeter_offset_db, -20.0);
+    // JSON only
+    let r = http_raw(
+        addr,
+        "POST",
+        "/api/admin/restore",
+        Some(&admin),
+        &saved.to_string(),
+        "text/plain",
+        &[],
+    )
+    .await;
+    assert_eq!(r.status, 415, "{}", r.body);
+
+    let r = http(
+        addr,
+        "POST",
+        "/api/admin/restore",
+        Some(&admin),
+        Some(saved),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert_eq!(r.json()["labels"], 1);
+    let back = Config::load(&path).unwrap();
+    assert_eq!(back.kiwi.smeter_offset_db, -7.0);
+    assert!(back.auth.admin_hash.is_some());
+    let labels = std::fs::read_to_string(dir.join(&back.markers.file)).unwrap();
+    assert!(labels.contains("FT8 here"), "{labels}");
+    // the login still works (the same hash)
+    assert_eq!(
+        http(addr, "GET", "/api/admin/backup", Some(&admin), None)
+            .await
+            .status,
+        200
+    );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}

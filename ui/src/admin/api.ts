@@ -91,7 +91,7 @@ export interface Stats {
   threads: { name: string; cpu_s: number; cpu_pct: number | null }[];
   pool: { jobs: number; busy_s: number; rx_dropped: number; wf_dropped: number; shed: number }[];
   wf_views: { hz: number; decim: number; fps: number; slot: number; shared: boolean; sessions: number[] }[];
-  hw: { adc_overloads: number; clock_ppm: number; hw_rate_ok: boolean; rx_frames: number };
+  hw: { adc_overloads: number; clock_ppm: number; hw_rate_ok: boolean; rx_frames: number; rx_lost_frames: number };
 }
 
 export interface SkimBand {
