@@ -1,0 +1,11 @@
+[package]
+name = "web888-img"
+description = "HF fax and SSTV decoders (image modes) for the web UI"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+web888-cw.workspace = true

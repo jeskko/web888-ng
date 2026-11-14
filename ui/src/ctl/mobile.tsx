@@ -36,6 +36,7 @@ import { angleDelta, nextWheelStep, takeClicks, wheelLabel, wheelTarget, CLICKS_
 import { JttyCtl, JttyPanel } from "./jtty.tsx";
 import { CwCtl, CwPanel } from "./cw.tsx";
 import { RttyCtl, RttyPanel } from "./rtty.tsx";
+import { ImgCtl, ImgPanel } from "./img.tsx";
 import { DigiCtl, DigiPanel } from "./digi.tsx";
 import { MapCtl, MapPanel } from "./map.tsx";
 import { LabelsCtl } from "./labels.tsx";
@@ -307,11 +308,13 @@ function More({ close }: { close: () => void }) {
         <DigiCtl />
         <CwCtl />
         <RttyCtl />
+        <ImgCtl />
         <JttyCtl />
       </div>
       {spotsOpen.value && <SpotPanel />}
       <CwPanel />
       <RttyPanel />
+      <ImgPanel />
       <JttyPanel />
       <DigiPanel />
       <MapPanel />

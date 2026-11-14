@@ -3,8 +3,8 @@
 // worklet, loaded separately by the browser), the decoders' workers with
 // their WebAssembly (from scripts/build-wasm.sh, in wasm/): jtty-worker.js
 // with jtty.wasm (JTTY), digi-worker.js with digi.wasm (FT8/FT4/WSPR),
-// cw-worker.js with cw.wasm (CW) and rtty-worker.js with fsk.wasm
-// (FSK/RTTY); index.html, style.css, and the map's world (map/*.json).
+// cw-worker.js with cw.wasm (CW), rtty-worker.js with fsk.wasm
+// (FSK/RTTY) and img-worker.js with img.wasm (fax, SSTV); index.html, style.css, and the map's world (map/*.json).
 // `node build.mjs --watch` rebuilds on change (development).
 import * as esbuild from "esbuild";
 import { access, copyFile, mkdir } from "node:fs/promises";
@@ -26,6 +26,7 @@ const copyStatic = {
         ["digi.wasm", "FT8/FT4/WSPR decoding"],
         ["cw.wasm", "CW decoding"],
         ["fsk.wasm", "RTTY decoding"],
+        ["img.wasm", "FAX/SSTV decoding"],
       ]) {
         try {
           await access(`wasm/${f}`);
@@ -39,7 +40,7 @@ const copyStatic = {
 };
 
 const options = {
-  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts" },
+  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "img-worker": "src/img/worker.ts" },
   outdir: out,
   bundle: true,
   format: "esm",

@@ -3,8 +3,8 @@
 # The web UI's WebAssembly, to ui/wasm/, which `pnpm build` copies into
 # dist/: the JTTY receiver (crates/jtty-wasm) as jtty.wasm, and the FT8,
 # FT4 and WSPR decoders (crates/digi-wasm) as digi.wasm, the CW skimmer
-# (crates/cw-wasm) as cw.wasm and the FSK/RTTY skimmer (crates/fsk-wasm)
-# as fsk.wasm.
+# (crates/cw-wasm) as cw.wasm, the FSK/RTTY skimmer (crates/fsk-wasm) as
+# fsk.wasm and the fax and SSTV decoders (crates/img-wasm) as img.wasm.
 #
 #   scripts/build-wasm.sh
 #
@@ -15,7 +15,7 @@ set -eu
 src=$(cd "$(dirname "$0")/.." && pwd)
 target=wasm32-unknown-unknown
 out=$src/ui/wasm
-crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm"
+crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm -p web888-img-wasm"
 mkdir -p "$out"
 if [ -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/$target" ]; then
 	(cd "$src" && cargo build --release --target $target $crates)
@@ -34,4 +34,5 @@ cp "$built/web888_jtty_wasm.wasm" "$out/jtty.wasm"
 cp "$built/web888_digi_wasm.wasm" "$out/digi.wasm"
 cp "$built/web888_cw_wasm.wasm" "$out/cw.wasm"
 cp "$built/web888_fsk_wasm.wasm" "$out/fsk.wasm"
-ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm" "$out/fsk.wasm"
+cp "$built/web888_img_wasm.wasm" "$out/img.wasm"
+ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm" "$out/fsk.wasm" "$out/img.wasm"

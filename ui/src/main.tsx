@@ -24,6 +24,7 @@ import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
 import { CwCtl, CwPanel } from "./ctl/cw.tsx";
 import { RttyCtl, RttyPanel } from "./ctl/rtty.tsx";
+import { ImgCtl, ImgPanel } from "./ctl/img.tsx";
 import { DigiCtl, DigiPanel } from "./ctl/digi.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
@@ -149,6 +150,7 @@ function App() {
           <DigiCtl />
           <CwCtl />
           <RttyCtl />
+          <ImgCtl />
           <JttyCtl />
           <LabelsCtl />
         </div>
@@ -162,6 +164,7 @@ function App() {
         <SpotPanel />
         <CwPanel />
         <RttyPanel />
+        <ImgPanel />
         <JttyPanel />
         <DigiPanel />
         <MapPanel />

@@ -16,6 +16,7 @@ import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
+import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
@@ -224,6 +225,7 @@ export function connect(): void {
       jttyAudio(f); // first: the player hands the samples to the worklet
       cwAudio(f);
       rttyAudio(f);
+      imgAudio(f);
       digiAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
@@ -616,6 +618,87 @@ export function pickRtty(centre: number): void {
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
   if (Math.abs(centre - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: centre });
+}
+
+// ---------------------------------------------------------- FAX / SSTV
+
+/** HF fax and SSTV decoding of this receiver's audio (USB), in this
+ * browser (remembered). */
+export const imgOn = signal(load("img") === "1");
+/** The pictures (mutated in place; `imgVersion` tells of changes). */
+export const imgState: ImgState = { fax: null, sstv: null, gallery: [], status: null };
+export const imgVersion = signal(0);
+export const imgError = signal("");
+/** Manual fax slant (ppm) and shift (fraction of a line). */
+export const faxTrim = signal({ ppm: 0, shift: 0 });
+let imgWorker: Worker | null = null;
+const imgFeed = new JttyFeed();
+let imgKey = "";
+let imgGen = 0;
+let imgDial = 0;
+
+function imgStart(): Worker {
+  const w = new Worker("img-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: ImgRun; blob?: Uint8Array; gen?: number; error?: string };
+    if (d.error) imgError.value = d.error;
+    if (!d.run || !d.blob || d.gen !== imgGen) return;
+    applyImg(imgState, d.run, d.blob, Date.now() / 1000, imgDial);
+    imgVersion.value++;
+  };
+  return w;
+}
+
+function imgAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!imgOn.value || !s || s.mode !== "usb") return;
+  imgWorker ??= imgStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== imgKey) {
+    imgKey = key;
+    imgGen++;
+    imgDial = s.hz;
+    imgWorker.postMessage({ reset: true });
+    imgWorker.postMessage({ cmd: "faxAdjust", ppm: faxTrim.value.ppm, shift: faxTrim.value.shift });
+    for (const k of ["fax", "sstv"] as const) {
+      const p = imgState[k];
+      if (p && !p.done) {
+        p.done = true;
+        if (p.rows > 0) imgState.gallery = [p, ...imgState.gallery].slice(0, 12);
+      }
+    }
+    imgVersion.value++;
+  }
+  const pcm = imgFeed.push(f.pcm, f.rate, f.stereo);
+  imgWorker.postMessage({ pcm, gen: imgGen }, [pcm.buffer]);
+}
+
+export function setImg(on: boolean): void {
+  imgOn.value = on;
+  save("img", on ? "1" : "0");
+  if (!on && imgWorker) {
+    imgWorker.terminate();
+    imgWorker = null;
+    imgKey = "";
+  }
+}
+
+export function imgCmd(cmd: "faxStart" | "faxStop" | "sstvStop"): void {
+  imgWorker?.postMessage({ cmd });
+}
+
+/** Nudge the fax's slant (ppm) or shift (fraction of a line). */
+export function trimFax(dppm: number, dshift: number): void {
+  const t = faxTrim.value;
+  const v = { ppm: t.ppm + dppm, shift: (((t.shift + dshift) % 1) + 1) % 1 };
+  faxTrim.value = v;
+  imgWorker?.postMessage({ cmd: "faxAdjust", ppm: v.ppm, shift: v.shift });
+}
+
+/** A fax carrier or SSTV dial was picked: USB with a 3 kHz passband. */
+export function pickImg(dial: number, fax: boolean): void {
+  tune(fax ? dial - FAX_OFFSET : dial);
+  setModePassband("usb", 300, 3300);
 }
 
 // ------------------------------------------------- FT8, FT4, WSPR (browser)

@@ -1,13 +1,12 @@
 # M8: more decoders in the browser (plan B)
 
 Status: in progress (planned 2026-11-15). Done: item 1 (CW; `crates/cw`,
-`crates/cw-wasm`, `ui/src/cw.ts`, `ui/src/ctl/cw.tsx`, §2.1) and item 2
+`crates/cw-wasm`, `ui/src/cw.ts`, `ui/src/ctl/cw.tsx`, §2.1), item 2
 (FSK/RTTY; `crates/fsk`, `crates/fsk-wasm`, `ui/src/rtty.ts`,
-`ui/src/ctl/rtty.tsx`, §2.2); item 5 partly (SITOR-B decodes, no NAVTEX
-view yet, not tried on air). This is
-`feature-gap.md` §4 item B: more decoders that run on the page's own
-audio, as JTTY and FT8/FT4/WSPR do. Nothing here runs on the unit, so the
-A9's CPU limits don't apply.
+`ui/src/ctl/rtty.tsx`, §2.2), items 3 and 4 (SSTV and HF fax;
+`crates/img`, `crates/img-wasm`, `ui/src/img.ts`, `ui/src/ctl/img.tsx`,
+§2.3-2.4); item 5 partly (SITOR-B decodes, no NAVTEX view yet, not tried
+on air).
 
 ## 1. Todo
 
@@ -125,6 +124,20 @@ Everything detected from the signal, with manual overrides:
   from the sync pulses, slant from a fit over lines (the sound card clock
   and the receiver's rate differ a little).
 * Image drawn as it arrives; PNG save. A mode can be forced without VIS.
+* **Done (2026-11-15)**, without forcing a mode (VIS only so far). Modes:
+  Martin 1/2, Scottie 1/2/DX, Robot 36/72, PD 50/90/120/160/180/240. The
+  FM demodulator (shared with fax) mixes 1900 Hz to complex, low-passes
+  ±1200 Hz and gives the instantaneous frequency at 6 kS/s. VIS: leader,
+  start bit, 7 bits + even parity, stop bit, each 30 ms bit's middle 20
+  ms. Syncs: 1 ms smoothed frequency under 1350 Hz for half a sync,
+  fitted as start + k × period with outliers out (so a clock off by a
+  few hundred ppm doesn't slant the picture; slant beyond ±1 % is
+  refused); the picture is redrawn when 8 and 32 syncs are in. A pixel
+  is the mean frequency over its time. Tests (an encoder in the crate):
+  every mode round-trips with mean error under 12/255; Martin 1,
+  Scottie 1, Robot 36 and PD 120 with the sender's clock 400 ppm off and
+  ~15 dB SNR under 30/255, the slant fitted to within 3 ppm. Not tried
+  on air yet.
 
 ### 2.4 HF fax (new)
 
@@ -134,6 +147,18 @@ Everything detected from the signal, with manual overrides:
   (450 Hz); phasing lines set the line start; LPM 60/90/120 (default 120).
 * Slant from the phasing signal and adjustable by hand; image drawn line
   by line; PNG save. Starts without the start tone too (manual).
+* **Done (2026-11-15).** APT tones from the share of the luminance's
+  variance at 300/675/450 Hz in 0.25 s windows (one second of them);
+  phasing: 40 lines from 1 s after the start tone, the 5 % pulse found
+  whichever way it is (dark on white or the reverse) to a fraction of a
+  bin, its drift fitted (outlier lines dropped) for the line period and
+  start; the chart is redrawn then. Slant (±50 ppm) and shift (±2 %)
+  nudges redraw from the kept luminance. Tests: a DWD-style fax (start
+  tone, 30 s phasing, chart, stop tone) at 0, +300 and −250 ppm with
+  both phasing polarities: the slant fitted within 60 ppm and the chart
+  within 0.15 mean error; a fax started by hand. In the page on the 40 m
+  recording: DWD 7880 kHz, started by hand (the 60 s recording has no
+  start tone).
 
 ## 3. Shared UI
 

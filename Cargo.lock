@@ -1871,6 +1871,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-img"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+ "web888-cw",
+]
+
+[[package]]
+name = "web888-img-wasm"
+version = "0.13.0"
+dependencies = [
+ "web888-img",
+]
+
+[[package]]
 name = "web888-iq"
 version = "0.13.0"
 dependencies = [
