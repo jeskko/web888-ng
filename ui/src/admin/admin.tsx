@@ -1091,6 +1091,9 @@ function LogsPage() {
       </div>
       {err && <p class="warn">{err}</p>}
       {logs?.error && logs.source === src && <p class="warn">{logs.error}</p>}
+      {logs && logs.source === src && !logs.error && !lines.length && (
+        <p class="dim">{logs.lines.length ? "No line matches the filter." : "No lines yet."}</p>
+      )}
       <pre class="log" ref={pre}>
         {lines.join("\n")}
       </pre>
@@ -1108,6 +1111,10 @@ export function AdminApp() {
       .catch((e: Error) => setErr(e.message));
   };
   useEffect(refresh, []);
+  // the tab bar scrolls sideways on a phone: keep the open tab in sight
+  useEffect(() => {
+    document.querySelector(".admin header nav .on")?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  }, [tab.value, auth]);
   // a refused call: the login ended
   useEffect(() => {
     if (loggedOut.value) refresh();
