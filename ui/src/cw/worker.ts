@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Web Worker: the CW skimmer (crates/cw-wasm, cw.wasm) off the page's
 // thread. In: {pcm: Float32Array, gen} (12 kHz mono), {band: [lo, hi]}
-// (audio Hz), {neural: boolean} or {reset: true}. Out: {run: CwRun, gen}
-// after each decode run (every 2 s), {error} if it can't load.
+// (audio Hz), {neural: boolean}, {wide: {rate, lo, hi} | null} (IQ from a
+// channelizer bin, or audio), {iq: Float32Array (I, Q interleaved), gen}
+// or {reset: true}. Out: {run: CwRun, gen} after each decode run (every
+// 2 s), {error} if it can't load.
 
 import type { CwRun } from "../cw.ts";
 
@@ -14,6 +16,9 @@ interface Cw {
   cw_band(lo: number, hi: number): void;
   cw_neural(on: number): void;
   cw_reset(): void;
+  cw_wide(rate: number, lo: number, hi: number): void;
+  cw_buffer_iq(n: number): number;
+  cw_push_iq(n: number): number;
 }
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
@@ -26,6 +31,24 @@ function handle(e: MessageEvent): void {
   const d = e.data;
   if (d?.reset) {
     x.cw_reset();
+    return;
+  }
+  if (d && "wide" in d) {
+    // IQ from a channelizer bin (rate, band from its centre), or null: audio
+    if (d.wide) x.cw_wide(d.wide.rate, d.wide.lo, d.wide.hi);
+    else x.cw_wide(0, 0, 0);
+    return;
+  }
+  if (d?.iq) {
+    const iq = d.iq as Float32Array;
+    const n = iq.length >> 1;
+    const p = x.cw_buffer_iq(n);
+    new Float32Array(x.memory.buffer, p, 2 * n).set(iq);
+    const m = x.cw_push_iq(n);
+    if (m > 0) {
+      const json = new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.cw_output(), m));
+      post({ run: JSON.parse(json), gen: d.gen });
+    }
     return;
   }
   if (d?.band) {

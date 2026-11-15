@@ -6,7 +6,8 @@ Status: in progress (planned 2026-11-15). Done: item 1 (CW; `crates/cw`,
 `ui/src/ctl/rtty.tsx`, §2.2), items 3 and 4 (SSTV and HF fax;
 `crates/img`, `crates/img-wasm`, `ui/src/img.ts`, `ui/src/ctl/img.tsx`,
 §2.3-2.4); item 5 (SITOR-B decodes; NAVTEX messages listed per signal; not
-tried on air) and item 7 (the neural CW decoder, §5).
+tried on air), item 7 (the neural CW decoder, §5) and item 9 (wide
+skimming, §6).
 
 ## 1. Todo
 
@@ -20,6 +21,7 @@ tried on air) and item 7 (the neural CW decoder, §5).
 | 6 | later: DSC, time codes (DCF77, MSF, WWVB...) | new | as in `feature-gap.md` §2.4 |
 | 7 | optional: **neural CW** | trained on datarx-style synthetic CW (§5) | beats item 1 on the synthetic sets and on real recordings; shipped only then |
 | 8 | optional: **signal identifier** | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
+| 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 (images, a new panel type), then the rest.
@@ -230,3 +232,44 @@ the 40 m recording it reads more than the classical decoder (both sides
 of a QSO, "5NN 73 TU" where the classical read "7E M TU"). Weak spot:
 word spaces are sometimes missed ("DL5YMK"); next: more word-gap
 variety in training, a beam search with a callsign/QSO language model.
+
+## 6. Wide skimming (item 9): done (2026-11-15)
+
+The audio is one 12 kS/s channel (±5 kHz at most); the channelizer's
+bins are 60 kS/s complex, 30 kHz apart and clean within ±21 kHz of their
+centre, so one bin is a whole CW sub-band or RTTY segment.
+
+* **Server** (`crates/web/src/wideiq.rs`): the client asks with
+  `{"type": "wide", "on": true, "hz": dial}`; the session subscribes to the
+  bin tap (the one zoomed waterfalls use) for the bin nearest `hz` and
+  sends its samples as they are read: frames of kind 3, 2048 complex
+  samples as i8 pairs scaled by the block's peak (header: frame number,
+  bin centre, rate, scale; ~1 Mbit/s). At most 4 streams at a time (each
+  is a bin read, ~1 % of an A9 core, and the link). The hello's `wide`
+  says whether the server has bins (bins mode, or the channelizer
+  bitstream's tap). Frame fixtures are shared with the UI's tests.
+* **Skimmers**: `web888_cw::Skimmer::new_iq` and
+  `web888_fsk::Skimmer::new_iq` take complex IQ at any rate (a multiple of
+  their channel rate) and a band of offsets (±20 kHz); real audio goes the
+  same way as complex with a zero imaginary part. Spectrogram lines stay
+  23.4 Hz (CW) and 15.6 Hz (FSK) at any rate, channel filters keep their
+  transition band (more taps), mixers are complex rotators. The CW
+  skimmer takes up to 60 signals in IQ, the FSK one 24.
+* **UI**: a Wide button in the CW and RTTY panels (when the server has
+  bins); the stream follows the dial (asked again when the dial leaves the
+  bin's middle 30 kHz); the panel says the range skimmed; RF = bin centre
+  + offset.
+* **Cost** (24 CW stations, half of them weak, in 40 s of a bin;
+  `cargo run --release -p web888-cw --example wide`): natively classical
+  26 %, neural 29 % of a core, all 24 read (classical 23). In WebAssembly
+  (V8, `simd128`): 36 % and 46 % of a core, in the worker. Getting there:
+  the network's dot products with 8 accumulators (vectorised; a 12 s
+  window 72 → 21 ms), its window 8 s, and with the network on the
+  classical decoder runs every third time per signal (it only gives speed,
+  SNR and frequency then).
+* **Tests**: six CW stations over ±19 kHz of a bin at 14-34 WPM all
+  decode; ham RTTY and 100 Bd ASCII 19 kHz apart both lock and decode. In
+  the page (iq backend in bins mode, the 40 m recording): with the dial at
+  7020 kHz it skims 6990-7030 kHz, four CW signals at once (both sides of
+  a QSO at 7018.9, a weak CQ at 7022.3, a CQ at 7008.9); RTTY on the bin
+  around 10100.8 kHz locks DWD as in audio mode.

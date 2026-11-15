@@ -25,9 +25,8 @@ use web888_cw::dsp;
 pub const AUDIO_RATE: f64 = 12_000.0;
 /// The channels' rate.
 pub const CH_FS: f64 = 4000.0;
-const DECIM: usize = 3;
-const NF: usize = 768;
-const HOP: usize = 384;
+/// Spectrogram lines (Hz): 768 points at 12 kS/s, scaled with the rate.
+const LINE_HZ: f64 = AUDIO_RATE / 768.0;
 const HISTORY_S: f64 = 8.0;
 const FRAMES_S: f64 = 8.0;
 const WINDOW_S: f64 = 12.0;
@@ -61,55 +60,62 @@ pub struct Active {
     pub locked: bool,
 }
 
-/// One signal's channel: audio mixed from `hz` and decimated to CH_FS.
+/// One signal's channel: the input mixed from `hz` and decimated to CH_FS.
 struct Channel {
+    rate: f64,
+    decim: usize,
     taps: Vec<f32>,
     ring: Vec<Complex32>,
     pos: usize,
-    phase: f64,
-    step: f64,
+    rot: num_complex::Complex64,
+    step: num_complex::Complex64,
     count: usize,
+    since_norm: usize,
 }
 
 impl Channel {
-    fn new(hz: f64, half_bw: f64) -> Self {
-        let n = 97;
+    fn new(hz: f64, half_bw: f64, rate: f64) -> Self {
+        // 97 taps at 12 kS/s, the same transition band at other rates
+        let n = ((97.0 * rate / AUDIO_RATE) as usize) | 1;
+        let a = -2.0 * std::f64::consts::PI * hz / rate;
         Channel {
-            taps: dsp::firwin(n, half_bw, AUDIO_RATE),
+            rate,
+            decim: (rate / CH_FS).round() as usize,
+            taps: dsp::firwin(n, half_bw, rate),
             ring: vec![Complex32::new(0.0, 0.0); 2 * n],
             pos: 0,
-            phase: 0.0,
-            step: -2.0 * std::f64::consts::PI * hz / AUDIO_RATE,
+            rot: num_complex::Complex64::new(1.0, 0.0),
+            step: num_complex::Complex64::new(a.cos(), a.sin()),
             count: 0,
+            since_norm: 0,
         }
     }
 
     fn delay(&self) -> f64 {
-        (self.taps.len() - 1) as f64 / 2.0 / AUDIO_RATE
+        (self.taps.len() - 1) as f64 / 2.0 / self.rate
     }
 
-    fn push(&mut self, audio: &[f32], out: &mut Vec<Complex32>) {
+    fn push(&mut self, input: &[Complex32], out: &mut Vec<Complex32>) {
         let n = self.taps.len();
-        for &a in audio {
-            let v = Complex32::new(
-                (a as f64 * self.phase.cos()) as f32,
-                (a as f64 * self.phase.sin()) as f32,
-            );
-            self.phase += self.step;
-            if self.phase < -std::f64::consts::PI {
-                self.phase += 2.0 * std::f64::consts::PI;
+        for &x in input {
+            let v = x * Complex32::new(self.rot.re as f32, self.rot.im as f32);
+            self.rot *= self.step;
+            self.since_norm += 1;
+            if self.since_norm == 1024 {
+                self.since_norm = 0;
+                self.rot /= self.rot.norm();
             }
             self.ring[self.pos] = v;
             self.ring[self.pos + n] = v;
             self.pos = (self.pos + 1) % n;
             self.count += 1;
-            if self.count == DECIM {
+            if self.count == self.decim {
                 self.count = 0;
                 let mut acc = Complex32::new(0.0, 0.0);
                 for (x, h) in self.ring[self.pos..self.pos + n].iter().zip(&self.taps) {
                     acc += x * *h;
                 }
-                out.push(acc * 2.0);
+                out.push(acc);
             }
         }
     }
@@ -149,13 +155,20 @@ struct Ident {
 }
 
 pub struct Skimmer {
+    /// Input rate; complex input (else real audio: the band is positive).
+    rate: f64,
+    complex: bool,
+    nf: usize,
+    hop: usize,
     lo: f64,
     hi: f64,
     n_in: u64,
-    hist: VecDeque<f32>,
-    pend: Vec<f32>,
+    hist: VecDeque<Complex32>,
+    pend: Vec<Complex32>,
     frames: VecDeque<Vec<f32>>,
-    bins: (usize, usize),
+    /// The spectrogram's first line (signed FFT index) and line count.
+    k0: i64,
+    nb: usize,
     fft: Arc<dyn Fft<f32>>,
     win: Vec<f32>,
     sigs: Vec<Sig>,
@@ -187,26 +200,45 @@ fn rank(p: &FskParams) -> u8 {
 }
 
 impl Skimmer {
+    /// Signals between `lo` and `hi` Hz of 12 kS/s audio.
     pub fn new(lo: f64, hi: f64) -> Self {
+        Self::with_rate(AUDIO_RATE, false, lo, hi)
+    }
+
+    /// Signals between `lo` and `hi` Hz (offsets, may be negative) of
+    /// complex IQ at `rate` (a multiple of 4 kS/s, e.g. a 60 kS/s bin).
+    pub fn new_iq(rate: f64, lo: f64, hi: f64) -> Self {
+        let mut s = Self::with_rate(rate, true, lo, hi);
+        s.max_signals = 24;
+        s
+    }
+
+    fn with_rate(rate: f64, complex: bool, lo: f64, hi: f64) -> Self {
+        let nf = (rate / LINE_HZ).round() as usize;
         let mut s = Skimmer {
+            rate,
+            complex,
+            nf,
+            hop: nf / 2,
             lo,
             hi,
             n_in: 0,
             hist: VecDeque::new(),
             pend: Vec::new(),
             frames: VecDeque::new(),
-            bins: (0, 0),
-            fft: FftPlanner::new().plan_fft_forward(NF),
-            win: (0..NF)
+            k0: 0,
+            nb: 0,
+            fft: FftPlanner::new().plan_fft_forward(nf),
+            win: (0..nf)
                 .map(|i| {
-                    (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / NF as f64).cos()) as f32
+                    (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / nf as f64).cos()) as f32
                 })
                 .collect(),
             sigs: Vec::new(),
             ignore: Vec::new(),
             idents: Vec::new(),
             next_id: 1,
-            next_run: (2.0 * AUDIO_RATE) as u64,
+            next_run: (2.0 * rate) as u64,
             events: Vec::new(),
             runs: 0,
             every: 2.0,
@@ -217,30 +249,45 @@ impl Skimmer {
         s
     }
 
-    /// The audio band searched. Signals outside it are dropped.
+    /// The band searched (audio Hz, or IQ offsets). Signals outside it
+    /// are dropped.
     pub fn set_band(&mut self, lo: f64, hi: f64) {
-        let df = AUDIO_RATE / NF as f64;
-        self.lo = lo.max(50.0);
-        self.hi = hi.min(AUDIO_RATE / 2.0 - 100.0).max(self.lo + 8.0 * df);
-        self.bins = (
-            (self.lo / df).ceil() as usize,
-            (self.hi / df).floor() as usize + 1,
-        );
+        let df = self.rate / self.nf as f64;
+        let edge = self.rate / 2.0 - 100.0;
+        self.lo = if self.complex {
+            lo.max(-edge)
+        } else {
+            lo.max(50.0)
+        };
+        self.hi = hi.min(edge).max(self.lo + 8.0 * df);
+        self.k0 = (self.lo / df).ceil() as i64;
+        self.nb = ((self.hi / df).floor() as i64 - self.k0 + 1).max(0) as usize;
         self.frames.clear();
         let (a, b) = (self.lo, self.hi);
         self.sigs.retain(|s| (a..=b).contains(&s.hz()));
     }
 
     pub fn now(&self) -> f64 {
-        self.n_in as f64 / AUDIO_RATE
+        self.n_in as f64 / self.rate
     }
 
+    /// Feed real audio (a skimmer from [`Skimmer::new`]).
     pub fn push(&mut self, audio: &[f32]) {
+        // as complex; ×2 for the half of a real tone's power at +f
+        let iq: Vec<Complex32> = audio
+            .iter()
+            .map(|&a| Complex32::new(2.0 * a, 0.0))
+            .collect();
+        self.push_iq(&iq);
+    }
+
+    /// Feed complex IQ (a skimmer from [`Skimmer::new_iq`]).
+    pub fn push_iq(&mut self, iq: &[Complex32]) {
         let keep = (WINDOW_S * CH_FS) as usize;
         let mut new_events = Vec::new();
         for s in &mut self.sigs {
             let n0 = s.buf.len();
-            s.ch.push(audio, &mut s.buf);
+            s.ch.push(iq, &mut s.buf);
             if let Some(dec) = &mut s.dec {
                 let items = dec.feed(&s.buf[n0..]);
                 emit(s, items, &mut new_events);
@@ -252,35 +299,35 @@ impl Skimmer {
             }
         }
         self.events.extend(new_events);
-        self.hist.extend(audio);
-        let hk = (HISTORY_S * AUDIO_RATE) as usize;
+        self.hist.extend(iq);
+        let hk = (HISTORY_S * self.rate) as usize;
         if self.hist.len() > hk {
             let cut = self.hist.len() - hk;
             self.hist.drain(..cut);
         }
-        self.pend.extend_from_slice(audio);
+        self.pend.extend_from_slice(iq);
+        let nf = self.nf as i64;
         let mut i = 0;
-        while i + NF <= self.pend.len() {
-            let mut b: Vec<Complex32> = (0..NF)
-                .map(|k| Complex32::new(self.pend[i + k] * self.win[k], 0.0))
+        while i + self.nf <= self.pend.len() {
+            let mut b: Vec<Complex32> = (0..self.nf)
+                .map(|k| self.pend[i + k] * self.win[k])
                 .collect();
             self.fft.process(&mut b);
             self.frames.push_back(
-                b[self.bins.0..self.bins.1]
-                    .iter()
-                    .map(|v| v.norm_sqr())
+                (0..self.nb as i64)
+                    .map(|j| b[(self.k0 + j).rem_euclid(nf) as usize].norm_sqr())
                     .collect(),
             );
-            i += HOP;
+            i += self.hop;
         }
         self.pend.drain(..i);
-        let max = (FRAMES_S * AUDIO_RATE / HOP as f64) as usize;
+        let max = (FRAMES_S * self.rate / self.hop as f64) as usize;
         while self.frames.len() > max {
             self.frames.pop_front();
         }
-        self.n_in += audio.len() as u64;
+        self.n_in += iq.len() as u64;
         if self.n_in >= self.next_run {
-            self.next_run += (self.every * AUDIO_RATE) as u64;
+            self.next_run += (self.every * self.rate) as u64;
             self.runs += 1;
             self.detect();
             self.manage();
@@ -289,15 +336,15 @@ impl Skimmer {
 
     fn detect(&mut self) {
         let nt = self.frames.len();
-        let nb = self.bins.1 - self.bins.0;
+        let nb = self.nb;
         if self.sigs.len() >= self.max_signals
-            || (nt as f64) < 3.0 * AUDIO_RATE / HOP as f64
+            || (nt as f64) < 3.0 * self.rate / self.hop as f64
             || nb < 8
         {
             return;
         }
-        let df = AUDIO_RATE / NF as f64;
-        let f: Vec<f64> = (self.bins.0..self.bins.1).map(|k| k as f64 * df).collect();
+        let df = self.rate / self.nf as f64;
+        let f: Vec<f64> = (0..nb as i64).map(|k| (self.k0 + k) as f64 * df).collect();
         let s: Vec<Vec<f32>> = self.frames.iter().cloned().collect();
         let mut mean = vec![0f64; nb];
         for row in &s {
@@ -326,12 +373,13 @@ impl Skimmer {
             {
                 continue;
             }
-            let mut ch = Channel::new(c, 0.5 * (hi - lo) + 250.0);
+            let mut ch = Channel::new(c, 0.5 * (hi - lo) + 250.0, self.rate);
             let mut buf = Vec::new();
-            let hist: Vec<f32> = self.hist.iter().copied().collect();
-            ch.push(&hist, &mut buf);
-            let n0 = self.n_in - hist.len() as u64;
-            let buf_t = (n0 + DECIM as u64 - 1) as f64 / AUDIO_RATE - ch.delay();
+            let (a, b) = self.hist.as_slices();
+            ch.push(a, &mut buf);
+            ch.push(b, &mut buf);
+            let n0 = self.n_in - self.hist.len() as u64;
+            let buf_t = (n0 + ch.decim as u64 - 1) as f64 / self.rate - ch.delay();
             self.sigs.push(Sig {
                 id: self.next_id,
                 off: c,

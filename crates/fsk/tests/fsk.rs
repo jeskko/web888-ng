@@ -495,3 +495,64 @@ fn skimmer_identifies_reversals() {
     let (sk, ev) = skim(&noise, (200.0, 2800.0));
     assert!(ev.is_empty() && sk.active().is_empty());
 }
+
+/// Ham RTTY and an ASCII signal 19 kHz apart in a 60 kS/s channelizer
+/// bin: both found, worked out and decoded.
+#[test]
+fn skimmer_wide_iq() {
+    let rate = 60_000.0;
+    let mut rng = Rng::new(31);
+    let t = text();
+    let a = synth::complex(
+        &synth::async_bits(
+            &ita2_encode(&t, true),
+            5,
+            Parity::None,
+            1.5,
+            &mut || 0.0,
+            60.0,
+            4.0,
+        ),
+        45.45,
+        170.0,
+        rate,
+        &Cond::new(-12_000.0),
+        &mut rng,
+    );
+    let b = synth::complex(
+        &synth::async_bits(&ascii(&t), 8, Parity::None, 1.0, &mut || 0.0, 100.0, 4.0),
+        100.0,
+        450.0,
+        rate,
+        &Cond {
+            mark_high: false,
+            ..Cond::new(7_000.0)
+        },
+        &mut rng,
+    );
+    let n = a.len().min(b.len());
+    let x: Vec<num_complex::Complex32> = (0..n)
+        .map(|i| {
+            (a[i] + b[i]) * 0.1
+                + num_complex::Complex32::new(
+                    (0.003 * rng.normal()) as f32,
+                    (0.003 * rng.normal()) as f32,
+                )
+        })
+        .collect();
+    let mut sk = Skimmer::new_iq(rate, -20_000.0, 20_000.0);
+    let mut ev = Vec::new();
+    for c in x.chunks(2048) {
+        sk.push_iq(c);
+        ev.extend(sk.poll());
+    }
+    let m = texts(&ev);
+    let keys: Vec<i64> = m.keys().copied().collect();
+    assert_eq!(keys, vec![-12_000, 7_000], "{m:?}");
+    for v in m.values() {
+        assert!(
+            v.contains("THE QUICK BROWN FOX JUMPS OVER THE LAZY DOG"),
+            "{v}"
+        );
+    }
+}

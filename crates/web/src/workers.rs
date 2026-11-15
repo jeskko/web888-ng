@@ -37,7 +37,7 @@ pub struct Out {
 
 impl Out {
     /// False when the session is gone.
-    fn send(&self, frame: Vec<u8>) -> bool {
+    pub(crate) fn send(&self, frame: Vec<u8>) -> bool {
         match self.tx.try_send(frame) {
             Ok(()) => true,
             Err(TrySendError::Full(_)) => {

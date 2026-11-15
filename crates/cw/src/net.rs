@@ -89,19 +89,23 @@ impl Conv {
         let pad = self.k / 2;
         let tout = (t + 2 * pad - self.k) / self.stride + 1;
         let mut y = vec![vec![0f32; tout]; self.cout];
-        for (o, yo) in y.iter_mut().enumerate() {
-            for (j, out) in yo.iter_mut().enumerate() {
-                let mut s = self.b[o];
-                for c in 0..self.cin {
-                    let w = &self.w[(o * self.cin + c) * self.k..(o * self.cin + c + 1) * self.k];
-                    for (kk, wk) in w.iter().enumerate() {
-                        let i = (j * self.stride + kk) as isize - pad as isize;
-                        if i >= 0 && (i as usize) < t {
-                            s += wk * x[c][i as usize];
-                        }
-                    }
+        // each output position's inputs in one column (cin × k, as the
+        // weights are laid out), then a dot product per output channel
+        let mut col = vec![0f32; self.cin * self.k];
+        for j in 0..tout {
+            for c in 0..self.cin {
+                for kk in 0..self.k {
+                    let i = (j * self.stride + kk) as isize - pad as isize;
+                    col[c * self.k + kk] = if i >= 0 && (i as usize) < t {
+                        x[c][i as usize]
+                    } else {
+                        0.0
+                    };
                 }
-                *out = s.max(0.0);
+            }
+            for (o, yo) in y.iter_mut().enumerate() {
+                let w = &self.w[o * self.cin * self.k..(o + 1) * self.cin * self.k];
+                yo[j] = (self.b[o] + dot(w, &col)).max(0.0);
             }
         }
         y
@@ -115,6 +119,26 @@ struct GruDir {
     bhh: Vec<f32>,
     inp: usize,
     h: usize,
+}
+
+/// Dot product with 8 accumulators (vectorises; the order of the sum
+/// differs from a plain loop by rounding only).
+#[inline]
+fn dot(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len().min(b.len());
+    let mut acc = [0f32; 8];
+    let (ca, ra) = a[..n].as_chunks::<8>();
+    let (cb, rb) = b[..n].as_chunks::<8>();
+    for (x, y) in ca.iter().zip(cb) {
+        for k in 0..8 {
+            acc[k] += x[k] * y[k];
+        }
+    }
+    let mut s = acc.iter().sum::<f32>();
+    for (x, y) in ra.iter().zip(rb) {
+        s += x * y;
+    }
+    s
 }
 
 fn sigmoid(v: f32) -> f32 {
@@ -132,10 +156,8 @@ impl GruDir {
         for step in 0..n {
             let t = if reverse { n - 1 - step } else { step };
             for r in 0..3 * h {
-                let wi = &self.wih[r * self.inp..(r + 1) * self.inp];
-                gi[r] = self.bih[r] + wi.iter().zip(&x[t]).map(|(a, b)| a * b).sum::<f32>();
-                let wh = &self.whh[r * h..(r + 1) * h];
-                gh[r] = self.bhh[r] + wh.iter().zip(&hs).map(|(a, b)| a * b).sum::<f32>();
+                gi[r] = self.bih[r] + dot(&self.wih[r * self.inp..(r + 1) * self.inp], &x[t]);
+                gh[r] = self.bhh[r] + dot(&self.whh[r * h..(r + 1) * h], &hs);
             }
             for j in 0..h {
                 let r = sigmoid(gi[j] + gh[j]);

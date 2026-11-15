@@ -182,6 +182,7 @@ impl Shared {
                 fps_max: FPS_MAX,
             },
             spots: self.skim.is_some() && self.live.borrow().skimmer.iter().any(|s| s.enabled),
+            wide: self.waterfalls.tap().is_some(),
         }
     }
 
@@ -417,6 +418,9 @@ struct Session<'a> {
     me: watch::Sender<UserPub>,
     audio: crossbeam_channel::Sender<AudioCmd>,
     sink: WfSink,
+    /// The wide IQ stream (none: off) and where its frames go.
+    wide: Option<crate::wideiq::Stream>,
+    wide_out: Out,
     /// `st.listen` for the admin (0: none).
     listen_pub: Arc<AtomicU64>,
     /// New spots, when the client asked for them.
@@ -600,6 +604,25 @@ impl Session<'_> {
                 self.stop_listening();
                 vec![st(self)]
             }
+            ClientMsg::Wide { on: false, .. } => {
+                self.wide = None;
+                vec![]
+            }
+            ClientMsg::Wide { on: true, hz } => {
+                self.wide = None; // one at a time
+                let Some(tap) = self.sh.waterfalls.tap() else {
+                    return vec![ServerMsg::Error {
+                        msg: "wide IQ needs the channelizer's bins".into(),
+                    }];
+                };
+                match crate::wideiq::start(tap, hz.unwrap_or(self.st.hz), self.wide_out.clone()) {
+                    Ok(w) => {
+                        self.wide = Some(w);
+                        vec![]
+                    }
+                    Err(msg) => vec![ServerMsg::Error { msg }],
+                }
+            }
             ClientMsg::Name { name } => {
                 self.st.name = Name::new(&name).as_str().into();
                 self.publish();
@@ -707,6 +730,8 @@ pub async fn run(
     // waterfalls from the shared hardware views
     let (audio_tx, mut audio_rx) = tokio::sync::mpsc::channel(32);
     let (wf_tx, mut wf_rx) = tokio::sync::mpsc::channel(16);
+    let (wide_tx, mut wide_rx) = tokio::sync::mpsc::channel(64);
+    let wide_drops = Arc::new(AtomicU64::new(0));
     let audio_drops = Arc::new(AtomicU64::new(0));
     let wf_drops = Arc::new(AtomicU64::new(0));
     let sink = WfSink::new(Out {
@@ -773,6 +798,12 @@ pub async fn run(
         me,
         audio: audio_cmd,
         sink,
+        wide: None,
+        wide_out: Out {
+            tx: wide_tx,
+            drops: wide_drops.clone(),
+            total: None,
+        },
         listen_pub,
         spots: None,
     };
@@ -863,6 +894,12 @@ pub async fn run(
                 continue;
             }
             Some(f) = wf_rx.recv() => {
+                if ws.send(Message::Binary(f.into())).await.is_err() {
+                    break;
+                }
+                continue;
+            }
+            Some(f) = wide_rx.recv() => {
                 if ws.send(Message::Binary(f.into())).await.is_err() {
                     break;
                 }

@@ -3,7 +3,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
-import { parseFrame, type AudioFrame, type WfLine } from "../src/proto.ts";
+import { parseFrame, type AudioFrame, type IqFrame, type WfLine } from "../src/proto.ts";
 
 const dir = new URL("../../crates/web/tests/proto/", import.meta.url);
 const frames = JSON.parse(readFileSync(new URL("frames.json", dir), "utf8"));
@@ -32,6 +32,14 @@ test("waterfall frame", () => {
   assert.equal(l.kind, 2);
   for (const k of ["flags", "seq", "f0", "df", "db0", "dbStep", "time"] as const) assert.equal(l[k], f[k], k);
   assert.deepEqual([...l.levels], f.levels);
+});
+
+test("wide IQ frame", () => {
+  const f = frames.iq;
+  const q = parseFrame(buf(f.hex)) as IqFrame;
+  assert.equal(q.kind, 3);
+  for (const k of ["flags", "seq", "frame", "centre", "rate"] as const) assert.equal(q[k], f[k], k);
+  assert.deepEqual([...q.iq], f.iq.map((v: number) => Math.fround(v * f.scale)));
 });
 
 test("short or unknown frames are rejected", () => {

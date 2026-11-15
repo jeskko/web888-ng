@@ -43,8 +43,8 @@ kill $P
 | `map.mjs` | the map: stations shown, the three projections, drag, zoom, hover tooltip (screenshots) | `[dxspots]` (internet) or skimmer spots; `[station] locator` |
 | `dxspots.mjs` | DX spot labels near 40 m, a typed frequency in view (the view stays) and off it (the view follows) | `[dxspots]` on (the default) and internet |
 | `digi.mjs` | FT8/FT4/WSPR decoding in the page: mode, dial, Deep, the status line and the rows | real signals: live, or a recording replayed from the same second of the slot as it was recorded (`2026-10-22_..._60s.cs8` started 8.7 s into a 15 s slot) |
-| `cw.mjs` | CW decoding in the page: the signals' rows (frequency, WPM, dB, text) every 15 s; tune with the URL's hash (`#f=7018.0&m=usb`), a passband button label as the 2nd argument | real CW (live or a recording, e.g. 40 m in `2026-10-22_..._60s.cs8`) |
-| `rtty.mjs` | FSK/RTTY decoding in the page: picks a station from the panel's list (centre Hz as the 2nd argument), prints each signal's parameters and text every 15 s | real FSK (DWD 10100.8 kHz is in `2026-10-22_..._60s.cs8`) |
+| `cw.mjs` | CW decoding in the page: the signals' rows (frequency, WPM, dB, text) every 15 s; tune with the URL's hash (`#f=7018.0&m=usb`), a passband button label as the 2nd argument; `NEURAL=0/1`, `WIDE=1` (skim the bin: bins mode) | real CW (live or a recording, e.g. 40 m in `2026-10-22_..._60s.cs8`) |
+| `rtty.mjs` | FSK/RTTY decoding in the page: picks a station from the panel's list (centre Hz as the 2nd argument), prints each signal's parameters and text every 15 s; `WIDE=1` skims the bin | real FSK (DWD 10100.8 kHz is in `2026-10-22_..._60s.cs8`) |
 | `img.mjs` | Fax/SSTV decoding in the page: picks a station (`f<carrier Hz>` fax, `s<dial Hz>` SSTV), `start` as the 4th argument starts a fax by hand, prints the status every 15 s, saves img.png | real fax or SSTV (DWD 7880 kHz is in `2026-10-22_..._60s.cs8`, no start tone) |
 
 Set passwords in the throwaway config with

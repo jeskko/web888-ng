@@ -22,8 +22,8 @@ use rustfft::{Fft, FftPlanner};
 use std::collections::VecDeque;
 use std::sync::Arc;
 
-const NF: usize = 512;
-const HOP: usize = 256;
+/// Spectrogram lines (Hz): 512 points at 12 kS/s, scaled with the rate.
+const LINE_HZ: f64 = AUDIO_RATE / 512.0;
 const HISTORY_S: f64 = 8.0;
 const FRAMES_S: f64 = 20.0;
 
@@ -72,14 +72,22 @@ impl Sig {
 }
 
 pub struct Skimmer {
+    /// Input rate; complex input (else real audio: the band is positive).
+    rate: f64,
+    complex: bool,
+    nf: usize,
+    hop: usize,
+    delay: f64,
     lo: f64,
     hi: f64,
     /// Samples in since the reset.
     n_in: u64,
-    hist: VecDeque<f32>,
-    pend: Vec<f32>,
+    hist: VecDeque<Complex32>,
+    pend: Vec<Complex32>,
     frames: VecDeque<Vec<f32>>,
-    bins: (usize, usize),
+    /// The spectrogram's first line (signed FFT index) and line count.
+    k0: i64,
+    nb: usize,
     fft: Arc<dyn Fft<f32>>,
     win: Vec<f32>,
     sigs: Vec<Sig>,
@@ -95,10 +103,14 @@ pub struct Skimmer {
     pub max_signals: usize,
     /// Detection level over the floor (dB).
     pub min_db: f32,
-    /// The text from the neural decoder (`net`) over each signal's last 12
+    /// The text from the neural decoder (`net`) over each signal's last 8
     /// s instead of the classical one (speed, SNR and frequency still come
     /// from the classical decoder).
     pub neural: bool,
+    /// With `neural`: signals the classical decoder reads cleanly at this
+    /// SNR (dB) or more keep its text (the network costs ~70 ms a signal
+    /// a run natively: on a wide band only the hard ones get it).
+    pub classical_above: f64,
 }
 
 impl Default for Skimmer {
@@ -108,25 +120,44 @@ impl Default for Skimmer {
 }
 
 impl Skimmer {
-    /// Signals between `lo` and `hi` Hz of audio.
+    /// Signals between `lo` and `hi` Hz of 12 kS/s audio.
     pub fn new(lo: f64, hi: f64) -> Self {
+        Self::with_rate(AUDIO_RATE, false, lo, hi)
+    }
+
+    /// Signals between `lo` and `hi` Hz (offsets, may be negative) of
+    /// complex IQ at `rate` (a multiple of 500 S/s, e.g. a 60 kS/s bin).
+    pub fn new_iq(rate: f64, lo: f64, hi: f64) -> Self {
+        let mut s = Self::with_rate(rate, true, lo, hi);
+        s.max_signals = 60;
+        s
+    }
+
+    fn with_rate(rate: f64, complex: bool, lo: f64, hi: f64) -> Self {
+        let nf = (rate / LINE_HZ).round() as usize;
         let mut s = Skimmer {
+            rate,
+            complex,
+            nf,
+            hop: nf / 2,
+            delay: Channel::with_rate(0.0, rate).delay(),
             lo,
             hi,
             n_in: 0,
             hist: VecDeque::new(),
             pend: Vec::new(),
             frames: VecDeque::new(),
-            bins: (0, 0),
-            fft: FftPlanner::new().plan_fft_forward(NF),
-            win: (0..NF)
+            k0: 0,
+            nb: 0,
+            fft: FftPlanner::new().plan_fft_forward(nf),
+            win: (0..nf)
                 .map(|i| {
-                    (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / NF as f64).cos()) as f32
+                    (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / nf as f64).cos()) as f32
                 })
                 .collect(),
             sigs: Vec::new(),
             next_id: 1,
-            next_run: (2.0 * AUDIO_RATE) as u64,
+            next_run: (2.0 * rate) as u64,
             events: Vec::new(),
             runs: 0,
             window: 30.0,
@@ -134,22 +165,27 @@ impl Skimmer {
             max_signals: 12,
             min_db: 15.0,
             neural: false,
+            classical_above: f64::INFINITY,
         };
         s.set_band(lo, hi);
         s
     }
 
-    /// The audio band searched (the passband, inside its skirts). Signals
-    /// outside it are dropped; the spectrogram starts over.
+    /// The band searched (audio: the passband inside its skirts; IQ:
+    /// offsets from the centre). Signals outside it are dropped; the
+    /// spectrogram starts over.
     pub fn set_band(&mut self, lo: f64, hi: f64) {
-        let (lo, hi) = (lo.max(50.0), hi.min(AUDIO_RATE / 2.0 - 100.0));
+        let edge = self.rate / 2.0 - 100.0;
+        let (lo, hi) = if self.complex {
+            (lo.max(-edge), hi.min(edge))
+        } else {
+            (lo.max(50.0), hi.min(edge))
+        };
+        let df = self.rate / self.nf as f64;
         self.lo = lo;
-        self.hi = hi.max(lo + 3.0 * AUDIO_RATE / NF as f64);
-        let df = AUDIO_RATE / NF as f64;
-        self.bins = (
-            (self.lo / df).ceil() as usize,
-            (self.hi / df).floor() as usize + 1,
-        );
+        self.hi = hi.max(lo + 3.0 * df);
+        self.k0 = (self.lo / df).ceil() as i64;
+        self.nb = ((self.hi / df).floor() as i64 - self.k0 + 1).max(0) as usize;
         self.frames.clear();
         let (a, b) = (self.lo - 20.0, self.hi + 20.0);
         self.sigs.retain(|s| (a..=b).contains(&s.hz()));
@@ -157,12 +193,24 @@ impl Skimmer {
 
     /// Stream time (s) of the newest channel sample.
     pub fn now(&self) -> f64 {
-        self.n_in as f64 / AUDIO_RATE - Channel::delay()
+        self.n_in as f64 / self.rate - self.delay
     }
 
+    /// Feed real audio (a skimmer from [`Skimmer::new`]).
     pub fn push(&mut self, audio: &[f32]) {
+        // as complex: the channels mix the image at −f out, ×2 for the
+        // half of a real tone's power at +f
+        let iq: Vec<Complex32> = audio
+            .iter()
+            .map(|&a| Complex32::new(2.0 * a, 0.0))
+            .collect();
+        self.push_iq(&iq);
+    }
+
+    /// Feed complex IQ (a skimmer from [`Skimmer::new_iq`]).
+    pub fn push_iq(&mut self, iq: &[Complex32]) {
         for s in &mut self.sigs {
-            s.ch.push(audio, &mut s.buf);
+            s.ch.push_iq(iq, &mut s.buf);
             let keep = (self.window * ENV_FS) as usize;
             if s.buf.len() > keep {
                 let cut = s.buf.len() - keep;
@@ -170,39 +218,39 @@ impl Skimmer {
                 s.buf_t += cut as f64 / ENV_FS;
             }
         }
-        self.hist.extend(audio);
-        let keep = (HISTORY_S * AUDIO_RATE) as usize;
+        self.hist.extend(iq);
+        let keep = (HISTORY_S * self.rate) as usize;
         if self.hist.len() > keep {
             let cut = self.hist.len() - keep;
             self.hist.drain(..cut);
         }
-        self.pend.extend_from_slice(audio);
+        self.pend.extend_from_slice(iq);
         let mut i = 0;
-        while i + NF <= self.pend.len() {
+        while i + self.nf <= self.pend.len() {
             self.frame(i);
-            i += HOP;
+            i += self.hop;
         }
         self.pend.drain(..i);
-        self.n_in += audio.len() as u64;
+        self.n_in += iq.len() as u64;
         if self.n_in >= self.next_run {
-            self.next_run += (self.every * AUDIO_RATE) as u64;
+            self.next_run += (self.every * self.rate) as u64;
             self.detect();
             self.decode_all();
         }
     }
 
     fn frame(&mut self, at: usize) {
-        let mut b: Vec<Complex32> = (0..NF)
-            .map(|k| Complex32::new(self.pend[at + k] * self.win[k], 0.0))
+        let mut b: Vec<Complex32> = (0..self.nf)
+            .map(|k| self.pend[at + k] * self.win[k])
             .collect();
         self.fft.process(&mut b);
+        let nf = self.nf as i64;
         self.frames.push_back(
-            b[self.bins.0..self.bins.1]
-                .iter()
-                .map(|v| v.norm_sqr())
+            (0..self.nb as i64)
+                .map(|j| b[(self.k0 + j).rem_euclid(nf) as usize].norm_sqr())
                 .collect(),
         );
-        let max = (FRAMES_S * AUDIO_RATE / HOP as f64) as usize;
+        let max = (FRAMES_S * self.rate / self.hop as f64) as usize;
         while self.frames.len() > max {
             self.frames.pop_front();
         }
@@ -211,11 +259,11 @@ impl Skimmer {
     /// Keyed carriers: (audio Hz, level dB over the floor), strongest first.
     fn candidates(&self) -> Vec<(f64, f32)> {
         let nt = self.frames.len();
-        let nb = self.bins.1 - self.bins.0;
+        let nb = self.nb;
         if nt < 40 || nb < 3 {
             return Vec::new();
         }
-        let df = AUDIO_RATE / NF as f64;
+        let df = self.rate / self.nf as f64;
         let (mut hi, mut lo, mut med) = (vec![0f32; nb], vec![0f32; nb], vec![0f32; nb]);
         let mut cols: Vec<Vec<f32>> = vec![Vec::with_capacity(nt); nb];
         for t in 0..nt {
@@ -257,7 +305,7 @@ impl Skimmer {
                 let (a, b, c) = (hi[k.saturating_sub(1)], hi[k], hi[(k + 1).min(nb - 1)]);
                 let den = a - 2.0 * b + c;
                 let d = if den < 0.0 { 0.5 * (a - c) / den } else { 0.0 };
-                out.push(((self.bins.0 + k) as f64 * df + d as f64 * df, hi[k]));
+                out.push(((self.k0 + k as i64) as f64 * df + d as f64 * df, hi[k]));
             }
         }
         out.sort_by(|a, b| b.1.total_cmp(&a.1));
@@ -276,13 +324,14 @@ impl Skimmer {
             {
                 continue;
             }
-            let mut ch = Channel::new(off);
+            let mut ch = Channel::with_rate(off, self.rate);
             let mut buf = Vec::new();
-            let hist: Vec<f32> = self.hist.iter().copied().collect();
-            ch.push(&hist, &mut buf);
-            let n0 = self.n_in - hist.len() as u64;
-            let decim = (AUDIO_RATE / ENV_FS) as u64;
-            let buf_t = (n0 + decim - 1) as f64 / AUDIO_RATE - Channel::delay();
+            let (a, b) = self.hist.as_slices();
+            ch.push_iq(a, &mut buf);
+            ch.push_iq(b, &mut buf);
+            let n0 = self.n_in - self.hist.len() as u64;
+            let decim = (self.rate / ENV_FS).round() as u64;
+            let buf_t = (n0 + decim - 1) as f64 / self.rate - self.delay;
             let now = self.now();
             self.sigs.push(Sig {
                 id: self.next_id,
@@ -312,20 +361,35 @@ impl Skimmer {
             if s.buf.len() < (3.0 * ENV_FS) as usize {
                 continue;
             }
-            let mut r = decode::decode(
-                &s.buf,
-                &DecodeOpts {
-                    f0: Some(0.0),
-                    span: 40.0,
-                    wpm: s.wpm,
-                    t0: s.buf_t,
-                    split: true,
-                    strict: true,
-                },
-            );
+            // with the network reading the text, the classical decoder only
+            // gives speed, SNR and frequency: every third run is enough
+            // (staggered over the signals), the first runs always
+            let classical_due =
+                !self.neural || s.wpm.is_none() || (self.runs + s.id as u64).is_multiple_of(3);
+            let mut r = if classical_due {
+                decode::decode(
+                    &s.buf,
+                    &DecodeOpts {
+                        f0: Some(0.0),
+                        span: 40.0,
+                        wpm: s.wpm,
+                        t0: s.buf_t,
+                        split: true,
+                        strict: true,
+                    },
+                )
+            } else {
+                decode::CwResult {
+                    snr: -99.0,
+                    ..Default::default()
+                }
+            };
             let mut net_ok = false;
-            if self.neural {
-                let w = (12.0 * ENV_FS) as usize;
+            let classical_clean =
+                r.wpm > 0.0 && r.marks >= 8 && r.cost < 0.05 && r.snr >= self.classical_above;
+            if self.neural && !classical_clean {
+                // 8 s: what is emitted is 3 s old, with 5 s before it
+                let w = (8.0 * ENV_FS) as usize;
                 let from = s.buf.len().saturating_sub(w);
                 r.chars = net::decode(&s.buf[from..], s.buf_t + from as f64 / ENV_FS);
                 // the network reads weaker signals than the classical fit

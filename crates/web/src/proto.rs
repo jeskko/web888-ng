@@ -116,6 +116,13 @@ pub enum ClientMsg {
     Name {
         name: String,
     },
+    /// Wide IQ (`wideiq`): the channelizer bin nearest `hz` (default: the
+    /// dial) as binary `KIND_IQ` frames, or stop.
+    Wide {
+        on: bool,
+        #[serde(default)]
+        hz: Option<f64>,
+    },
 }
 
 /// SSB/CW AGC recovery speed.
@@ -313,6 +320,9 @@ pub enum ServerMsg {
         /// The server runs skimmers (spots can be asked for).
         #[serde(default)]
         spots: bool,
+        /// Wide IQ can be asked for (a channelizer's bins).
+        #[serde(default)]
+        wide: bool,
     },
     State(State),
     /// The session's receiver: granted, or waiting at `position` (1 =

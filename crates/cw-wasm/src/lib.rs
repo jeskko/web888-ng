@@ -13,6 +13,10 @@
 //!   since the last reset)
 //! * `cw_band(lo, hi)`: the audio band searched (Hz)
 //! * `cw_neural(on)`: text from the neural decoder (1) or the classical
+//! * `cw_wide(rate, lo, hi)`: complex IQ at `rate` (a channelizer bin),
+//!   signals between `lo` and `hi` Hz from its centre; `rate` 0: back to
+//!   audio. `cw_buffer_iq(n)` / `cw_push_iq(n)` take n complex samples
+//!   (I, Q interleaved f32) as `cw_buffer` / `cw_push` take audio
 //! * `cw_reset()`: a new stream (after retuning)
 
 use std::cell::RefCell;
@@ -21,6 +25,9 @@ use web888_cw::{Active, Event, Skimmer};
 
 struct State {
     skimmer: Skimmer,
+    /// IQ input: (rate, lo, hi).
+    wide: Option<(f64, f64, f64)>,
+    input_iq: Vec<f32>,
     neural: bool,
     band: (f64, f64),
     runs: u64,
@@ -31,6 +38,8 @@ struct State {
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State {
         skimmer: Skimmer::default(),
+        wide: None,
+        input_iq: Vec::new(),
         neural: false,
         band: (200.0, 2800.0),
         runs: 0,
@@ -96,14 +105,19 @@ pub extern "C" fn cw_push(n: usize) -> usize {
         let n = n.min(s.input.len());
         let State { skimmer, input, .. } = s;
         skimmer.push(&input[..n]);
-        if s.skimmer.runs == s.runs {
-            return 0;
-        }
-        s.runs = s.skimmer.runs;
-        let ev = s.skimmer.poll();
-        s.output = to_json(&ev, &s.skimmer.active(), s.skimmer.now());
-        s.output.len()
+        output(s)
     })
+}
+
+/// The JSON of a decode run (its length), or 0 between runs.
+fn output(s: &mut State) -> usize {
+    if s.skimmer.runs == s.runs {
+        return 0;
+    }
+    s.runs = s.skimmer.runs;
+    let ev = s.skimmer.poll();
+    s.output = to_json(&ev, &s.skimmer.active(), s.skimmer.now());
+    s.output.len()
 }
 
 #[unsafe(no_mangle)]
@@ -131,11 +145,48 @@ pub extern "C" fn cw_neural(on: u32) {
 
 #[unsafe(no_mangle)]
 pub extern "C" fn cw_reset() {
+    STATE.with_borrow_mut(fresh);
+}
+
+/// A new skimmer for the current input.
+fn fresh(s: &mut State) {
+    s.skimmer = match s.wide {
+        Some((rate, lo, hi)) => Skimmer::new_iq(rate, lo, hi),
+        None => Skimmer::new(s.band.0, s.band.1),
+    };
+    s.skimmer.neural = s.neural;
+    s.runs = 0;
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cw_wide(rate: f64, lo: f64, hi: f64) {
     STATE.with_borrow_mut(|s| {
-        s.skimmer = Skimmer::new(s.band.0, s.band.1);
-        s.skimmer.neural = s.neural;
-        s.runs = 0;
+        s.wide = (rate > 0.0).then_some((rate, lo, hi));
+        fresh(s);
     });
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cw_buffer_iq(n: usize) -> *mut f32 {
+    STATE.with_borrow_mut(|s| {
+        s.input_iq.resize(2 * n, 0.0);
+        s.input_iq.as_mut_ptr()
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn cw_push_iq(n: usize) -> usize {
+    STATE.with_borrow_mut(|s| {
+        let n = n.min(s.input_iq.len() / 2);
+        let iq: Vec<num_complex::Complex32> = s.input_iq[..2 * n]
+            .as_chunks::<2>()
+            .0
+            .iter()
+            .map(|c| num_complex::Complex32::new(c[0], c[1]))
+            .collect();
+        s.skimmer.push_iq(&iq);
+        output(s)
+    })
 }
 
 #[cfg(test)]

@@ -15,6 +15,9 @@ set -eu
 src=$(cd "$(dirname "$0")/.." && pwd)
 target=wasm32-unknown-unknown
 out=$src/ui/wasm
+# WebAssembly SIMD (128-bit): every browser since 2021-2023 (Safari 16.4);
+# the neural CW decoder's dot products vectorise with it
+export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128"
 crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm -p web888-img-wasm"
 mkdir -p "$out"
 if [ -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/$target" ]; then
@@ -25,6 +28,7 @@ else
 	mkdir -p "$src/target/wasm-build"
 	"$engine" run --rm -v "$src:/src:ro" -v "$src/target/wasm-build:/out" \
 		-e CARGO_TARGET_DIR=/out/target \
+		-e CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS \
 		docker.io/library/rust:1-slim sh -c "
 			rustup target add $target >/dev/null 2>&1
 			cd /src && cargo build --release --target $target $crates"

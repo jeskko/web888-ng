@@ -3,7 +3,7 @@
 // with backoff (not when the receiver is busy, nor after the server ended
 // the session by its time or idle limit), ping for latency.
 
-import { parseFrame, PROTO, type AudioFrame, type ClientMsg, type ServerMsg, type WfLine } from "./proto.ts";
+import { parseFrame, PROTO, type AudioFrame, type ClientMsg, type IqFrame, type ServerMsg, type WfLine } from "./proto.ts";
 
 export type ConnState = "connecting" | "open" | "closed" | "busy" | "ended";
 
@@ -17,6 +17,8 @@ export interface ConnHandlers {
   onMessage(m: ServerMsg): void;
   onAudio(f: AudioFrame): void;
   onWf(l: WfLine): void;
+  /** Wide IQ (when asked for). */
+  onIq?(f: IqFrame): void;
   onLatency(ms: number): void;
 }
 
@@ -62,6 +64,7 @@ export class Conn {
       const f = parseFrame(e.data as ArrayBuffer);
       if (f?.kind === 1) this.h.onAudio(f);
       else if (f?.kind === 2) this.h.onWf(f);
+      else if (f?.kind === 3) this.h.onIq?.(f);
     };
     ws.onclose = (e) => {
       clearInterval(this.pinger);

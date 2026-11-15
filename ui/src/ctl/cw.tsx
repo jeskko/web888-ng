@@ -5,7 +5,7 @@
 
 import { formatKhz } from "../fmt.ts";
 import { audioBand } from "../cw.ts";
-import { clearCw, cwError, cwNeural, cwOn, cwSignals, pickCw, setCw, setCwNeural, st } from "../state.ts";
+import { clearCw, cwError, cwNeural, cwOn, cwSignals, cwWide, pickCw, setCw, setCwNeural, setCwWide, st, WIDE_HALF, wideAvail, wideCentre } from "../state.ts";
 
 /** Characters shown per signal (the newest). */
 const SHOWN = 240;
@@ -31,6 +31,11 @@ export function CwPanel() {
       <div class="spots-bar">
         <strong>CW</strong>
         <span class="dim num">{sigs.filter((x) => x.active).length}</span>
+        {wideAvail.value && (
+          <button class={cwWide.value ? "on" : ""} onClick={() => setCwWide(!cwWide.value)} title="Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband">
+            Wide
+          </button>
+        )}
         <button class={cwNeural.value ? "on" : ""} onClick={() => setCwNeural(!cwNeural.value)} title="Text from the neural decoder (trained on synthetic CW; reads weaker and rougher signals) instead of the classical one">
           Neural
         </button>
@@ -43,7 +48,11 @@ export function CwPanel() {
       </div>
       <div class="spots-list">
         {cwError.value && <p class="warn">{cwError.value}</p>}
-        {s && !band && <p class="dim">CW is decoded in CW, USB and LSB.</p>}
+        {wideAvail.value && cwWide.value ? (
+          <p class="dim">{wideCentre.value ? `Skimming ${formatKhz(wideCentre.value - WIDE_HALF).slice(0, -2)}–${formatKhz(wideCentre.value + WIDE_HALF).slice(0, -2)} kHz` : "Waiting for the wide IQ…"}</p>
+        ) : (
+          s && !band && <p class="dim">CW is decoded in CW, USB and LSB.</p>
+        )}
         {sigs.length === 0 ? (
           <p class="dim">
             Nothing yet: every keyed signal in the passband is found and decoded (9–45 WPM); text shows a few seconds behind the audio, once it has settled. A wide passband (USB) decodes several stations at once.

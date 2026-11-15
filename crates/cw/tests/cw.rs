@@ -277,3 +277,79 @@ fn skimmer_neural_weak_signal() {
     let quiet = run(true, false);
     assert!(quiet.trim().is_empty(), "noise: {quiet:?}");
 }
+
+/// CW at `hz` in complex IQ at `rate` (edges smoothed over ~2 ms).
+fn iq_signal(text: &str, wpm: f64, hz: f64, rate: f64, amp: f32, rng: &mut Rng) -> Vec<Complex32> {
+    let k = Keying {
+        lead: 0.5,
+        tail: 1.0,
+        ..Keying::new(wpm)
+    };
+    let key = synth::keying(text, &k, rate, rng);
+    // two moving averages: a triangle ~2 ms each side
+    let m = (0.002 * rate) as usize;
+    let avg = |x: &[f32]| -> Vec<f32> {
+        let mut c = vec![0f64; x.len() + 1];
+        for i in 0..x.len() {
+            c[i + 1] = c[i] + x[i] as f64;
+        }
+        (0..x.len())
+            .map(|i| ((c[(i + m).min(x.len())] - c[i]) / m as f64) as f32)
+            .collect()
+    };
+    let key = avg(&avg(&key));
+    let ph0 = rng.uniform() * std::f64::consts::TAU;
+    key.iter()
+        .enumerate()
+        .map(|(i, &a)| {
+            let p = 2.0 * std::f64::consts::PI * hz * i as f64 / rate + ph0;
+            Complex32::new((a * amp) * p.cos() as f32, (a * amp) * p.sin() as f32)
+        })
+        .collect()
+}
+
+/// Six stations over 40 kHz of a 60 kS/s channelizer bin, 14-34 WPM.
+#[test]
+fn skimmer_wide_iq() {
+    let rate = 60_000.0;
+    let mut rng = Rng::new(21);
+    let n = (40.0 * rate) as usize;
+    let sd = 0.003f32;
+    let mut x: Vec<Complex32> = (0..n)
+        .map(|_| Complex32::new(sd * rng.normal() as f32, sd * rng.normal() as f32))
+        .collect();
+    let st = [
+        (-18_000.0, 14.0, "CQ DE N0CALL N0CALL K"),
+        (-9_150.0, 22.0, "TEST N1CALL N1CALL"),
+        (-2_000.0, 30.0, "CQ CQ N2CALL N2CALL"),
+        (3_210.0, 18.0, "N3CALL DE N4CALL K"),
+        (11_000.0, 26.0, "TU N5CALL TEST"),
+        (18_800.0, 34.0, "CQ N6CALL N6CALL"),
+    ];
+    for &(hz, wpm, text) in &st {
+        let s = iq_signal(text, wpm, hz, rate, 0.05, &mut rng);
+        for (i, v) in x.iter_mut().enumerate() {
+            *v += s[i % s.len()];
+        }
+    }
+    let mut sk = Skimmer::new_iq(rate, -20_000.0, 20_000.0);
+    let mut got = std::collections::HashMap::<u32, (f64, String)>::new();
+    let t = std::time::Instant::now();
+    for c in x.chunks(2048) {
+        sk.push_iq(c);
+        for e in sk.poll() {
+            let g = got.entry(e.id).or_default();
+            g.0 = e.hz;
+            g.1.push_str(&e.text);
+        }
+    }
+    eprintln!("40 s of a 60 kS/s bin: {:.1} s", t.elapsed().as_secs_f64());
+    for &(hz, _, text) in &st {
+        let call = text.split(' ').find(|w| w.contains("CALL")).unwrap();
+        assert!(
+            got.values()
+                .any(|(f, t)| (f - hz).abs() < 10.0 && t.contains(call)),
+            "{hz}: {got:?}"
+        );
+    }
+}

@@ -13,13 +13,15 @@
     {"type": "listen", "user": null},
     {"type": "spots", "on": true},
     {"type": "name", "name": "N0CALL"},
+    {"type": "wide", "on": true, "hz": 7020000},
+    {"type": "wide", "on": false},
     {"type": "mode", "mode": "sas"}
   ],
   "server": [
     {"type": "hello", "proto": 2, "server": "web888d 0.1.0", "codec": "pcm16", "audio_rate": 12000,
      "radio": {"backend": "sim", "variant": "hf", "adc_hz": 122880000, "rx_rate": 48000,
                "rf_lo": 0, "rf_hi": 61440000, "wf_decim_min": 1, "wf_decim_max": 8192},
-     "limits": {"bins_max": 4096, "fps_max": 30}, "session": 12, "class": "web", "spots": true},
+     "limits": {"bins_max": 4096, "fps_max": 30}, "session": 12, "class": "web", "spots": true, "wide": true},
     {"type": "state", "hz": 7074000, "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700, "agc": true, "gain_db": 100,
      "agc_speed": "medium", "nb": 0, "nr": 0, "squelch": false, "squelch_db": -100,
      "wf": {"center_hz": 30720000, "decim": 2, "bins": 1024, "fps": 20}, "share": true, "listen": null, "name": "N0CALL"},

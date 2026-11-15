@@ -1802,6 +1802,7 @@ dependencies = [
 name = "web888-cw-wasm"
 version = "0.13.0"
 dependencies = [
+ "num-complex",
  "web888-cw",
 ]
 
@@ -1838,6 +1839,7 @@ dependencies = [
 name = "web888-fsk-wasm"
 version = "0.13.0"
 dependencies = [
+ "num-complex",
  "web888-fsk",
 ]
 

@@ -22,6 +22,7 @@ pub mod tls;
 pub mod update;
 pub mod users;
 pub mod wfsvc;
+pub mod wideiq;
 pub mod workers;
 
 use axum::Router;

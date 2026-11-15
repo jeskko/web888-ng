@@ -1,8 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Web Worker: the FSK/RTTY skimmer (crates/fsk-wasm, fsk.wasm) off the page's
 // thread. In: {pcm: Float32Array, gen} (12 kHz mono), {band: [lo, hi]}
-// (audio Hz) or {reset: true}. Out: {run: FskRun, gen} on new text and
-// every 2 s, {error} if it can't load.
+// (audio Hz), {wide: {rate, lo, hi} | null} (IQ from a
+// channelizer bin, or audio), {iq: Float32Array (I, Q interleaved), gen}
+// or {reset: true}. Out: {run: FskRun, gen} on new text and every 2 s,
+// {error} if it can't load.
 
 import type { FskRun } from "../rtty.ts";
 
@@ -13,6 +15,9 @@ interface Fsk {
   fsk_output(): number;
   fsk_band(lo: number, hi: number): void;
   fsk_reset(): void;
+  fsk_wide(rate: number, lo: number, hi: number): void;
+  fsk_buffer_iq(n: number): number;
+  fsk_push_iq(n: number): number;
 }
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
@@ -25,6 +30,24 @@ function handle(e: MessageEvent): void {
   const d = e.data;
   if (d?.reset) {
     x.fsk_reset();
+    return;
+  }
+  if (d && "wide" in d) {
+    // IQ from a channelizer bin (rate, band from its centre), or null: audio
+    if (d.wide) x.fsk_wide(d.wide.rate, d.wide.lo, d.wide.hi);
+    else x.fsk_wide(0, 0, 0);
+    return;
+  }
+  if (d?.iq) {
+    const iq = d.iq as Float32Array;
+    const n = iq.length >> 1;
+    const p = x.fsk_buffer_iq(n);
+    new Float32Array(x.memory.buffer, p, 2 * n).set(iq);
+    const m = x.fsk_push_iq(n);
+    if (m > 0) {
+      const json = new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.fsk_output(), m));
+      post({ run: JSON.parse(json), gen: d.gen });
+    }
     return;
   }
   if (d?.band) {

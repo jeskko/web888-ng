@@ -152,6 +152,8 @@ export type ServerMsg =
       class: string;
       /** The server runs skimmers (spots can be asked for). */
       spots?: boolean;
+      /** Wide IQ can be asked for (a channelizer's bins). */
+      wide?: boolean;
     }
   | ({ type: "state" } & State)
   | { type: "lease"; granted: boolean; position: number }
@@ -173,10 +175,14 @@ export type ClientMsg =
   | { type: "share"; on: boolean }
   | { type: "listen"; user: number | null }
   | { type: "spots"; on: boolean }
-  | { type: "name"; name: string };
+  | { type: "name"; name: string }
+  | { type: "wide"; on: boolean; hz?: number };
 
 export const KIND_AUDIO = 1;
 export const KIND_WF = 2;
+/** Wide IQ: a channelizer bin's samples (crates/web/src/wideiq.rs). */
+export const KIND_IQ = 3;
+export const IQ_HEADER = 32;
 export const FLAG_OVERLOAD = 1;
 /** Audio: samples were lost before this frame. */
 export const FLAG_GAP = 2;
@@ -217,8 +223,21 @@ export interface WfLine {
   levels: Uint8Array;
 }
 
+export interface IqFrame {
+  kind: typeof KIND_IQ;
+  flags: number;
+  seq: number;
+  /** The first sample's frame number. */
+  frame: number;
+  /** The bin's centre (Hz) and sample rate. */
+  centre: number;
+  rate: number;
+  /** I, Q interleaved, scaled (1.0: a full-scale sine). */
+  iq: Float32Array;
+}
+
 /** Decode a binary frame; null for an unknown kind or a short frame. */
-export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | null {
+export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | null {
   const v = new DataView(buf);
   if (buf.byteLength < 4) return null;
   const kind = v.getUint8(0);
@@ -250,6 +269,22 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | null {
       dbStep: v.getFloat32(28, true),
       time: v.getFloat64(32, true),
       levels: new Uint8Array(buf, WF_HEADER, n),
+    };
+  }
+  if (kind === KIND_IQ) {
+    if (buf.byteLength < IQ_HEADER + 2 * n) return null;
+    const scale = v.getFloat32(28, true);
+    const raw = new Int8Array(buf, IQ_HEADER, 2 * n);
+    const iq = new Float32Array(2 * n);
+    for (let k = 0; k < 2 * n; k++) iq[k] = raw[k] * scale;
+    return {
+      kind,
+      flags,
+      seq: v.getUint32(4, true),
+      frame: Number(v.getBigUint64(8, true)),
+      centre: v.getFloat64(16, true),
+      rate: v.getFloat32(24, true),
+      iq,
     };
   }
   return null;

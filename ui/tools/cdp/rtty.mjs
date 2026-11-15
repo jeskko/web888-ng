@@ -2,7 +2,7 @@
 // FSK/RTTY decoding in the page: start audio, turn RTTY on, pick a station
 // from its list (the centre between the tones, Hz), print the signals
 // (parameters and text) every 15 s; saves rtty.png in OUT.
-//   CHROME=... node rtty.mjs URL [STATION_HZ] [SECONDS]
+//   CHROME=... [WIDE=0|1] node rtty.mjs URL [STATION_HZ] [SECONDS]
 import { launch, q, sleep } from "./lib.mjs";
 const [url, station = "10100800", secs = "60"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
@@ -14,6 +14,12 @@ await sleep(1500);
 await p.ev(`[...document.querySelectorAll('header .tools button')].find((b) => b.textContent === 'RTTY').click()`);
 await sleep(500);
 await p.ev(`(() => { const s = ${q(".rtty select")}; s.value = ${JSON.stringify(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+// WIDE=1: skim the channelizer bin around the dial (needs bins mode)
+if (process.env.WIDE !== undefined) {
+  await sleep(500);
+  const on = await p.ev(`[...document.querySelectorAll('.rtty .spots-bar button')].find((b) => b.textContent === 'Wide')?.classList.contains('on')`);
+  if (on !== (process.env.WIDE === "1")) await p.ev(`[...document.querySelectorAll('.rtty .spots-bar button')].find((b) => b.textContent === 'Wide')?.click()`);
+}
 const t0 = Date.now();
 while (Date.now() - t0 < Number(secs) * 1000) {
   await sleep(15000);

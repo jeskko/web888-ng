@@ -195,6 +195,11 @@ impl Waterfalls {
         self.bins.is_some()
     }
 
+    /// The channelizer's bin tap (wide IQ), if views come from bins.
+    pub fn tap(&self) -> Option<&BinTap> {
+        self.bins.as_ref()
+    }
+
     /// The shared views, with the span's decimation (not the capture's).
     pub fn views(&self) -> Vec<ViewInfo> {
         let mut v = self.inner.lock().unwrap().sched.views();

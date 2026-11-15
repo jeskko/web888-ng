@@ -8,7 +8,7 @@
 import { formatKhz } from "../fmt.ts";
 import { audioBand } from "../cw.ts";
 import { describe, navtex, NAVTEX_SUBJECTS, RTTY_STATIONS } from "../rtty.ts";
-import { clearRtty, pickRtty, rttyError, rttyOn, rttySignals, setRtty, st } from "../state.ts";
+import { clearRtty, pickRtty, rttyError, rttyOn, rttySignals, rttyWide, setRtty, setRttyWide, st, WIDE_HALF, wideAvail, wideCentre } from "../state.ts";
 
 /** Characters shown per signal (the newest). */
 const SHOWN = 1500;
@@ -42,6 +42,11 @@ export function RttyPanel() {
           ))}
         </select>
         <span class="dim num">{sigs.filter((x) => x.active && x.locked).length}</span>
+        {wideAvail.value && (
+          <button class={rttyWide.value ? "on" : ""} onClick={() => setRttyWide(!rttyWide.value)} title="Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband">
+            Wide
+          </button>
+        )}
         <button onClick={clearRtty} title="Clear the text">
           Clear
         </button>
@@ -51,7 +56,11 @@ export function RttyPanel() {
       </div>
       <div class="spots-list">
         {rttyError.value && <p class="warn">{rttyError.value}</p>}
-        {s && !band && <p class="dim">RTTY is decoded in USB, LSB and CW.</p>}
+        {wideAvail.value && rttyWide.value ? (
+          <p class="dim">{wideCentre.value ? `Skimming ${formatKhz(wideCentre.value - WIDE_HALF).slice(0, -2)}–${formatKhz(wideCentre.value + WIDE_HALF).slice(0, -2)} kHz` : "Waiting for the wide IQ…"}</p>
+        ) : (
+          s && !band && <p class="dim">RTTY is decoded in USB, LSB and CW.</p>
+        )}
         {sigs.length === 0 ? (
           <p class="dim">
             Nothing yet: every two-tone FSK signal in the passband is found, its rate, shift, framing (data bits, parity, stop bits), polarity and character set worked out, and decoded. A signal needs a few seconds before it locks.

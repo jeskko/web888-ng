@@ -9,7 +9,7 @@ import { bandOf, type Band } from "./bands.ts";
 import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
-import type { AudioFrame, AudioReq, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
+import type { AudioFrame, AudioReq, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
@@ -173,7 +173,10 @@ export function connect(): void {
             server.value = m.server;
             sessionId.value = m.session;
             spotsAvail.value = !!m.spots;
+            wideAvail.value = !!m.wide;
           });
+          wideAsked = null; // a new session: ask again
+          wideSync();
           audioRate = m.audio_rate;
           if (myName.value) link?.send({ type: "name", name: myName.value });
           if (m.spots) {
@@ -223,11 +226,17 @@ export function connect(): void {
       if (f.flags & FLAG_OVERLOAD) overloadAt.value = performance.now();
       if (f.flags & FLAG_GAP) audioGaps.value++;
       jttyAudio(f); // first: the player hands the samples to the worklet
-      cwAudio(f);
-      rttyAudio(f);
+      if (!cwWideNow()) cwAudio(f);
+      if (!rttyWideNow()) rttyAudio(f);
       imgAudio(f);
       digiAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
+    },
+    onIq(f: IqFrame) {
+      if (wideCentre.value !== f.centre) wideCentre.value = f.centre;
+      const both = cwWideNow() && rttyWideNow();
+      if (cwWideNow()) cwIq(f, both ? f.iq.slice() : f.iq);
+      if (rttyWideNow()) rttyIq(f, f.iq);
     },
     onWf(l) {
       serverClock.observe(l.time / 1000, Date.now() / 1000);
@@ -512,7 +521,8 @@ function cwAudio(f: AudioFrame): void {
     const { mode, hz, pitch } = s;
     cwRf = (a) => rfOf(mode, hz, pitch, a);
     cwSignals.value = cwSignals.value.filter((x) => !x.active);
-    cwWorker.postMessage({ reset: true });
+    cwBand = "";
+    cwWorker.postMessage({ wide: null });
   }
   const b = `${band.lo}|${band.hi}`;
   if (b !== cwBand) {
@@ -553,6 +563,89 @@ export function clearCw(): void {
   cwSignals.value = cwSignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "" }));
 }
 
+// ------------------------------------------------- wide IQ (the skimmers)
+
+/** The server can send wide IQ (a channelizer bin, `wideiq.rs`). */
+export const wideAvail = signal(false);
+/** The CW and RTTY skimmers read the bin instead of the audio. */
+export const cwWide = signal(load("cwWide") === "1");
+export const rttyWide = signal(load("rttyWide") === "1");
+/** The bin being received (its centre, Hz), or null. */
+export const wideCentre = signal<number | null>(null);
+/** The part of a bin skimmed (Hz from its centre; it's clean to ±21). */
+export const WIDE_HALF = 20_000;
+/** The dial the bin was last asked for (null: not asked). */
+let wideAsked: number | null = null;
+
+function cwWideNow(): boolean {
+  return wideAvail.value && cwOn.value && cwWide.value;
+}
+function rttyWideNow(): boolean {
+  return wideAvail.value && rttyOn.value && rttyWide.value;
+}
+
+/** Ask for wide IQ while a skimmer wants it (again when the dial leaves
+ * the bin's middle 30 kHz), stop when none does. */
+function wideSync(): void {
+  const want = cwWideNow() || rttyWideNow();
+  const hz = st.value?.hz;
+  if (!want) {
+    if (wideAsked !== null) {
+      link?.send({ type: "wide", on: false });
+      wideAsked = null;
+      wideCentre.value = null;
+    }
+    return;
+  }
+  if (hz === undefined) return;
+  const c = wideCentre.value ?? wideAsked;
+  if (wideAsked === null || c === null || Math.abs(hz - c) > 15_000) {
+    wideAsked = hz;
+    link?.send({ type: "wide", on: true, hz });
+  }
+}
+export function setCwWide(on: boolean): void {
+  cwWide.value = on;
+  save("cwWide", on ? "1" : "0");
+  cwKey = "";
+}
+
+export function setRttyWide(on: boolean): void {
+  rttyWide.value = on;
+  save("rttyWide", on ? "1" : "0");
+  rttyKey = "";
+}
+
+function cwIq(f: IqFrame, iq: Float32Array): void {
+  cwWorker ??= cwStart();
+  const key = `wide|${f.centre}|${f.rate}`;
+  if (key !== cwKey) {
+    cwKey = key;
+    cwBand = "";
+    cwGen++;
+    const c = f.centre;
+    cwRf = (a) => c + a;
+    cwSignals.value = cwSignals.value.filter((x) => !x.active);
+    cwWorker.postMessage({ wide: { rate: f.rate, lo: -WIDE_HALF, hi: WIDE_HALF } });
+  }
+  cwWorker.postMessage({ iq, gen: cwGen }, [iq.buffer]);
+}
+
+function rttyIq(f: IqFrame, iq: Float32Array): void {
+  rttyWorker ??= rttyStart();
+  const key = `wide|${f.centre}|${f.rate}`;
+  if (key !== rttyKey) {
+    rttyKey = key;
+    rttyBand = "";
+    rttyGen++;
+    const c = f.centre;
+    rttyRf = (a) => c + a;
+    rttySignals.value = rttySignals.value.filter((x) => !x.active);
+    rttyWorker.postMessage({ wide: { rate: f.rate, lo: -WIDE_HALF, hi: WIDE_HALF } });
+  }
+  rttyWorker.postMessage({ iq, gen: rttyGen }, [iq.buffer]);
+}
+
 // ------------------------------------------------------------ FSK / RTTY
 
 /** FSK/RTTY decoding of every two-tone signal in this receiver's
@@ -591,7 +684,8 @@ function rttyAudio(f: AudioFrame): void {
     const { mode, hz, pitch } = s;
     rttyRf = (a) => rfOf(mode, hz, pitch, a);
     rttySignals.value = rttySignals.value.filter((x) => !x.active);
-    rttyWorker.postMessage({ reset: true });
+    rttyBand = "";
+    rttyWorker.postMessage({ wide: null });
   }
   const b = `${band.lo}|${band.hi}`;
   if (b !== rttyBand) {
@@ -629,6 +723,10 @@ export function pickRtty(centre: number): void {
   const span = wfSpan(r.adc_hz, v.decim);
   if (Math.abs(centre - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: centre });
 }
+
+// the wide IQ stream follows the skimmers' settings and the dial (here,
+// after everything it reads is declared)
+effect(() => wideSync());
 
 // ---------------------------------------------------------- FAX / SSTV
 
