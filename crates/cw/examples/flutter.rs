@@ -1,10 +1,10 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! Fading and auroral flutter: character errors of the classical and the
 //! neural decoder on one signal (20 and 30 WPM, 5 % jitter) under Rayleigh
-//! fading at Doppler spreads from slow QSB (0.2 Hz) to auroral flutter
-//! (2-20 Hz: the carrier spread over tens of Hz, the level changing within
-//! a dot). The network was trained with 0.03-0.6 Hz only; this says
-//! whether flutter is worth training for.
+//! fading with a Gaussian Doppler spectrum (ITU-R F.1487) of spreads (2σ)
+//! from slow QSB (0.2 Hz) to auroral flutter (3-30 Hz: the carrier spread
+//! over tens of Hz, the level changing within a dot). For reference,
+//! F.1487's high latitudes: quiet 0.5 Hz, moderate 10 Hz, disturbed 30 Hz.
 //!
 //!     cargo run --release -p web888-cw --example flutter [reps]
 
@@ -41,7 +41,7 @@ fn main() {
         .nth(1)
         .and_then(|v| v.parse().ok())
         .unwrap_or(4);
-    let dopplers = [0.0, 0.2, 2.0, 5.0, 10.0, 20.0];
+    let dopplers = [0.0, 0.2, 3.0, 10.0, 20.0, 30.0];
     for wpm in [20.0, 30.0] {
         println!(
             "character errors, classical / neural ({wpm:.0} WPM; SNR in 2500 Hz; Doppler spread)"
@@ -70,7 +70,7 @@ fn main() {
                         };
                         let ch = Channel {
                             snr_db: Some(snr),
-                            fade_hz,
+                            spread_hz: fade_hz,
                             ..Channel::new(3.0)
                         };
                         let x =

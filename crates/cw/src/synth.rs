@@ -88,6 +88,9 @@ pub struct Channel {
     pub rise: f64,
     /// Rayleigh fading Doppler spread (Hz), 0 for none.
     pub fade_hz: f64,
+    /// Or a Gaussian Doppler spectrum (ITU-R F.1487: auroral flutter) of
+    /// this spread (2σ, Hz); used when > 0.
+    pub spread_hz: f64,
 }
 
 impl Channel {
@@ -97,6 +100,7 @@ impl Channel {
             snr_db: None,
             rise: 0.005,
             fade_hz: 0.0,
+            spread_hz: 0.0,
         }
     }
 }
@@ -144,6 +148,27 @@ impl Fading {
         }
     }
 
+    /// Gaussian Doppler spectrum of spread `spread` Hz (2σ, as ITU-R
+    /// F.1487): the paths' frequencies drawn from it.
+    pub fn gaussian(spread: f64, rng: &mut Rng) -> Self {
+        let two_pi = 2.0 * std::f64::consts::PI;
+        Fading {
+            hz: 1.0,
+            paths: (0..16)
+                .map(|_| (spread / 2.0 * rng.normal(), two_pi * rng.uniform()))
+                .collect(),
+        }
+    }
+
+    /// A channel's fading, if any.
+    fn of(ch: &Channel, rng: &mut Rng) -> Option<Self> {
+        if ch.spread_hz > 0.0 {
+            Some(Self::gaussian(ch.spread_hz, rng))
+        } else {
+            (ch.fade_hz > 0.0).then(|| Self::new(ch.fade_hz, rng))
+        }
+    }
+
     /// The complex gain at `t` s (mean power 1).
     pub fn gain(&self, t: f64) -> (f64, f64) {
         let (mut re, mut im) = (0.0, 0.0);
@@ -160,7 +185,7 @@ impl Fading {
 pub fn complex(text: &str, k: &Keying, ch: &Channel, fs: f64, rng: &mut Rng) -> Vec<Complex32> {
     let key = shaped(&keying(text, k, fs, rng), fs, ch.rise);
     let ph0 = 2.0 * std::f64::consts::PI * rng.uniform();
-    let fade = (ch.fade_hz > 0.0).then(|| Fading::new(ch.fade_hz, rng));
+    let fade = Fading::of(ch, rng);
     let sig = ch
         .snr_db
         .map(|snr| (10f64.powf(-snr / 10.0) / 2500.0 * fs / 2.0).sqrt());
@@ -187,7 +212,7 @@ pub fn complex(text: &str, k: &Keying, ch: &Channel, fs: f64, rng: &mut Rng) -> 
 pub fn audio(text: &str, k: &Keying, ch: &Channel, fs: f64, amp: f64, rng: &mut Rng) -> Vec<f32> {
     let key = shaped(&keying(text, k, fs, rng), fs, ch.rise);
     let ph0 = 2.0 * std::f64::consts::PI * rng.uniform();
-    let fade = (ch.fade_hz > 0.0).then(|| Fading::new(ch.fade_hz, rng));
+    let fade = Fading::of(ch, rng);
     // noise s.d. so that its power in 2500 Hz is amp²/2 / snr: PSD (one-sided) * 2500
     let sig = ch
         .snr_db

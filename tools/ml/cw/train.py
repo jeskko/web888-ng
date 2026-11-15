@@ -33,12 +33,16 @@ def val_set(device, n=256):
     out = []
     for lo, hi in ((10, 20), (0, 10), (-6, 0), (-12, -6)):
         r = random.Random(1000 + lo)
-        x, lab = batch(n, r, device, snr=(lo, hi), pileup=0.0)
+        x, lab = batch(n, r, device, snr=(lo, hi), pileup=0.0, flutter=0.0)
         out.append((f"{lo:+d}..{hi:+d} dB", features(x), lab))
     # pile-ups: close neighbours at similar level
     r = random.Random(999)
-    x, lab = batch(n, r, device, snr=(0, 20), pileup=1.0)
+    x, lab = batch(n, r, device, snr=(0, 20), pileup=1.0, flutter=0.0)
     out.append(("pile-up", features(x), lab))
+    # auroral flutter
+    r = random.Random(998)
+    x, lab = batch(n, r, device, snr=(0, 20), pileup=0.0, flutter=1.0)
+    out.append(("flutter", features(x), lab))
     return out
 
 
@@ -65,6 +69,7 @@ def main():
     ap.add_argument("--resume", default="")
     ap.add_argument("--seed", type=int, default=1)
     ap.add_argument("--pileup", type=float, default=0.3, help="share of pile-up examples")
+    ap.add_argument("--flutter", type=float, default=0.15, help="share of auroral flutter examples")
     ap.add_argument("--eval", action="store_true", help="evaluate --resume and exit")
     a = ap.parse_args()
     os.makedirs(a.out, exist_ok=True)
@@ -87,7 +92,7 @@ def main():
     for step in range(1, a.steps + 1):
         # curriculum: clean signals first, the full SNR range by 30 %
         k = min(1.0, step / (0.3 * a.steps))
-        x, lab = batch(a.batch, r, dev, snr=(10.0 - 22.0 * k, 20.0), pileup=a.pileup)
+        x, lab = batch(a.batch, r, dev, snr=(10.0 - 22.0 * k, 20.0), pileup=a.pileup, flutter=a.flutter)
         f = features(x)
         lp = model(f)                                        # (B, T, C)
         T = lp.shape[1]

@@ -300,28 +300,39 @@ on their own, words run together 0.4 %; a few garbled stations are split
 in two. Cost (`--example wide`, WebAssembly): 42 % classical, 58 % neural
 of a core for 24 stations in a bin (was 36 % and 46 %).
 
-**Fading and auroral flutter** (`--example flutter`: one signal, Jakes
-Rayleigh fading at a maximum Doppler shift of 0.2-20 Hz; ITU-R F.1487's
-2σ spread is ~1.4× that). Character errors, classical / neural, 20 WPM,
-10 dB:
+**Fading and auroral flutter.** ITU-R F.1487 models HF fading as
+Gaussian Doppler spectra; its high-latitude spreads (2σ) are 0.5 Hz
+quiet, 10 Hz moderate, 30 Hz disturbed (25 Hz exceeded 5 % of the time;
+mid-latitudes 0.1-1 Hz). Measurements on auroral paths report 2-55 Hz,
+more in auroral backscatter. A real recording (an Alaska station on
+18 MHz heard in Norway at Kp 2) measures ~6 Hz (from the decay of the
+carrier's autocorrelation over key-down samples, checked on synthetic
+fading of known spread: it reads 10-20 % low).
 
-| | none | 0.2 Hz | 2 Hz | 5 Hz | 10 Hz | 20 Hz |
-|---|---|---|---|---|---|---|
-| before the pile-up fine-tune | 0 / 0 % | 3.7 / 0.2 % | 69 / 1.7 % | 72 / 9.7 % | 59 / 36 % | 38 / 28 % |
-| after | 0 / 0 % | 3.7 / 0 % | 69 / 1.7 % | 72 / 1.9 % | 59 / 13 % | 38 / 16 % |
+`--example flutter`: one signal, 5 % jitter, Rayleigh fading with a
+Gaussian Doppler spectrum (`synth::Channel::spread_hz`). The classical
+decoder fails from 3 Hz on even at 20 dB (its fit assumes a steady
+level). Training (`synth.py`) now has flutter on 15 % of examples:
+3-30 Hz (log-uniform), half of them two modes up to 10 Hz apart, the
+neighbours fluttering too (and every neighbour fading on its own); a
+20k-step fine-tune from the pile-up weights: validation error with
+flutter 19.8 % → 2.1 %, the others as before (pile-ups 1.4 → 1.6 %,
+−12..−6 dB 19.8 → 19.0 %). Character errors, classical / neural, 20 WPM:
 
-The classical decoder fails from 2 Hz even on strong signals; the network
-has never seen flutter yet holds to ~5 Hz (and better since it learnt to
-read through neighbours). For reference, ITU-R F.1487 gives high-latitude
-spreads (2σ) of 0.5 Hz quiet, 10 Hz moderate, 30 Hz disturbed (25 Hz
-exceeded 5 % of the time; mid-latitudes 0.1-1 Hz), Gaussian Doppler
-spectra; measurements on auroral paths report 2-55 Hz, more in auroral
-backscatter. A real recording (an Alaska station on 18 MHz heard in
-Norway at Kp 2) measures ~6 Hz (2σ, from the decay of the carrier's
-autocorrelation over key-down samples) and decodes with the network
-nearly whole, not with the classical decoder. Next: flutter in training
-(a Gaussian Doppler spectrum, 3-30 Hz), checked against on-air captures
-during an aurora.
+| SNR | 3 Hz | 10 Hz | 20 Hz | 30 Hz |
+|---|---|---|---|---|
+| 10 dB, before | 74 / 2.0 % | 72 / 3.3 % | 51 / 22 % | 34 / 32 % |
+| 10 dB, after | 74 / 0.2 % | 72 / 0.0 % | 51 / 0.2 % | 34 / 4.3 % |
+| 0 dB, before | 76 / 19 % | 74 / 29 % | 50 / 42 % | 36 / 58 % |
+| 0 dB, after | 76 / 7.9 % | 74 / 2.5 % | 50 / 1.6 % | 36 / 4.1 % |
+
+(Strong flutter reads better than 3 Hz at 0 dB: at 3 Hz the fades last a
+character or more, at 20 Hz they average out within a dot.) Pile-ups with
+every station fluttering (3-20 Hz, `FADE=aurora`): calls read 21 / 39 /
+50 % → 33 / 64 / 76 %, no-call words 49-59 % → 10-37 %; with QSB as
+before. The real recording decodes the same ("TU L7SB UP" without
+spaces, its first letter cut by the clip). Still to do: check against
+on-air captures during an aurora.
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 

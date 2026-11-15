@@ -8,7 +8,8 @@
 //! only the callers' own sending counts). The callers' spread around the runner:
 //! tight (±40 Hz), medium (±100 Hz) or wide (±300 Hz). Every station
 //! fades on its own (`FADE`): `none`; `qsb` (the default: Rayleigh, 0.05-0.5
-//! Hz Doppler); `aurora` (2-15 Hz: flutter).
+//! Hz Doppler); `aurora` (flutter: a Gaussian Doppler spectrum, 3-20 Hz
+//! spread).
 //!
 //! Scored per spread: the share of callers whose call was read as a word
 //! of its own at least once, and the callsign-like words (a letter and a
@@ -57,15 +58,22 @@ struct Caller {
 }
 
 /// One trial: the IQ and every call sent (the runner's included).
-/// A station's fading (Doppler range in Hz; None: none).
-fn fader(r: &mut Rng, doppler: Option<(f64, f64)>) -> Option<Fading> {
-    doppler.map(|(a, b)| Fading::new(a + (b - a) * r.uniform(), r))
+/// A station's fading (Doppler range in Hz, Gaussian; None: none).
+fn fader(r: &mut Rng, doppler: Option<(f64, f64, bool)>) -> Option<Fading> {
+    doppler.map(|(a, b, gauss)| {
+        let hz = a + (b - a) * r.uniform();
+        if gauss {
+            Fading::gaussian(hz, r)
+        } else {
+            Fading::new(hz, r)
+        }
+    })
 }
 
 fn scenario(
     r: &mut Rng,
     spread: f64,
-    doppler: Option<(f64, f64)>,
+    doppler: Option<(f64, f64, bool)>,
 ) -> (Vec<Complex32>, Vec<(String, f64)>, HashSet<String>) {
     // 8 s of noise after the last round: what was sent is all printed
     let n = ((SECONDS + 8.0) * RATE) as usize;
@@ -186,8 +194,8 @@ fn main() {
     let fade = std::env::var("FADE").unwrap_or_else(|_| "qsb".into());
     let doppler = match fade.as_str() {
         "none" => None,
-        "aurora" => Some((2.0, 15.0)),
-        _ => Some((0.05, 0.5)),
+        "aurora" => Some((3.0, 20.0, true)),
+        _ => Some((0.05, 0.5, false)),
     };
     println!("fading: {fade}");
     for (name, spread) in [
