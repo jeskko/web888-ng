@@ -137,8 +137,9 @@ Everything detected from the signal, with manual overrides:
   sidelobes 31 dB down rather than 13, so neighbours a few hundred Hz
   away leak far less. On synthetic RTTY it helps a little too (−7 dB:
   2.6 % character errors against 3.5 %). Done for async; SITOR-B keeps
-  the boxcar its bit alignment is found with. Still open: correcting a
-  weak character from the station's own repeated words.
+  the boxcar its bit alignment is found with. Not done on purpose:
+  correcting a weak character from the words a station repeats (a guess,
+  wrong for a call heard once or the operator's own typo).
 
 ### 2.3 SSTV (new)
 
