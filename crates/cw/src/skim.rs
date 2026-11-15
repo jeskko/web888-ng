@@ -426,6 +426,24 @@ impl Skimmer {
             } else {
                 Vec::new()
             };
+            // a silence too long for any character and its gaps (2 s or 25
+            // dots) is a pause between words or overs: a space, also where
+            // the decoder gave none
+            let pause = (25.0 * u).max(2.0);
+            let mut prev = (!s.text.is_empty() && !s.text.ends_with(' ')).then_some(s.last_mark);
+            let mut spaced: Vec<(f64, String)> = Vec::with_capacity(new.len());
+            for c in new {
+                if c.1 == " " {
+                    prev = None;
+                } else {
+                    if prev.is_some_and(|p| c.0 - p > pause) {
+                        spaced.push((c.0, " ".to_string()));
+                    }
+                    prev = Some(c.0);
+                }
+                spaced.push(c);
+            }
+            let new = spaced;
             if let Some(last) = new.last() {
                 s.last_t = last.0;
                 if let Some(m) = new.iter().rev().find(|c| c.1 != " ") {

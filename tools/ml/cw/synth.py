@@ -91,8 +91,19 @@ def keying(t: str, r: random.Random, wpm: float, jitter: float, dash: float, fw:
     t0 = 0.0
     marks, chars = [], []
     for wi, word in enumerate(t.split()):
-        if wi:
-            chars.append((t0, t0 + 7 * uf * j(), " "))
+        if word == "|":
+            # a pause between overs or phrases (listening, the other side
+            # sending): a space too, however long
+            if chars and chars[-1][2] == " ":
+                a, _, _ = chars.pop()
+                t0 = a
+            chars.append((t0, t0 + r.uniform(0.5, 4.0), " "))
+            t0 = chars[-1][1]
+            continue
+        if wi and not (chars and chars[-1][2] == " " and chars[-1][1] == t0):
+            # a word gap; now and then a longer pause mid-line
+            gap = 7 * uf * j() if r.random() > 0.05 else r.uniform(10 * uf, 1.5)
+            chars.append((t0, t0 + gap, " "))
             t0 = chars[-1][1]
         for ci, ch in enumerate(chars_of(word)):
             if ci:
@@ -122,7 +133,8 @@ def example(r: random.Random, n: int):
         marks, chars, total = keying(line, r, wpm, jitter, dash, fw)
         if total >= WINDOW + 1 or r.random() < 0.2:
             break
-        line = line + " " + text(r)
+        # the next phrase after a pause (most of the time) or straight on
+        line = line + (" | " if r.random() < 0.7 else " ") + text(r)
     # the window: often starting before the text or ending after it (silence)
     w0 = r.uniform(-3.0, max(-2.9, total - WINDOW + 3.0))
     w1 = w0 + WINDOW

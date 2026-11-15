@@ -229,9 +229,17 @@ SNR and frequency; the network's text (last 12 s every 2 s) replaces its
 text, and four characters of its own make a signal count as decoding (a
 −7 dB hand-keyed station decodes, noise stays quiet: `tests/cw.rs`). On
 the 40 m recording it reads more than the classical decoder (both sides
-of a QSO, "5NN 73 TU" where the classical read "7E M TU"). Weak spot:
-word spaces are sometimes missed ("DL5YMK"); next: more word-gap
-variety in training, a beam search with a callsign/QSO language model.
+of a QSO, "5NN 73 TU" where the classical read "7E M TU"). Word spaces
+(2026-11-15): on air they went missing between transmissions ("SN1TTEST",
+"TESTOM8DD": a contest station's CQ, a pause, the CQ again), as training
+had only word gaps of ~7 dots. Fixed twice: training pauses of 0.5-4 s
+between phrases (70 %) and now and then mid-line, labelled as a space (a
+10k-step fine-tune); and in the skimmer a silence over 2 s or 25 dots
+between emitted characters is a space whatever the decoder says. On a 90 s
+live capture of 7000-7040 kHz in a contest (`--example replay`), words of
+10+ characters (run together): 7.9 % → 2.6 % (the rule) → 1.2 % (both);
+what's left is pile-ups. Error rates as before or slightly better
+(−8 dB 0.2 %, −10 dB 2.3 %).
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 

@@ -8,7 +8,7 @@ the fly. Nothing here is shipped; the trained weights are, as
 | file | what |
 |---|---|
 | `common.py` | alphabet, features, model (must match `net.rs` exactly) |
-| `synth.py` | training data: text, keying, channel (fading, interference, impulse noise, white noise) |
+| `synth.py` | training data: text, keying (pauses between phrases as spaces), channel (fading, interference, impulse noise, white noise) |
 | `train.py` | CTC training with a fixed validation set at four SNR bands |
 | `export.py` | `cwnet.bin` and `cwnet-ref.bin` (a reference input and output for `net.rs`'s test) |
 
@@ -20,6 +20,8 @@ python3 train.py --steps 30000 --lr 1e-3 --out /tmp/cwrun   # ~40 min on an RTX 
 python3 export.py /tmp/cwrun/best.pt ../../../crates/cw/model
 cargo test -p web888-cw --release net                      # the Rust inference matches PyTorch
 cargo run --release -p web888-cw --example cer             # classical vs neural
+cargo run --release -p web888-cw --example spaces          # word spaces
+cargo run --release -p web888-cw --example replay IQFILE   # a captured bin (words run together)
 ```
 
 The training synthesiser is independent of the Rust one
