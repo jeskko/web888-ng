@@ -117,6 +117,28 @@ Everything detected from the signal, with manual overrides:
   the 40 m/30 m recording: DWD 10100.8 kHz locks within 15 s as 50 Bd,
   450 Hz, 5N1.5, mark lower, ITA2 (as datarx), with the Baltic sea
   forecast as text.
+* **A contest as a test set (2026-11-15)**: 10 minutes of the WAE DX
+  RTTY contest recorded off air on 20 m and 40 m (HackRF, 4 MS/s), RTTY
+  segments cut to 40 kS/s IQ and skimmed (`--example replay`; 600 s in
+  20-40 s, 16-38 stations locked per 34 kHz). No transcript exists, so
+  errors are found by spellcheck: a word one edit from a word the
+  recording repeats (a running station's call, TEST, a serial). Each
+  suspect was decoded again with receiver variants (`--example dive`,
+  soft bits per character). Of 238 suspects on three slices about 1 in 9
+  was sent as read (clean bits in every variant: the operator's typo, a
+  call heard once); a third were weak in every variant (selective fades
+  faster than the 0.6 s threshold tracking, a static crash in a weak
+  signal), which only context could recover; the rest were readable by
+  some variant. Compared like for like (`--example spans`: every
+  skimmed span decoded from the same channel with each filter), a Hann
+  tone filter 1.4 bits long in place of the 1-bit boxcar reads 8 % more
+  of the recordings' words right (5118 against 4720) for the same
+  errors (326 against 324): it keeps the boxcar's noise bandwidth with
+  sidelobes 31 dB down rather than 13, so neighbours a few hundred Hz
+  away leak far less. On synthetic RTTY it helps a little too (−7 dB:
+  2.6 % character errors against 3.5 %). Done for async; SITOR-B keeps
+  the boxcar its bit alignment is found with. Still open: correcting a
+  weak character from the station's own repeated words.
 
 ### 2.3 SSTV (new)
 

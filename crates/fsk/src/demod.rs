@@ -10,17 +10,28 @@ pub const STD_BAUD: [f64; 12] = [
 
 /// Streaming non-coherent two-tone detector. Per input sample: the
 /// normalised soft decision (+1 upper tone, −1 lower) and the two tone
-/// filters' amplitudes. Output i integrates inputs i−L+1..i (one bit when
-/// L = fs/baud): a bit reads cleanly only at its end. Each tone is
-/// normalised by its own tracked on and off levels, so selective fading
-/// does not bias the decision.
+/// filters' amplitudes. With [`ToneDemod::new`], output i integrates
+/// inputs i−L+1..i (a boxcar, one bit when L = fs/baud): a bit reads
+/// cleanly only at its end. [`ToneDemod::hann`] weights a longer span
+/// (M = 1.5 L) with a Hann window instead: the same noise bandwidth, but
+/// sidelobes 31 dB down and falling 18 dB an octave rather than 13 dB and
+/// 6, so a strong neighbour a few hundred Hz away (a contest band) leaks
+/// far less. Each tone is normalised by its own tracked on and off
+/// levels, so selective fading does not bias the decision.
 #[derive(Clone)]
 pub struct ToneDemod {
     pub fs: f64,
     pub f: [f64; 2],
+    /// The filter's length (samples): L for the boxcar, M for the Hann.
     pub l: usize,
+    hann: bool,
     hist: [Vec<Complex32>; 2],
-    sum: [num_complex::Complex64; 2],
+    /// Sliding sums over the last `l` inputs: plain, and weighted by
+    /// e^(+j2πn/l), e^(−j2πn/l) (n the absolute index): the Hann window's
+    /// three terms.
+    sum: [[num_complex::Complex64; 3]; 2],
+    /// e^(j2πn/l) for n mod l.
+    rot: Vec<num_complex::Complex64>,
     pos: usize,
     ph: [f64; 2],
     alpha: f64,
@@ -28,22 +39,49 @@ pub struct ToneDemod {
 }
 
 impl ToneDemod {
+    /// A boxcar of l samples (one bit: fs / baud).
     pub fn new(fs: f64, f_lo: f64, f_hi: f64, l: f64) -> Self {
-        let l = (l.round() as usize).max(2);
+        Self::make(fs, f_lo, f_hi, (l.round() as usize).max(2), false)
+    }
+
+    /// A Hann window `span` × l samples long (l: one bit). 1.5 keeps the
+    /// boxcar's noise bandwidth.
+    pub fn hann(fs: f64, f_lo: f64, f_hi: f64, l: f64, span: f64) -> Self {
+        Self::make(fs, f_lo, f_hi, ((span * l).round() as usize).max(3), true)
+    }
+
+    fn make(fs: f64, f_lo: f64, f_hi: f64, l: usize, hann: bool) -> Self {
+        let w = 2.0 * std::f64::consts::PI / l as f64;
         ToneDemod {
             fs,
             f: [f_lo, f_hi],
             l,
+            hann,
             hist: [
                 vec![Complex32::new(0.0, 0.0); l],
                 vec![Complex32::new(0.0, 0.0); l],
             ],
             sum: Default::default(),
+            rot: (0..l)
+                .map(|k| num_complex::Complex64::from_polar(1.0, w * k as f64))
+                .collect(),
             pos: 0,
             ph: [0.0; 2],
             alpha: 1.0 / (0.6 * fs),
             ema: None,
         }
+    }
+
+    /// The filter's delay (samples): a bit's clean reading comes this
+    /// long after its centre.
+    pub fn delay(&self) -> f64 {
+        0.5 * self.l as f64
+    }
+
+    /// The tone filters' noise bandwidth (Hz).
+    pub fn noise_bw(&self) -> f64 {
+        let k = if self.hann { 1.5 } else { 1.0 };
+        k * self.fs / self.l as f64
     }
 
     /// Feeds x; appends the decisions to d and the amplitudes to a, b.
@@ -56,9 +94,17 @@ impl ToneDemod {
     ) {
         let n0 = a_out.len();
         let two_pi = 2.0 * std::f64::consts::PI;
-        let inv_l = 1.0 / self.l as f64;
+        let l = self.l;
+        let inv_l = 1.0 / l as f64;
         let mut env = [Vec::with_capacity(x.len()), Vec::with_capacity(x.len())];
         for &v in x {
+            // the window's first input is n − l + 1; the Hann weights
+            // w(m) = ½ − ½cos(2π(m + ½)/l), m = 0..l, in the sliding sums'
+            // absolute phase: e^(±j2π(m + ½)/l) = e^(±j2πn'/l) e^(∓j2π(n − l + ½)/l)
+            let r = self.rot[self.pos];
+            let half = num_complex::Complex64::from_polar(1.0, std::f64::consts::PI * inv_l);
+            // e^(−j2π(n − l + ½)/l) = e^(−j2πn/l) e^(−jπ/l); pos = n mod l
+            let back = r.conj() * half.conj();
             for k in 0..2 {
                 let rot = Complex32::new(self.ph[k].cos() as f32, -self.ph[k].sin() as f32);
                 let z = v * rot;
@@ -70,13 +116,23 @@ impl ToneDemod {
                 }
                 let old = self.hist[k][self.pos];
                 self.hist[k][self.pos] = z;
-                self.sum[k] += num_complex::Complex64::new(
+                let dz = num_complex::Complex64::new(
                     z.re as f64 - old.re as f64,
                     z.im as f64 - old.im as f64,
                 );
-                env[k].push((self.sum[k] * inv_l).norm());
+                // old and new share n mod l, so one rotation serves both
+                let s = &mut self.sum[k];
+                s[0] += dz;
+                if self.hann {
+                    s[1] += dz * r;
+                    s[2] += dz * r.conj();
+                    let y = 0.5 * s[0] - 0.25 * (s[1] * back + s[2] * back.conj());
+                    env[k].push((y * (2.0 * inv_l)).norm());
+                } else {
+                    env[k].push((s[0] * inv_l).norm());
+                }
             }
-            self.pos = (self.pos + 1) % self.l;
+            self.pos = (self.pos + 1) % l;
         }
         let al = self.alpha;
         let u = |a: f64, b: f64| {

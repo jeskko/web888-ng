@@ -748,11 +748,26 @@ impl FskDecoder {
     pub const HOLD: f32 = 2.3;
     /// Per-character threshold of the parameter search.
     pub const QMIN: f32 = 2.6;
+    /// The tone filters: a Hann window this many bits long (see
+    /// [`ToneDemod::hann`]).
+    pub const SPAN: f64 = 1.4;
 
     pub fn new(fs: f64, p: FskParams, t0: f64) -> Self {
+        Self::with_span(fs, p, t0, Self::SPAN)
+    }
+
+    /// With the async tone filters a Hann window `span` bits long, or the
+    /// 1-bit boxcar for 0.
+    pub fn with_span(fs: f64, p: FskParams, t0: f64, span: f64) -> Self {
         let t = fs / p.baud;
-        let dem = ToneDemod::new(fs, p.f_lo, p.f_hi, t);
-        let lag = 0.5 * dem.l as f64;
+        // async: the Hann window (QRM); SITOR keeps the boxcar its bit
+        // alignment was found with
+        let dem = if p.mode == Mode::Async && span > 0.0 {
+            ToneDemod::hann(fs, p.f_lo, p.f_hi, t, span)
+        } else {
+            ToneDemod::new(fs, p.f_lo, p.f_hi, t)
+        };
+        let lag = dem.delay();
         let nbits = p.ndata + u32::from(p.parity != Parity::None);
         let cs = if p.is_ita2() {
             Cs::Ita2(Ita2Auto::new(p.usos, p.charset == "US-TTY"))
@@ -809,7 +824,7 @@ impl FskDecoder {
         snr_2500(
             median(&mut on) as f64,
             median(&mut off) as f64,
-            self.fs / self.dem.l as f64,
+            self.dem.noise_bw(),
         )
     }
 
