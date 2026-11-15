@@ -367,7 +367,14 @@ pub fn frame_time(j: usize) -> f64 {
 /// (the network was trained with the carrier within ±10 Hz). Greedy CTC:
 /// (time s, character) from x's start `t0`, spaces included.
 pub fn decode(x: &[Complex32], t0: f64) -> Vec<(f64, String)> {
-    let (f, _) = crate::decode::fine_freq(x, 0.0, 150.0);
+    decode_near(x, t0, 0.0, 150.0)
+}
+
+/// [`decode`] of a carrier within `span` Hz of `f0` (a skimmer's channel
+/// whose carrier is known: a louder neighbour in the window doesn't take
+/// it over).
+pub fn decode_near(x: &[Complex32], t0: f64, f0: f64, span: f64) -> Vec<(f64, String)> {
+    let (f, _) = crate::decode::fine_freq(x, f0, span);
     let w = -2.0 * std::f64::consts::PI * f / ENV_FS;
     let y: Vec<Complex32> = x
         .iter()

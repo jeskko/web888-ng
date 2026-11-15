@@ -3,7 +3,9 @@
 phrases, callsigns, numbers, words, random characters), keying (speed,
 hand-keying jitter, dash/dot ratio, Farnsworth gaps), and the channel
 (carrier offset and drift, edge shaping, Rayleigh fading, another CW
-signal nearby, impulse noise, white noise at an SNR in 2500 Hz). Each
+signal nearby, or a pile-up: 1-3 callers 12-120 Hz away at similar or
+higher level, keyed over the wanted one; impulse noise, white noise at an
+SNR in 2500 Hz). The label is only the signal at the centre. Each
 example is a WINDOW-second channel at 500 S/s; characters cut by the
 window's edges are keyed up, so the label is exactly what is audible.
 
@@ -156,19 +158,28 @@ def example(r: random.Random, n: int):
     return key, label, wpm
 
 
-def batch(B: int, r: random.Random, device, n: int = int(WINDOW * FS), snr=(-12.0, 20.0)):
-    """(B, n) complex channels and labels."""
-    keys, labels, qrm = [], [], []
+QRM = 3  # interferers at most
+
+
+def batch(B: int, r: random.Random, device, n: int = int(WINDOW * FS), snr=(-12.0, 20.0), pileup=0.3):
+    """(B, n) complex channels and labels. `pileup`: the share of examples
+    with 1-3 close neighbours at similar level (else one signal 25-180 Hz
+    away, mostly weaker, on 30 %)."""
+    keys, labels, qrm, mode = [], [], [], []
     for _ in range(B):
         k, lab, _ = example(r, n)
-        if r.random() < 0.05:
-            # noise (and maybe the other signal) only: nothing to read
+        p = r.random() < pileup
+        if r.random() < (0.15 if p else 0.05):
+            # noise (and maybe the others) only: nothing to read
             k, lab = np.zeros(n, np.float32), []
         keys.append(k)
         labels.append(lab)
-        qrm.append(example(r, n)[0] if r.random() < 0.3 else np.zeros(n, np.float32))
+        m = r.randint(1, QRM) if p else int(r.random() < 0.3)
+        qrm.append(np.stack([example(r, n)[0] if i < m else np.zeros(n, np.float32) for i in range(QRM)]))
+        mode.append(p)
     K = torch.tensor(np.stack(keys), device=device)
-    Q = torch.tensor(np.stack(qrm), device=device)
+    Q = torch.tensor(np.stack(qrm), device=device)             # (B, QRM, n)
+    P = torch.tensor(mode, device=device)[:, None]             # (B, 1) pile-up
     t = torch.arange(n, device=device) / FS
     # edges: raised cosine, 2-8 ms
     rise = r.uniform(1.0, 4.0)
@@ -176,12 +187,14 @@ def batch(B: int, r: random.Random, device, n: int = int(WINDOW * FS), snr=(-12.
     win = torch.hann_window(2 * m + 3, periodic=False, device=device)
     win = (win / win.sum())[None, None, :]
     K = torch.nn.functional.conv1d(K[:, None, :], win, padding=m + 1)[:, 0, :]
-    Q = torch.nn.functional.conv1d(Q[:, None, :], win, padding=m + 1)[:, 0, :]
+    Q = torch.nn.functional.conv1d(Q.reshape(B * QRM, 1, n), win, padding=m + 1).reshape(B, QRM, n)
     g = torch.Generator(device=device).manual_seed(r.randrange(1 << 30))
     U = lambda *s, a=0.0, b=1.0: a + (b - a) * torch.rand(*s, device=device, generator=g)  # noqa: E731
     two_pi = 2 * torch.pi
-    # carrier: residual offset after centring, slow drift
-    f0 = U(B, 1, a=-10.0, b=10.0) + U(B, 1, a=-1.0, b=1.0) * t[None, :] / WINDOW
+    # carrier: residual offset after centring (pile-ups: the skimmer
+    # centres on the signal's own carrier, ±4 Hz), slow drift
+    res = torch.where(P, 4.0, 10.0)
+    f0 = U(B, 1, a=-1.0, b=1.0) * res + U(B, 1, a=-1.0, b=1.0) * t[None, :] / WINDOW
     ph = two_pi * torch.cumsum(f0 / FS, dim=1) + U(B, 1, b=two_pi)
     sig = K * torch.exp(1j * ph)
     # fading (Jakes, 12 paths) on ~40 %
@@ -191,10 +204,12 @@ def batch(B: int, r: random.Random, device, n: int = int(WINDOW * FS), snr=(-12.
     gain = torch.exp(1j * (two_pi * fade_hz[:, :, None] * torch.cos(a)[:, :, None] * t[None, None, :] + p[:, :, None])).sum(1) / (12 ** 0.5)
     gain = torch.where(fade_hz > 0, gain, torch.ones_like(gain))
     sig = sig * gain
-    # another CW signal 25-180 Hz away, -20..+6 dB
-    off = U(B, 1, a=25.0, b=180.0) * torch.where(U(B, 1) < 0.5, -1.0, 1.0)
-    lvl = 10 ** (U(B, 1, a=-20.0, b=6.0) / 20)
-    sig = sig + lvl * Q * torch.exp(1j * (two_pi * off * t[None, :] + U(B, 1, b=two_pi)))
+    # the others: 25-180 Hz away at -20..+6 dB; pile-ups 12-120 Hz at -6..+10 dB
+    sign = torch.where(U(B, QRM) < 0.5, -1.0, 1.0)
+    off = torch.where(P, U(B, QRM, a=12.0, b=120.0), U(B, QRM, a=25.0, b=180.0)) * sign
+    lvl = 10 ** (torch.where(P, U(B, QRM, a=-6.0, b=10.0), U(B, QRM, a=-20.0, b=6.0)) / 20)
+    ph_q = two_pi * off[:, :, None] * t[None, None, :] + U(B, QRM, 1, b=two_pi)
+    sig = sig + (lvl[:, :, None] * Q * torch.exp(1j * ph_q)).sum(1)
     # white noise: SNR in 2500 Hz for unit mark power
     s = U(B, 1, a=snr[0], b=snr[1])
     n0 = 10 ** (-s / 10) / 2500.0

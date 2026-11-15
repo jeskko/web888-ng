@@ -60,6 +60,12 @@ fn main() {
         let mut sk = Skimmer::new_iq(rate, -20_000.0, 20_000.0);
         sk.neural = neural;
         sk.classical_above = above;
+        if let Some(v) = std::env::var("SPACING").ok().and_then(|v| v.parse().ok()) {
+            sk.spacing = v;
+        }
+        if let Some(v) = std::env::var("HI_PCT").ok().and_then(|v| v.parse().ok()) {
+            sk.hi_pct = v;
+        }
         let mut text = std::collections::HashMap::<u32, String>::new();
         let t = Instant::now();
         for c in x.chunks(2048) {

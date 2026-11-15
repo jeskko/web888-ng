@@ -126,14 +126,15 @@ fn shaped(k: &[f32], fs: f64, rise: f64) -> Vec<f32> {
         .collect()
 }
 
-/// Jakes-style Rayleigh gain (16 paths).
-struct Fading {
+/// Jakes-style Rayleigh gain (16 paths): slow QSB at a fraction of a Hz,
+/// auroral flutter at several Hz.
+pub struct Fading {
     hz: f64,
     paths: Vec<(f64, f64)>,
 }
 
 impl Fading {
-    fn new(hz: f64, rng: &mut Rng) -> Self {
+    pub fn new(hz: f64, rng: &mut Rng) -> Self {
         let two_pi = 2.0 * std::f64::consts::PI;
         Fading {
             hz,
@@ -143,7 +144,8 @@ impl Fading {
         }
     }
 
-    fn gain(&self, t: f64) -> (f64, f64) {
+    /// The complex gain at `t` s (mean power 1).
+    pub fn gain(&self, t: f64) -> (f64, f64) {
         let (mut re, mut im) = (0.0, 0.0);
         for (c, ph) in &self.paths {
             let a = 2.0 * std::f64::consts::PI * self.hz * c * t + ph;

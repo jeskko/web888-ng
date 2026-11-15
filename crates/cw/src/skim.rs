@@ -3,10 +3,16 @@
 //! own channel and decoder, and its text streams out as it settles. After
 //! datarx's `wahrx/cwskim.py`, on real audio instead of a wideband IQ bank.
 //!
-//! * Detection: a 512-point spectrogram (23.4 Hz lines, 21 ms hop; short enough for 40 WPM key-up gaps) of the band, the
-//!   last 20 s; a keyed carrier is a line whose 90th percentile level is
-//!   15 dB over the band's local floor, whose 20th percentile is back near
-//!   it, and which is on 3-90 % of the time.
+//! * Detection: a 512-point spectrogram (23.4 Hz lines, 21 ms hop; short
+//!   enough for 40 WPM key-up gaps) of the band, the last 20 s; a keyed
+//!   carrier is a line whose 99th percentile level (a pile-up caller is
+//!   keyed a few % of the time) is 15 dB over the band's local floor,
+//!   whose 20th percentile is back near it, and which is on 3-90 % of the
+//!   time. The carriers are the peaks of a second, 1024-point spectrogram
+//!   (11.7 Hz lines), so that callers in a pile-up ~20 Hz apart are two
+//!   signals.
+//! * Each signal's carrier is searched for only near where it was found:
+//!   a louder neighbour inside its channel (±210 Hz) doesn't take it over.
 //! * A new signal's channel is run over the last 8 s of audio first, so a
 //!   call found a few seconds late still decodes from its start.
 //! * Every 2 s each signal's last 30 s are decoded again; characters are
@@ -26,6 +32,9 @@ use std::sync::Arc;
 const LINE_HZ: f64 = AUDIO_RATE / 512.0;
 const HISTORY_S: f64 = 8.0;
 const FRAMES_S: f64 = 20.0;
+/// A signal's carrier is searched for within this of where it was found
+/// (Hz; the fine spectrogram's peaks are good to a few Hz).
+const ANCHOR_HZ: f64 = 12.0;
 
 /// New text of one signal.
 #[derive(Clone, Debug, PartialEq)]
@@ -85,6 +94,14 @@ pub struct Skimmer {
     hist: VecDeque<Complex32>,
     pend: Vec<Complex32>,
     frames: VecDeque<Vec<f32>>,
+    /// The fine spectrogram (2 nf points, every other frame): its first
+    /// line and line count.
+    fine: VecDeque<Vec<f32>>,
+    k0f: i64,
+    nbf: usize,
+    fft2: Arc<dyn Fft<f32>>,
+    win2: Vec<f32>,
+    odd: bool,
     /// The spectrogram's first line (signed FFT index) and line count.
     k0: i64,
     nb: usize,
@@ -101,6 +118,12 @@ pub struct Skimmer {
     /// Seconds between decodes.
     pub every: f64,
     pub max_signals: usize,
+    /// Closest two signals' channels (Hz): pile-up callers ~20 Hz apart
+    /// are two signals (the network reads the one at its centre).
+    pub spacing: f64,
+    /// The percentile of a line's level taken as its keyed level (a
+    /// pile-up caller is keyed a few % of the time).
+    pub hi_pct: f64,
     /// Detection level over the floor (dB).
     pub min_db: f32,
     /// The text from the neural decoder (`net`) over each signal's last 8
@@ -147,14 +170,16 @@ impl Skimmer {
             hist: VecDeque::new(),
             pend: Vec::new(),
             frames: VecDeque::new(),
+            fine: VecDeque::new(),
+            k0f: 0,
+            nbf: 0,
+            fft2: FftPlanner::new().plan_fft_forward(2 * nf),
+            win2: hann(2 * nf),
+            odd: false,
             k0: 0,
             nb: 0,
             fft: FftPlanner::new().plan_fft_forward(nf),
-            win: (0..nf)
-                .map(|i| {
-                    (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / nf as f64).cos()) as f32
-                })
-                .collect(),
+            win: hann(nf),
             sigs: Vec::new(),
             next_id: 1,
             next_run: (2.0 * rate) as u64,
@@ -163,6 +188,8 @@ impl Skimmer {
             window: 30.0,
             every: 2.0,
             max_signals: 12,
+            spacing: 20.0,
+            hi_pct: 99.0,
             min_db: 15.0,
             neural: false,
             classical_above: f64::INFINITY,
@@ -186,7 +213,10 @@ impl Skimmer {
         self.hi = hi.max(lo + 3.0 * df);
         self.k0 = (self.lo / df).ceil() as i64;
         self.nb = ((self.hi / df).floor() as i64 - self.k0 + 1).max(0) as usize;
+        self.k0f = (self.lo / (df / 2.0)).ceil() as i64;
+        self.nbf = ((self.hi / (df / 2.0)).floor() as i64 - self.k0f + 1).max(0) as usize;
         self.frames.clear();
+        self.fine.clear();
         let (a, b) = (self.lo - 20.0, self.hi + 20.0);
         self.sigs.retain(|s| (a..=b).contains(&s.hz()));
     }
@@ -226,7 +256,7 @@ impl Skimmer {
         }
         self.pend.extend_from_slice(iq);
         let mut i = 0;
-        while i + self.nf <= self.pend.len() {
+        while i + 2 * self.nf <= self.pend.len() {
             self.frame(i);
             i += self.hop;
         }
@@ -254,6 +284,21 @@ impl Skimmer {
         while self.frames.len() > max {
             self.frames.pop_front();
         }
+        self.odd = !self.odd;
+        if self.odd {
+            let n2 = 2 * self.nf;
+            let mut b: Vec<Complex32> = (0..n2).map(|k| self.pend[at + k] * self.win2[k]).collect();
+            self.fft2.process(&mut b);
+            let n2 = n2 as i64;
+            self.fine.push_back(
+                (0..self.nbf as i64)
+                    .map(|j| b[(self.k0f + j).rem_euclid(n2) as usize].norm_sqr())
+                    .collect(),
+            );
+            while self.fine.len() > max / 2 {
+                self.fine.pop_front();
+            }
+        }
     }
 
     /// Keyed carriers: (audio Hz, level dB over the floor), strongest first.
@@ -280,7 +325,7 @@ impl Skimmer {
             let mut s = cols[k].clone();
             s.sort_by(|a, b| a.total_cmp(b));
             med[k] = dsp::percentile_sorted(&s, 50.0);
-            hi[k] = dsp::percentile_sorted(&s, 90.0);
+            hi[k] = dsp::percentile_sorted(&s, self.hi_pct);
             lo[k] = dsp::percentile_sorted(&s, 20.0);
         }
         let floor = dsp::percentile_filter(&med, 50.0, ((2000.0 / df) as usize | 1).max(3));
@@ -297,19 +342,75 @@ impl Skimmer {
                     / nt as f32
             })
             .collect();
-        let w = ((30.0 / df).round() as usize).max(1);
+        // the carriers: peaks (over ±1 line) of the fine spectrogram's
+        // keyed level, checked against the short one's line for keying
+        let (hif, dff) = self.fine_hi();
+        let nbf = hif.len();
         let mut out = Vec::new();
-        for k in 0..nb {
-            let peak = (k.saturating_sub(w)..=(k + w).min(nb - 1)).all(|j| hi[k] >= hi[j]);
-            if peak && hi[k] >= self.min_db && lo[k] <= 6.0 && (0.03..=0.9).contains(&duty[k]) {
-                let (a, b, c) = (hi[k.saturating_sub(1)], hi[k], hi[(k + 1).min(nb - 1)]);
-                let den = a - 2.0 * b + c;
-                let d = if den < 0.0 { 0.5 * (a - c) / den } else { 0.0 };
-                out.push(((self.k0 + k as i64) as f64 * df + d as f64 * df, hi[k]));
+        for kf in 1..nbf.saturating_sub(1) {
+            let (a, b, c) = (hif[kf - 1], hif[kf], hif[kf + 1]);
+            if b < a || b < c {
+                continue;
+            }
+            let den = a - 2.0 * b + c;
+            let d = if den < 0.0 { 0.5 * (a - c) / den } else { 0.0 };
+            let f = (self.k0f + kf as i64) as f64 * dff + d as f64 * dff;
+            let k = ((f / df).round() as i64 - self.k0).clamp(0, nb as i64 - 1) as usize;
+            if b >= self.min_db
+                && hi[k] >= self.min_db
+                && lo[k] <= 6.0
+                && (0.03..=0.9).contains(&duty[k])
+            {
+                out.push((f, b, kf));
             }
         }
         out.sort_by(|a, b| b.1.total_cmp(&a.1));
-        out
+        // key clicks: a hard-keyed carrier's sidebands ripple into peaks
+        // 40-300 Hz either side, 15-35 dB under it and keyed with it (their
+        // levels correlate 0.3-0.7 frame by frame); a pile-up's callers key
+        // on their own (a carrier's leakage in the fine lines is gone by
+        // 40 Hz)
+        let col = |kf: usize| -> Vec<f32> {
+            self.fine
+                .iter()
+                .map(|f| 10.0 * (f[kf] + 1e-20).log10())
+                .collect()
+        };
+        let mut kept: Vec<(f64, f32, Vec<f32>)> = Vec::new();
+        for (f, b, kf) in out {
+            let c = col(kf);
+            let click = kept.iter().any(|(g, gb, d)| {
+                (40.0..=300.0).contains(&(f - g).abs()) && gb - b >= 10.0 && corr(&c, d) > 0.3
+            });
+            if !click {
+                kept.push((f, b, c));
+            }
+        }
+        kept.into_iter().map(|(f, b, _)| (f, b)).collect()
+    }
+
+    /// The fine spectrogram's keyed level (`hi_pct`) per line over its local
+    /// floor (dB), and its line spacing.
+    fn fine_hi(&self) -> (Vec<f32>, f64) {
+        let dff = self.rate / (2 * self.nf) as f64;
+        let (nt, nb) = (self.fine.len(), self.nbf);
+        if nt < 20 || nb < 3 {
+            return (Vec::new(), dff);
+        }
+        let (mut hi, mut med) = (vec![0f32; nb], vec![0f32; nb]);
+        let mut col = Vec::with_capacity(nt);
+        for k in 0..nb {
+            col.clear();
+            col.extend(self.fine.iter().map(|f| 10.0 * (f[k] + 1e-20).log10()));
+            col.sort_by(|a, b| a.total_cmp(b));
+            med[k] = dsp::percentile_sorted(&col, 50.0);
+            hi[k] = dsp::percentile_sorted(&col, self.hi_pct);
+        }
+        let floor = dsp::percentile_filter(&med, 50.0, ((2000.0 / dff) as usize | 1).max(3));
+        for k in 0..nb {
+            hi[k] -= floor[k];
+        }
+        (hi, dff)
     }
 
     fn detect(&mut self) {
@@ -320,7 +421,7 @@ impl Skimmer {
             if self
                 .sigs
                 .iter()
-                .any(|s| (off - s.off).abs().min((off - s.hz()).abs()) < 70.0)
+                .any(|s| (off - s.off).abs().min((off - s.hz()).abs()) < self.spacing)
             {
                 continue;
             }
@@ -370,8 +471,11 @@ impl Skimmer {
                 decode::decode(
                     &s.buf,
                     &DecodeOpts {
+                        // this signal's carrier, near where it was found
+                        // (a neighbour in the channel's ±210 Hz must not
+                        // take it over, nor the search walk to it run by run)
                         f0: Some(0.0),
-                        span: 40.0,
+                        span: ANCHOR_HZ,
                         wpm: s.wpm,
                         t0: s.buf_t,
                         split: true,
@@ -391,7 +495,14 @@ impl Skimmer {
                 // 8 s: what is emitted is 3 s old, with 5 s before it
                 let w = (8.0 * ENV_FS) as usize;
                 let from = s.buf.len().saturating_sub(w);
-                r.chars = net::decode(&s.buf[from..], s.buf_t + from as f64 / ENV_FS);
+                // centred on this signal's own carrier, not the loudest one
+                // in the channel (a pile-up's callers are within its ±210 Hz)
+                r.chars = net::decode_near(
+                    &s.buf[from..],
+                    s.buf_t + from as f64 / ENV_FS,
+                    s.freq_fine,
+                    8.0,
+                );
                 // the network reads weaker signals than the classical fit
                 // accepts: a few characters of its own make a signal good
                 net_ok = r.chars.iter().filter(|c| c.1 != " ").count() >= 4;
@@ -408,7 +519,7 @@ impl Skimmer {
                     None => r.wpm,
                 });
                 s.snr = r.snr;
-                s.freq_fine = r.freq;
+                s.freq_fine = r.freq.clamp(-ANCHOR_HZ, ANCHOR_HZ);
                 s.good = true;
             }
             if net_ok {
@@ -525,4 +636,27 @@ impl Skimmer {
         v.sort_by(|a, b| a.hz.total_cmp(&b.hz));
         v
     }
+}
+
+fn hann(n: usize) -> Vec<f32> {
+    (0..n)
+        .map(|i| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / n as f64).cos()) as f32)
+        .collect()
+}
+
+/// Pearson correlation.
+fn corr(a: &[f32], b: &[f32]) -> f32 {
+    let n = a.len().min(b.len()) as f32;
+    if n < 2.0 {
+        return 0.0;
+    }
+    let (ma, mb) = (a.iter().sum::<f32>() / n, b.iter().sum::<f32>() / n);
+    let (mut sab, mut saa, mut sbb) = (0.0, 0.0, 0.0);
+    for (x, y) in a.iter().zip(b) {
+        let (x, y) = (x - ma, y - mb);
+        sab += x * y;
+        saa += x * x;
+        sbb += y * y;
+    }
+    sab / (saa * sbb).sqrt().max(1e-20)
 }

@@ -212,16 +212,17 @@ phrases, callsigns, words and random groups), 30 min on an RTX 5070. The
 Rust inference matches PyTorch to 2e-3 (`net::tests`).
 
 Against the classical decoder, on the Rust synthesiser (not the one it
-trained on), character errors (`--example cer`):
+trained on), character errors (`--example cer`; the current weights, after
+the pile-up fine-tune of §5.2):
 
 | SNR | clean | 10 % jitter | QSB 0.2 Hz |
 |---|---|---|---|
-| +6 dB | 0.0 / 0.0 % | 2.2 / 0.0 % | 9.8 / 1.5 % |
-| 0 dB | 0.0 / 0.0 % | 2.4 / 0.0 % | 26.2 / 6.8 % |
-| −3 dB | 0.4 / 0.0 % | 2.2 / 0.0 % | 38.1 / 11.8 % |
-| −6 dB | 10.2 / 0.0 % | 16.2 / 0.2 % | 57.2 / 21.5 % |
-| −8 dB | 57.8 / 0.4 % | 61.7 / 1.5 % | 67.2 / 29.5 % |
-| −10 dB | 80.8 / 2.9 % | 80.3 / 5.9 % | 78.4 / 39.8 % |
+| +6 dB | 0.0 / 0.0 % | 2.2 / 0.0 % | 9.8 / 1.0 % |
+| 0 dB | 0.0 / 0.0 % | 2.4 / 0.0 % | 26.2 / 6.4 % |
+| −3 dB | 0.4 / 0.0 % | 2.2 / 0.0 % | 38.1 / 10.4 % |
+| −6 dB | 10.2 / 0.2 % | 16.2 / 0.0 % | 57.2 / 21.0 % |
+| −8 dB | 57.8 / 0.2 % | 61.7 / 0.8 % | 67.2 / 29.0 % |
+| −10 dB | 80.8 / 2.3 % | 80.3 / 6.0 % | 78.4 / 39.2 % |
 
 12-45 WPM at 0 dB with jitter: 1.4-5.8 % / 0.0 %. A 12 s window takes
 72 ms natively. In the skimmer, the classical decoder still gives speed,
@@ -240,6 +241,87 @@ live capture of 7000-7040 kHz in a contest (`--example replay`), words of
 10+ characters (run together): 7.9 % → 2.6 % (the rule) → 1.2 % (both);
 what's left is pile-ups. Error rates as before or slightly better
 (−8 dB 0.2 %, −10 dB 2.3 %).
+
+### 5.2 Pile-ups and fading (2026-11-15)
+
+`--example pileup`: a running station at 0 Hz and a pool of 2-4 callers
+(22-35 WPM, within ±6 dB of each other) answering every round, one worked
+and replaced each round, for 60 s of 12 kS/s IQ; callers spread ±40,
+±100 or ±300 Hz; each station fading on its own (`FADE=none|qsb|aurora`:
+Rayleigh at 0.05-0.5 Hz or 2-15 Hz). Scored on the callers' own sending
+(the runner's exchange leaves their calls out): the share of callers whose
+call is read as a word of its own, and the callsign-like words that are no
+station's call. The first version let the runner echo the worked call,
+and ended the run without letting the last 3 s print: both flattered the
+numbers.
+
+What failed, in order:
+
+1. **The runner's channel read its callers.** The network re-centred each
+   8 s window on the loudest carrier within ±150 Hz, and the classical
+   decoder searched ±40 Hz around the last estimate, so a louder caller
+   took the channel over (and a caller's channel walked towards the
+   runner run by run). Now the carrier is searched within ±12 Hz of where
+   the signal was found (`ANCHOR_HZ`) and the network centres within
+   ±8 Hz of that. On the 40 m contest capture this alone cut words run
+   together from 1.2 % to 0.3 %.
+2. **Callers got no channel.** Channels were at least 70 Hz apart, the
+   detection spectrogram (43 ms) can't resolve carriers closer than ~45 Hz,
+   and a line counted as keyed by its 90th percentile level, which a
+   caller keyed a few % of the time never reaches. Now peaks come from a
+   second, 1024-point spectrogram (11.7 Hz lines), channels may be 20 Hz
+   apart (`spacing`), and the keyed level is the 99th percentile
+   (`hi_pct`). The finer peaks found hard keying's click sidebands as
+   signals (70 spurious channels among 24 stations in `--example wide`):
+   a peak 40-300 Hz from one 10+ dB stronger whose level correlates with
+   it (> 0.3) is dropped.
+3. **The network had not learnt to ignore close neighbours.** Training
+   now has pile-ups on 30 % of examples: 1-3 other signals 12-120 Hz away
+   at −6..+10 dB, keyed over the wanted one, the label only the centre
+   signal (15 % with the centre silent). A 20k-step fine-tune (30 min):
+   validation error on pile-ups 61 % → 2.9 %, the other bands as before
+   (−12..−6 dB 23.5 → 22.2 %).
+
+Callers read (QSB, 24 trials):
+
+| | tight ±40 Hz | medium ±100 Hz | wide ±300 Hz |
+|---|---|---|---|
+| before: calls read | 15 % | 22 % | 54 % |
+| before: no-call words | 53 % | 65 % | 46 % |
+| after: calls read | 42 % | 60 % | 80 % |
+| after: no-call words | 24 % | 12 % | 6 % |
+
+The fine-tune hardly shows here (the old weights read about the same with
+the skimmer changes): what's left is mostly callers within ~15 Hz of the
+runner or of each other calling at once, which no channel separates. On
+the 40 m capture the skimmer now follows 35 signals instead of 20 and
+reads 445 words instead of 316: callers next to running stations decode
+on their own, words run together 0.4 %; a few garbled stations are split
+in two. Cost (`--example wide`, WebAssembly): 42 % classical, 58 % neural
+of a core for 24 stations in a bin (was 36 % and 46 %).
+
+**Fading and auroral flutter** (`--example flutter`: one signal, Jakes
+Rayleigh fading at a maximum Doppler shift of 0.2-20 Hz; ITU-R F.1487's
+2σ spread is ~1.4× that). Character errors, classical / neural, 20 WPM,
+10 dB:
+
+| | none | 0.2 Hz | 2 Hz | 5 Hz | 10 Hz | 20 Hz |
+|---|---|---|---|---|---|---|
+| before the pile-up fine-tune | 0 / 0 % | 3.7 / 0.2 % | 69 / 1.7 % | 72 / 9.7 % | 59 / 36 % | 38 / 28 % |
+| after | 0 / 0 % | 3.7 / 0 % | 69 / 1.7 % | 72 / 1.9 % | 59 / 13 % | 38 / 16 % |
+
+The classical decoder fails from 2 Hz even on strong signals; the network
+has never seen flutter yet holds to ~5 Hz (and better since it learnt to
+read through neighbours). For reference, ITU-R F.1487 gives high-latitude
+spreads (2σ) of 0.5 Hz quiet, 10 Hz moderate, 30 Hz disturbed (25 Hz
+exceeded 5 % of the time; mid-latitudes 0.1-1 Hz), Gaussian Doppler
+spectra; measurements on auroral paths report 2-55 Hz, more in auroral
+backscatter. A real recording (an Alaska station on 18 MHz heard in
+Norway at Kp 2) measures ~6 Hz (2σ, from the decay of the carrier's
+autocorrelation over key-down samples) and decodes with the network
+nearly whole, not with the classical decoder. Next: flutter in training
+(a Gaussian Doppler spectrum, 3-30 Hz), checked against on-air captures
+during an aurora.
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 
@@ -270,7 +352,8 @@ centre, so one bin is a whole CW sub-band or RTTY segment.
 * **Cost** (24 CW stations, half of them weak, in 40 s of a bin;
   `cargo run --release -p web888-cw --example wide`): natively classical
   26 %, neural 29 % of a core, all 24 read (classical 23). In WebAssembly
-  (V8, `simd128`): 36 % and 46 % of a core, in the worker. Getting there:
+  (V8, `simd128`): 36 % and 46 % of a core, in the worker (42 % and 58 %
+  since the pile-up changes of §5.2). Getting there:
   the network's dot products with 8 accumulators (vectorised; a 12 s
   window 72 → 21 ms), its window 8 s, and with the network on the
   classical decoder runs every third time per signal (it only gives speed,
