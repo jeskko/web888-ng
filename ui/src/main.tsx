@@ -21,13 +21,14 @@ import {
 } from "./ctl/controls.tsx";
 import { MobileApp, PlayIcon } from "./ctl/mobile.tsx";
 import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
-import { JttyCtl, JttyPanel } from "./ctl/jtty.tsx";
-import { CwCtl, CwPanel } from "./ctl/cw.tsx";
-import { RttyCtl, RttyPanel } from "./ctl/rtty.tsx";
-import { ImgCtl, ImgPanel } from "./ctl/img.tsx";
-import { DigiCtl, DigiPanel } from "./ctl/digi.tsx";
-import { SigCtl, SigPanel } from "./ctl/sigid.tsx";
+import { JttyPanel } from "./ctl/jtty.tsx";
+import { CwPanel } from "./ctl/cw.tsx";
+import { RttyPanel } from "./ctl/rtty.tsx";
+import { ImgPanel } from "./ctl/img.tsx";
+import { DigiPanel } from "./ctl/digi.tsx";
+import { SigPanel } from "./ctl/sigid.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
+import { DecodersCtl } from "./ctl/decoders.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
@@ -148,12 +149,7 @@ function App() {
           <ShareCtl />
           <SpotsCtl />
           <MapCtl />
-          <DigiCtl />
-          <CwCtl />
-          <RttyCtl />
-          <ImgCtl />
-          <SigCtl />
-          <JttyCtl />
+          <DecodersCtl />
           <LabelsCtl />
         </div>
       </header>

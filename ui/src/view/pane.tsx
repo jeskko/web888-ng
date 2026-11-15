@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Spectrum + waterfall pane: canvases, redraw loop, and the pointer
-// interactions: wheel zooms around the cursor, drag pans, click tunes,
+// interactions: wheel zooms around the cursor (a step per notch, or per
+// 100 px of trackpad travel), a sideways swipe or drag pans, click tunes,
 // shift+wheel steps the dial, a click on a user marker picks that user,
 // a click on a spot label tunes to it, two fingers pinch to zoom. Hovering
 // shows where a click would tune: the frequency and the passband there.
@@ -8,6 +9,7 @@
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
 import { wfSpan } from "../proto.ts";
+import { WheelSteps, wheelPx } from "../wheelzoom.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
 import { bandPlan, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
@@ -362,17 +364,30 @@ export function Pane() {
       }
       drag = null;
     };
+    // whole steps from wheel travel (a trackpad sends many small deltas)
+    const zoomSteps = new WheelSteps();
+    const tuneSteps = new WheelSteps();
     const wheel = (e: WheelEvent) => {
       const s = st.value;
       const r = radio.value;
       const v = view();
       if (!s || !r || !v) return;
       e.preventDefault();
+      const dx = wheelPx(e.deltaX, e.deltaMode);
+      const dy = wheelPx(e.deltaY, e.deltaMode);
       if (e.shiftKey) {
-        tune(stepTo(s.hz, stepOf(s.mode), e.deltaY < 0 || e.deltaX < 0 ? 1 : -1));
+        // (some systems turn shift+wheel into a horizontal delta)
+        const n = tuneSteps.push(dy || dx, false, e.timeStamp);
+        if (n) tune(stepTo(s.hz, stepOf(s.mode), -n));
         return;
       }
-      zoomAt(e.clientX, e.deltaY < 0 ? s.wf.decim * 2 : s.wf.decim / 2);
+      if (!e.ctrlKey && Math.abs(dx) > Math.abs(dy)) {
+        // a sideways trackpad swipe pans
+        setView({ ...s.wf, center_hz: s.wf.center_hz + (dx / box.clientWidth) * v.span });
+        return;
+      }
+      const n = zoomSteps.push(dy, e.ctrlKey, e.timeStamp);
+      if (n) zoomAt(e.clientX, n < 0 ? s.wf.decim * 2 : s.wf.decim / 2);
     };
     for (const c of [sc, wc]) {
       c.addEventListener("pointerdown", down);

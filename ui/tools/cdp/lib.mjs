@@ -87,3 +87,14 @@ export async function launch({ width = 1400, height = 900, dpr = 1, autoplay = f
 
 /** A selector as a JS expression for `type`. */
 export const q = (sel) => `document.querySelector(${JSON.stringify(sel)})`;
+
+/** Turns a browser decoder on (or off) from the header's Decoders list,
+ * by its label there ("FT8/FT4/WSPR", "CW", "RTTY", "FAX/SSTV", "Signal ID",
+ * "JTTY"). */
+export async function decoder(p, label, on = true) {
+  await p.ev(`document.querySelector(".decoders-pop") || document.querySelector("header button.decoders").click()`);
+  await sleep(200);
+  await p.ev(`(() => { const c = document.querySelector('.decoders-pop input[data-dec=${JSON.stringify(label)}]'); if (c.checked !== ${on}) c.click(); })()`);
+  await sleep(200);
+  await p.ev(`document.querySelector(".decoders-pop") && document.querySelector("header button.decoders").click()`);
+}
