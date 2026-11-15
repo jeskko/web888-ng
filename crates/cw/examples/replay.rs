@@ -5,6 +5,11 @@
 //! characters).
 //!
 //!     [SPACING=hz] cargo run --release -p web888-cw --example replay FILE [neural 0|1]
+//!
+//! RATE=sps: another input rate (signals within ±0.42 of it); CENTRE=Hz:
+//! the input's RF centre, to print RF kHz; EVENTS=1: also every text
+//! event as `T time kHz id wpm snr text`; LO=, HI=: a narrower band
+//! (Hz from the centre).
 
 use num_complex::Complex32;
 use web888_cw::Skimmer;
@@ -23,7 +28,16 @@ fn main() {
             )
         })
         .collect();
-    let mut sk = Skimmer::new_iq(60_000.0, -20_000.0, 20_000.0);
+    let env = |k: &str| std::env::var(k).ok().and_then(|v| v.parse::<f64>().ok());
+    let rate = env("RATE").unwrap_or(60_000.0);
+    let centre = env("CENTRE").unwrap_or(0.0);
+    let events = std::env::var("EVENTS").is_ok();
+    let half = if rate == 60_000.0 {
+        20_000.0
+    } else {
+        0.42 * rate
+    };
+    let mut sk = Skimmer::new_iq(rate, env("LO").unwrap_or(-half), env("HI").unwrap_or(half));
     sk.neural = a.get(2).is_none_or(|v| v == "1");
     if let Some(v) = std::env::var("HI_PCT").ok().and_then(|v| v.parse().ok()) {
         sk.hi_pct = v;
@@ -35,6 +49,17 @@ fn main() {
     for c in x.chunks(2048) {
         sk.push_iq(c);
         for e in sk.poll() {
+            if events {
+                println!(
+                    "T {:7.2} {:9.3} {:4} {:4.1} {:5.1} {}",
+                    e.t,
+                    (centre + e.hz) / 1e3,
+                    e.id,
+                    e.wpm,
+                    e.snr,
+                    e.text
+                );
+            }
             let t = text.entry(e.id).or_default();
             t.0 = e.hz;
             t.1.push_str(&e.text);
@@ -42,7 +67,11 @@ fn main() {
     }
     let (mut words, mut long) = (0, 0);
     for (hz, t) in text.values() {
-        println!("{:>8.0} {t}", hz);
+        if centre > 0.0 {
+            println!("{:>9.3} {t}", (centre + hz) / 1e3);
+        } else {
+            println!("{:>8.0} {t}", hz);
+        }
         for w in t.split(' ').filter(|w| !w.is_empty()) {
             words += 1;
             long += usize::from(w.chars().count() >= 10);
