@@ -62,6 +62,8 @@ export interface Js8Msg {
   partial: boolean;
   from: string | null;
   to: string | null;
+  /** The sender's locator, if a frame said it. */
+  grid: string | null;
 }
 
 /** Messages kept. */
@@ -92,6 +94,7 @@ export function applyJs8(prev: Js8Msg[], sub: Js8Submode, frames: Js8Frame[], st
         done: (f.flags & 2) !== 0,
         from: open.from ?? f.from,
         to: open.to ?? f.to,
+        grid: open.grid ?? f.grid,
       });
     } else {
       msgs.unshift({
@@ -106,6 +109,7 @@ export function applyJs8(prev: Js8Msg[], sub: Js8Submode, frames: Js8Frame[], st
         partial: (f.flags & 1) === 0,
         from: f.from,
         to: f.to,
+        grid: f.grid,
       });
     }
   }

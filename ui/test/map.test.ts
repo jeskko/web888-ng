@@ -2,7 +2,9 @@
 import assert from "node:assert/strict";
 import { test } from "node:test";
 import { GridBook } from "../src/geo.ts";
-import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, skimmerPoints, type DxMapSpot } from "../src/map.ts";
+import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, hfdlPoints, js8Points, reportTime, skimmerPoints, type DxMapSpot } from "../src/map.ts";
+import type { HfdlItem, HfdlMsg, HfdlStation } from "../src/hfdl.ts";
+import type { Js8Msg } from "../src/js8.ts";
 import type { DigiRow } from "../src/digi.ts";
 import type { Spot } from "../src/proto.ts";
 
@@ -117,4 +119,83 @@ test("bands and their colours", () => {
   assert.deepEqual(bandsOf(p), ["40m", "20m"]);
   assert.notEqual(bandColour("20m"), bandColour("40m"));
   assert.equal(bandColour("nonsense"), "#d0d0d0");
+});
+
+test("JS8: senders placed by a heartbeat's grid, a GRID in text, or the book", () => {
+  const book = new GridBook();
+  book.note("N0CCC", "IO91");
+  const msg = (id: number, last: number, from: string | null, grid: string | null, text: string, done = true): Js8Msg => ({
+    id,
+    sub: "normal",
+    rf: 7_079_200,
+    utc: last,
+    last,
+    snr: -12,
+    text,
+    done,
+    partial: false,
+    from,
+    to: null,
+    grid,
+  });
+  // newest first
+  const msgs = [
+    msg(5, 400, "N0DDD", null, "N0DDD: N0AAA HELLO"), // never said where
+    msg(4, 300, "N0CCC", null, "N0CCC: N0AAA SNR -10"), // known from FT8
+    msg(3, 200, "N0BBB", null, "N0BBB: @APRSIS GRID FN42AB "),
+    msg(2, 100, "N0AAA", "FN31", "N0AAA: @HB HEARTBEAT FN31"),
+    msg(1, 90, "@ALLCALL", null, "@ALLCALL CQ"),
+  ];
+  const p = js8Points(msgs, book, rx, 50);
+  assert.deepEqual(
+    p.map((x) => [x.call, x.grid, x.band, x.mode, x.tune?.hz]),
+    [
+      ["N0AAA", "FN31", "40m", "JS8", 7_078_000],
+      ["N0BBB", "FN42AB", "40m", "JS8", 7_078_000],
+      ["N0CCC", "IO91", "40m", "JS8", 7_078_000],
+    ],
+  );
+  assert.equal(book.get("N0AAA"), "FN31");
+});
+
+test("HFDL: aircraft positions and the ground stations heard", () => {
+  const stations: HfdlStation[] = [{ id: 3, name: "Reykjavik, Iceland", lat: 64.1, lon: -21.9, f: [8977] }];
+  const item = (extra: Partial<HfdlItem>): HfdlItem => ({ ac: 7, k: "position", text: "pos", flight: "", reg: "", icao: null, lat: null, lon: null, ...extra });
+  const ev = (utc: number, dir: HfdlMsg["dir"], items: HfdlItem[]): HfdlMsg => ({
+    t: 0,
+    bps: 1200,
+    slot: "S",
+    f: 0,
+    snr: 10,
+    dir,
+    gs: 3,
+    items,
+    utc,
+    rf: 8_977_000,
+  });
+  const msgs = [
+    ev(300, "down", [item({ flight: "XY123", lat: 60.5, lon: -30.25 })]),
+    ev(290, "down", [item({ flight: "ZZ9", lat: 1, lon: 2, text: "23:00:00 UTC" })]), // reported an hour before: too old
+    ev(250, "squitter", []),
+    ev(200, "down", [item({ flight: "XY123", lat: 59, lon: -32 }), item({ icao: "4CA123", lat: 61, lon: -10 }), item({ k: "acars" })]),
+    ev(10, "down", [item({ reg: "OLD", lat: 50, lon: 0 })]), // too old
+  ];
+  const p = hfdlPoints(msgs, stations, rx, 50);
+  assert.deepEqual(
+    p.map((x) => [x.call, x.kind, x.pos, x.t, x.band]),
+    [
+      ["XY123", "aircraft", [60.5, -30.25], 300, "HFDL"],
+      ["Reykjavik", "ground", [64.1, -21.9], 250, "HFDL"],
+      ["4CA123", "aircraft", [61, -10], 200, "HFDL"],
+    ],
+  );
+  assert.deepEqual(p[0].tune, { hz: 8_977_000, mode: "usb" });
+});
+
+test("HFDL: a position's own time, on the day nearest the burst", () => {
+  const day = 20_000 * 86400;
+  assert.equal(reportTime("22:02:14 UTC", day + 23 * 3600 + 6 * 60), day + 22 * 3600 + 2 * 60 + 14);
+  assert.equal(reportTime("23:59:50 UTC", day + 20), day - 10); // yesterday's
+  assert.equal(reportTime("00:00:30 UTC", day + 20), day + 20); // never after the burst
+  assert.equal(reportTime("pos", day), day);
 });

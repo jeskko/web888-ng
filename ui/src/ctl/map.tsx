@@ -23,9 +23,9 @@ import { feature } from "topojson-client";
 import type { Topology } from "topojson-specification";
 import { formatKhz } from "../fmt.ts";
 import { bearing, distanceKm, gridToLatLon, latLonToGrid, subsolar, GridBook, type LatLon } from "../geo.ts";
-import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, LAYERS, skimmerPoints, type Layer, type MapPoint } from "../map.ts";
+import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, hfdlPoints, js8Points, LAYERS, skimmerPoints, type Layer, type MapPoint } from "../map.ts";
 import { utcTime } from "../spots.ts";
-import { api, digiRows, mapDx, mapInfo, mapOpen, mapOpts, pickMapPoint, setMapOpts, showMap, spots, type MapOpts } from "../state.ts";
+import { api, digiRows, hfdlMsgs, hfdlStations, js8Msgs, mapDx, mapInfo, mapOpen, mapOpts, pickMapPoint, setMapOpts, showMap, spots, type MapOpts } from "../state.ts";
 
 const AGES = [5, 15, 30, 60, 180];
 /** Lines drawn at most (the newest), and while dragging. */
@@ -191,12 +191,12 @@ function Tooltip({ p, rx }: { p: MapPoint; rx: LatLon | null }) {
   const from = p.from ?? rx;
   const km = from ? Math.round(distanceKm(from, p.pos)) : null;
   const deg = from ? Math.round(bearing(from, p.pos)) : null;
-  const where = p.grid ?? latLonToGrid(p.pos, 4);
+  const where = p.kind ? `${p.pos[0].toFixed(2)}, ${p.pos[1].toFixed(2)}` : (p.grid ?? latLonToGrid(p.pos, 4));
   return (
     <>
       <b>{p.call}</b> {where}
       <br />
-      {p.band} {p.mode} {formatKhz(p.hz)} kHz{p.snr !== undefined ? ` · ${p.snr} dB` : ""} · {utcTime(p.t)}
+      {p.band} {p.mode !== p.band && p.mode} {formatKhz(p.hz)} kHz{p.snr !== undefined ? ` · ${p.snr} dB` : ""} · {utcTime(p.t)}
       {km !== null && (
         <>
           <br />
@@ -270,6 +270,9 @@ export function MapPanel() {
   const sp = spots.value;
   const rows = digiRows.value;
   const dxs = mapDx.value;
+  const js8 = js8Msgs.value;
+  const hfdl = hfdlMsgs.value;
+  const gss = hfdlStations.value;
   const t = now.value;
   const rxKey = rx?.join(",");
   const all = useMemo(() => {
@@ -281,12 +284,12 @@ export function MapPanel() {
     const heard = heardTimes(sp, rows);
     const lists: [Layer, MapPoint[]][] = [
       ["skimmer", skimmerPoints(sp, book.current, rx, oldest, heard)],
-      ["browser", browserPoints(rows, book.current, rx, oldest, heard)],
+      ["browser", [...browserPoints(rows, book.current, rx, oldest, heard), ...js8Points(js8, book.current, rx, oldest), ...hfdlPoints(hfdl, gss, rx, oldest)]],
       ["dx", dxPoints(dxs, oldest)],
     ];
     for (const [id, list] of lists) if (o.layers.includes(id)) out.push(...list);
     return out;
-  }, [open, sp, rows, dxs, t, o, rxKey]);
+  }, [open, sp, rows, dxs, js8, hfdl, gss, t, o, rxKey]);
   const bands = useMemo(() => bandsOf(all), [all]);
   const points = useMemo(() => (o.band ? all.filter((p) => p.band === o.band) : all.slice()).sort((a, b) => a.t - b.t), [all, o.band]);
 
@@ -396,8 +399,13 @@ export function MapPanel() {
       for (const [band, list] of marks) {
         g.beginPath();
         for (const { p, x, y } of list) {
-          if (p.layer === "dx") g.rect(x - 3, y - 3, 6, 6);
-          else if (p.layer === "browser") {
+          if (p.layer === "dx" || p.kind === "ground") g.rect(x - 3, y - 3, 6, 6);
+          else if (p.kind === "aircraft") {
+            g.moveTo(x, y - 5);
+            g.lineTo(x + 4, y + 3);
+            g.lineTo(x - 4, y + 3);
+            g.closePath();
+          } else if (p.layer === "browser") {
             g.moveTo(x, y - 4);
             g.lineTo(x + 4, y);
             g.lineTo(x, y + 4);

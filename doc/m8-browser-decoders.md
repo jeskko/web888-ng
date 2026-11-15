@@ -24,8 +24,8 @@ skimming, §6) and item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
 | 8 | optional: **signal identifier** (done, §5.3) | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
 | 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
 | 10 | **PSK31/63/125** (BPSK, Varicode) | new (G3PLX's Varicode) | every BPSK signal in the passband found (carrier, rate) and decoded |
-| 11 | **HFDL** (aircraft data link, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as the reference) | new | squitters, logons, position reports and ACARS decoded, checked by their CRCs (§2.6); next: positions on the map |
-| 12 | **JS8** (JS8Call: FT8's waveform, its own code and frames; Normal, Fast, Turbo, Slow) | the FT8 decoder, generalised | heartbeats, directed messages and free text, frames joined per frequency (§2.7) |
+| 11 | **HFDL** (aircraft data link, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as the reference) | new | squitters, logons, position reports and ACARS decoded, checked by their CRCs; aircraft positions and ground stations on the map (§2.6) |
+| 12 | **JS8** (JS8Call: FT8's waveform, its own code and frames; Normal, Fast, Turbo, Slow) | the FT8 decoder, generalised | heartbeats, directed messages and free text, frames joined per frequency; senders with a grid on the map (§2.7) |
 | 13 | later: ALE 2G, Olivia | new | — |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
@@ -303,7 +303,11 @@ signal itself (`--example diag`).
   newest first (UTC, ground station, direction, rate, SNR), and their
   parts, with the channels to tune to (USB). The worker with `hfdl.wasm`
   decodes the same bursts as the native build (24 of 33 in a 300 s
-  test). Not yet: positions on the map, the over-the-air system table,
+  test). The map (Browser layer, band "HFDL") shows the aircraft at
+  their reported positions, dated by the report's own time (often an
+  hour older than the burst), and the ground stations heard sending;
+  on the unit, 5720 kHz at 23:00 UTC: Reykjavik and seven aircraft in
+  six minutes. Not yet: the over-the-air system table,
   more than one channel at a time (the wide IQ path), ACARS reassembly
   of multi-block messages.
 
@@ -350,7 +354,11 @@ run.
   as JS8Call's band activity), lists the stations heard, shows frames
   and periods decoded, and has the usual dials. On the unit, 7078 kHz at
   22:30 UTC: heartbeat replies within five minutes; 3578 and 10130 kHz
-  were quiet. Not yet: messages to the map (grids), the wide IQ path.
+  were quiet. The map (Browser layer) places senders by a heartbeat's
+  or compound's grid, a "GRID" sent as text, or a locator learnt from
+  any mode (FT8 included); a click tunes to the usual dial. On a replay
+  of the 40 m recording (resampled to 1.92 MS/s for `--backend iq`):
+  the three stations that sent grids. Not yet: the wide IQ path.
 
 ## 3. Shared UI
 

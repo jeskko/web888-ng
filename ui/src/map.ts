@@ -5,6 +5,8 @@
 
 import { bandOf } from "./bands.ts";
 import type { DigiRow } from "./digi.ts";
+import { shortName, type HfdlMsg, type HfdlStation } from "./hfdl.ts";
+import { JS8_DIALS, type Js8Msg } from "./js8.ts";
 import { ftxSender, GridBook, gridToLatLon, wsprSender, type LatLon } from "./geo.ts";
 import type { Spot } from "./proto.ts";
 import type { Tune } from "./markers.ts";
@@ -13,7 +15,7 @@ export type Layer = "skimmer" | "browser" | "dx";
 
 export const LAYERS: { id: Layer; name: string; title: string }[] = [
   { id: "skimmer", name: "Skimmers", title: "This receiver's FT8/FT4/WSPR skimmers: senders with a known locator" },
-  { id: "browser", name: "Browser", title: "What this browser decoded (FT8/FT4/WSPR button)" },
+  { id: "browser", name: "Browser", title: "What this browser decoded: FT8/FT4/WSPR and JS8 senders with a known locator, HFDL aircraft positions and ground stations" },
   { id: "dx", name: "DX spots", title: "Live DX cluster spots (Spothole), from the spotter to the station" },
 ];
 
@@ -26,6 +28,8 @@ export interface MapPoint {
   from: LatLon | null;
   /** The locator, if it came from one. */
   grid?: string;
+  /** HFDL: an aircraft (its reported position) or a ground station. */
+  kind?: "aircraft" | "ground";
   band: string;
   mode: string;
   /** When heard, Unix s. */
@@ -69,6 +73,7 @@ const BAND_COLOURS: Record<string, string> = {
   "6m": "#ff0000",
   "4m": "#cc0044",
   "2m": "#ff1493",
+  HFDL: "#40e0d0",
 };
 
 export function bandColour(band: string): string {
@@ -196,6 +201,78 @@ export function dxPoints(list: DxMapSpot[], oldest: number): MapPoint[] {
       text: s.note,
       tune: { hz: s.hz, mode: s.tune },
     });
+  }
+  return latestEach(out);
+}
+
+/** JS8 senders with a locator (a heartbeat's or a GRID's, or learnt by
+ * `book` from any mode) heard since `oldest`. `msgs` newest first. */
+export function js8Points(msgs: Js8Msg[], book: GridBook, rx: LatLon | null, oldest: number): MapPoint[] {
+  const out: MapPoint[] = [];
+  for (let i = msgs.length - 1; i >= 0; i--) {
+    const m = msgs[i];
+    const call = m.from;
+    if (!call || call.startsWith("@") || call.startsWith("<")) continue;
+    // a heartbeat's or compound's grid, or one sent as text ("GRID FN42")
+    const said = m.grid || (m.done ? / GRID ([A-R]{2}[0-9]{2}(?:[A-X]{2})?)\b/i.exec(m.text)?.[1] : undefined);
+    if (said && place(said)) book.note(call, said);
+    if (m.last < oldest) continue;
+    const grid = said || book.get(call);
+    const pos = place(grid);
+    if (!pos) continue;
+    // the usual dial below it, if it is in a JS8 channel
+    const dial = JS8_DIALS.find((d) => m.rf >= d.hz && m.rf < d.hz + 3500);
+    out.push({
+      layer: "browser",
+      call,
+      pos,
+      from: rx,
+      grid,
+      band: browserBand(m.rf),
+      mode: "JS8",
+      t: m.last,
+      hz: m.rf,
+      snr: m.snr,
+      text: m.text,
+      tune: dial ? { hz: dial.hz, mode: "usb" } : undefined,
+    });
+  }
+  return latestEach(out);
+}
+
+/** When an aircraft was where it says: a position report's own time
+ * ("HH:MM:SS UTC", which can be an hour old) on the day nearest the
+ * burst heard at `heard` (Unix s); else then. */
+export function reportTime(text: string, heard: number): number {
+  const m = /^(\d\d):(\d\d):(\d\d) UTC/.exec(text);
+  if (!m) return heard;
+  const tod = Number(m[1]) * 3600 + Number(m[2]) * 60 + Number(m[3]);
+  let t = Math.floor(heard / 86400) * 86400 + tod;
+  if (t > heard + 43200) t -= 86400;
+  else if (t < heard - 43200) t += 86400;
+  return Math.min(t, heard);
+}
+
+/** HFDL since `oldest`: aircraft at their reported positions (by flight,
+ * registration or ICAO address) and the ground stations heard sending
+ * (their places from the station list). `msgs` newest first. */
+export function hfdlPoints(msgs: HfdlMsg[], stations: HfdlStation[], rx: LatLon | null, oldest: number): MapPoint[] {
+  const out: MapPoint[] = [];
+  for (const m of msgs) {
+    if (m.utc < oldest) continue;
+    const base = { layer: "browser" as const, from: rx, band: "HFDL", t: m.utc, hz: m.rf, snr: m.snr, tune: { hz: m.rf, mode: "usb" as const } };
+    if (m.dir !== "down" && m.gs !== null) {
+      const s = stations.find((x) => x.id === m.gs);
+      if (s) out.push({ ...base, kind: "ground", call: shortName(s.name), pos: [s.lat, s.lon], mode: "ground station", text: s.name });
+    }
+    for (const it of m.items) {
+      if (it.lat === null || it.lon === null || Math.abs(it.lat) > 90 || Math.abs(it.lon) > 180) continue;
+      const call = it.flight || it.reg || it.icao || (it.ac !== null ? `aircraft ${it.ac}` : "");
+      if (!call) continue;
+      const t = reportTime(it.text, m.utc);
+      if (t < oldest) continue;
+      out.push({ ...base, kind: "aircraft", call, pos: [it.lat, it.lon], mode: "aircraft", t, text: it.text });
+    }
   }
   return latestEach(out);
 }

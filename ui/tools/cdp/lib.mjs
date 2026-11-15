@@ -98,3 +98,19 @@ export async function decoder(p, label, on = true) {
   await sleep(200);
   await p.ev(`document.querySelector(".decoders-pop") && document.querySelector("header button.decoders").click()`);
 }
+
+/** Opens the map with only this browser's decodes shown (all bands, the
+ * last 3 h), prints the stations on it, and saves `file`. */
+export async function mapShot(p, file) {
+  await p.ev(`document.querySelector("aside.map") || [...document.querySelectorAll("header .tools button")].find((b) => b.textContent.trim() === "Map").click()`);
+  await sleep(2500);
+  // one at a time: each change renders the bar again
+  for (const n of ["Skimmers", "Browser", "DX spots"]) {
+    await p.ev(`(() => { const l = [...document.querySelectorAll(".map .spots-bar label")].find((x) => x.textContent.trim() === ${JSON.stringify(n)}); const c = l?.querySelector("input"); if (c && c.checked !== ${n === "Browser"}) c.click(); })()`);
+    await sleep(300);
+  }
+  await p.ev(`(() => { const s = [...document.querySelectorAll(".map .spots-bar select")].find((x) => x.title === "Heard in the last"); s.value = "180"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  await sleep(1500);
+  console.log("map: stations shown", await p.ev(`${q(".map .spots-bar .num")}?.textContent`));
+  await p.shot(file);
+}

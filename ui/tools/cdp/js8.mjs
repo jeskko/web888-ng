@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // JS8 decoding in the page: start audio, turn JS8 on, pick a band from
 // its list (the USB dial, Hz), print the messages every 30 s; saves
-// js8.png in OUT.
+// js8.png in OUT (with MAP=1, the map too: js8-map.png).
 //   CHROME=... node js8.mjs URL [DIAL_HZ] [SECONDS]
-import { launch, q, sleep, decoder } from "./lib.mjs";
+import { launch, q, sleep, decoder, mapShot } from "./lib.mjs";
 const [url, dial = "7078000", secs = "120"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -23,4 +23,5 @@ while (Date.now() - t0 < Number(secs) * 1000) {
 console.log("heard:", await p.ev(`${q(".js8 .js8-heard")}?.innerText`));
 console.log("freq:", await p.ev(`${q(".freq")}.textContent`), "mode:", await p.ev(`${q("header button.on")}?.textContent`));
 await p.shot(`${out}/js8.png`);
+if (process.env.MAP) await mapShot(p, `${out}/js8-map.png`);
 p.close();

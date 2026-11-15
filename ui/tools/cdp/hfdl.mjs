@@ -1,9 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // HFDL decoding in the page: start audio, turn HFDL on, pick a channel
 // from its list (the listed frequency, Hz), print the decoded bursts every
-// 15 s; saves hfdl.png in OUT.
+// 15 s; saves hfdl.png in OUT (with MAP=1, the map too: hfdl-map.png).
 //   CHROME=... node hfdl.mjs URL [DIAL_HZ] [SECONDS]
-import { launch, q, sleep, decoder } from "./lib.mjs";
+import { launch, q, sleep, decoder, mapShot } from "./lib.mjs";
 const [url, dial = "8942000", secs = "60"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -23,4 +23,5 @@ while (Date.now() - t0 < Number(secs) * 1000) {
 }
 console.log("freq:", await p.ev(`${q(".freq")}.textContent`), "mode:", await p.ev(`${q("header button.on")}?.textContent`));
 await p.shot(`${out}/hfdl.png`);
+if (process.env.MAP) await mapShot(p, `${out}/hfdl-map.png`);
 p.close();

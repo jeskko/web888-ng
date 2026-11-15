@@ -1593,6 +1593,7 @@ export function setMapOpts(o: Partial<MapOpts>): void {
  * the list; a DX spot in its mode). */
 export function pickMapPoint(p: MapPoint): void {
   if (p.spot) pickSpot(p.spot);
+  else if (p.band === "HFDL" && p.tune) pickHfdl(p.tune.hz);
   else if (p.tune) tuneMode(p.tune.hz, p.tune.mode);
 }
 
