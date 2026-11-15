@@ -4,7 +4,7 @@
 // their WebAssembly (from scripts/build-wasm.sh, in wasm/): jtty-worker.js
 // with jtty.wasm (JTTY), digi-worker.js with digi.wasm (FT8/FT4/WSPR),
 // cw-worker.js with cw.wasm (CW), rtty-worker.js with fsk.wasm
-// (FSK/RTTY), img-worker.js with img.wasm (fax, SSTV) and sigid-worker.js
+// (FSK/RTTY), psk-worker.js with psk.wasm (PSK31/63/125), img-worker.js with img.wasm (fax, SSTV) and sigid-worker.js
 // with sigid.wasm (the signal identifier); index.html, style.css, and the
 // map's world (map/*.json).
 // `node build.mjs --watch` rebuilds on change (development).
@@ -28,6 +28,7 @@ const copyStatic = {
         ["digi.wasm", "FT8/FT4/WSPR decoding"],
         ["cw.wasm", "CW decoding"],
         ["fsk.wasm", "RTTY decoding"],
+        ["psk.wasm", "PSK decoding"],
         ["img.wasm", "FAX/SSTV decoding"],
         ["sigid.wasm", "Signal identification"],
       ]) {
@@ -43,7 +44,7 @@ const copyStatic = {
 };
 
 const options = {
-  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "img-worker": "src/img/worker.ts", "sigid-worker": "src/sigid/worker.ts" },
+  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "psk-worker": "src/psk/worker.ts", "img-worker": "src/img/worker.ts", "sigid-worker": "src/sigid/worker.ts" },
   outdir: out,
   bundle: true,
   format: "esm",

@@ -1922,6 +1922,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-psk"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+ "web888-cw",
+]
+
+[[package]]
+name = "web888-psk-wasm"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+ "web888-psk",
+]
+
+[[package]]
 name = "web888-radio"
 version = "0.13.0"
 

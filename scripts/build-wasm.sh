@@ -4,8 +4,9 @@
 # dist/: the JTTY receiver (crates/jtty-wasm) as jtty.wasm, and the FT8,
 # FT4 and WSPR decoders (crates/digi-wasm) as digi.wasm, the CW skimmer
 # (crates/cw-wasm) as cw.wasm, the FSK/RTTY skimmer (crates/fsk-wasm) as
-# fsk.wasm, the fax and SSTV decoders (crates/img-wasm) as img.wasm and
-# the signal identifier (crates/sigid-wasm) as sigid.wasm.
+# fsk.wasm, the PSK31/63/125 skimmer (crates/psk-wasm) as psk.wasm, the
+# fax and SSTV decoders (crates/img-wasm) as img.wasm and the signal
+# identifier (crates/sigid-wasm) as sigid.wasm.
 #
 #   scripts/build-wasm.sh
 #
@@ -19,7 +20,7 @@ out=$src/ui/wasm
 # WebAssembly SIMD (128-bit): every browser since 2021-2023 (Safari 16.4);
 # the neural CW decoder's dot products vectorise with it
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128"
-crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm -p web888-img-wasm -p web888-sigid-wasm"
+crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm -p web888-psk-wasm -p web888-img-wasm -p web888-sigid-wasm"
 mkdir -p "$out"
 if [ -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/$target" ]; then
 	(cd "$src" && cargo build --release --target $target $crates)
@@ -39,6 +40,7 @@ cp "$built/web888_jtty_wasm.wasm" "$out/jtty.wasm"
 cp "$built/web888_digi_wasm.wasm" "$out/digi.wasm"
 cp "$built/web888_cw_wasm.wasm" "$out/cw.wasm"
 cp "$built/web888_fsk_wasm.wasm" "$out/fsk.wasm"
+cp "$built/web888_psk_wasm.wasm" "$out/psk.wasm"
 cp "$built/web888_img_wasm.wasm" "$out/img.wasm"
 cp "$built/web888_sigid_wasm.wasm" "$out/sigid.wasm"
-ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm" "$out/fsk.wasm" "$out/img.wasm" "$out/sigid.wasm"
+ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm" "$out/fsk.wasm" "$out/psk.wasm" "$out/img.wasm" "$out/sigid.wasm"

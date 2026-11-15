@@ -6,8 +6,9 @@ Status: in progress (planned 2026-11-15). Done: item 1 (CW; `crates/cw`,
 `ui/src/ctl/rtty.tsx`, §2.2), items 3 and 4 (SSTV and HF fax;
 `crates/img`, `crates/img-wasm`, `ui/src/img.ts`, `ui/src/ctl/img.tsx`,
 §2.3-2.4); item 5 (SITOR-B decodes; NAVTEX messages listed per signal; not
-tried on air), item 7 (the neural CW decoder, §5) and item 9 (wide
-skimming, §6).
+tried on air), item 7 (the neural CW decoder, §5), item 9 (wide
+skimming, §6) and item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
+`ui/src/psk.ts`, `ui/src/ctl/psk.tsx`, §2.5).
 
 ## 1. Todo
 
@@ -22,6 +23,9 @@ skimming, §6).
 | 7 | optional: **neural CW** | trained on datarx-style synthetic CW (§5) | beats item 1 on the synthetic sets and on real recordings; shipped only then |
 | 8 | optional: **signal identifier** (done, §5.3) | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
 | 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
+| 10 | **PSK31/63/125** (BPSK, Varicode) | new (G3PLX's Varicode) | every BPSK signal in the passband found (carrier, rate) and decoded |
+| 11 | next: **HFDL** (aircraft data, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as a reference) | new | position reports on the map; heard on 2026-11-15 at 6646 kHz (the identifier calls it MIL-110A) |
+| 12 | later: JS8Call (FT8's waveform and code, other framing), ALE 2G, Olivia | new | — |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 (images, a new panel type), then the rest.
@@ -198,6 +202,47 @@ Everything detected from the signal, with manual overrides:
   within 0.15 mean error; a fax started by hand. In the page on the 40 m
   recording: DWD 7880 kHz, started by hand (the 60 s recording has no
   start tone).
+
+### 2.5 PSK31/63/125 (new): done (2026-11-15)
+
+* **Receiver** (`crates/psk`): a channel at 16 samples a symbol; the
+  matched filter is PSK31's pulse (a Hann window two symbols long);
+  symbol timing from its output's energy; differential detection (no
+  phase change a 1, a reversal a 0); a frequency loop on p² (the phase
+  change doubled); a squelch on the mean |cos| of the phase changes;
+  Varicode (characters end at "00"; runs longer than any code are a
+  steady tone, not text). A character whose smallest |cos| is under 0.5
+  is weak (dimmed, as in RTTY; nothing is replaced).
+* **Skimmer**: every 2 s, peaks of the last 4 s's spectrum (2.9 Hz
+  lines). A peak is a candidate when its squared signal has one line
+  (twice the carrier, which it gives to a fraction of a hertz: FSK
+  squares to a line per tone) and its envelope a line at 31.25, 62.5 or
+  125 Hz (the rate). It is decoded from the last 8 s and kept when two
+  blocks of 32 symbols there read as clean BPSK: p² coherent, mean |cos|
+  over 0.85, at most 10 % of changes near 90° and at least 20 % clean
+  reversals. On the 40 m contest recording that last test took the
+  false locks on RTTY and CW from 59 to 0 (real PSK31 blocks: |cos| ~1,
+  30-50 % clean reversals; RTTY and CW taken for BPSK: 0.7-0.9, at most
+  16 %).
+* **Synthetic** (`--example cer`, five runs, SNR in 2500 Hz, character
+  errors of the text read): PSK31 found at 0 to −10 dB (4 of 5 at −10),
+  0.8 % / 0.9 % / 2.2 % at 0 / −5 / −8 dB, 27 % at −10; PSK63 down to
+  −8 dB (12 %); PSK125 down to −5 dB (11 %). Locks in 3 s. The
+  demodulator alone, with the carrier known, reads PSK31 at −10 dB almost
+  cleanly: the skimmer loses a dB or two, partly the benchmark's SNR.
+  0.13 % of a core per second of audio.
+* **On air** (`--example replay` on the 2026-11-15 recordings): 20 m
+  14070-14074 kHz, four PSK31 stations found and read (a special event
+  station's CQs and QSOs, an Italian ragchew, a /P CQ), nothing false in
+  the FT8 segment next to them; 40 m 7023-7057 kHz in the RTTY contest,
+  the one PSK31 QSO there and nothing else.
+* **Page**: PSK in the Decoders list; the panel lists each signal (RF,
+  PSK31/63/125, how cleanly it reads) and its text, with the usual
+  frequencies to tune to; the identifier's PSK31 rows open it. Checked in
+  a browser: the worker with `psk.wasm` on synthetic audio locks PSK31 at
+  1000.0 Hz and PSK63 at 1700.0 Hz and reads both texts without an error;
+  on the unit at 7040 kHz at night nothing was on. Not yet: wide
+  skimming (the crate takes IQ already), QPSK.
 
 ## 3. Shared UI
 

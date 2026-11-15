@@ -24,6 +24,7 @@ import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
 import { JttyPanel } from "./ctl/jtty.tsx";
 import { CwPanel } from "./ctl/cw.tsx";
 import { RttyPanel } from "./ctl/rtty.tsx";
+import { PskPanel } from "./ctl/psk.tsx";
 import { ImgPanel } from "./ctl/img.tsx";
 import { DigiPanel } from "./ctl/digi.tsx";
 import { SigPanel } from "./ctl/sigid.tsx";
@@ -162,6 +163,7 @@ function App() {
         <SpotPanel />
         <CwPanel />
         <RttyPanel />
+        <PskPanel />
         <ImgPanel />
         <JttyPanel />
         <DigiPanel />

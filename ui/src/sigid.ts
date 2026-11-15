@@ -23,14 +23,14 @@ export type SigClass =
   | "am";
 
 /** The decoder in this page a class opens (none: listed only). */
-export type Opens = "cw" | "rtty" | "img" | "ft8" | "ft4" | "wspr" | "ssb" | "am" | null;
+export type Opens = "cw" | "rtty" | "psk" | "img" | "ft8" | "ft4" | "wspr" | "ssb" | "am" | null;
 
 export const CLASS_INFO: Record<SigClass, { label: string; opens: Opens; hint: string }> = {
   noise: { label: "Noise", opens: null, hint: "nothing recognisable at this frequency" },
   carrier: { label: "Carrier", opens: null, hint: "an unmodulated carrier" },
   cw: { label: "CW", opens: "cw", hint: "Morse" },
   fsk: { label: "RTTY / FSK", opens: "rtty", hint: "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)" },
-  psk31: { label: "PSK31", opens: null, hint: "BPSK 31-125 Bd (not decoded here)" },
+  psk31: { label: "PSK31", opens: "psk", hint: "BPSK 31-125 Bd: PSK31, PSK63, PSK125" },
   ft8: { label: "FT8", opens: "ft8", hint: "FT8" },
   ft4: { label: "FT4", opens: "ft4", hint: "FT4" },
   wspr: { label: "WSPR", opens: "wspr", hint: "WSPR beacons" },

@@ -16,6 +16,7 @@ import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
 import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyRow } from "./jtty.ts";
 import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
+import { applyPsk, type PskRun, type PskSignal } from "./psk.ts";
 import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
@@ -229,6 +230,7 @@ export function connect(): void {
       jttyAudio(f); // first: the player hands the samples to the worklet
       if (!cwWideNow()) cwAudio(f);
       if (!rttyWideNow()) rttyAudio(f);
+      pskAudio(f);
       imgAudio(f);
       digiAudio(f);
       sigAudio(f);
@@ -730,6 +732,85 @@ export function pickRtty(centre: number): void {
 // after everything it reads is declared)
 effect(() => wideSync());
 
+// ------------------------------------------------------------ PSK31/63/125
+
+/** PSK31/63/125 decoding of every BPSK signal in this receiver's
+ * passband, in this browser (remembered). */
+export const pskOn = signal(load("psk") === "1");
+export const pskSignals = signal<PskSignal[]>([]);
+export const pskError = signal("");
+let pskWorker: Worker | null = null;
+const pskFeed = new JttyFeed();
+let pskKey = "";
+let pskBand = "";
+let pskGen = 0;
+let pskRf: (hz: number) => number = (hz) => hz;
+
+function pskStart(): Worker {
+  const w = new Worker("psk-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: PskRun; gen?: number; error?: string };
+    if (d.error) pskError.value = d.error;
+    if (!d.run || d.gen !== pskGen) return;
+    pskSignals.value = applyPsk(pskSignals.value, d.run, Date.now() / 1000, pskRf);
+  };
+  return w;
+}
+
+function pskAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!pskOn.value || !s) return;
+  const band = audioBand(s.mode, s.lo, s.hi, s.pitch);
+  if (!band) return;
+  pskWorker ??= pskStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== pskKey) {
+    // retuned: a new stream
+    pskKey = key;
+    pskGen++;
+    const { mode, hz, pitch } = s;
+    pskRf = (a) => rfOf(mode, hz, pitch, a);
+    pskSignals.value = pskSignals.value.filter((x) => !x.active);
+    pskBand = "";
+    pskWorker.postMessage({ reset: true });
+  }
+  const b = `${band.lo}|${band.hi}`;
+  if (b !== pskBand) {
+    pskBand = b;
+    pskWorker.postMessage({ band: [band.lo, band.hi] });
+  }
+  const pcm = pskFeed.push(f.pcm, f.rate, f.stereo);
+  pskWorker.postMessage({ pcm, gen: pskGen }, [pcm.buffer]);
+}
+
+export function setPsk(on: boolean): void {
+  pskOn.value = on;
+  save("psk", on ? "1" : "0");
+  if (!on && pskWorker) {
+    pskWorker.terminate();
+    pskWorker = null;
+    pskKey = "";
+    pskBand = "";
+  }
+}
+
+export function clearPsk(): void {
+  pskSignals.value = pskSignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "", weak: "" }));
+}
+
+/** A band's PSK frequency was picked: USB there, a 3 kHz passband, in
+ * view. */
+export function pickPsk(dial: number): void {
+  tune(dial);
+  setModePassband("usb", 300, 3000);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  const c = dial + 1500;
+  if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
+}
+
 // ---------------------------------------------------------- FAX / SSTV
 
 /** HF fax and SSTV decoding of this receiver's audio (USB), in this
@@ -1070,6 +1151,9 @@ export function openSig(row: SigRow, cls: SigClass): void {
       break;
     case "fsk":
       setRtty(true);
+      break;
+    case "psk31":
+      setPsk(true);
       break;
     case "sstv":
     case "fax":
