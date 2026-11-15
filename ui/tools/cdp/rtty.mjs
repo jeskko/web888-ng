@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // FSK/RTTY decoding in the page: start audio, turn RTTY on, pick a station
-// from its list (the centre between the tones, Hz), print the signals
+// from its list (the centre between the tones, Hz; "-" keeps the URL's
+// tuning), print the signals
 // (parameters and text) every 15 s; saves rtty.png in OUT.
 //   CHROME=... [WIDE=0|1] node rtty.mjs URL [STATION_HZ] [SECONDS]
 import { launch, q, sleep, decoder } from "./lib.mjs";
@@ -13,7 +14,8 @@ await p.ev(`${q(".start")}?.click()`);
 await sleep(1500);
 await decoder(p, "RTTY");
 await sleep(500);
-await p.ev(`(() => { const s = ${q(".rtty select")}; s.value = ${JSON.stringify(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+// "-": keep the tuning (the URL's hash, e.g. #f=7091.0&m=usb)
+if (station !== "-") await p.ev(`(() => { const s = ${q(".rtty select")}; s.value = ${JSON.stringify(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 // WIDE=1: skim the channelizer bin around the dial (needs bins mode)
 if (process.env.WIDE !== undefined) {
   await sleep(500);

@@ -8,7 +8,10 @@
 //! * A new pair gets a 4 kS/s complex channel centred between its tones
 //!   (primed from the last 8 s of audio) and is analysed once 4 s are in.
 //! * A believable analysis (framing errors ≤ 12 %, plausible text) locks
-//!   it: a streaming decoder then runs with those parameters. Pairs that
+//!   it: a streaming decoder then runs with those parameters. A station
+//!   sending overs with pauses (a contest) can sink that analysis: then
+//!   the longest stretch it is on is analysed, once 3 s of it are heard
+//!   (until then it isn't counted as a try). Pairs that
 //!   never decode (FT8/FT4 tones, unrelated carriers) are dropped and their
 //!   frequency left alone for 2 minutes; signals identified but not
 //!   decodable (reversals, 4-of-7 codes) are listed as such for 15 minutes.
@@ -140,6 +143,8 @@ struct Sig {
     next_try: f64,
     last_text: f64,
     ident: bool,
+    /// Analysed at least once (enough of it was heard).
+    heard: bool,
 }
 
 impl Sig {
@@ -397,6 +402,7 @@ impl Skimmer {
                 next_try: now,
                 last_text: now,
                 ident: false,
+                heard: false,
             });
             self.next_id += 1;
         }
@@ -411,7 +417,26 @@ impl Skimmer {
                 if now >= s.next_try && s.buf.len() as f64 >= 4.0 * CH_FS {
                     s.tries += 1;
                     s.next_try = now + 3.0;
-                    let r = analyze::analyze(&s.buf, CH_FS, Some((s.lo, s.hi)), s.buf_t);
+                    let mut r = analyze::analyze(&s.buf, CH_FS, Some((s.lo, s.hi)), s.buf_t);
+                    // a station sending overs with pauses (a contest): the
+                    // pauses can sink the analysis; then the longest
+                    // stretch it is on, once 3 s of it are heard
+                    let (a, b) = on_span(&s.buf);
+                    let on = (b - a) as f64 / CH_FS;
+                    if !analyze::is_valid(&r, 12) && b - a < s.buf.len() {
+                        if on >= 3.0 {
+                            let t0 = s.buf_t + a as f64 / CH_FS;
+                            let r2 = analyze::analyze(&s.buf[a..b], CH_FS, Some((s.lo, s.hi)), t0);
+                            if analyze::is_valid(&r2, 12) {
+                                r = r2;
+                            }
+                        } else {
+                            // hardly heard yet: not a try
+                            s.tries -= 1;
+                            s.next_try = now + 1.0;
+                        }
+                    }
+                    s.heard |= on >= 3.0;
                     if analyze::is_valid(&r, 12)
                         && r.params.as_ref().is_some_and(|p| p.charset != "raw")
                     {
@@ -449,14 +474,21 @@ impl Skimmer {
                         self.drop(i, 600.0);
                         continue;
                     }
-                    if s.tries >= 3 || (r.params.is_none() && s.buf.len() as f64 >= 6.0 * CH_FS) {
+                    if s.tries >= 3 || (r.params.is_none() && on >= 6.0) {
                         self.drop(i, 120.0);
                         continue;
                     }
                 }
                 let s = &self.sigs[i];
                 if now - s.born > 24.0 {
-                    let ig = if s.ident { 600.0 } else { 120.0 };
+                    // never heard long enough to analyse: forgotten, not ignored
+                    let ig = if s.ident {
+                        600.0
+                    } else if s.heard {
+                        120.0
+                    } else {
+                        0.0
+                    };
                     self.drop(i, ig);
                     continue;
                 }
@@ -509,6 +541,7 @@ impl Skimmer {
 
     fn drop(&mut self, i: usize, ignore: f64) {
         let s = self.sigs.remove(i);
+
         if ignore > 0.0 {
             self.ignore.push((s.hz(), self.now() + ignore));
         }
@@ -549,6 +582,45 @@ impl Skimmer {
         out.sort_by(|a, b| a.hz.total_cmp(&b.hz));
         out
     }
+}
+
+/// Where in a channel's samples the signal is on: the longest stretch of
+/// 50 ms blocks 6 dB or more over the quietest fifth, pauses up to 0.5 s
+/// bridged. All of it if it never pauses (no blocks that quiet) or there
+/// is nothing.
+fn on_span(buf: &[Complex32]) -> (usize, usize) {
+    let blk = (0.05 * CH_FS) as usize;
+    let n = buf.len() / blk;
+    if n < 10 {
+        return (0, buf.len());
+    }
+    let p: Vec<f32> = buf
+        .chunks_exact(blk)
+        .map(|c| c.iter().map(|x| x.norm_sqr()).sum::<f32>())
+        .collect();
+    let mut sorted = p.clone();
+    sorted.sort_by(f32::total_cmp);
+    let floor = sorted[n / 5];
+    if sorted[n * 9 / 10] < 4.0 * floor {
+        return (0, buf.len());
+    }
+    let bridge = 10;
+    let (mut best, mut cur): ((usize, usize), Option<(usize, usize)>) = ((0, 0), None);
+    for (i, &v) in p.iter().enumerate() {
+        if v < 4.0 * floor {
+            continue;
+        }
+        cur = match cur {
+            Some((a, e)) if i - e <= bridge => Some((a, i + 1)),
+            _ => Some((i, i + 1)),
+        };
+        let c = cur.expect("set");
+        if c.1 - c.0 > best.1 - best.0 {
+            best = c;
+        }
+    }
+    let end = if best.1 == n { buf.len() } else { best.1 * blk };
+    (best.0 * blk, end)
 }
 
 fn emit(s: &mut Sig, items: Vec<Item>, out: &mut Vec<Event>) {

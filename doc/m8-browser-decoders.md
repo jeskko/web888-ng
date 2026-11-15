@@ -159,6 +159,21 @@ Everything detected from the signal, with manual overrides:
   dimmed too. Not done on purpose: correcting a weak character from the
   words a station repeats (a guess, wrong for a call heard once or the
   operator's own typo).
+* **Overs with pauses (2026-11-16)**: a contest station on 7092 kHz,
+  strong (~20 dB over the noise in 240 Hz) and sending 5-12 s overs
+  with pauses, was hardly decoded on the unit. The skimmer looks every
+  2 s: it found him 1.5 s into an over, analysed the last 8 s (mostly
+  pause), got nothing, dropped him and ignored the frequency for 2
+  minutes, again and again. Now when the whole buffer's analysis fails
+  and the signal pauses, the longest stretch it is on (50 ms blocks 6 dB
+  over the quietest fifth, pauses up to 0.5 s bridged) is analysed, once
+  3 s of it are heard; a pair never heard that long is forgotten, not
+  ignored. On a 90 s recording of him: locked, his CQ read in every
+  over (none before). The contest slices gain too (words in the
+  vocabulary 2567 → 2632, 1131 → 1205, 1732 → 1839 for 46/20/43 locks
+  against 40/15/40; one-edit-off ratio 8.4 → 8.7, 6.6 → 6.3, 7.6 →
+  7.5 %). Test: `skimmer_overs_with_pauses` (synthetic, the first look
+  at 1 s of the first over; none decoded before).
 
 ### 2.3 SSTV (new)
 

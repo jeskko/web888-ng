@@ -556,3 +556,39 @@ fn skimmer_wide_iq() {
         );
     }
 }
+
+/// A contest station: short overs with pauses between. The first look at
+/// it is mostly pause; it is still worked out (from the stretch it is on)
+/// and its overs decoded, not ignored for minutes.
+#[test]
+fn skimmer_overs_with_pauses() {
+    let mut rng = Rng::new(11);
+    let over = "CQ TEST N0CALL N0CALL TEST\n";
+    let rate = AUDIO_RATE;
+    // 17 s quiet (the skimmer first looks at 18 s, with 1 s of the over
+    // at the end of its 8 s: the analysis gives nothing; until 2026-11-16
+    // the frequency was then ignored for 2 minutes and none was decoded),
+    // then overs of ~6 s every 14 s
+    let mut x = vec![0f32; (17.0 * rate) as usize];
+    for _ in 0..6 {
+        let seg = synth::async_bits(
+            &ita2_encode(over, true),
+            5,
+            Parity::None,
+            1.5,
+            &mut || 0.0,
+            8.0,
+            2.0,
+        );
+        let a = synth::audio(&seg, 45.45, 170.0, rate, &Cond::new(1500.0), 0.1, &mut rng);
+        let on = a.len();
+        x.extend(a);
+        x.extend(std::iter::repeat_n(0.0, (14.0 * rate) as usize - on));
+    }
+    for v in &mut x {
+        *v += (0.01 * rng.normal()) as f32;
+    }
+    let (_, ev) = skim(&x, (200.0, 2800.0));
+    let all: String = texts(&ev).values().cloned().collect();
+    assert!(all.matches("N0CALL N0CALL").count() >= 5, "{all:?}");
+}
