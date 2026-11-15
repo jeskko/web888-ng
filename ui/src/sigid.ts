@@ -36,7 +36,7 @@ export const CLASS_INFO: Record<SigClass, { label: string; opens: Opens; hint: s
   wspr: { label: "WSPR", opens: "wspr", hint: "WSPR beacons" },
   ale: { label: "ALE", opens: null, hint: "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)" },
   stanag4285: { label: "STANAG 4285", opens: null, hint: "2400 Bd PSK modem, 106.7 ms frames (not decoded here)" },
-  mil110a: { label: "MIL-110A", opens: null, hint: "MIL-STD-188-110A serial-tone modem (not decoded here)" },
+  mil110a: { label: "MIL-110A", opens: null, hint: "MIL-STD-188-110A serial-tone modem (not decoded here), or HFDL (aircraft, also 1800 Bd PSK: on an HFDL channel, try the HFDL decoder)" },
   sstv: { label: "SSTV", opens: "img", hint: "slow-scan television" },
   fax: { label: "HF fax", opens: "img", hint: "weather fax (radiofax)" },
   ssb: { label: "SSB voice", opens: "ssb", hint: "single-sideband speech" },

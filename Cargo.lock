@@ -1853,6 +1853,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-hfdl"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+]
+
+[[package]]
+name = "web888-hfdl-wasm"
+version = "0.13.0"
+dependencies = [
+ "web888-hfdl",
+]
+
+[[package]]
 name = "web888-hpsdr"
 version = "0.13.0"
 dependencies = [

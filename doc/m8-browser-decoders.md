@@ -24,7 +24,7 @@ skimming, §6) and item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
 | 8 | optional: **signal identifier** (done, §5.3) | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
 | 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
 | 10 | **PSK31/63/125** (BPSK, Varicode) | new (G3PLX's Varicode) | every BPSK signal in the passband found (carrier, rate) and decoded |
-| 11 | next: **HFDL** (aircraft data, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as a reference) | new | position reports on the map; heard on 2026-11-15 at 6646 kHz (the identifier calls it MIL-110A) |
+| 11 | **HFDL** (aircraft data link, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as the reference) | new | squitters, logons, position reports and ACARS decoded, checked by their CRCs (§2.6); next: positions on the map |
 | 12 | later: JS8Call (FT8's waveform and code, other framing), ALE 2G, Olivia | new | — |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
@@ -243,6 +243,68 @@ Everything detected from the signal, with manual overrides:
   1000.0 Hz and PSK63 at 1700.0 Hz and reads both texts without an error;
   on the unit at 7040 kHz at night nothing was on. Not yet: wide
   skimming (the crate takes IQ already), QPSK.
+
+### 2.6 HFDL (new): done (2026-11-15)
+
+HFDL is the HF data link of airliners and 16 ground stations: 1800 Bd
+PSK bursts (BPSK, QPSK or 8PSK; 300 to 1800 bps) in 2.4 s TDMA slots,
+1440 Hz above the listed (USB dial) frequency. ARINC 635 isn't public;
+dumphfdl (GPL-3.0, like this project) was read as the reference for the
+burst format, the PDUs and the ground station table, and libacars (MIT)
+for ACARS framing. Nothing was built or run from either. Two of its
+constants differ from a plain reading: on air they were found from the
+signal itself (`--example diag`).
+
+* **Burst** (`crates/hfdl`, `phy`): a 448-symbol prekey, the 127-symbol A
+  sequence twice, M1 (127 symbols: one of eight rotations of an
+  m-sequence, the rate and single or double slot), M2 (15), nine
+  15-symbol T sequences, then 72 or 168 frames of 30 data symbols and a
+  15-symbol T probe. Data: a 120-bit scrambler (180° turns), a 40-row
+  block interleaver, a K=7 rate 1/2 code (300 bps sends each coded bit
+  twice), Gray-coded M-PSK. The scrambler's LFSR starts from 0x4d4b: the
+  bits common to many bursts (zero padding) repeat with it every 120
+  symbols. The code's two outputs go out as 0x6d then 0x4f: a strong
+  burst re-encodes exactly that way, and its 300 bps pairs agree 100 %
+  once descrambled and deinterleaved.
+* **Receiver** (`front`, `demod`): audio (or IQ) to 4 samples a symbol
+  through a root raised cosine filter. Detection: the A pair correlated
+  in 16 pieces whose powers add (a frequency offset turns the pieces;
+  ±40 Hz is fine), the best within 130 symbols of the first over
+  0.18 (noise ~0.06). Frequency from the pieces' phases. A 17-tap
+  half-symbol equaliser fitted by least squares to the A pair, then
+  normalised LMS on the known symbols only, with a phase loop. M1 picks
+  the burst type; under 0.4 the burst is dropped. Soft bits use the gain
+  interpolated between the probes on either side of each 30-symbol
+  block: on the polar path from Barrow the channel turns 30-60° a frame
+  (auroral fading), which a forward-only tracker followed too late.
+* **Messages** (`pdu`, `skim`): squitters (the ground station, its TDMA
+  frame, the frequencies it and two others use), MPDUs and their LPDUs
+  (logon request, confirm, logoff, denied), HFNPDUs (position reports,
+  frequency data, system table parts) and ACARS (registration, flight,
+  label, text). Each part's own CRC must pass; a part that fails is
+  shown as such, never mended. An aircraft's ICAO address comes from the
+  logon confirm that gave its ID; its flight and registration from its
+  messages. A different flight or registration on the ID, or 30 minutes
+  unheard, forgets them (IDs are reused, and a logoff can be missed).
+* **Recordings** (2026-11-15 16:20 UTC 40 m, 6646 kHz, Barrow and its
+  aircraft; 2026-10-23 8942 kHz, Shannon; `/data/iq/hfdl`): 65 of 89
+  bursts decoded (40 + 25), from 33 at the first version; every burst
+  with a probe SNR of 2.4 dB or more. What's left is mostly Barrow's own
+  squitters at about −3 dB in fast fading. USB audio made from the
+  recordings decodes as the IQ does (64). Synthetic: all eight burst
+  types at 30 dB; 600 and 1800 bps with a 23 Hz offset, a second path
+  1.2 ms late at 0.6 and 12 dB SNR. 0.4 % of a core.
+* **On air** (the unit, 2026-11-15 21:35 UTC, Reykjavik 5720 kHz through
+  the page): 54 of 66 bursts in four minutes: squitters, logons,
+  position reports, ACARS. At that hour 6646, 8942 and the other
+  channels tried were silent.
+* **Page**: HFDL in the Decoders list. The panel lists decoded bursts,
+  newest first (UTC, ground station, direction, rate, SNR), and their
+  parts, with the channels to tune to (USB). The worker with `hfdl.wasm`
+  decodes the same bursts as the native build (24 of 33 in a 300 s
+  test). Not yet: positions on the map, the over-the-air system table,
+  more than one channel at a time (the wide IQ path), ACARS reassembly
+  of multi-block messages.
 
 ## 3. Shared UI
 

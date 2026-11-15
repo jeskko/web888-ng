@@ -304,3 +304,8 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .img-thumb-pic { width: 100%; height: auto; display: block; }
 .navtex { font-size: 12px; margin: 4px 0; }
 .navtex summary { cursor: pointer; }
+.hfdl-msg { margin: 6px 0 10px; font-size: 12px; }
+.hfdl-msg.squitter { opacity: 0.75; }
+.hfdl-item { margin-left: 8px; overflow-wrap: anywhere; }
+.hfdl-kind { display: inline-block; font-size: 10px; padding: 0 4px; border-radius: 3px; background: var(--accent-bg); margin-right: 2px; }
+.hfdl-text { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }

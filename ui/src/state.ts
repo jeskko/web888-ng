@@ -17,6 +17,7 @@ import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyR
 import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
 import { applyPsk, type PskRun, type PskSignal } from "./psk.ts";
+import { applyHfdl, hfdlCentre, type HfdlMsg, type HfdlRun, type HfdlStation } from "./hfdl.ts";
 import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
@@ -231,6 +232,7 @@ export function connect(): void {
       if (!cwWideNow()) cwAudio(f);
       if (!rttyWideNow()) rttyAudio(f);
       pskAudio(f);
+      hfdlAudio(f);
       imgAudio(f);
       digiAudio(f);
       sigAudio(f);
@@ -808,6 +810,84 @@ export function pickPsk(dial: number): void {
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
   const c = dial + 1500;
+  if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
+}
+
+// ---------------------------------------------------------- HFDL
+
+/** HFDL decoding of the channel this receiver is tuned to (USB), in this
+ * browser (remembered). */
+export const hfdlOn = signal(load("hfdl") === "1");
+export const hfdlMsgs = signal<HfdlMsg[]>([]);
+export const hfdlStations = signal<HfdlStation[]>([]);
+/** Bursts heard and decoded since the last retune. */
+export const hfdlCount = signal({ bursts: 0, decoded: 0 });
+export const hfdlError = signal("");
+let hfdlWorker: Worker | null = null;
+const hfdlFeed = new JttyFeed();
+let hfdlKey = "";
+let hfdlGen = 0;
+let hfdlRf = 0;
+
+function hfdlStart(): Worker {
+  const w = new Worker("hfdl-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: HfdlRun; gen?: number; error?: string; stations?: HfdlStation[] };
+    if (d.error) hfdlError.value = d.error;
+    if (d.stations) {
+      hfdlStations.value = d.stations;
+      hfdlKey = ""; // the centre may now be found from the channel list
+    }
+    if (!d.run || d.gen !== hfdlGen) return;
+    hfdlCount.value = { bursts: d.run.bursts, decoded: d.run.decoded };
+    hfdlMsgs.value = applyHfdl(hfdlMsgs.value, d.run, Date.now() / 1000, hfdlRf);
+  };
+  return w;
+}
+
+function hfdlAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!hfdlOn.value || !s) return;
+  hfdlWorker ??= hfdlStart();
+  if (s.mode !== "usb") return;
+  const key = `${s.hz}|${s.lo}|${s.hi}|${s.listen ?? ""}`;
+  if (key !== hfdlKey) {
+    // retuned: a new stream, centred on the channel in the passband
+    hfdlKey = key;
+    hfdlGen++;
+    const [centre, rf] = hfdlCentre(hfdlStations.value, s.hz, s.lo, s.hi);
+    hfdlRf = rf;
+    hfdlCount.value = { bursts: 0, decoded: 0 };
+    hfdlWorker.postMessage({ centre });
+  }
+  const pcm = hfdlFeed.push(f.pcm, f.rate, f.stereo);
+  hfdlWorker.postMessage({ pcm, gen: hfdlGen }, [pcm.buffer]);
+}
+
+export function setHfdl(on: boolean): void {
+  hfdlOn.value = on;
+  save("hfdl", on ? "1" : "0");
+  if (!on && hfdlWorker) {
+    hfdlWorker.terminate();
+    hfdlWorker = null;
+    hfdlKey = "";
+  }
+}
+
+export function clearHfdl(): void {
+  hfdlMsgs.value = [];
+}
+
+/** An HFDL channel was picked (its listed frequency): USB with the dial
+ * there, a passband over the bursts (1440 ± 1200 Hz), in view. */
+export function pickHfdl(dial: number): void {
+  tune(dial);
+  setModePassband("usb", 200, 2800);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  const c = dial + 1440;
   if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
 }
 

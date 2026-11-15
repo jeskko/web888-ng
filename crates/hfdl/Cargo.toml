@@ -1,0 +1,10 @@
+[package]
+name = "web888-hfdl"
+description = "HFDL (ARINC 635 HF data link) decoder: bursts to SPDUs, MPDUs, LPDUs, HFNPDUs and ACARS"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true

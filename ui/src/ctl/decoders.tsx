@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Signal } from "@preact/signals";
-import { cwOn, digiOn, imgOn, jttyOn, pskOn, rttyOn, setCw, setDigi, setImg, setJtty, setPsk, setRtty, setSig, sigOn } from "../state.ts";
+import { cwOn, digiOn, hfdlOn, imgOn, jttyOn, pskOn, rttyOn, setCw, setDigi, setHfdl, setImg, setJtty, setPsk, setRtty, setSig, sigOn } from "../state.ts";
 
 interface Decoder {
   label: string;
@@ -18,6 +18,7 @@ export const DECODERS: Decoder[] = [
   { label: "CW", hint: "every keyed signal in the passband (Morse)", on: cwOn, set: setCw },
   { label: "RTTY", hint: "FSK/RTTY and NAVTEX, every parameter found from the signal", on: rttyOn, set: setRtty },
   { label: "PSK", hint: "PSK31, PSK63 and PSK125: every BPSK signal in the passband", on: pskOn, set: setPsk },
+  { label: "HFDL", hint: "aircraft HF data link: position reports and ACARS (USB)", on: hfdlOn, set: setHfdl },
   { label: "FAX/SSTV", hint: "HF weather charts and SSTV pictures (USB)", on: imgOn, set: setImg },
   { label: "Signal ID", hint: "identify the signals in the passband", on: sigOn, set: setSig },
   { label: "JTTY", hint: "WSJT-X's keyboard mode", on: jttyOn, set: setJtty },
