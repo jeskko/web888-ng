@@ -1,0 +1,11 @@
+[package]
+name = "web888-sigid"
+description = "Signal identifier: names the mode of a signal (a small CNN, trained in tools/ml/sigid)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true

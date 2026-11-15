@@ -19,6 +19,7 @@ import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
 import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
+import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { TuneSync } from "./tunesync.ts";
 import { WHEEL_STEPS } from "./wheel.ts";
@@ -230,6 +231,7 @@ export function connect(): void {
       if (!rttyWideNow()) rttyAudio(f);
       imgAudio(f);
       digiAudio(f);
+      sigAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
     onIq(f: IqFrame) {
@@ -993,6 +995,106 @@ export function pickSkimmer(k: SkimMark): void {
   const span = wfSpan(r.adc_hz, v.decim);
   const mid = (k.lo + k.hi) / 2;
   if (Math.abs(mid - v.center_hz) > span / 2 - (k.hi - k.lo) / 2) setView({ ...v, center_hz: mid });
+}
+
+// ------------------------------------------------------ SIGNAL ID
+
+/** The signals in this receiver's passband named by the identifier, in
+ * this browser (remembered). */
+export const sigOn = signal(load("sigid") === "1");
+export const sigRows = signal<SigRow[]>([]);
+export const sigError = signal("");
+let sigWorker: Worker | null = null;
+const sigFeed = new JttyFeed();
+let sigKey = "";
+let sigBand = "";
+let sigGen = 0;
+let sigRf: (hz: number) => number = (hz) => hz;
+
+function sigStart(): Worker {
+  const w = new Worker("sigid-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: SigRun; gen?: number; error?: string };
+    if (d.error) sigError.value = d.error;
+    if (!d.run || d.gen !== sigGen) return;
+    sigRows.value = toSigRows(d.run, sigRf);
+  };
+  return w;
+}
+
+function sigAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!sigOn.value || !s) return;
+  const band = audioBand(s.mode, s.lo, s.hi, s.pitch);
+  if (!band) return;
+  sigWorker ??= sigStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== sigKey) {
+    sigKey = key;
+    sigGen++;
+    const { mode, hz, pitch } = s;
+    sigRf = (a) => rfOf(mode, hz, pitch, a);
+    sigRows.value = [];
+    sigBand = "";
+    sigWorker.postMessage({ reset: true });
+    sigWorker.postMessage({ lsb: mode === "lsb" });
+  }
+  const b = `${band.lo}|${band.hi}`;
+  if (b !== sigBand) {
+    sigBand = b;
+    sigWorker.postMessage({ band: [band.lo, band.hi] });
+  }
+  const pcm = sigFeed.push(f.pcm, f.rate, f.stereo);
+  sigWorker.postMessage({ pcm, gen: sigGen }, [pcm.buffer]);
+}
+
+export function setSig(on: boolean): void {
+  sigOn.value = on;
+  save("sigid", on ? "1" : "0");
+  if (!on && sigWorker) {
+    sigWorker.terminate();
+    sigWorker = null;
+    sigKey = "";
+    sigBand = "";
+    sigRows.value = [];
+  }
+}
+
+/** What an identified signal opens: its decoder (which reads the whole
+ * passband), or for speech the receiver tuned to it (SSB: the sideband
+ * by the usual convention, LSB below 10 MHz). */
+export function openSig(row: SigRow, cls: SigClass): void {
+  switch (cls) {
+    case "cw":
+      setCw(true);
+      break;
+    case "fsk":
+      setRtty(true);
+      break;
+    case "sstv":
+    case "fax":
+      setImg(true);
+      break;
+    case "ft8":
+    case "ft4":
+    case "wspr":
+      if (digiMode.value !== cls) {
+        digiMode.value = cls;
+        save("digiMode", cls);
+      }
+      setDigi(true);
+      break;
+    case "ssb": {
+      const lsb = row.rf < 10e6;
+      tune(lsb ? row.rf + 1500 : row.rf - 1500);
+      setModePassband(lsb ? "lsb" : "usb", 300, 2700);
+      break;
+    }
+    case "am":
+      tune(row.rf);
+      setMode("am");
+      break;
+  }
 }
 
 export function setMode(mode: Mode): void {

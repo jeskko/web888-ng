@@ -26,6 +26,7 @@ import { CwCtl, CwPanel } from "./ctl/cw.tsx";
 import { RttyCtl, RttyPanel } from "./ctl/rtty.tsx";
 import { ImgCtl, ImgPanel } from "./ctl/img.tsx";
 import { DigiCtl, DigiPanel } from "./ctl/digi.tsx";
+import { SigCtl, SigPanel } from "./ctl/sigid.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
 import { isMobile } from "./mobile.ts";
@@ -151,6 +152,7 @@ function App() {
           <CwCtl />
           <RttyCtl />
           <ImgCtl />
+          <SigCtl />
           <JttyCtl />
           <LabelsCtl />
         </div>
@@ -167,6 +169,7 @@ function App() {
         <ImgPanel />
         <JttyPanel />
         <DigiPanel />
+        <SigPanel />
         <MapPanel />
       </main>
       <footer>

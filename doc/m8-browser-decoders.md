@@ -20,7 +20,7 @@ skimming, §6).
 | 5 | NAVTEX / SITOR-B | datarx `wahrx/fsk.py` (already decodes it) | falls out of item 2; a NAVTEX view (B1-B4 header, message list) |
 | 6 | later: DSC, time codes (DCF77, MSF, WWVB...) | new | as in `feature-gap.md` §2.4 |
 | 7 | optional: **neural CW** | trained on datarx-style synthetic CW (§5) | beats item 1 on the synthetic sets and on real recordings; shipped only then |
-| 8 | optional: **signal identifier** | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
+| 8 | optional: **signal identifier** (done, §5.3) | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
 | 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
@@ -333,6 +333,61 @@ every station fluttering (3-20 Hz, `FADE=aurora`): calls read 21 / 39 /
 before. The real recording decodes the same ("TU L7SB UP" without
 spaces, its first letter cut by the clip). Still to do: check against
 on-air captures during an aurora.
+
+### 5.3 Signal identifier: done (2026-11-15)
+
+`crates/sigid` (features, inference without a framework, the passband
+scanner; 529k parameters as f16, 1.1 MB), `crates/sigid-wasm`
+(`sigid.wasm`, 1.5 MB, loaded only when used), `tools/ml/sigid/`
+(training, `README.md`), the ID button and its panel beside the waterfall.
+
+* **Classes** (15): noise, carrier, CW, 2-FSK (RTTY 45-75 Bd, SITOR-B /
+  NAVTEX, ASCII, DWD 50/450: the RTTY panel works out which), PSK31/63/125,
+  FT8, FT4, WSPR, ALE, STANAG 4285, MIL-STD-188-110A, SSTV (13 modes), HF
+  fax, SSB voice, AM. A row's Decode opens the page's decoder (CW, RTTY,
+  fax/SSTV, FT8/FT4/WSPR); Tune tunes to voice (LSB below 10 MHz) or AM.
+* **Input**: 4.096 s of complex baseband at 6 kS/s, the signal at the
+  centre. Three views: a two-resolution spectrogram (43 ms and 11 ms
+  windows on one grid), a 1.46 Hz periodogram (FT8 and WSPR tones), and
+  |autocorrelation| at 1-400 ms (frame periodicities: STANAG 4285 and
+  MIL-110A look the same in a spectrogram). Model: a 2-D CNN pooled over
+  time but not frequency (the label is the signal at the centre; its
+  neighbours are elsewhere), 1-D CNNs on the other two views, two linear
+  layers.
+* **Training data**, made on the fly (`modes.py`, `data.py`): content random
+  where it doesn't identify the mode, exact where it does (Costas arrays,
+  frame, probe and scrambler sequences, baud rates, shifts, SSTV line
+  timings); speech from espeak-ng (~40 languages) with an on-air spectral
+  tilt. Channel: offsets (voice and AM anywhere in their band, as the
+  scanner sees them), QSB or auroral flutter, multipath, neighbours of
+  other classes, birdies, impulses, −6..+30 dB, passband edges (AM cut by
+  an SSB filter too), LSB inversion. 20k steps from scratch, then two
+  fine-tunes (10k and 8k), ~2.5 h on 16 threads + an RTX 5070 (the data
+  generation limits it).
+* **In the page**: the worker keeps 4.1 s of the 12 kHz audio; every 2 s the
+  scanner finds the signals in the passband (power over the floor
+  smoothed over 120 Hz, gaps up to 190 Hz joined) and identifies the next
+  one: an FFT of the audio, an inverse FFT of the 6 kHz around the signal
+  (no image; LSB flipped back). ~0.3-0.5 s of a core in WebAssembly each
+  (0.54 s measured while training loaded every core; 0.14 s natively);
+  each signal's probabilities are averaged over its runs.
+
+Results. Synthetic validation (1500 windows): 97.7 % (93 % at −6..0 dB).
+Real windows labelled by hand from waterfalls (`real.py eval`):
+
+| recording | windows | right | misses |
+|---|---|---|---|
+| 40/30 m, 12 min (2026-10-23) | 506 | 82 % | mostly nothing at the centre then (FT4's 7.5 s cycles, pauses in QSOs and CW, the fax's blank phases); weak SSB QSOs called MIL-110A |
+| 40 m, 60 s (2026-10-22) | 60 | 97 % | two weak QSO windows called noise |
+
+DWD RTTY 48/48, six AM broadcasters 137/144, both FT8 sub-bands 38/48,
+fax 21/24; the scanner on 20 m FT8/FT4 corpus slots: 17/17 FT8 and 9/10
+FT4 regions right. In the page (the 60 s recording replayed): FT8 on
+7074 kHz 78-99 %, DWD fax 86 %, DWD RTTY 95-98 %, AM heard in USB 70 %.
+Weakest: SSB voice. espeak speech isn't on-air speech, and a weak voice
+shows only its lowest few hundred Hz to the scanner; LSB QSOs come out as
+voice at 20-40 % (top, unsure) or as CW. Next: on-air speech in training
+(the SSB segments of the 2026-11-15 contest recordings).
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 
