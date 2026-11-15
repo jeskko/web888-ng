@@ -710,7 +710,7 @@ export function setRtty(on: boolean): void {
 }
 
 export function clearRtty(): void {
-  rttySignals.value = rttySignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "" }));
+  rttySignals.value = rttySignals.value.filter((x) => x.active).map((x) => ({ ...x, text: "", weak: "" }));
 }
 
 /** A station was picked (the centre between its tones): USB with a 3 kHz

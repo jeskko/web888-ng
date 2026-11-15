@@ -474,6 +474,9 @@ pub struct Char {
     pub off: f32,
     /// Bits since the previous character's start edge.
     pub spacing: f64,
+    /// The smallest |soft decision| over its start, data and stop bits: how
+    /// near the character came to reading otherwise.
+    pub margin: f32,
 }
 
 fn median(v: &mut [f32]) -> f32 {
@@ -616,6 +619,10 @@ pub fn async_scan(
             t: tt,
             code,
             fe,
+            margin: cols
+                .iter()
+                .map(|&i| d[i].abs())
+                .fold(f32::INFINITY, f32::min),
             on: median(&mut on),
             off: median(&mut off),
             spacing: sp,
@@ -700,8 +707,10 @@ pub fn sitor_dx_parity(codes: &[u32]) -> (usize, f64) {
 
 // ------------------------------------------------------- streaming decoder
 
-/// A decoded character: (time s, text, framed correctly).
-pub type Item = (f64, String, bool);
+/// A decoded character: (time s, text, framed correctly, margin: the
+/// smallest |soft bit|, see [`Char::margin`]; infinite for SITOR, whose
+/// characters are checked by their code).
+pub type Item = (f64, String, bool, f32);
 
 enum Cs {
     Ita2(Ita2Auto),
@@ -751,19 +760,32 @@ impl FskDecoder {
     /// The tone filters: a Hann window this many bits long (see
     /// [`ToneDemod::hann`]).
     pub const SPAN: f64 = 1.4;
+    /// With it, each tone weighed by its strength now (a peak follower
+    /// releasing in this many s; see [`ToneDemod::set_weighing`]).
+    pub const RELEASE: f64 = 0.4;
+    /// A character with a bit nearer the threshold than this (or a
+    /// framing error) is reported weak: it may have read otherwise.
+    pub const WEAK: f32 = 0.3;
+
+    /// Whether an item is weak (see [`FskDecoder::WEAK`]).
+    pub fn weak(it: &Item) -> bool {
+        !it.2 || it.3 < Self::WEAK
+    }
 
     pub fn new(fs: f64, p: FskParams, t0: f64) -> Self {
         Self::with_span(fs, p, t0, Self::SPAN)
     }
 
-    /// With the async tone filters a Hann window `span` bits long, or the
-    /// 1-bit boxcar for 0.
+    /// With the async tone filters a Hann window `span` bits long and the
+    /// tones weighed, or the 1-bit boxcar unweighed (as before) for 0.
     pub fn with_span(fs: f64, p: FskParams, t0: f64, span: f64) -> Self {
         let t = fs / p.baud;
         // async: the Hann window (QRM); SITOR keeps the boxcar its bit
         // alignment was found with
         let dem = if p.mode == Mode::Async && span > 0.0 {
-            ToneDemod::hann(fs, p.f_lo, p.f_hi, t, span)
+            let mut d = ToneDemod::hann(fs, p.f_lo, p.f_hi, t, span);
+            d.set_weighing(true, Self::RELEASE);
+            d
         } else {
             ToneDemod::new(fs, p.f_lo, p.f_hi, t)
         };
@@ -803,6 +825,17 @@ impl FskDecoder {
             bit_lv: Vec::new(),
             slot_done: 0,
         }
+    }
+
+    /// The tone levels' tracking time constant (s), see
+    /// [`ToneDemod::set_tracking`].
+    pub fn set_tracking(&mut self, secs: f64) {
+        self.dem.set_tracking(secs);
+    }
+
+    /// See [`ToneDemod::set_weighing`].
+    pub fn set_weighing(&mut self, on: bool, secs: f64) {
+        self.dem.set_weighing(on, secs);
     }
 
     pub fn fe_rate(&self) -> f64 {
@@ -928,7 +961,7 @@ impl FskDecoder {
                 Cs::Other => Some(format!("<{code:02x}>")),
             };
             if let Some(s) = s {
-                out.push((ch.t, s, !ch.fe));
+                out.push((ch.t, s, !ch.fe, ch.margin));
             }
         }
         trim(&mut self.recent, 200);
@@ -989,7 +1022,7 @@ impl FskDecoder {
             if let Some(c) = code {
                 self.levels.push((on, offm));
                 if let Some(s) = self.c476.char(c) {
-                    out.push((self.bit_t[a], s.to_string(), true));
+                    out.push((self.bit_t[a], s.to_string(), true, f32::INFINITY));
                 }
             }
         }

@@ -3,12 +3,15 @@
 //! different tone filters: every signal the skimmer decoded (from
 //! `replay`'s output) is decoded again over its whole span, once per
 //! filter, from one channel. Writes `OUT.<span>.txt` in `replay`'s
-//! format, for a like-for-like score of the filters.
+//! format (weak characters in lower case), for a like-for-like score of
+//! the filters.
 //!
 //!     cargo run --release -p web888-fsk --example spans FILE.cf32 RATE CENTRE_HZ REPLAY.txt OUT [SPANS]
 //!
-//! SPANS: comma-separated Hann lengths in bits, 0 for the boxcar
-//! (default 0,1.5).
+//! SPANS: comma-separated Hann lengths in bits, 0 for the boxcar, each
+//! optionally `@` the level tracking time constant in s (default 0,1.4;
+//! e.g. 1.4@0.3), and `w` and a release time for the per-tone weighing
+//! (1.4w0.2).
 
 use num_complex::{Complex32, Complex64};
 use std::collections::BTreeMap;
@@ -22,10 +25,22 @@ fn main() {
     let a: Vec<String> = std::env::args().collect();
     let rate: f64 = a[2].parse().expect("rate");
     let centre: f64 = a[3].parse().expect("centre");
-    let spans: Vec<f64> = a
+    let names: Vec<String> = a
         .get(6)
-        .map(|s| s.split(',').map(|v| v.parse().expect("span")).collect())
-        .unwrap_or(vec![0.0, 1.5]);
+        .map(|s| s.split(',').map(String::from).collect())
+        .unwrap_or(vec!["0".into(), "1.4".into()]);
+    let spans: Vec<(f64, Option<f64>, Option<f64>)> = names
+        .iter()
+        .map(|v| {
+            let (v, w) = match v.split_once('w') {
+                Some((v, w)) => (v, Some(w.parse::<f64>().expect("release"))),
+                None => (v.as_str(), None),
+            };
+            let mut it = v.split('@');
+            let s = it.next().unwrap().parse().expect("span");
+            (s, it.next().map(|t| t.parse().expect("tracking")), w)
+        })
+        .collect();
     // signal id -> (kHz, first, last text time); a signal's frequency is
     // that of its lock (text lines carry it too)
     let mut sig: BTreeMap<u32, (f64, f64, f64)> = BTreeMap::new();
@@ -40,6 +55,11 @@ fn main() {
         e.1 = e.1.min(t);
         e.2 = e.2.max(t);
     }
+    // WEAK=x: the weak threshold (to try others than the decoder's)
+    let weak_at: f32 = std::env::var("WEAK")
+        .ok()
+        .and_then(|v| v.parse().ok())
+        .unwrap_or(FskDecoder::WEAK);
     let mut raw = Vec::new();
     std::fs::File::open(&a[1])
         .expect("open")
@@ -57,7 +77,7 @@ fn main() {
         })
         .collect();
     drop(raw);
-    let mut outs: Vec<std::io::BufWriter<std::fs::File>> = spans
+    let mut outs: Vec<std::io::BufWriter<std::fs::File>> = names
         .iter()
         .map(|s| {
             std::io::BufWriter::new(
@@ -92,14 +112,23 @@ fn main() {
                     .sum()
             })
             .collect();
-        for (k, &span) in spans.iter().enumerate() {
+        for (k, &(span, tracking, weigh)) in spans.iter().enumerate() {
             let p = FskParams::new(-0.5 * shift, 0.5 * shift, 45.45);
             let mut d = FskDecoder::with_span(FS, p, ts - dl, span);
+            if let Some(t) = tracking {
+                d.set_tracking(t);
+            }
+            if let Some(r) = weigh {
+                d.set_weighing(true, r);
+            }
             for it in d.feed(&ch) {
                 if it.0 < t0 - 1.0 {
                     continue;
                 }
-                let s = it.1.replace('\n', "\\n").replace('\r', "\\r");
+                let mut s = it.1.replace('\n', "\\n").replace('\r', "\\r");
+                if !it.2 || it.3 < weak_at {
+                    s = s.to_ascii_lowercase();
+                }
                 writeln!(outs[k], "T {:7.2} {khz:9.3} {id:4} {s}", it.0).unwrap();
             }
         }

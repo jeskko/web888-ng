@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyFsk, describe, navtex, RTTY_LINGER, RTTY_TEXT, type FskP, type FskRun } from "../src/rtty.ts";
+import { applyFsk, describe, navtex, RTTY_LINGER, RTTY_TEXT, textRuns, type FskP, type FskRun } from "../src/rtty.ts";
 
 const ham: FskP = { baud: 45.45, shift: 170, lo: 830, hi: 1000, markHigh: true, framing: "5N1.5", charset: "ITA2", usos: true, msb: false, mode: "async" };
 const dwd: FskP = { ...ham, baud: 50, shift: 450, markHigh: false, usos: false };
@@ -35,6 +35,24 @@ test("lock, text and identified signals merge per signal", () => {
 test("text is capped per signal", () => {
   const s = applyFsk([], run([{ k: "lock", id: 1, hz: 900, p: ham }, { k: "text", id: 1, hz: 900, t: 0, text: "E".repeat(RTTY_TEXT + 9) }], []), 0, rf);
   assert.equal(s[0].text.length, RTTY_TEXT);
+});
+
+test("weak characters follow the text, capped with it", () => {
+  let s = applyFsk([], run([{ k: "lock", id: 1, hz: 900, p: ham }, { k: "text", id: 1, hz: 900, t: 0, text: "CQ " }], []), 0, rf);
+  s = applyFsk(s, run([{ k: "text", id: 1, hz: 900, t: 1, text: "TEST", weak: "0100" }], []), 1, rf);
+  assert.deepEqual([s[0].text, s[0].weak], ["CQ TEST", "0000100"]);
+  assert.deepEqual(textRuns(s[0].text, s[0].weak, 100), [
+    { s: "CQ T", weak: false },
+    { s: "E", weak: true },
+    { s: "ST", weak: false },
+  ]);
+  assert.deepEqual(textRuns(s[0].text, s[0].weak, 3), [
+    { s: "…", weak: false },
+    { s: "E", weak: true },
+    { s: "ST", weak: false },
+  ]);
+  s = applyFsk(s, run([{ k: "text", id: 1, hz: 900, t: 2, text: "E".repeat(RTTY_TEXT), weak: "1".repeat(RTTY_TEXT) }], []), 2, rf);
+  assert.equal(s[0].weak, "1".repeat(RTTY_TEXT));
 });
 
 test("NAVTEX messages from SITOR-B text", () => {

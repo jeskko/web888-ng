@@ -23,7 +23,7 @@ export interface FskP {
 
 export type FskEv =
   | { k: "lock"; id: number; hz: number; p: FskP }
-  | { k: "text"; id: number; hz: number; t: number; text: string }
+  | { k: "text"; id: number; hz: number; t: number; text: string; weak?: string }
   | { k: "ident"; hz: number; p: FskP };
 
 /** What the worker posts. */
@@ -43,6 +43,9 @@ export interface FskSignal {
   snr: number;
   fe: number;
   text: string;
+  /** Per character of `text`, "1" where it read weakly (a bit near the
+   * threshold or a framing error: it may have read otherwise). */
+  weak: string;
   locked: boolean;
   /** Still in the skimmer's list. */
   active: boolean;
@@ -101,7 +104,7 @@ export function applyFsk(prev: FskSignal[], run: FskRun, now: number, rf: (hz: n
     const k = id ? `#${id}` : `@${Math.round(rf(hz) / 100)}`;
     let s = by.get(k);
     if (!s) {
-      s = { id, rf: rf(hz), p, snr: -99, fe: 0, text: "", locked: id !== 0, active: true, last: now };
+      s = { id, rf: rf(hz), p, snr: -99, fe: 0, text: "", weak: "", locked: id !== 0, active: true, last: now };
       by.set(k, s);
     }
     return s;
@@ -113,8 +116,12 @@ export function applyFsk(prev: FskSignal[], run: FskRun, now: number, rf: (hz: n
       const s = by.get(`#${e.id}`);
       if (!s) continue;
       let text = s.text + e.text;
-      if (text.length > RTTY_TEXT) text = text.slice(text.length - RTTY_TEXT);
-      Object.assign(s, { text, last: now });
+      let weak = s.weak + (e.weak?.length === e.text.length ? e.weak : "0".repeat(e.text.length));
+      if (text.length > RTTY_TEXT) {
+        text = text.slice(text.length - RTTY_TEXT);
+        weak = weak.slice(weak.length - RTTY_TEXT);
+      }
+      Object.assign(s, { text, weak, last: now });
     }
   }
   for (const s of by.values()) s.active = false;
@@ -123,6 +130,25 @@ export function applyFsk(prev: FskSignal[], run: FskRun, now: number, rf: (hz: n
     Object.assign(s, { rf: rf(a.hz), p: a.p, snr: a.snr, fe: a.fe, locked: a.locked, active: true });
   }
   return [...by.values()].filter((s) => s.active || now - s.last < RTTY_LINGER).sort((a, b) => a.rf - b.rf);
+}
+
+/** The last `n` characters of a signal's text as runs read weakly or
+ * not (a leading "…" when cut). */
+export function textRuns(text: string, weak: string, n: number): { s: string; weak: boolean }[] {
+  const cut = text.length > n;
+  const t = cut ? text.slice(text.length - n) : text;
+  const w = cut ? weak.slice(weak.length - n) : weak;
+  const out: { s: string; weak: boolean }[] = cut ? [{ s: "…", weak: false }] : [];
+  for (let i = 0; i < t.length; ) {
+    const k = w[i] === "1";
+    let j = i + 1;
+    while (j < t.length && (w[j] === "1") === k) j++;
+    const last = out[out.length - 1];
+    if (last && last.weak === k) last.s += t.slice(i, j);
+    else out.push({ s: t.slice(i, j), weak: k });
+    i = j;
+  }
+  return out;
 }
 
 function key(s: FskSignal): string {

@@ -2,12 +2,13 @@
 // FSK / RTTY decoded in this browser from this receiver's audio: the
 // button, and beside the waterfall each two-tone signal in the passband
 // with the parameters worked out from it (rate, shift, framing, polarity,
-// character set) and its text; signals identified but not decodable
-// (reversals, other codes) are listed as such.
+// character set) and its text, characters read weakly dimmed; signals
+// identified but not decodable (reversals, other codes) are listed as
+// such.
 
 import { formatKhz } from "../fmt.ts";
 import { audioBand } from "../cw.ts";
-import { describe, navtex, NAVTEX_SUBJECTS, RTTY_STATIONS } from "../rtty.ts";
+import { describe, navtex, NAVTEX_SUBJECTS, RTTY_STATIONS, textRuns } from "../rtty.ts";
 import { clearRtty, pickRtty, rttyError, rttyOn, rttySignals, rttyWide, setRtty, setRttyWide, st, WIDE_HALF, wideAvail, wideCentre } from "../state.ts";
 
 /** Characters shown per signal (the newest). */
@@ -90,7 +91,19 @@ export function RttyPanel() {
                     <pre class="rtty-text">{m.text}</pre>
                   </details>
                 ))}
-              {x.text && <pre class="rtty-text">{x.text.length > SHOWN ? "…" + x.text.slice(x.text.length - SHOWN) : x.text}</pre>}
+              {x.text && (
+                <pre class="rtty-text">
+                  {textRuns(x.text, x.weak, SHOWN).map((r) =>
+                    r.weak ? (
+                      <span class="weak" title="Read weakly: a bit near the threshold, it may have been another character">
+                        {r.s}
+                      </span>
+                    ) : (
+                      r.s
+                    ),
+                  )}
+                </pre>
+              )}
             </div>
           ))
         )}

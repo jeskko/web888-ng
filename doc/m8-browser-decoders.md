@@ -128,18 +128,32 @@ Everything detected from the signal, with manual overrides:
   was sent as read (clean bits in every variant: the operator's typo, a
   call heard once); a third were weak in every variant (selective fades
   faster than the 0.6 s threshold tracking, a static crash in a weak
-  signal), which only context could recover; the rest were readable by
-  some variant. Compared like for like (`--example spans`: every
+  signal); the rest were readable by some variant. Compared like for like (`--example spans`: every
   skimmed span decoded from the same channel with each filter), a Hann
   tone filter 1.4 bits long in place of the 1-bit boxcar reads 8 % more
   of the recordings' words right (5118 against 4720) for the same
   errors (326 against 324): it keeps the boxcar's noise bandwidth with
   sidelobes 31 dB down rather than 13, so neighbours a few hundred Hz
   away leak far less. On synthetic RTTY it helps a little too (−7 dB:
-  2.6 % character errors against 3.5 %). Done for async; SITOR-B keeps
-  the boxcar its bit alignment is found with. Not done on purpose:
-  correcting a weak character from the words a station repeats (a guess,
-  wrong for a call heard once or the operator's own typo).
+  2.6 % character errors against 3.5 %). Faster threshold tracking
+  for the fast fades only loses (0.2 s: 4958 right), as noisier levels
+  cost every signal; instead each tone's half of the decision is
+  weighed by its strength now (a peak follower releasing in 0.4 s,
+  against its tracked levels), so while one tone is faded the other
+  decides alone against its own midpoint: 5269 right, 304 errors (with
+  both tones up the decision is unchanged; on synthetic white noise it
+  costs a little, −7 dB 2.9 %). Done for async; SITOR-B keeps the boxcar
+  its bit alignment is found with.
+* **Weak characters shown, not guessed**: a character whose bits came
+  near the threshold (smallest |soft decision| under 0.3, or a framing
+  error) is reported weak (`Event::Text` `weak`, `"weak"` in the worker
+  JSON) and dimmed in the panel. On the contest slices the wrong
+  character is marked in 53-67 % of the substitution errors (the rest
+  mostly sent as read, or flipped cleanly by QRM) while 1.3-1.8 % of the
+  characters of words read right are; keyup junk between overs is
+  dimmed too. Not done on purpose: correcting a weak character from the
+  words a station repeats (a guess, wrong for a call heard once or the
+  operator's own typo).
 
 ### 2.3 SSTV (new)
 

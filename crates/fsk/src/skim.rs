@@ -42,6 +42,9 @@ pub enum Event {
         hz: f64,
         text: String,
         t: f64,
+        /// Per character of `text`: weak, it may have read otherwise
+        /// ([`FskDecoder::WEAK`]).
+        weak: Vec<bool>,
     },
     /// An FSK signal identified but not decodable.
     Ident { hz: f64, params: FskParams },
@@ -553,11 +556,16 @@ fn emit(s: &mut Sig, items: Vec<Item>, out: &mut Vec<Event>) {
         return;
     }
     let text: String = items.iter().map(|i| i.1.as_str()).collect();
+    let weak = items
+        .iter()
+        .flat_map(|i| std::iter::repeat_n(FskDecoder::weak(i), i.1.chars().count()))
+        .collect();
     s.last_text = items[items.len() - 1].0;
     out.push(Event::Text {
         id: s.id,
         hz: s.hz(),
         text,
         t: items[0].0,
+        weak,
     });
 }

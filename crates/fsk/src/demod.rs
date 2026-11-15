@@ -36,6 +36,11 @@ pub struct ToneDemod {
     ph: [f64; 2],
     alpha: f64,
     ema: Option<[f64; 8]>,
+    /// Weigh each tone by its strength now (see [`ToneDemod::set_weighing`]).
+    weigh: bool,
+    /// Each tone's peak follower, and its per-sample release factor.
+    peak: [f64; 2],
+    release: f64,
 }
 
 impl ToneDemod {
@@ -69,7 +74,28 @@ impl ToneDemod {
             ph: [0.0; 2],
             alpha: 1.0 / (0.6 * fs),
             ema: None,
+            weigh: false,
+            peak: [0.0; 2],
+            release: (-1.0 / (0.2 * fs)).exp(),
         }
+    }
+
+    /// How fast each tone's on and off levels follow (the time constant,
+    /// s; 0.6 by default).
+    pub fn set_tracking(&mut self, secs: f64) {
+        self.alpha = 1.0 / (secs * self.fs);
+    }
+
+    /// Selective fading faster than the level tracking: each tone's half
+    /// of the decision is weighted by how strong that tone is now (a peak
+    /// follower releasing in `secs`, against its tracked on and off
+    /// levels), so while one tone is faded into the noise the other
+    /// decides alone against its own midpoint, rather than the faded
+    /// one's noise counting as much. With both tones up the decision is
+    /// unchanged.
+    pub fn set_weighing(&mut self, on: bool, secs: f64) {
+        self.weigh = on;
+        self.release = (-1.0 / (secs * self.fs)).exp();
     }
 
     /// The filter's delay (samples): a bit's clean reading comes this
@@ -182,7 +208,17 @@ impl ToneDemod {
             }
             let da = (la - na).max(0.15 * la + 1e-12);
             let db = (lb - nb).max(0.15 * lb + 1e-12);
-            d.push(((b - nb) / db - (a - na) / da) as f32);
+            let (ta, tb) = ((a - na) / da, (b - nb) / db);
+            if self.weigh {
+                let r = self.release;
+                self.peak[0] = a.max(self.peak[0] * r);
+                self.peak[1] = b.max(self.peak[1] * r);
+                let wa = ((self.peak[0] - na) / da).clamp(0.1, 1.0);
+                let wb = ((self.peak[1] - nb) / db).clamp(0.1, 1.0);
+                d.push((2.0 * (wb * (tb - 0.5) - wa * (ta - 0.5)) / (wa + wb)) as f32);
+            } else {
+                d.push((tb - ta) as f32);
+            }
             a_out.push(a as f32);
             b_out.push(b as f32);
         }

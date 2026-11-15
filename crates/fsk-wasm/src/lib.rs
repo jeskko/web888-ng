@@ -8,7 +8,9 @@
 //! * `fsk_push(n)`: runs them through; returns the length of the JSON at
 //!   `fsk_output()` when there is something new (text, or a run every 2
 //!   s), else 0: `{"ev":[...],"act":[...],"now":..}` with events
-//!   `{"k":"lock","id","hz","p"}`, `{"k":"text","id","hz","text","t"}`,
+//!   `{"k":"lock","id","hz","p"}`, `{"k":"text","id","hz","text","t"}`
+//!   (and `"weak"`: a '0'/'1' per character of the text, '1' where it may
+//!   have read otherwise, when any is),
 //!   `{"k":"ident","hz","p"}`, signals `{"id","hz","locked","snr","fe","p"}`
 //!   and parameters `p` = `{"baud","shift","lo","hi","markHigh","framing",
 //!   "charset","usos","msb","mode"}` (audio Hz; times in s since the reset)
@@ -101,12 +103,23 @@ pub fn to_json(ev: &[Event], act: &[Active], now: f64) -> String {
                 params(&mut s, p);
                 s.push('}');
             }
-            Event::Text { id, hz, text, t } => {
+            Event::Text {
+                id,
+                hz,
+                text,
+                t,
+                weak,
+            } => {
                 let _ = write!(
                     s,
                     "{{\"k\":\"text\",\"id\":{id},\"hz\":{hz:.1},\"t\":{t:.3},\"text\":"
                 );
                 esc(&mut s, text);
+                if weak.iter().any(|&w| w) {
+                    s.push_str(",\"weak\":\"");
+                    s.extend(weak.iter().map(|&w| if w { '1' } else { '0' }));
+                    s.push('"');
+                }
                 s.push('}');
             }
             Event::Ident { hz, params: p } => {
@@ -245,6 +258,14 @@ mod tests {
                 hz: 915.0,
                 text: "CQ \"X\"\nDE".into(),
                 t: 1.5,
+                weak: vec![false; 9],
+            },
+            Event::Text {
+                id: 2,
+                hz: 915.0,
+                text: "TEST".into(),
+                t: 3.0,
+                weak: vec![false, true, false, false],
             },
             Event::Ident {
                 hz: 1500.0,
@@ -265,7 +286,7 @@ mod tests {
         }];
         let j = to_json(&ev, &act, 9.0);
         let p = r#"{"baud":45.45,"shift":170.0,"lo":-85.0,"hi":85.0,"markHigh":false,"framing":"5N1.5","charset":"ITA2","usos":true,"msb":false,"mode":"async"}"#;
-        assert!(j.starts_with(&format!(r#"{{"ev":[{{"k":"lock","id":2,"hz":915.0,"p":{p}}},{{"k":"text","id":2,"hz":915.0,"t":1.500,"text":"CQ \"X\"\nDE"}},{{"k":"ident","hz":1500.0,"p":{{"baud":50,"#)), "{j}");
+        assert!(j.starts_with(&format!(r#"{{"ev":[{{"k":"lock","id":2,"hz":915.0,"p":{p}}},{{"k":"text","id":2,"hz":915.0,"t":1.500,"text":"CQ \"X\"\nDE"}},{{"k":"text","id":2,"hz":915.0,"t":3.000,"text":"TEST","weak":"0100"}},{{"k":"ident","hz":1500.0,"p":{{"baud":50,"#)), "{j}");
         assert!(
             j.contains(r#""framing":"sync","charset":"reversals (idle)""#),
             "{j}"

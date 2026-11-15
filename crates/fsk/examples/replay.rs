@@ -1,7 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The skimmer on a recording: complex f32 IQ (I, Q pairs, little
 //! endian), e.g. a slice of a HackRF recording. Prints every lock and the
-//! text of every signal, one line per text event:
+//! text of every signal (weak characters in lower case), one line per
+//! text event:
 //! `T   time  RF_kHz  id  text`, and `L time RF_kHz id params` per lock.
 //!
 //!     cargo run --release -p web888-fsk --example replay FILE.cf32 RATE CENTRE_HZ [MAX]
@@ -62,11 +63,24 @@ fn main() {
                     params.charset,
                     params.snr
                 ),
-                Event::Text { id, hz, text, t } => println!(
-                    "T {t:7.2} {:9.3} {id:4} {}",
-                    (centre + hz) / 1e3,
-                    text.replace('\n', "\\n").replace('\r', "\\r")
-                ),
+                Event::Text {
+                    id,
+                    hz,
+                    text,
+                    t,
+                    weak,
+                } => {
+                    let s: String = text
+                        .chars()
+                        .zip(weak)
+                        .map(|(c, w)| if w { c.to_ascii_lowercase() } else { c })
+                        .collect();
+                    println!(
+                        "T {t:7.2} {:9.3} {id:4} {}",
+                        (centre + hz) / 1e3,
+                        s.replace('\n', "\\n").replace('\r', "\\r")
+                    )
+                }
                 Event::Ident { hz, params } => println!(
                     "I {now:7.2} {:9.3}    0 {} Bd {:.0} Hz {}",
                     (centre + hz) / 1e3,
