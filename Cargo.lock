@@ -1913,6 +1913,23 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-js8"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+ "web888-ftx",
+]
+
+[[package]]
+name = "web888-js8-wasm"
+version = "0.13.0"
+dependencies = [
+ "web888-ftx",
+ "web888-js8",
+]
+
+[[package]]
 name = "web888-jtty"
 version = "0.13.0"
 dependencies = [

@@ -10,6 +10,8 @@
 pub mod crc;
 pub mod ft4;
 pub mod ft8;
+pub mod js8;
+pub mod js8code;
 pub mod ldpc;
 pub mod msg;
 pub mod osd;

@@ -26,6 +26,7 @@ import { CwPanel } from "./ctl/cw.tsx";
 import { RttyPanel } from "./ctl/rtty.tsx";
 import { PskPanel } from "./ctl/psk.tsx";
 import { HfdlPanel } from "./ctl/hfdl.tsx";
+import { Js8Panel } from "./ctl/js8.tsx";
 import { ImgPanel } from "./ctl/img.tsx";
 import { DigiPanel } from "./ctl/digi.tsx";
 import { SigPanel } from "./ctl/sigid.tsx";
@@ -166,6 +167,7 @@ function App() {
         <RttyPanel />
         <PskPanel />
         <HfdlPanel />
+        <Js8Panel />
         <ImgPanel />
         <JttyPanel />
         <DigiPanel />

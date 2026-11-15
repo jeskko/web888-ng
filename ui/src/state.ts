@@ -18,6 +18,7 @@ import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
 import { applyPsk, type PskRun, type PskSignal } from "./psk.ts";
 import { applyHfdl, hfdlCentre, type HfdlMsg, type HfdlRun, type HfdlStation } from "./hfdl.ts";
+import { applyJs8, JS8_SUBMODES, type Js8Msg, type Js8Result } from "./js8.ts";
 import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
@@ -233,6 +234,7 @@ export function connect(): void {
       if (!rttyWideNow()) rttyAudio(f);
       pskAudio(f);
       hfdlAudio(f);
+      js8Audio(f);
       imgAudio(f);
       digiAudio(f);
       sigAudio(f);
@@ -888,6 +890,105 @@ export function pickHfdl(dial: number): void {
   if (!v || !r) return;
   const span = wfSpan(r.adc_hz, v.decim);
   const c = dial + 1440;
+  if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
+}
+
+// ---------------------------------------------------------- JS8
+
+/** JS8 decoding (every submode, the whole passband) in this browser
+ * (remembered). */
+export const js8On = signal(load("js8") === "1");
+export const js8Msgs = signal<Js8Msg[]>([]);
+export const js8Error = signal("");
+/** Periods waiting and decoded, frames found (since JS8 was turned on). */
+export const js8Status = signal({ pending: 0, clock: false, periods: 0, frames: 0 });
+let js8Worker: Worker | null = null;
+const js8Feed = new JttyFeed();
+const js8Clock = new SampleClock(DIGI_RATE);
+let js8Slotters: Slotter[] = [];
+let js8Index = 0;
+let js8Key = "";
+let js8Gen = 0;
+let js8Rf: (hz: number) => number = (hz) => hz;
+
+function js8Start(): Worker {
+  const w = new Worker("js8-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { result?: Js8Result; sub?: number; start?: number; gen?: number; error?: string };
+    if (d.error) js8Error.value = d.error;
+    if (!d.result || d.start === undefined || d.sub === undefined) return;
+    const s0 = js8Status.value;
+    js8Status.value = { ...s0, pending: Math.max(0, s0.pending - 1), periods: s0.periods + 1, frames: s0.frames + d.result.frames.length };
+    if (d.gen !== js8Gen) return;
+    const sub = JS8_SUBMODES.find((m) => m.id === d.sub)!.name;
+    js8Msgs.value = applyJs8(js8Msgs.value, sub, d.result.frames, d.start, js8Rf);
+  };
+  return w;
+}
+
+function js8Restart(): void {
+  for (const s of js8Slotters) s.reset();
+  js8Clock.reset();
+  js8Index = 0;
+}
+
+function js8Audio(f: AudioFrame): void {
+  const s = st.value;
+  if (!js8On.value || !s) return;
+  js8Worker ??= js8Start();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== js8Key) {
+    // retuned: a new stream; the messages heard so far stay listed
+    js8Key = key;
+    js8Gen++;
+    const dial = s.hz;
+    js8Rf = (a) => dial + a;
+    js8Slotters = JS8_SUBMODES.map((m) => new Slotter(m.period, m.collect));
+    js8Restart();
+  }
+  if (f.flags & FLAG_GAP) js8Restart();
+  if (s.mode !== "usb") return;
+  const pcm = js8Feed.push(f.pcm, f.rate, f.stereo);
+  if (pcm.length === 0) return;
+  const first = js8Index;
+  js8Index += pcm.length;
+  js8Clock.observe(js8Index, serverClock.now(Date.now() / 1000));
+  let pending = js8Status.value.pending;
+  js8Slotters.forEach((sl, i) => {
+    // each slotter keeps its own copy (they trim at their own pace)
+    for (const slot of sl.push(first, pcm.slice(), js8Clock)) {
+      js8Worker!.postMessage({ slot: slot.audio, sub: JS8_SUBMODES[i].id, start: slot.start, gen: js8Gen }, [slot.audio.buffer]);
+      pending++;
+    }
+  });
+  if (pending !== js8Status.value.pending || serverClock.known !== js8Status.value.clock) js8Status.value = { ...js8Status.value, pending, clock: serverClock.known };
+}
+
+export function setJs8(on: boolean): void {
+  js8On.value = on;
+  save("js8", on ? "1" : "0");
+  if (!on && js8Worker) {
+    js8Worker.terminate();
+    js8Worker = null;
+    js8Key = "";
+    js8Status.value = { pending: 0, clock: serverClock.known, periods: 0, frames: 0 };
+  }
+}
+
+export function clearJs8(): void {
+  js8Msgs.value = [];
+}
+
+/** A band's JS8 frequency was picked: USB there, a 3 kHz passband, in
+ * view. */
+export function pickJs8(dial: number): void {
+  tune(dial);
+  setModePassband("usb", 100, 3000);
+  const v = st.value?.wf;
+  const r = radio.value;
+  if (!v || !r) return;
+  const span = wfSpan(r.adc_hz, v.decim);
+  const c = dial + 1500;
   if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
 }
 

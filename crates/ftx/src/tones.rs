@@ -67,6 +67,8 @@ pub enum Shape {
     /// BT 1.0; a ramp symbol before and after, each a half cosine over
     /// the whole symbol on the first and last tone.
     Ft4,
+    /// Plain (rectangular) FSK, as JS8 sends; ramps as FT8.
+    Fsk,
 }
 
 impl Shape {
@@ -74,13 +76,15 @@ impl Shape {
         match self {
             Shape::Ft8 => 2.0,
             Shape::Ft4 => 1.0,
+            // a Gaussian this narrow leaves the rectangle
+            Shape::Fsk => 50.0,
         }
     }
 
     /// Ramp symbols added at each end.
     pub fn guard(self) -> usize {
         match self {
-            Shape::Ft8 => 0,
+            Shape::Ft8 | Shape::Fsk => 0,
             Shape::Ft4 => 1,
         }
     }

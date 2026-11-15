@@ -39,7 +39,9 @@ function handle(e: MessageEvent): void {
   }
   const pcm = d?.pcm as Float32Array | undefined;
   if (!pcm || pcm.length === 0) return;
-  new Float32Array(x.memory.buffer, x.sig_buffer(pcm.length), pcm.length).set(pcm);
+  // allocate first: it may grow the memory, which detaches the old buffer
+  const ptr = x.sig_buffer(pcm.length);
+  new Float32Array(x.memory.buffer, ptr, pcm.length).set(pcm);
   const n = x.sig_push(pcm.length);
   if (n > 0) {
     const json = new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.sig_output(), n));

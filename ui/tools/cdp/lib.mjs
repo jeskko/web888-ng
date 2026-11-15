@@ -89,7 +89,7 @@ export async function launch({ width = 1400, height = 900, dpr = 1, autoplay = f
 export const q = (sel) => `document.querySelector(${JSON.stringify(sel)})`;
 
 /** Turns a browser decoder on (or off) from the header's Decoders list,
- * by its label there ("FT8/FT4/WSPR", "CW", "RTTY", "PSK", "HFDL",
+ * by its label there ("FT8/FT4/WSPR", "CW", "RTTY", "PSK", "JS8", "HFDL",
  * "FAX/SSTV", "Signal ID", "JTTY"). */
 export async function decoder(p, label, on = true) {
   await p.ev(`document.querySelector(".decoders-pop") || document.querySelector("header button.decoders").click()`);

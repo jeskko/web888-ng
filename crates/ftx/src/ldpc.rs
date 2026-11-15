@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The (174,91) LDPC code of FT8/FT4: systematic encoder and a
-//! belief propagation decoder (normalised min-sum).
+//! belief propagation decoder (normalised min-sum), which also takes
+//! JS8's (174,87) code ([`Bp::js8`]).
 //!
 //! Codeword bit 0 is the first bit sent. Bits 0..91 are the message and
 //! CRC (bit 90 of the `u128` word is codeword bit 0), bits 91..174 the
@@ -90,25 +91,78 @@ const ALPHA: f32 = 0.8;
 /// Belief propagation decoder state; reusable between candidates.
 pub struct Bp {
     /// Each check's bits (0-based) and, for each, which of the bit's
-    /// three checks it is.
-    nm: [[(u8, u8); 7]; M],
+    /// three checks it is; and how many bits it has.
+    nm: Vec<[(u8, u8); 7]>,
+    rows: Vec<u8>,
     tov: [[f32; 3]; N],
 }
 
 impl Default for Bp {
+    /// FT8's and FT4's (174,91) code.
     fn default() -> Self {
-        let mut nm = [[(0u8, 0u8); 7]; M];
-        for m in 0..M {
-            for i in 0..NUM_ROWS[m] as usize {
-                let n = NM[m][i] as usize - 1;
-                let k = MN[n].iter().position(|&x| x as usize - 1 == m).unwrap();
-                nm[m][i] = (n as u8, k as u8);
+        let checks: Vec<Vec<u8>> = (0..M)
+            .map(|m| {
+                NM[m][..NUM_ROWS[m] as usize]
+                    .iter()
+                    .map(|&n| n - 1)
+                    .collect()
+            })
+            .collect();
+        let mn: Vec<[u8; 3]> = MN.iter().map(|r| r.map(|x| x - 1)).collect();
+        Bp::new(&checks, &mn)
+    }
+}
+
+impl Bp {
+    /// A code given as each check's bits and each bit's three checks (all
+    /// 0-based; the order of a bit's checks is the order its messages
+    /// are summed in).
+    pub fn new<C: AsRef<[u8]>>(checks: &[C], mn: &[[u8; 3]]) -> Self {
+        let mut nm = vec![[(0u8, 0u8); 7]; checks.len()];
+        let mut rows = vec![0u8; checks.len()];
+        for (m, c) in checks.iter().enumerate() {
+            let c = c.as_ref();
+            rows[m] = c.len() as u8;
+            for (i, &n) in c.iter().enumerate() {
+                let k = mn[n as usize]
+                    .iter()
+                    .position(|&x| x as usize == m)
+                    .unwrap();
+                nm[m][i] = (n, k as u8);
             }
         }
         Bp {
             nm,
+            rows,
             tov: [[0.0; 3]; N],
         }
+    }
+
+    /// JS8's (174,87) code: the 87 parity bits first, then the message.
+    pub fn js8() -> Self {
+        let checks = &crate::js8code::CHECKS;
+        let mut mn = vec![[0u8; 3]; N];
+        let mut have = vec![0usize; N];
+        for (m, c) in checks.iter().enumerate() {
+            for &n in c.iter() {
+                mn[n as usize][have[n as usize]] = m as u8;
+                have[n as usize] += 1;
+            }
+        }
+        Bp::new(checks, &mn)
+    }
+
+    /// Checks `c` fails.
+    pub fn errors(&self, c: &Bits) -> usize {
+        self.nm
+            .iter()
+            .zip(&self.rows)
+            .filter(|(r, w)| {
+                r[..**w as usize]
+                    .iter()
+                    .fold(false, |x, &(n, _)| x ^ get(c, n as usize))
+            })
+            .count()
     }
 }
 
@@ -129,19 +183,20 @@ impl Bp {
         for t in self.tov.iter_mut() {
             *t = [0.0; 3];
         }
+        let checks = self.rows.len();
         let mut best = Decoded {
             codeword: [0; 3],
-            errors: M,
+            errors: checks,
             iterations: 0,
         };
         let mut zn = *llr;
-        let (mut last, mut stalled) = (M, 0);
+        let (mut last, mut stalled) = (checks, 0);
         for iter in 0..=max_iter {
             let mut c = [0u64; 3];
             for (n, &z) in zn.iter().enumerate() {
                 set(&mut c, n, z > 0.0);
             }
-            let errors = check(&c);
+            let errors = self.errors(&c);
             stalled = if errors < last { 0 } else { stalled + 1 };
             last = errors;
             if errors < best.errors {
@@ -161,7 +216,8 @@ impl Bp {
             // smallest of their magnitudes, and the sign that makes the
             // check hold. LLRs are ln(P1 / P0), so an even number of ones
             // is the product of the others' signs times (-1)^(w - 1).
-            for (m, &w) in NUM_ROWS.iter().enumerate() {
+            for m in 0..checks {
+                let w = self.rows[m];
                 let w = w as usize;
                 // Bits to the check: everything a bit knows except what
                 // this check told it.

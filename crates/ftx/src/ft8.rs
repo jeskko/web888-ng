@@ -19,6 +19,7 @@
 //! 4. **Subtraction.** Decoded signals are rebuilt and subtracted from the
 //!    audio, and the search runs again for what they covered.
 
+use crate::js8;
 use crate::ldpc::{self, Bp, N};
 use crate::msg::{self, CallHashes, Message};
 use crate::osd;
@@ -102,6 +103,13 @@ pub struct Config {
     pub trace: Option<f32>,
     /// Keep the audio left after subtracting the decodes (`residual`).
     pub keep_residual: bool,
+    /// JS8 frames (its Costas arrays) instead of FT8: the (174,87) code,
+    /// CRC-12, tones without Gray code, plain FSK, no OSD
+    /// ([`crate::js8`]). Decodes carry the 75 bits; `message.text` is the
+    /// 12 characters, `message.i3` the frame type.
+    pub js8: Option<[[u8; 7]; 3]>,
+    /// Nominal start of a transmission in the slot, s.
+    pub t0: f32,
 }
 
 impl Default for Config {
@@ -128,6 +136,8 @@ impl Default for Config {
             llr_scale: 5.5,
             trace: None,
             keep_residual: false,
+            js8: None,
+            t0: T0,
         }
     }
 }
@@ -209,6 +219,9 @@ pub struct Decoder {
     tone_ref: [[C32; DS_NSPS]; 8],
     /// exp(-j 2 pi df n / 200) for each fine frequency offset.
     fine_tw: [[C32; DS_NSPS]; FINE_DF.len()],
+    /// The Costas arrays and the tone of each 3-bit word.
+    costas: [[u8; 7]; 3],
+    map: [u8; 8],
     pub stats: Stats,
     residual: Vec<f32>,
 }
@@ -222,6 +235,8 @@ impl Decoder {
                 C32::new(ph.cos(), ph.sin())
             })
         });
+        let js8 = cfg.js8.is_some();
+        let costas = cfg.js8.unwrap_or([FT8_COSTAS; 3]);
         Decoder {
             cfg,
             fft1: RealFft::new(NFFT1),
@@ -230,7 +245,9 @@ impl Decoder {
             spec_fft: p.plan_fft_forward(SPEC_NFFT),
             spec_ifft: p.plan_fft_inverse(SPEC_N),
             fft32: p.plan_fft_forward(DS_NSPS),
-            bp: Bp::default(),
+            bp: if js8 { Bp::js8() } else { Bp::default() },
+            costas,
+            map: if js8 { js8::TONE_MAP } else { FT8_GRAY },
             tone_ref,
             fine_tw: std::array::from_fn(|k| {
                 std::array::from_fn(|n| {
@@ -361,9 +378,9 @@ impl Decoder {
             .expect("no gate");
         Analysis {
             freq: d.f0,
-            dt: d.t - T0,
+            dt: d.t - self.cfg.t0,
             nsync: d.nsync,
-            metrics: [1, 2, 3].map(|nsym| soft_bits(&d.cs, nsym, self.cfg.llr_scale)),
+            metrics: [1, 2, 3].map(|nsym| soft_bits(&d.cs, nsym, self.cfg.llr_scale, &self.map)),
         }
     }
 
@@ -374,7 +391,7 @@ impl Decoder {
         let n = audio.len().min(SLOT);
         x[..n].copy_from_slice(&audio[..n]);
         let spectrum = self.spectrum(&x);
-        let t = (dt + T0) * DS_RATE;
+        let t = (dt + self.cfg.t0) * DS_RATE;
         let i0 = t.floor();
         let cd = self.downsample_shifted(&spectrum, freq, (t - i0) / DS_RATE);
         let (cs, _, nsync) = self.symbols(&cd, i0 as i64);
@@ -382,7 +399,7 @@ impl Decoder {
             freq,
             dt,
             nsync,
-            metrics: [1, 2, 3].map(|nsym| soft_bits(&cs, nsym, self.cfg.llr_scale)),
+            metrics: [1, 2, 3].map(|nsym| soft_bits(&cs, nsym, self.cfg.llr_scale, &self.map)),
         }
     }
 
@@ -398,15 +415,15 @@ impl Decoder {
     /// 200 S/s, take its slowly varying complex amplitude from the
     /// received samples, and subtract its spectrum.
     fn subtract(&self, spectrum: &mut [C32], d: &Decode) {
-        let t = (d.dt + T0) * DS_RATE;
+        let t = (d.dt + self.cfg.t0) * DS_RATE;
         let i0 = t.floor();
         let frac = (t - i0) / DS_RATE;
         let i0 = i0 as i64;
         let cd = self.downsample_shifted(spectrum, d.freq, frac);
         let reference = tones::synth_complex(
-            &tones::ft8(d.bits),
+            &self.tones(d.bits),
             BAUD as f64,
-            Shape::Ft8,
+            self.shape(),
             0.0,
             DS_RATE as f64,
         );
@@ -492,7 +509,7 @@ impl Decoder {
         // Lags in steps from the nominal start: 0.04 s each, ±2.5 s. For
         // each lag, the three Costas arrays' power and reference sums go
         // into per-bin accumulators.
-        let j0 = (T0 / SPEC_DT).round() as i32;
+        let j0 = (self.cfg.t0 / SPEC_DT).round() as i32;
         let ni = i_max - i_min;
         let mut best = vec![(0f32, 0i32, 0f32, 0i32); ni]; // (sync, lag, sync near, lag near)
         let mut ta = vec![[0f32; 3]; ni];
@@ -501,7 +518,7 @@ impl Decoder {
             ta.iter_mut().for_each(|v| *v = [0.0; 3]);
             t0.iter_mut().for_each(|v| *v = [0.0; 3]);
             for a in 0..3 {
-                for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+                for (k, &tone) in self.costas[a].iter().enumerate() {
                     let j = j0 + lag + 4 * (36 * a as i32 + k as i32);
                     if j < 0 || j as usize >= nsteps {
                         continue;
@@ -569,7 +586,7 @@ impl Decoder {
             let lag = (c.dt / SPEC_DT).round() as i32;
             let (mut hits, mut seen) = (0, 0);
             for a in 0..3 {
-                for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+                for (k, &tone) in self.costas[a as usize].iter().enumerate() {
                     let j = j0 + lag + 4 * (36 * a + k as i32);
                     if j < 0 || j as usize >= nsteps {
                         continue;
@@ -649,7 +666,7 @@ impl Decoder {
         };
         let mut sum = vec![0f32; n];
         for a in 0..3 {
-            for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+            for (k, &tone) in self.costas[a].iter().enumerate() {
                 let r = &self.tone_ref[tone as usize];
                 let step = r[1];
                 let start = first + (DS_NSPS * (36 * a + k)) as i64;
@@ -676,7 +693,7 @@ impl Decoder {
         let mut sum = [0f32; FINE_DF.len()];
         let mut p = [C32::default(); DS_NSPS];
         for a in 0..3 {
-            for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+            for (k, &tone) in self.costas[a].iter().enumerate() {
                 let start = i0 + (DS_NSPS * (36 * a + k)) as i64;
                 for (n, (pn, r)) in p.iter_mut().zip(&self.tone_ref[tone as usize]).enumerate() {
                     let idx = start + n as i64;
@@ -701,7 +718,7 @@ impl Decoder {
         let mut n = 0;
         let mut buf = [C32::default(); DS_NSPS];
         for a in 0..3 {
-            for (k, &tone) in FT8_COSTAS.iter().enumerate() {
+            for (k, &tone) in self.costas[a].iter().enumerate() {
                 let start = i0 + (DS_NSPS * (36 * a + k)) as i64;
                 for (j, b) in buf.iter_mut().enumerate() {
                     let idx = start + j as i64;
@@ -750,7 +767,7 @@ impl Decoder {
             for k in 0..7 {
                 let row = &s8[36 * a + k];
                 let top = (0..8).max_by(|&x, &y| row[x].total_cmp(&row[y])).unwrap();
-                if top == FT8_COSTAS[k] as usize {
+                if top == self.costas[a][k] as usize {
                     nsync += 1;
                 }
             }
@@ -766,7 +783,7 @@ impl Decoder {
         let t = Instant::now();
         let mut f0 = c.freq;
         let mut cd = self.downsample(spectrum, f0);
-        let nominal = ((c.dt + T0) * DS_RATE).round() as i64;
+        let nominal = ((c.dt + self.cfg.t0) * DS_RATE).round() as i64;
         // The peak of sync over start samples first..first + len (the
         // first of equal ones), and the values around it.
         let peak = |v: &[f32], first: i64| {
@@ -857,7 +874,8 @@ impl Decoder {
         }
         let t = Instant::now();
 
-        let metrics: [[f32; N]; 3] = [1, 2, 3].map(|nsym| soft_bits(&cs, nsym, self.cfg.llr_scale));
+        let metrics: [[f32; N]; 3] =
+            [1, 2, 3].map(|nsym| soft_bits(&cs, nsym, self.cfg.llr_scale, &self.map));
         self.stats.metrics += t.elapsed();
         let t = Instant::now();
         for (m, how) in metrics.iter().zip([1u8, 2, 3]) {
@@ -872,7 +890,7 @@ impl Decoder {
         self.stats.bp += t.elapsed();
         let t = Instant::now();
         let mut result = None;
-        if let Some(depth) = self.cfg.osd {
+        if let Some(depth) = self.cfg.osd.filter(|_| self.cfg.js8.is_none()) {
             'osd: for (m, how) in metrics.iter().zip([1u8, 2, 3]) {
                 if let Some(f) = osd::decode(m, depth) {
                     if traced {
@@ -936,6 +954,22 @@ impl Decoder {
         )
     }
 
+    /// The tones of a decode's bits.
+    fn tones(&self, bits: u128) -> [u8; 79] {
+        match self.cfg.js8 {
+            Some(c) => js8::tones(js8::with_crc(bits), &c),
+            None => tones::ft8(bits),
+        }
+    }
+
+    fn shape(&self) -> Shape {
+        if self.cfg.js8.is_some() {
+            Shape::Fsk
+        } else {
+            Shape::Ft8
+        }
+    }
+
     #[allow(clippy::too_many_arguments)]
     fn accept(
         &self,
@@ -948,12 +982,28 @@ impl Decoder {
         how: u8,
         hashes: &mut CallHashes,
     ) -> Option<Decode> {
-        let a91 = ldpc::message(cw);
-        let bits = crate::crc::check(a91)?;
+        let (bits, message) = if self.cfg.js8.is_some() {
+            let bits = js8::check(js8::message(cw))?;
+            let (text, i3) = js8::text(bits);
+            (
+                bits,
+                Message {
+                    text,
+                    sender: None,
+                    grid: None,
+                    calls: vec![],
+                    i3,
+                    n3: 0,
+                },
+            )
+        } else {
+            let a91 = ldpc::message(cw);
+            let bits = crate::crc::check(a91)?;
+            (bits, msg::peek(bits, hashes)?)
+        };
         if bits == 0 {
             return None;
         }
-        let message = msg::peek(bits, hashes)?;
         if let Some(f) = osd
             && !self.osd_plausible(&message, f, hashes)
         {
@@ -962,7 +1012,7 @@ impl Decoder {
         for c in &message.calls {
             hashes.save(c);
         }
-        let tones = tones::ft8(bits);
+        let tones = self.tones(bits);
         let mut xsig = 0.0;
         let mut xnoi = 0.0;
         for (k, &t) in tones.iter().enumerate() {
@@ -975,7 +1025,7 @@ impl Decoder {
             message,
             bits,
             freq: f0,
-            dt: t_start - T0,
+            dt: t_start - self.cfg.t0,
             snr,
             sync,
             how,
@@ -1035,7 +1085,7 @@ pub(crate) fn parabola_peak(a: f32, b: f32, c: f32) -> f32 {
 }
 
 /// Bit log-likelihoods from coherent sums over groups of `nsym` symbols.
-fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32) -> [f32; N] {
+fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f32; N] {
     let mut out = [0f32; N];
     for half in 0..2 {
         let base = if half == 0 { 7 } else { 43 };
@@ -1054,7 +1104,7 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32) -> [f32; N] {
                 let row = &cs[base + ks + j];
                 for i in (0..len).rev() {
                     let p = z[i];
-                    for (t, &g) in FT8_GRAY.iter().enumerate() {
+                    for (t, &g) in map.iter().enumerate() {
                         z[i * 8 + t] = p + row[g as usize];
                     }
                 }

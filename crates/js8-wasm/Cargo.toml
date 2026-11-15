@@ -1,0 +1,16 @@
+[package]
+name = "web888-js8-wasm"
+description = "The JS8 decoder for the web UI (WebAssembly, plain C ABI)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[lib]
+crate-type = ["cdylib", "rlib"]
+
+[dependencies]
+web888-js8.workspace = true
+
+[dev-dependencies]
+web888-ftx.workspace = true

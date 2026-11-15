@@ -25,7 +25,8 @@ skimming, §6) and item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
 | 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
 | 10 | **PSK31/63/125** (BPSK, Varicode) | new (G3PLX's Varicode) | every BPSK signal in the passband found (carrier, rate) and decoded |
 | 11 | **HFDL** (aircraft data link, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as the reference) | new | squitters, logons, position reports and ACARS decoded, checked by their CRCs (§2.6); next: positions on the map |
-| 12 | later: JS8Call (FT8's waveform and code, other framing), ALE 2G, Olivia | new | — |
+| 12 | **JS8** (JS8Call: FT8's waveform, its own code and frames; Normal, Fast, Turbo, Slow) | the FT8 decoder, generalised | heartbeats, directed messages and free text, frames joined per frequency (§2.7) |
+| 13 | later: ALE 2G, Olivia | new | — |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 (images, a new panel type), then the rest.
@@ -305,6 +306,51 @@ signal itself (`--example diag`).
   test). Not yet: positions on the map, the over-the-air system table,
   more than one channel at a time (the wide IQ path), ACARS reassembly
   of multi-block messages.
+
+### 2.7 JS8 (new): done (2026-11-16)
+
+JS8Call (GPL-3.0) was read as the reference; nothing of it was built or
+run.
+
+* **Frames** (`crates/ftx`, `js8`): FT8's 79 symbols of 8-FSK at FT8's
+  timing for Normal, but 87 bits (72 text bits, 3 flag bits, a CRC-12:
+  boost's augmented CRC, polynomial 0xc06, XOR 42), a (174,87) LDPC code
+  whose codeword is the parity then the message, tones straight from the
+  3-bit words (no Gray code), its own Costas arrays (one for Normal,
+  three others for the rest), plain FSK. The FT8 decoder now takes a
+  Costas set, tone map, code and start time (`Config::js8`, `t0`; the
+  belief propagation decoder takes any code's checks): FT8 and FT4
+  decode exactly as before on both corpora (FT8 1623/1842, 1458/1600,
+  1173/1267; FT4 468/488). No OSD for JS8: with a 12-bit CRC it would
+  find false frames (JS8Call doesn't use it either).
+* **Submodes** (`crates/js8`): Fast (10 Bd, 10 s), Turbo (20 Bd, 6 s)
+  and Slow (3.125 Bd, 30 s) are Normal's frame at another symbol length,
+  so each period is resampled in the frequency domain to Normal's timing
+  (×1.6, ×3.2 in time; Slow ×0.5, its band in two halves) and decoded by
+  the same decoder; frequency, time and SNR mapped back.
+* **Messages** (`message`, `jsc`): the flag bits say first frame, last
+  frame, fast data; the 72 bits start with the frame type: heartbeat
+  (callsign, grid, @HB or @ALLCALL CQ), compound callsign, directed
+  (from, to, one of 32 commands, a number or SNR), data. Free text is
+  JS8Call's dictionary compression (262144 entries, `data/jsc_words.txt`
+  from its `jsc_map.cpp`, embedded in the wasm: 2.7 MB, 1.3 MB as served
+  gzipped), or the old Huffman code. Text as JS8Call shows it.
+* **Synthetic** (`--example snr`, 20 frames a point, SNR in 2500 Hz):
+  50 % at −20 dB Normal, −19 Fast, about −16 Turbo, −23.5 Slow (each as
+  its symbol rate predicts); no false frame from noise in 20 periods
+  each.
+* **Recording** (2026-11-15 16:21 UTC, 7078 kHz, `/data/iq/js8`): 47
+  frames in 10 minutes (44 Normal, 2 Fast, 1 Slow), every one readable:
+  heartbeats and their SNR replies, CQs, a QSO's free text across
+  frames. 20 m had 4 then, 80 and 15 m none. All four submodes cost 4.5 s
+  for the 10 minutes natively, 11 s in the browser (~2 % of a core).
+* **Page**: JS8 in the Decoders list. Four slot collectors (one per
+  submode) on the audio; each period is decoded as it ends. The panel
+  joins frames per frequency into messages (first and last frame flags,
+  as JS8Call's band activity), lists the stations heard, shows frames
+  and periods decoded, and has the usual dials. On the unit, 7078 kHz at
+  22:30 UTC: heartbeat replies within five minutes; 3578 and 10130 kHz
+  were quiet. Not yet: messages to the map (grids), the wide IQ path.
 
 ## 3. Shared UI
 

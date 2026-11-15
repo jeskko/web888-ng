@@ -1,0 +1,12 @@
+[package]
+name = "web888-js8"
+description = "JS8 (JS8Call) decoder: Normal, Fast, Turbo and Slow frames to messages"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true
+web888-ftx.workspace = true
