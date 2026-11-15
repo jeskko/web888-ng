@@ -7,7 +7,7 @@
 use std::time::Instant;
 use web888_cw::dsp::Rng;
 use web888_cw::synth::{self, Channel, Keying};
-use web888_cw::{AUDIO_RATE, DecodeOpts, ENV_FS, Skimmer, decode};
+use web888_cw::{AUDIO_RATE, DecodeOpts, ENV_FS, Skimmer, decode, net};
 
 const MSGS: [&str; 5] = [
     "CQ CQ DE N0CALL N0CALL PSE K",
@@ -33,19 +33,24 @@ fn cer(r: &str, h: &str) -> f64 {
     d[b.len()] as f64 / a.len().max(1) as f64
 }
 
-fn rate(k: &Keying, ch: &Channel, reps: u64) -> f64 {
-    let mut s = 0.0;
+/// (classical, neural) error rates.
+fn rate(k: &Keying, ch: &Channel, reps: u64) -> (f64, f64) {
+    let (mut a, mut b) = (0.0, 0.0);
     for rep in 0..reps {
         for (i, m) in MSGS.iter().enumerate() {
             let x = synth::complex(m, k, ch, ENV_FS, &mut Rng::new(rep * 100 + i as u64));
-            s += cer(m, &decode(&x, &DecodeOpts::default()).text);
+            a += cer(m, &decode(&x, &DecodeOpts::default()).text);
+            let t: String = net::decode(&x, 0.0).into_iter().map(|c| c.1).collect();
+            b += cer(m, &t);
         }
     }
-    s / (reps as f64 * MSGS.len() as f64)
+    let n = reps as f64 * MSGS.len() as f64;
+    (a / n, b / n)
 }
 
 fn main() {
-    println!("SNR (2500 Hz)  clean 20 WPM  jitter 10 %  QSB 0.2 Hz");
+    println!("character errors, classical / neural (20 WPM, SNR in 2500 Hz)");
+    println!("SNR      clean            jitter 10 %      QSB 0.2 Hz");
     for snr in [6.0, 3.0, 0.0, -3.0, -6.0, -8.0, -10.0] {
         let ch = Channel {
             snr_db: Some(snr),
@@ -68,13 +73,43 @@ fn main() {
             },
             4,
         );
+        let p = |v: (f64, f64)| format!("{:>5.1} / {:>5.1} %", 100.0 * v.0, 100.0 * v.1);
+        println!("{snr:>4.0} dB  {}  {}  {}", p(a), p(b), p(c));
+    }
+    println!("speeds (0 dB, 10 % jitter):");
+    for wpm in [12.0, 25.0, 35.0, 45.0] {
+        let ch = Channel {
+            snr_db: Some(0.0),
+            ..Channel::new(20.0)
+        };
+        let v = rate(
+            &Keying {
+                jitter: 0.1,
+                ..Keying::new(wpm)
+            },
+            &ch,
+            2,
+        );
         println!(
-            "{snr:>6.0} dB     {:>6.1} %      {:>6.1} %     {:>6.1} %",
-            100.0 * a,
-            100.0 * b,
-            100.0 * c
+            "  {wpm:>2.0} WPM  {:>5.1} / {:>5.1} %",
+            100.0 * v.0,
+            100.0 * v.1
         );
     }
+    // neural cost: a 12 s window
+    let x = synth::complex(
+        &MSGS[0].repeat(2),
+        &Keying::new(20.0),
+        &Channel::new(5.0),
+        ENV_FS,
+        &mut Rng::new(9),
+    );
+    let t = Instant::now();
+    let _ = net::decode(&x[..(12.0 * ENV_FS) as usize], 0.0);
+    println!(
+        "neural: a 12 s window in {:.0} ms",
+        1000.0 * t.elapsed().as_secs_f64()
+    );
     // skimmer: four signals, 60 s of audio
     let mut rng = Rng::new(1);
     let n = (60.0 * AUDIO_RATE) as usize;

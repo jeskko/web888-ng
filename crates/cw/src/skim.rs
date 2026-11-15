@@ -16,6 +16,7 @@
 use crate::channel::{AUDIO_RATE, Channel};
 use crate::decode::{self, DecodeOpts, ENV_FS};
 use crate::dsp;
+use crate::net;
 use num_complex::Complex32;
 use rustfft::{Fft, FftPlanner};
 use std::collections::VecDeque;
@@ -94,6 +95,10 @@ pub struct Skimmer {
     pub max_signals: usize,
     /// Detection level over the floor (dB).
     pub min_db: f32,
+    /// The text from the neural decoder (`net`) over each signal's last 12
+    /// s instead of the classical one (speed, SNR and frequency still come
+    /// from the classical decoder).
+    pub neural: bool,
 }
 
 impl Default for Skimmer {
@@ -128,6 +133,7 @@ impl Skimmer {
             every: 2.0,
             max_signals: 12,
             min_db: 15.0,
+            neural: false,
         };
         s.set_band(lo, hi);
         s
@@ -306,7 +312,7 @@ impl Skimmer {
             if s.buf.len() < (3.0 * ENV_FS) as usize {
                 continue;
             }
-            let r = decode::decode(
+            let mut r = decode::decode(
                 &s.buf,
                 &DecodeOpts {
                     f0: Some(0.0),
@@ -317,6 +323,15 @@ impl Skimmer {
                     strict: true,
                 },
             );
+            let mut net_ok = false;
+            if self.neural {
+                let w = (12.0 * ENV_FS) as usize;
+                let from = s.buf.len().saturating_sub(w);
+                r.chars = net::decode(&s.buf[from..], s.buf_t + from as f64 / ENV_FS);
+                // the network reads weaker signals than the classical fit
+                // accepts: a few characters of its own make a signal good
+                net_ok = r.chars.iter().filter(|c| c.1 != " ").count() >= 4;
+            }
             if r.wpm > 0.0
                 && r.marks >= 8
                 && (5.0..=60.0).contains(&r.wpm)
@@ -330,6 +345,9 @@ impl Skimmer {
                 });
                 s.snr = r.snr;
                 s.freq_fine = r.freq;
+                s.good = true;
+            }
+            if net_ok {
                 s.good = true;
             }
             let u = 1.2 / s.wpm.unwrap_or(20.0);

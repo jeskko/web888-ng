@@ -5,8 +5,8 @@ Status: in progress (planned 2026-11-15). Done: item 1 (CW; `crates/cw`,
 (FSK/RTTY; `crates/fsk`, `crates/fsk-wasm`, `ui/src/rtty.ts`,
 `ui/src/ctl/rtty.tsx`, §2.2), items 3 and 4 (SSTV and HF fax;
 `crates/img`, `crates/img-wasm`, `ui/src/img.ts`, `ui/src/ctl/img.tsx`,
-§2.3-2.4); item 5 partly (SITOR-B decodes, no NAVTEX view yet, not tried
-on air).
+§2.3-2.4); item 5 (SITOR-B decodes; NAVTEX messages listed per signal; not
+tried on air) and item 7 (the neural CW decoder, §5).
 
 ## 1. Todo
 
@@ -194,3 +194,39 @@ Everything detected from the signal, with manual overrides:
 * Training: PyTorch on the workstation's GPU (`tools/ml/`, not shipped),
   export to ONNX. Inference in the browser: `tract` in the wasm crate (one
   test path through `cargo test`), weights fetched lazily (< 1 MB).
+
+### 5.1 Neural CW: done (2026-11-15)
+
+`tools/ml/cw/` (training, `README.md`), `crates/cw/src/net.rs` (inference
+without a framework, weights embedded as f16: 96k parameters, 190 kB),
+the CW panel's Neural button (on by default). Features: a 16-point STFT
+every 4 ms, log power of the 5 bins within ±62.5 Hz of the carrier (so
+nearby interference is seen), normalised by the noise floor; model: three
+1-D convolutions (batch norm folded in at export), 2-layer bidirectional
+GRU (48), CTC over 58 characters. Training: 30k steps of 128 synthetic
+12 s windows (10-45 WPM, jitter, dash ratio, Farnsworth, −12..+20 dB,
+fading, a second CW signal, impulse noise, 5 % noise only; text from QSO
+phrases, callsigns, words and random groups), 30 min on an RTX 5070. The
+Rust inference matches PyTorch to 2e-3 (`net::tests`).
+
+Against the classical decoder, on the Rust synthesiser (not the one it
+trained on), character errors (`--example cer`):
+
+| SNR | clean | 10 % jitter | QSB 0.2 Hz |
+|---|---|---|---|
+| +6 dB | 0.0 / 0.0 % | 2.2 / 0.0 % | 9.8 / 1.5 % |
+| 0 dB | 0.0 / 0.0 % | 2.4 / 0.0 % | 26.2 / 6.8 % |
+| −3 dB | 0.4 / 0.0 % | 2.2 / 0.0 % | 38.1 / 11.8 % |
+| −6 dB | 10.2 / 0.0 % | 16.2 / 0.2 % | 57.2 / 21.5 % |
+| −8 dB | 57.8 / 0.4 % | 61.7 / 1.5 % | 67.2 / 29.5 % |
+| −10 dB | 80.8 / 2.9 % | 80.3 / 5.9 % | 78.4 / 39.8 % |
+
+12-45 WPM at 0 dB with jitter: 1.4-5.8 % / 0.0 %. A 12 s window takes
+72 ms natively. In the skimmer, the classical decoder still gives speed,
+SNR and frequency; the network's text (last 12 s every 2 s) replaces its
+text, and four characters of its own make a signal count as decoding (a
+−7 dB hand-keyed station decodes, noise stays quiet: `tests/cw.rs`). On
+the 40 m recording it reads more than the classical decoder (both sides
+of a QSO, "5NN 73 TU" where the classical read "7E M TU"). Weak spot:
+word spaces are sometimes missed ("DL5YMK"); next: more word-gap
+variety in training, a beam search with a callsign/QSO language model.

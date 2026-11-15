@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applyFsk, describe, RTTY_LINGER, RTTY_TEXT, type FskP, type FskRun } from "../src/rtty.ts";
+import { applyFsk, describe, navtex, RTTY_LINGER, RTTY_TEXT, type FskP, type FskRun } from "../src/rtty.ts";
 
 const ham: FskP = { baud: 45.45, shift: 170, lo: 830, hi: 1000, markHigh: true, framing: "5N1.5", charset: "ITA2", usos: true, msb: false, mode: "async" };
 const dwd: FskP = { ...ham, baud: 50, shift: 450, markHigh: false, usos: false };
@@ -35,4 +35,12 @@ test("lock, text and identified signals merge per signal", () => {
 test("text is capped per signal", () => {
   const s = applyFsk([], run([{ k: "lock", id: 1, hz: 900, p: ham }, { k: "text", id: 1, hz: 900, t: 0, text: "E".repeat(RTTY_TEXT + 9) }], []), 0, rf);
   assert.equal(s[0].text.length, RTTY_TEXT);
+});
+
+test("NAVTEX messages from SITOR-B text", () => {
+  const t = "XXZCZC EA12\nGALE WARNING 8 BALTIC\nNNNN\nZCZC IB01 SEA AREA FORECAST\nNNNN ZCZC EA13 (cut off";
+  assert.deepEqual(navtex(t), [
+    { station: "E", subject: "A", number: "12", text: "GALE WARNING 8 BALTIC" },
+    { station: "I", subject: "B", number: "01", text: "SEA AREA FORECAST" },
+  ]);
 });

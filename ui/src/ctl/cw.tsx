@@ -5,7 +5,7 @@
 
 import { formatKhz } from "../fmt.ts";
 import { audioBand } from "../cw.ts";
-import { clearCw, cwError, cwOn, cwSignals, pickCw, setCw, st } from "../state.ts";
+import { clearCw, cwError, cwNeural, cwOn, cwSignals, pickCw, setCw, setCwNeural, st } from "../state.ts";
 
 /** Characters shown per signal (the newest). */
 const SHOWN = 240;
@@ -31,6 +31,9 @@ export function CwPanel() {
       <div class="spots-bar">
         <strong>CW</strong>
         <span class="dim num">{sigs.filter((x) => x.active).length}</span>
+        <button class={cwNeural.value ? "on" : ""} onClick={() => setCwNeural(!cwNeural.value)} title="Text from the neural decoder (trained on synthetic CW; reads weaker and rougher signals) instead of the classical one">
+          Neural
+        </button>
         <button onClick={clearCw} title="Clear the text">
           Clear
         </button>
@@ -59,8 +62,8 @@ export function CwPanel() {
               {sigs.map((x) => (
                 <tr class={x.active ? "" : "dim"} onClick={() => pickCw(Math.round(x.rf))} title={`${Math.round(x.hz)} Hz audio; click: CW mode on this signal`}>
                   <td class="r">{formatKhz(Math.round(x.rf)).slice(0, -2)}</td>
-                  <td class="r num">{x.wpm.toFixed(0)}</td>
-                  <td class="r num">{x.snr.toFixed(0)}</td>
+                  <td class="r num">{x.wpm > 0 ? x.wpm.toFixed(0) : "–"}</td>
+                  <td class="r num">{x.snr > -90 ? x.snr.toFixed(0) : "–"}</td>
                   <td class="msg">{x.text.length > SHOWN ? "…" + x.text.slice(x.text.length - SHOWN) : x.text}</td>
                 </tr>
               ))}

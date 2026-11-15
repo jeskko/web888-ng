@@ -2,7 +2,7 @@
 // CW decoding in the page: open URL (tune with its hash, e.g.
 // #f=7018.0&m=usb), start audio, pick a passband button, turn CW on, wait,
 // print the signals' rows; saves cw.png in OUT.
-//   CHROME=... node cw.mjs URL [PASSBAND_LABEL] [SECONDS]
+//   CHROME=... [NEURAL=0|1] node cw.mjs URL [PASSBAND_LABEL] [SECONDS]
 import { launch, q, sleep } from "./lib.mjs";
 const [url, bw = "", secs = "60"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
@@ -14,6 +14,12 @@ await sleep(1500);
 if (bw) await p.ev(`[...document.querySelectorAll('header button')].find((b) => b.textContent === ${JSON.stringify(bw)})?.click()`);
 await sleep(500);
 await p.ev(`[...document.querySelectorAll('header .tools button')].find((b) => b.textContent === 'CW').click()`);
+// NEURAL=1: the neural decoder's text (the button toggles the remembered setting)
+if (process.env.NEURAL !== undefined) {
+  await sleep(300);
+  const on = await p.ev(`[...document.querySelectorAll('.cw .spots-bar button')].find((b) => b.textContent === 'Neural').classList.contains('on')`);
+  if (on !== (process.env.NEURAL === "1")) await p.ev(`[...document.querySelectorAll('.cw .spots-bar button')].find((b) => b.textContent === 'Neural').click()`);
+}
 const t0 = Date.now();
 while (Date.now() - t0 < Number(secs) * 1000) {
   await sleep(15000);

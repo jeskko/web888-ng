@@ -296,3 +296,5 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .img-gallery { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; }
 .img-thumb { padding: 0; border: 1px solid var(--dim); background: none; width: 72px; }
 .img-thumb-pic { width: 100%; height: auto; display: block; }
+.navtex { font-size: 12px; margin: 4px 0; }
+.navtex summary { cursor: pointer; }

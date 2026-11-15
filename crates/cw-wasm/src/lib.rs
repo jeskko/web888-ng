@@ -12,6 +12,7 @@
 //!   "act":[{"id":..,"hz":..,"wpm":..,"snr":..}],"now":..}` (times in s
 //!   since the last reset)
 //! * `cw_band(lo, hi)`: the audio band searched (Hz)
+//! * `cw_neural(on)`: text from the neural decoder (1) or the classical
 //! * `cw_reset()`: a new stream (after retuning)
 
 use std::cell::RefCell;
@@ -20,6 +21,7 @@ use web888_cw::{Active, Event, Skimmer};
 
 struct State {
     skimmer: Skimmer,
+    neural: bool,
     band: (f64, f64),
     runs: u64,
     input: Vec<f32>,
@@ -29,6 +31,7 @@ struct State {
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State {
         skimmer: Skimmer::default(),
+        neural: false,
         band: (200.0, 2800.0),
         runs: 0,
         input: Vec::new(),
@@ -119,9 +122,18 @@ pub extern "C" fn cw_band(lo: f64, hi: f64) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn cw_neural(on: u32) {
+    STATE.with_borrow_mut(|s| {
+        s.neural = on != 0;
+        s.skimmer.neural = s.neural;
+    });
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn cw_reset() {
     STATE.with_borrow_mut(|s| {
         s.skimmer = Skimmer::new(s.band.0, s.band.1);
+        s.skimmer.neural = s.neural;
         s.runs = 0;
     });
 }

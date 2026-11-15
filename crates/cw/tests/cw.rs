@@ -238,3 +238,42 @@ fn skimmer_quiet_on_noise_and_carriers() {
     }
     assert!(ev.is_empty(), "{ev:?}");
 }
+
+/// The neural decoder in the skimmer: a weak, hand-keyed station the
+/// classical decoder can't read is decoded; noise stays quiet.
+#[test]
+fn skimmer_neural_weak_signal() {
+    let text = "CQ CQ DE N0CALL N0CALL K";
+    let run = |neural: bool, with_signal: bool| -> String {
+        let mut rng = Rng::new(11);
+        let n = (40.0 * AUDIO_RATE) as usize;
+        let mut audio = synth::audio_noise(n, AUDIO_RATE, 0.1, -7.0, &mut rng);
+        if with_signal {
+            let k = Keying {
+                jitter: 0.1,
+                lead: 0.5,
+                tail: 1.5,
+                ..Keying::new(20.0)
+            };
+            let s = synth::audio(text, &k, &Channel::new(800.0), AUDIO_RATE, 0.1, &mut rng);
+            for (i, a) in audio.iter_mut().enumerate() {
+                *a += s[i % s.len()];
+            }
+        }
+        let mut sk = Skimmer::new(200.0, 2800.0);
+        sk.min_db = 8.0; // weak: detection from the spectrogram
+        sk.neural = neural;
+        let mut out = String::new();
+        for c in audio.chunks(1024) {
+            sk.push(c);
+            for e in sk.poll() {
+                out.push_str(&e.text);
+            }
+        }
+        out
+    };
+    let neural = run(true, true);
+    assert!(neural.contains("N0CALL N0CALL"), "neural: {neural:?}");
+    let quiet = run(true, false);
+    assert!(quiet.trim().is_empty(), "noise: {quiet:?}");
+}

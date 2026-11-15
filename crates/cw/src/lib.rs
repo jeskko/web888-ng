@@ -12,6 +12,7 @@ pub mod channel;
 pub mod decode;
 pub mod dsp;
 pub mod morse;
+pub mod net;
 pub mod skim;
 pub mod synth;
 

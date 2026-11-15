@@ -7,7 +7,7 @@
 
 import { formatKhz } from "../fmt.ts";
 import { audioBand } from "../cw.ts";
-import { describe, RTTY_STATIONS } from "../rtty.ts";
+import { describe, navtex, NAVTEX_SUBJECTS, RTTY_STATIONS } from "../rtty.ts";
 import { clearRtty, pickRtty, rttyError, rttyOn, rttySignals, setRtty, st } from "../state.ts";
 
 /** Characters shown per signal (the newest). */
@@ -70,6 +70,17 @@ export function RttyPanel() {
                   <span class="dim"> · identified, not decoded</span>
                 )}
               </div>
+              {x.p.mode === "sitor" &&
+                navtex(x.text).map((m) => (
+                  <details class="navtex">
+                    <summary>
+                      NAVTEX {m.station}
+                      {m.subject}
+                      {m.number} · {NAVTEX_SUBJECTS[m.subject] ?? "?"}
+                    </summary>
+                    <pre class="rtty-text">{m.text}</pre>
+                  </details>
+                ))}
               {x.text && <pre class="rtty-text">{x.text.length > SHOWN ? "…" + x.text.slice(x.text.length - SHOWN) : x.text}</pre>}
             </div>
           ))

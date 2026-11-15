@@ -1,8 +1,8 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Web Worker: the CW skimmer (crates/cw-wasm, cw.wasm) off the page's
 // thread. In: {pcm: Float32Array, gen} (12 kHz mono), {band: [lo, hi]}
-// (audio Hz) or {reset: true}. Out: {run: CwRun, gen} after each decode
-// run (every 2 s), {error} if it can't load.
+// (audio Hz), {neural: boolean} or {reset: true}. Out: {run: CwRun, gen}
+// after each decode run (every 2 s), {error} if it can't load.
 
 import type { CwRun } from "../cw.ts";
 
@@ -12,6 +12,7 @@ interface Cw {
   cw_push(n: number): number;
   cw_output(): number;
   cw_band(lo: number, hi: number): void;
+  cw_neural(on: number): void;
   cw_reset(): void;
 }
 
@@ -29,6 +30,10 @@ function handle(e: MessageEvent): void {
   }
   if (d?.band) {
     x.cw_band(d.band[0], d.band[1]);
+    return;
+  }
+  if (typeof d?.neural === "boolean") {
+    x.cw_neural(d.neural ? 1 : 0);
     return;
   }
   const pcm = d?.pcm as Float32Array | undefined;

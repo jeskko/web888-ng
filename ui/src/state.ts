@@ -473,6 +473,9 @@ export function pickJtty(dial: number): void {
  * this browser (remembered). */
 export const cwOn = signal(load("cw") === "1");
 export const cwSignals = signal<CwSignal[]>([]);
+/** The text from the neural decoder instead of the classical one (the
+ * default: it reads weaker and rougher signals). */
+export const cwNeural = signal(load("cwNeural") !== "0");
 export const cwError = signal("");
 let cwWorker: Worker | null = null;
 const cwFeed = new JttyFeed();
@@ -486,6 +489,7 @@ let cwRf: (hz: number) => number = (hz) => hz;
 
 function cwStart(): Worker {
   const w = new Worker("cw-worker.js", { type: "module" });
+  w.postMessage({ neural: cwNeural.value });
   w.onmessage = (e: MessageEvent) => {
     const d = e.data as { run?: CwRun; gen?: number; error?: string };
     if (d.error) cwError.value = d.error;
@@ -537,6 +541,12 @@ export function pickCw(rf: number): void {
   if (!s) return;
   if (s.mode !== "cw") setMode("cw");
   tune(rf);
+}
+
+export function setCwNeural(on: boolean): void {
+  cwNeural.value = on;
+  save("cwNeural", on ? "1" : "0");
+  cwWorker?.postMessage({ neural: on });
 }
 
 export function clearCw(): void {

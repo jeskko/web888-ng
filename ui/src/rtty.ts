@@ -128,3 +128,45 @@ export function applyFsk(prev: FskSignal[], run: FskRun, now: number, rf: (hz: n
 function key(s: FskSignal): string {
   return s.id ? `#${s.id}` : `@${Math.round(s.rf / 100)}`;
 }
+
+/** NAVTEX subjects (B2). */
+export const NAVTEX_SUBJECTS: Record<string, string> = {
+  A: "navigational warning",
+  B: "meteorological warning",
+  C: "ice report",
+  D: "search and rescue",
+  E: "weather forecast",
+  F: "pilot service",
+  G: "AIS",
+  H: "LORAN",
+  J: "GNSS",
+  K: "other navaid",
+  L: "navigational warning",
+  T: "test",
+  V: "special service",
+  W: "special service",
+  X: "special service",
+  Y: "special service",
+  Z: "no message on hand",
+};
+
+/** A NAVTEX message. */
+export interface NavtexMsg {
+  /** B1: the transmitter's letter. */
+  station: string;
+  /** B2: the subject letter. */
+  subject: string;
+  /** B3B4: the serial number. */
+  number: string;
+  text: string;
+}
+
+/** Complete NAVTEX messages (ZCZC B1B2B3B4 ... NNNN) in decoded text. */
+export function navtex(text: string): NavtexMsg[] {
+  const out: NavtexMsg[] = [];
+  const re = /ZCZC ?([A-Z])([A-Z])(\d\d)\s*([\s\S]*?)NNNN/g;
+  for (let m = re.exec(text); m; m = re.exec(text)) {
+    out.push({ station: m[1], subject: m[2], number: m[3], text: m[4].replace(/\r/g, "").trim() });
+  }
+  return out;
+}
