@@ -250,6 +250,27 @@ fn noise_blanker_restores_a_tone_under_impulses() {
 }
 
 #[test]
+fn notch_takes_a_carrier_out_of_usb() {
+    // a heterodyne at +1 kHz, 35 dB over the noise in a 23 Hz bin
+    let scene = || Scene::new().tone(F0 + 1000.0, -90.0).noise(-140.0);
+    let (off, _) = run(scene(), fixed(Mode::Usb), 3.0);
+    let on_spec = AudioSpec {
+        notch: true,
+        ..fixed(Mode::Usb)
+    };
+    let (on, _) = run(scene(), on_spec, 3.0);
+    // from 1.5 s on (run() starts at 0.5 s)
+    let (a, b) = (&off[12_000..], &on[12_000..]);
+    let drop = db(amp(a, 1000.0)) - db(amp(b, 1000.0));
+    assert!(drop > 25.0, "carrier down {drop:.1} dB");
+    // the noise beside it stays
+    let p = |x: &[f32]| x.iter().map(|v| (v * v) as f64).sum::<f64>();
+    let rest = |x: &[f32]| p(x) - (amp(x, 1000.0).powi(2) / 2.0) * x.len() as f64;
+    let noise = 10.0 * (rest(b) / rest(a)).log10();
+    assert!(noise.abs() < 1.0, "noise {noise:.2} dB");
+}
+
+#[test]
 fn squelch_mutes_a_quiet_channel() {
     let mut spec = AudioSpec::new(Mode::Am);
     spec.squelch_db = Some(-60.0);
