@@ -16,6 +16,7 @@
 use crate::proto::{AUDIO_HEADER, FLAG_MULAW, FLAG_OPUS, KIND_AUDIO};
 use std::num::NonZeroU32;
 use web888_dsp::audio::{AudioSpec, Mode};
+use web888_dsp::pcm16;
 
 /// What a session's audio is sent as.
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq)]
@@ -67,10 +68,6 @@ pub fn mulaw_decode(u: u8) -> i16 {
     (if u & 0x80 != 0 { -x } else { x }) as i16
 }
 
-fn to_i16(s: f32) -> i16 {
-    (s * 32767.0).round().clamp(-32768.0, 32767.0) as i16
-}
-
 /// The highest audio frequency `spec` gives (Hz).
 fn audio_top(spec: &AudioSpec) -> f64 {
     match spec.mode {
@@ -108,6 +105,9 @@ impl OpusEnc {
         };
         let mut enc = opus1::OpusEncoder::new(sr, ch, opus1::Application::Audio).ok()?;
         enc.set_complexity(0).ok()?;
+        // the samples are 16-bit deep (the noise floor of the analysis and
+        // the bit allocation), as `encode_i16` would take them
+        enc.set_lsb_depth(16).ok()?;
         Some(OpusEnc {
             enc: Box::new(enc),
             rate,
@@ -134,7 +134,8 @@ impl OpusEnc {
 pub struct WebEnc {
     codec: Codec,
     opus: Option<OpusEnc>,
-    pcm: Vec<i16>,
+    /// Opus's input: the samples held to -1..1.
+    pcm: Vec<f32>,
     packet: Vec<u8>,
 }
 
@@ -165,13 +166,11 @@ impl WebEnc {
         chans: usize,
         spec: &AudioSpec,
     ) -> Vec<u8> {
-        self.pcm.clear();
-        self.pcm.extend(pcm.iter().map(|&s| to_i16(s)));
         let (flag, payload): (u8, &[u8]) = match self.codec {
             Codec::Pcm16 => return crate::proto::audio_frame(flags, seq, rate, rssi_db, pcm),
             Codec::Mulaw => {
                 self.packet.clear();
-                self.packet.extend(self.pcm.iter().map(|&s| mulaw(s)));
+                self.packet.extend(pcm.iter().map(|&s| mulaw(pcm16(s))));
                 (FLAG_MULAW, &self.packet)
             }
             Codec::Opus => {
@@ -187,8 +186,10 @@ impl WebEnc {
                 };
                 o.set_band(opus_band(audio_top(spec), rate));
                 self.packet.resize(1500, 0);
-                let per_chan = self.pcm.len() / chans.max(1);
-                match o.enc.encode_i16(&self.pcm, per_chan, &mut self.packet) {
+                self.pcm.clear();
+                self.pcm.extend(pcm.iter().map(|&s| s.clamp(-1.0, 1.0)));
+                let per_chan = pcm.len() / chans.max(1);
+                match o.enc.encode(&self.pcm, per_chan, &mut self.packet) {
                     Ok(n) => {
                         self.packet.truncate(n);
                         (FLAG_OPUS, &self.packet)

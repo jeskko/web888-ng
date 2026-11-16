@@ -63,6 +63,7 @@ fn run(scene: Scene, spec: AudioSpec, secs: f64) -> (Vec<f32>, f32) {
             nch: n,
             iq: buf[..got * n].to_vec(),
             overload: false,
+            arrived: 0.0,
         };
         chain.process(block.channel(0), &mut out);
         frames += got;

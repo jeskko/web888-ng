@@ -8,6 +8,7 @@
 
 use super::wire::{Cmd, MAX_ZOOM, WF_SPEEDS, WF_WIDTH, WfEnc, WfView};
 use super::{Geometry, answer_auth, band_msgs, command, send_config, send_msg, wait_auth};
+use crate::WS_READ_BUFFER;
 use crate::session::{Admission, BINS_MAX, Shared};
 use crate::wfsvc::HwView;
 use crate::workers::{Out, WfSink};
@@ -29,7 +30,8 @@ pub(crate) async fn upgrade(
     let Some(ts) = super::timestamp(&ts).filter(|_| sh.live.borrow().kiwi.enabled) else {
         return axum::http::StatusCode::NOT_FOUND.into_response();
     };
-    up.on_upgrade(move |ws| run(ws, sh, peer, ts))
+    up.read_buffer_size(WS_READ_BUFFER)
+        .on_upgrade(move |ws| run(ws, sh, peer, ts))
 }
 
 /// A paired stream's waterfall, taken off when it ends (a stream of its

@@ -111,7 +111,10 @@ pub struct ZynqsdrRadio<D: Device> {
     adc_assumed: f64,
     r2: u16,
     words: Vec<u64>,
+    /// Bytes read but not yet whole frames taken: `rx_stage[..rx_have]`
+    /// (the buffer only grows, so it is zeroed once, not per read).
     rx_stage: Vec<u8>,
+    rx_have: usize,
     wf: Vec<WfState>,
     gpio: u32,
     /// From GET_STATS at open (open driver + open bitstream).
@@ -298,6 +301,7 @@ impl<D: Device> ZynqsdrRadio<D> {
             r2: 20,
             words: vec![0; rx_ch],
             rx_stage: Vec::new(),
+            rx_have: 0,
             wf: (0..wf_ch)
                 .map(|_| WfState {
                     decim: 1,
@@ -424,7 +428,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         self.dev.set(RX_START, arg as u32).map_err(io)?;
         self.r2 = r2;
         // the ring restarts at offset 0 with frame 0
-        self.rx_stage.clear();
+        self.rx_have = 0;
         Ok(())
     }
 
@@ -454,13 +458,18 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         }
         let frame_bytes = 8 * n;
         let want = buf.len() * 8;
-        let have = self.rx_stage.len();
-        if have < want {
+        if self.rx_stage.len() < want {
             self.rx_stage.resize(want, 0);
-            let got = self.dev.rx_read(&mut self.rx_stage[have..]).map_err(io)?;
-            self.rx_stage.truncate(have + got);
         }
-        let frames = (self.rx_stage.len() / frame_bytes).min(buf.len() / n);
+        let have = self.rx_have;
+        if have < want {
+            let got = self
+                .dev
+                .rx_read(&mut self.rx_stage[have..want])
+                .map_err(io)?;
+            self.rx_have = have + got.min(want - have);
+        }
+        let frames = (self.rx_have / frame_bytes).min(buf.len() / n);
         let bytes = frames * frame_bytes;
         for (k, c) in self.rx_stage[..bytes].as_chunks::<8>().0.iter().enumerate() {
             buf[k] = Iq32 {
@@ -468,7 +477,8 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
                 q: i32::from_le_bytes(c[4..8].try_into().unwrap()),
             };
         }
-        self.rx_stage.drain(..bytes);
+        self.rx_stage.copy_within(bytes..self.rx_have, 0);
+        self.rx_have -= bytes;
         Ok(frames)
     }
 

@@ -232,9 +232,7 @@ impl Cmd {
     }
 }
 
-fn pcm16(x: f32) -> i16 {
-    (x * 32767.0).round().clamp(-32768.0, 32767.0) as i16
-}
+use web888_dsp::pcm16;
 
 /// One SND stream's packets: compression, byte order, the ADPCM state and
 /// the sequence (shared with the stream's waterfall, which tags its lines

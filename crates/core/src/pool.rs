@@ -452,6 +452,7 @@ mod tests {
             nch: 1,
             iq: vec![Default::default(); 10],
             overload: false,
+            arrived: 0.0,
         }
     }
 

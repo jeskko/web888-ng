@@ -43,6 +43,21 @@ pub fn fft_plan(n: usize, inverse: bool) -> std::sync::Arc<dyn rustfft::Fft<f32>
 
 /// Convert hardware RX samples to f32, scaled so that a full-scale ADC sine
 /// has |z| = 1 (before any CIC droop).
+/// A sample (-1..1) as 16-bit PCM, rounded half away from zero and
+/// saturated. `f32::round` is a libm call on the A9 (VFPv3 has no
+/// rounding instruction); the cast saturates.
+#[inline]
+pub fn pcm16(s: f32) -> i16 {
+    let x = s * 32767.0;
+    (x + 0.5f32.copysign(x)) as i16
+}
+
+/// `v` rounded to the nearest 0..=255 (the cast saturates, NaN to 0).
+#[inline]
+pub fn level_u8(v: f32) -> u8 {
+    (v + 0.5) as u8
+}
+
 pub fn rx_to_c32(s: web888_radio::Iq32) -> C32 {
     const K: f32 = (1.0 / web888_radio::RX_SINE_FULL_SCALE) as f32;
     C32::new(s.i as f32 * K, s.q as f32 * K)

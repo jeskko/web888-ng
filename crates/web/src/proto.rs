@@ -447,7 +447,7 @@ pub fn audio_frame(flags: u8, seq: u32, rate: u32, rssi_db: f32, pcm: &[f32]) ->
     b.extend_from_slice(&rate.to_le_bytes());
     b.extend_from_slice(&rssi_db.to_le_bytes());
     for &s in pcm {
-        let v = (s * 32767.0).round().clamp(-32768.0, 32767.0) as i16;
+        let v = web888_dsp::pcm16(s);
         b.extend_from_slice(&v.to_le_bytes());
     }
     b

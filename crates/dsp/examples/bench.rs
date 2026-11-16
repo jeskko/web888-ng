@@ -243,6 +243,7 @@ fn fanout(nch: usize, jobs: usize, fs: f64, secs: f64) {
         nch,
         iq: vec![Iq32 { i: 1, q: 2 }; frames * nch],
         overload: false,
+        arrived: 0.0,
     };
     let mut x: Vec<C32> = Vec::new();
     let t = Instant::now();

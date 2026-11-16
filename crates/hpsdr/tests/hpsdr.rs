@@ -78,6 +78,7 @@ fn two_receivers(r2: u16) {
                 nch: n,
                 iq: buf[..got * n].to_vec(),
                 overload: false,
+                arrived: 0.0,
             };
             first_frame = blk.end_frame();
             if blk_tx.send(Arc::new(blk)).is_err() {
@@ -204,6 +205,7 @@ fn host_maps_receivers_and_a_silent_client_is_stopped() {
                 nch: 4,
                 iq,
                 overload: false,
+                arrived: 0.0,
             };
             first_frame = blk.end_frame();
             if blk_tx.send(Arc::new(blk)).is_err() {

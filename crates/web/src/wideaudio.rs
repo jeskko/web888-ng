@@ -221,6 +221,7 @@ mod tests {
             nch: 1,
             iq: vec![Iq32::default(); 600],
             overload: false,
+            arrived: 0.0,
         };
         assert!(job.rx(&block(0))); // subscribes
         tap.send_frames(am(240, 0, 120_000, dial, 8000.0));

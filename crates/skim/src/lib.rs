@@ -245,7 +245,12 @@ impl Job for BandJob {
         }
         self.next_frame = Some(b.end_frame());
         let Some(ch) = ch else { return true };
-        self.clock.observe(b.end_frame(), unix_now());
+        let now = if b.arrived > 0.0 {
+            b.arrived
+        } else {
+            unix_now()
+        };
+        self.clock.observe(b.end_frame(), now);
         self.audio.clear();
         self.usb
             .process(b.channel(ch).map(web888_dsp::rx_to_c32), &mut self.audio);

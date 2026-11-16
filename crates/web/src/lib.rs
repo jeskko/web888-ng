@@ -157,6 +157,12 @@ fn parse_hop(s: &str) -> Option<std::net::IpAddr> {
     s.parse::<SocketAddr>().ok().map(|a| a.ip().to_canonical())
 }
 
+/// Bytes a WebSocket reads at a time. tungstenite zero-fills this much
+/// before every read attempt (128 KiB by default: 2 % of the unit's CPU
+/// with 8 listeners); clients send small messages, longer ones take more
+/// reads.
+pub(crate) const WS_READ_BUFFER: usize = 4096;
+
 /// A WebSocket session; with a listener password set, only for logins.
 async fn ws(
     up: WebSocketUpgrade,
@@ -169,7 +175,8 @@ async fn ws(
     if role.is_none() && !open {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
-    up.on_upgrade(move |s| session::run(s, sh, peer, role))
+    up.read_buffer_size(WS_READ_BUFFER)
+        .on_upgrade(move |s| session::run(s, sh, peer, role))
         .into_response()
 }
 

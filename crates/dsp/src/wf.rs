@@ -101,8 +101,10 @@ pub fn rebin_db(db: &[f32], g: usize) -> Vec<f32> {
 
 /// Quantise levels for the wire: `WF_DB0 + v * WF_DB_STEP`.
 pub fn quantize(db: &[f32]) -> Vec<u8> {
+    let k = 1.0 / WF_DB_STEP;
+    // the cast saturates (NaN to 0), so no clamp; no libm round
     db.iter()
-        .map(|d| ((d - WF_DB0) / WF_DB_STEP).round().clamp(0.0, 255.0) as u8)
+        .map(|d| crate::level_u8((d - WF_DB0) * k))
         .collect()
 }
 

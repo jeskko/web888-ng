@@ -22,8 +22,14 @@ impl Decimator {
     }
 
     /// Taps passing `pass_hz` and rejecting what would fold into it.
+    /// Without decimation (`r` = 1) the lowpass would sit at fs/2, where
+    /// every tap but the centre one is zero: one tap, no delay.
     pub fn design(fs: f64, r: usize, pass_hz: f64, atten_db: f64) -> Vec<f32> {
         assert!(r >= 1);
+        if r == 1 {
+            assert!(pass_hz < fs / 2.0, "passband beyond fs/2");
+            return vec![1.0];
+        }
         let stop = fs / r as f64 - pass_hz;
         assert!(stop > pass_hz, "passband too wide for decimation by {r}");
         let n = kaiser_len(atten_db, (stop - pass_hz) / fs);
@@ -66,6 +72,11 @@ impl Decimator {
 
     /// Filter and decimate `input`, appending the outputs to `out`.
     pub fn process(&mut self, input: &[C32], out: &mut Vec<C32>) {
+        // the RX channels are often at the output rate already
+        if self.r == 1 && self.taps == [1.0] && self.buf.is_empty() {
+            out.extend_from_slice(input);
+            return;
+        }
         self.buf.extend_from_slice(input);
         let n = self.taps.len();
         let mut i = self.next;
@@ -157,5 +168,28 @@ mod tests {
                 assert!(db < want_db, "{f} Hz: {db:.1} dB");
             }
         }
+    }
+
+    /// At r = 1 the samples pass through as they are, and the old filter
+    /// (fs/2 cutoff) was the same thing delayed: its taps but the centre
+    /// were ~0.
+    #[test]
+    fn without_decimation_samples_pass() {
+        let fs = 12_000.0;
+        let old = lowpass(kaiser_len(80.0, (fs - 2.0 * 2900.0) / fs), 0.5, 80.0);
+        let c = old.len() / 2;
+        assert!(
+            old.iter()
+                .enumerate()
+                .all(|(k, &t)| (t - (k == c) as u8 as f64).abs() < 1e-9)
+        );
+        let mut d = Decimator::new(fs, 1, 2900.0, 80.0);
+        assert_eq!(d.taps(), 1);
+        let x = tone(700.0, fs, 5000);
+        let mut y = Vec::new();
+        for c in x.chunks(333) {
+            d.process(c, &mut y);
+        }
+        assert_eq!(y, x);
     }
 }

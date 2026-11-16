@@ -15,6 +15,9 @@ pub struct RxBlock {
     pub iq: Vec<Iq32>,
     /// ADC overload seen while these frames were read.
     pub overload: bool,
+    /// When the block was read (Unix seconds; 0: unknown). One clock read
+    /// for every consumer: on the A9 each is a system call.
+    pub arrived: f64,
 }
 
 impl RxBlock {
@@ -68,6 +71,7 @@ mod tests {
             nch: 3,
             iq,
             overload: false,
+            arrived: 0.0,
         };
         assert_eq!(b.frames(), 4);
         assert_eq!(b.end_frame(), 14);

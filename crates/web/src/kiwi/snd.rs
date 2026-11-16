@@ -5,6 +5,7 @@
 
 use super::wire::{Cmd, SND_FLAG_LPF, SND_FLAG_NEW_FREQ, SND_FLAG_RESTART, SndEnc, SndSet};
 use super::{Geometry, answer_auth, band_msgs, command, send_config, send_msg, wait_auth};
+use crate::WS_READ_BUFFER;
 use crate::auth::Role;
 use crate::proto;
 use crate::session::{Admission, Shared, Timeout, Timeouts};
@@ -33,7 +34,8 @@ pub(crate) async fn upgrade(
         return axum::http::StatusCode::NOT_FOUND.into_response();
     };
     let camp = q.is_some_and(|q| q.split('&').any(|p| p == "camp"));
-    up.on_upgrade(move |ws| run(ws, sh, peer, ts, camp))
+    up.read_buffer_size(WS_READ_BUFFER)
+        .on_upgrade(move |ws| run(ws, sh, peer, ts, camp))
 }
 
 /// A Kiwi mode name: web888d's demodulator, the mode others see, and the
