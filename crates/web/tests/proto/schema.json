@@ -13,6 +13,7 @@
         "si5351_adc": null,
         "bins": null,
         "zoom_engine": true,
+        "atten_db": 0.0,
         "sim": {
           "tones": [],
           "noise": false
@@ -219,6 +220,12 @@
           "description": "Bins mode: zoomed waterfalls from the source's zoom engine when it\nhas one (`hw/docs/channelizer.md` §3.9), instead of FFTs here.",
           "type": "boolean",
           "default": true
+        },
+        "atten_db": {
+          "description": "zynqsdr: the RF attenuator before the ADC, 0 (off) to 31.5 dB in\n0.5 dB steps, for every listener at once: against ADC overloads\nfrom strong signals. Applies at once (no restart); an HPSDR client\nmay change it while it runs.",
+          "type": "number",
+          "format": "float",
+          "default": 0.0
         },
         "sim": {
           "description": "Backend sim: the simulated scene.",
