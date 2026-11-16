@@ -699,7 +699,10 @@ there (before: the workstation's HackRF on another antenna, or audio).
   replaying the 40 m recording at 1.92 MS/s): 10 s at 7074 kHz saved the
   bin 7042-7102 kHz, 600 000 samples, none lost; its spectrogram matches
   the source mixed to the same centre (correlation 0.95, no frequency
-  shift, not inverted). The WAV reads as stereo 16-bit at 60 kHz.
+  shift, not inverted) and so do the samples (1 s of it correlates 0.999
+  with the source decimated to 60 kS/s). The WAV reads as stereo 16-bit
+  at 60 kHz. On the unit (2026-11-16): 10 s of 7050-7110 kHz, no samples
+  lost, the FT8 segment 32 dB over the floor.
 * **Not done**: on phones (no button there); replaying a file in
   `web888d --backend iq` needs resampling to 480 kS/s or more; the
   receiver's own channel (12 kS/s IQ around the dial) as an alternative to
