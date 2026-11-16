@@ -14,6 +14,7 @@
     {"type": "spots", "on": true},
     {"type": "name", "name": "N0CALL"},
     {"type": "wide", "on": true, "hz": 7020000},
+    {"type": "wide", "on": true, "hz": 7020000, "bits": 16},
     {"type": "wide", "on": false},
     {"type": "mode", "mode": "sas"}
   ],

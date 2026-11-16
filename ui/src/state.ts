@@ -24,6 +24,7 @@ import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Sl
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
+import { IqRecorder, REC_MAX_S, type RecFormat } from "./iqrec.ts";
 import { TuneSync } from "./tunesync.ts";
 import { WHEEL_STEPS } from "./wheel.ts";
 import { covered, fetchRange, LABEL_MAX_SPAN, parseSources, tuneTo, type BandPlan, type FreqMarker } from "./markers.ts";
@@ -242,6 +243,7 @@ export function connect(): void {
     },
     onIq(f: IqFrame) {
       if (wideCentre.value !== f.centre) wideCentre.value = f.centre;
+      recIq(f);
       const both = cwWideNow() && rttyWideNow();
       if (cwWideNow()) cwIq(f, both ? f.iq.slice() : f.iq);
       if (rttyWideNow()) rttyIq(f, f.iq);
@@ -592,10 +594,14 @@ function rttyWideNow(): boolean {
   return wideAvail.value && rttyOn.value && rttyWide.value;
 }
 
-/** Ask for wide IQ while a skimmer wants it (again when the dial leaves
- * the bin's middle 30 kHz), stop when none does. */
+/** The sample width last asked for. */
+let wideBits: 8 | 16 = 8;
+
+/** Ask for wide IQ while a skimmer or a recording wants it (again when the
+ * dial leaves the bin's middle 30 kHz, but not while recording: the
+ * recording keeps its bin), stop when none does. 16-bit while recording. */
 function wideSync(): void {
-  const want = cwWideNow() || rttyWideNow();
+  const want = cwWideNow() || rttyWideNow() || recorder !== null;
   const hz = st.value?.hz;
   if (!want) {
     if (wideAsked !== null) {
@@ -606,11 +612,71 @@ function wideSync(): void {
     return;
   }
   if (hz === undefined) return;
+  const bits = recorder ? 16 : 8;
   const c = wideCentre.value ?? wideAsked;
-  if (wideAsked === null || c === null || Math.abs(hz - c) > 15_000) {
-    wideAsked = hz;
-    link?.send({ type: "wide", on: true, hz });
+  if (recorder && wideAsked !== null && bits === wideBits) return;
+  if (wideAsked === null || c === null || bits !== wideBits || Math.abs(hz - c) > 15_000) {
+    // a recording started on a stream keeps that stream's bin
+    const at = recorder && c !== null && Math.abs(hz - c) <= 15_000 ? c : hz;
+    wideAsked = at;
+    wideBits = bits;
+    link?.send({ type: "wide", on: true, hz: at, bits });
   }
+}
+
+// ------------------------------------------------- IQ recording
+
+/** The recording under way: its bin, length, samples lost (null: none). */
+export const iqRec = signal<{ centre: number; rate: number; seconds: number; lost: number; maxS: number } | null>(null);
+/** The last recording's file name, or why it failed. */
+export const iqRecDone = signal("");
+export const iqRecFormat = signal<RecFormat>(load("iqRecFormat") === "wav" ? "wav" : "cs16");
+let recorder: IqRecorder | null = null;
+
+export function setIqRecFormat(f: RecFormat): void {
+  iqRecFormat.value = f;
+  save("iqRecFormat", f);
+}
+
+/** Record the bin around the dial for up to `maxS` seconds. */
+export function startIqRec(maxS: number): void {
+  if (!wideAvail.value || recorder) return;
+  recorder = new IqRecorder(Date.now(), Math.min(maxS, REC_MAX_S));
+  iqRecDone.value = "";
+  iqRec.value = { centre: 0, rate: 0, seconds: 0, lost: 0, maxS: recorder.maxS };
+  wideSync();
+}
+
+/** Stop; `keep`: save what was recorded as a file. */
+export function stopIqRec(keep = true): void {
+  const r = recorder;
+  if (!r) return;
+  recorder = null;
+  iqRec.value = null;
+  wideSync();
+  if (!keep) return;
+  if (r.samples === 0) {
+    iqRecDone.value = "nothing was received";
+    return;
+  }
+  const { bytes, name } = r.file(iqRecFormat.value);
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "application/octet-stream" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const lost = r.lost ? `, ${(r.lost / r.rate).toFixed(2)} s lost (zeros)` : "";
+  iqRecDone.value = `${name} (${r.seconds.toFixed(1)} s${lost})`;
+}
+
+function recIq(f: IqFrame): void {
+  const r = recorder;
+  if (!r || !r.push(f)) return;
+  const v = iqRec.value;
+  if (!v || r.full || v.centre === 0 || r.seconds - v.seconds >= 0.25 || r.lost !== v.lost)
+    iqRec.value = { centre: r.centre, rate: r.rate, seconds: r.seconds, lost: r.lost, maxS: r.maxS };
+  if (r.full) stopIqRec();
 }
 export function setCwWide(on: boolean): void {
   cwWide.value = on;

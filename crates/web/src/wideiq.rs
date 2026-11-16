@@ -5,13 +5,14 @@
 //! sub-band at once). The bin's samples are passed on as read: no DSP
 //! here, the A9 reads the bin (~1 % of a core) and packs it.
 //!
-//! Frames (`KIND_IQ`): header (32 bytes) + `count` × (i8 I, i8 Q), each
-//! block scaled by its own peak:
+//! Frames (`KIND_IQ`): header (32 bytes) + `count` × (i8 I, i8 Q), or with
+//! `FLAG_I16` (asked for with `bits: 16`, for recording) × (i16 I, i16 Q)
+//! little-endian; each block scaled by its own peak:
 //!
 //! | offset | type | |
 //! |---|---|---|
 //! | 0 | u8 | kind = 3 |
-//! | 1 | u8 | flags (`FLAG_GAP`: frames were lost before this one) |
+//! | 1 | u8 | flags (`FLAG_GAP`: frames were lost before this one; `FLAG_I16`) |
 //! | 2 | u16 | count (complex samples) |
 //! | 4 | u32 | seq |
 //! | 8 | u64 | the first sample's frame number |
@@ -31,6 +32,8 @@ use web888_radio::chan::RX_SINE_FULL_SCALE;
 
 pub const KIND_IQ: u8 = 3;
 pub const IQ_HEADER: usize = 32;
+/// The samples are i16 (else i8).
+pub const FLAG_I16: u8 = 4;
 /// Samples a frame (34 ms at 60 kS/s).
 pub const BLOCK: usize = 2048;
 /// Wide streams at a time (each ~1 Mbit/s and a bin read).
@@ -51,7 +54,7 @@ pub fn nearest_bin(caps: &BinCaps, hz: f64) -> usize {
         .unwrap_or(0)
 }
 
-/// A wide IQ frame.
+/// A wide IQ frame (`i16`: 16-bit samples, `FLAG_I16` set).
 pub fn iq_frame(
     flags: u8,
     seq: u32,
@@ -59,6 +62,7 @@ pub fn iq_frame(
     centre_hz: f64,
     rate: f32,
     iq: &[Iq32],
+    i16: bool,
 ) -> Vec<u8> {
     let peak = iq
         .iter()
@@ -66,10 +70,11 @@ pub fn iq_frame(
         .max()
         .unwrap_or(0)
         .max(1) as f64;
-    let step = peak / 127.0;
-    let mut b = Vec::with_capacity(IQ_HEADER + 2 * iq.len());
+    let top = if i16 { 32767.0 } else { 127.0 };
+    let step = peak / top;
+    let mut b = Vec::with_capacity(IQ_HEADER + if i16 { 4 } else { 2 } * iq.len());
     b.push(KIND_IQ);
-    b.push(flags);
+    b.push(if i16 { flags | FLAG_I16 } else { flags });
     b.extend_from_slice(&(iq.len() as u16).to_le_bytes());
     b.extend_from_slice(&seq.to_le_bytes());
     b.extend_from_slice(&frame.to_le_bytes());
@@ -77,8 +82,15 @@ pub fn iq_frame(
     b.extend_from_slice(&rate.to_le_bytes());
     b.extend_from_slice(&((step / RX_SINE_FULL_SCALE) as f32).to_le_bytes());
     for s in iq {
-        b.push((s.i as f64 / step).round().clamp(-127.0, 127.0) as i8 as u8);
-        b.push((s.q as f64 / step).round().clamp(-127.0, 127.0) as i8 as u8);
+        let i = (s.i as f64 / step).round().clamp(-top, top);
+        let q = (s.q as f64 / step).round().clamp(-top, top);
+        if i16 {
+            b.extend_from_slice(&(i as i16).to_le_bytes());
+            b.extend_from_slice(&(q as i16).to_le_bytes());
+        } else {
+            b.push(i as i8 as u8);
+            b.push(q as i8 as u8);
+        }
     }
     b
 }
@@ -95,8 +107,8 @@ impl Drop for Stream {
     }
 }
 
-/// Start streaming the bin nearest `hz` to `out`.
-pub fn start(tap: &BinTap, hz: f64, out: Out) -> Result<Stream, String> {
+/// Start streaming the bin nearest `hz` to `out` (`i16`: 16-bit samples).
+pub fn start(tap: &BinTap, hz: f64, out: Out, i16: bool) -> Result<Stream, String> {
     if ACTIVE.fetch_add(1, Ordering::SeqCst) >= MAX_STREAMS {
         ACTIVE.fetch_sub(1, Ordering::SeqCst);
         return Err(format!(
@@ -146,7 +158,7 @@ pub fn start(tap: &BinTap, hz: f64, out: Out) -> Result<Stream, String> {
                         if buf.len() == BLOCK {
                             let flags = if gap { FLAG_GAP } else { 0 };
                             gap = false;
-                            if !out.send(iq_frame(flags, seq, buf_frame, centre, rate, &buf)) {
+                            if !out.send(iq_frame(flags, seq, buf_frame, centre, rate, &buf, i16)) {
                                 return ACTIVE.fetch_sub(1, Ordering::SeqCst);
                             }
                             seq = seq.wrapping_add(1);
@@ -181,7 +193,7 @@ mod tests {
             },
             Iq32 { i: 0, q: 1 << 27 },
         ];
-        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq);
+        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq, false);
         assert_eq!(f.len(), IQ_HEADER + 4);
         assert_eq!((f[0], f[1]), (KIND_IQ, FLAG_GAP));
         assert_eq!(u16::from_le_bytes([f[2], f[3]]), 2);
@@ -195,6 +207,24 @@ mod tests {
         assert!((127.0 * scale - 1.0).abs() < 1e-6);
         assert_eq!(f[33] as i8, -64);
         assert_eq!(f[35] as i8, 32);
+    }
+
+    #[test]
+    fn frame_layout_16_bit() {
+        let iq = [
+            Iq32 {
+                i: 1 << 29,
+                q: -(1 << 28),
+            },
+            Iq32 { i: 0, q: 1 << 27 },
+        ];
+        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq, true);
+        assert_eq!(f.len(), IQ_HEADER + 8);
+        assert_eq!(f[1], FLAG_GAP | FLAG_I16);
+        let scale = f32::from_le_bytes(f[28..32].try_into().unwrap());
+        let v = |k: usize| i16::from_le_bytes([f[IQ_HEADER + 2 * k], f[IQ_HEADER + 2 * k + 1]]);
+        assert_eq!((v(0), v(1), v(2), v(3)), (32767, -16384, 0, 8192));
+        assert!((32767.0 * scale - 1.0).abs() < 1e-6);
     }
 
     #[test]

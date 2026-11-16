@@ -176,13 +176,15 @@ export type ClientMsg =
   | { type: "listen"; user: number | null }
   | { type: "spots"; on: boolean }
   | { type: "name"; name: string }
-  | { type: "wide"; on: boolean; hz?: number };
+  | { type: "wide"; on: boolean; hz?: number; bits?: 8 | 16 };
 
 export const KIND_AUDIO = 1;
 export const KIND_WF = 2;
 /** Wide IQ: a channelizer bin's samples (crates/web/src/wideiq.rs). */
 export const KIND_IQ = 3;
 export const IQ_HEADER = 32;
+/** Wide IQ: 16-bit samples (asked for with bits: 16). */
+export const FLAG_I16 = 4;
 export const FLAG_OVERLOAD = 1;
 /** Audio: samples were lost before this frame. */
 export const FLAG_GAP = 2;
@@ -272,11 +274,15 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
     };
   }
   if (kind === KIND_IQ) {
-    if (buf.byteLength < IQ_HEADER + 2 * n) return null;
+    const i16 = (flags & FLAG_I16) !== 0;
+    if (buf.byteLength < IQ_HEADER + (i16 ? 4 : 2) * n) return null;
     const scale = v.getFloat32(28, true);
-    const raw = new Int8Array(buf, IQ_HEADER, 2 * n);
     const iq = new Float32Array(2 * n);
-    for (let k = 0; k < 2 * n; k++) iq[k] = raw[k] * scale;
+    if (i16) for (let k = 0; k < 2 * n; k++) iq[k] = v.getInt16(IQ_HEADER + 2 * k, true) * scale;
+    else {
+      const raw = new Int8Array(buf, IQ_HEADER, 2 * n);
+      for (let k = 0; k < 2 * n; k++) iq[k] = raw[k] * scale;
+    }
     return {
       kind,
       flags,

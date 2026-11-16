@@ -608,14 +608,19 @@ impl Session<'_> {
                 self.wide = None;
                 vec![]
             }
-            ClientMsg::Wide { on: true, hz } => {
+            ClientMsg::Wide { on: true, hz, bits } => {
                 self.wide = None; // one at a time
                 let Some(tap) = self.sh.waterfalls.tap() else {
                     return vec![ServerMsg::Error {
                         msg: "wide IQ needs the channelizer's bins".into(),
                     }];
                 };
-                match crate::wideiq::start(tap, hz.unwrap_or(self.st.hz), self.wide_out.clone()) {
+                match crate::wideiq::start(
+                    tap,
+                    hz.unwrap_or(self.st.hz),
+                    self.wide_out.clone(),
+                    bits == Some(16),
+                ) {
                     Ok(w) => {
                         self.wide = Some(w);
                         vec![]

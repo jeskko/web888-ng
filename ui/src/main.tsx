@@ -32,6 +32,7 @@ import { DigiPanel } from "./ctl/digi.tsx";
 import { SigPanel } from "./ctl/sigid.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
 import { DecodersCtl } from "./ctl/decoders.tsx";
+import { IqRecCtl } from "./ctl/iqrec.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
@@ -153,6 +154,7 @@ function App() {
           <SpotsCtl />
           <MapCtl />
           <DecodersCtl />
+          <IqRecCtl />
           <LabelsCtl />
         </div>
       </header>

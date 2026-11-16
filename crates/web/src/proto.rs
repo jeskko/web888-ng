@@ -117,11 +117,14 @@ pub enum ClientMsg {
         name: String,
     },
     /// Wide IQ (`wideiq`): the channelizer bin nearest `hz` (default: the
-    /// dial) as binary `KIND_IQ` frames, or stop.
+    /// dial) as binary `KIND_IQ` frames, or stop. `bits`: 8 (default) or 16
+    /// (recording).
     Wide {
         on: bool,
         #[serde(default)]
         hz: Option<f64>,
+        #[serde(default)]
+        bits: Option<u8>,
     },
 }
 

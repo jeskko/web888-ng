@@ -42,6 +42,14 @@ test("wide IQ frame", () => {
   assert.deepEqual([...q.iq], f.iq.map((v: number) => Math.fround(v * f.scale)));
 });
 
+test("wide IQ frame, 16-bit", () => {
+  const f = frames.iq16;
+  const q = parseFrame(buf(f.hex)) as IqFrame;
+  for (const k of ["flags", "seq", "frame", "centre", "rate"] as const) assert.equal(q[k], f[k], k);
+  assert.deepEqual([...q.iq], f.iq.map((v: number) => Math.fround(v * Math.fround(f.scale))));
+  assert.equal(parseFrame(buf(f.hex.slice(0, -2))), null);
+});
+
 test("short or unknown frames are rejected", () => {
   assert.equal(parseFrame(buf(frames.wf.hex.slice(0, 60))), null);
   assert.equal(parseFrame(buf("09000000")), null);

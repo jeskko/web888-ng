@@ -674,3 +674,33 @@ centre, so one bin is a whole CW sub-band or RTTY segment.
   7020 kHz it skims 6990-7030 kHz, four CW signals at once (both sides of
   a QSO at 7018.9, a weak CQ at 7022.3, a CQ at 7008.9); RTTY on the bin
   around 10100.8 kHz locks DWD as in audio mode.
+
+## 7. IQ recording from the page (2026-11-16)
+
+A signal heard on the receiver, saved as IQ to study offline as heard
+there (before: the workstation's HackRF on another antenna, or audio).
+
+* **What**: the channelizer bin around the dial, through the wide IQ
+  stream of §6: 60 kS/s complex, 60 kHz (clean within ±21 kHz of the
+  centre). Needs the server's bins (the hello's `wide`).
+* **Server**: `{"type": "wide", "on": true, "hz": dial, "bits": 16}` asks
+  for 16-bit frames (`FLAG_I16`, still scaled per block by its peak;
+  ~2 Mbit/s instead of ~1). Nothing is stored on the unit.
+* **Page** (`ui/src/iqrec.ts`, the Rec IQ button in the header): 10 s to
+  5 min; while recording the stream is 16-bit and keeps its bin (the
+  wide skimmers share it and don't follow the dial meanwhile); samples
+  lost on the way (frame numbers skip) become zeros, so file time stays
+  air time, and the count is shown. Saved as `.cs16` (interleaved i16,
+  no header) or `.wav` (stereo 16-bit, I left, Q right), scaled to the
+  recording's peak at −1 dBFS, named by the start (UTC), centre and rate:
+  `2026-11-16_0801_7072k_60k_web888.cs16`. Held as f32 in the page
+  (480 kB/s; 144 MB at 5 min).
+* **Test** (`ui/tools/cdp/iqrec.mjs`; the iq backend in bins mode
+  replaying the 40 m recording at 1.92 MS/s): 10 s at 7074 kHz saved the
+  bin 7042-7102 kHz, 600 000 samples, none lost; its spectrogram matches
+  the source mixed to the same centre (correlation 0.95, no frequency
+  shift, not inverted). The WAV reads as stereo 16-bit at 60 kHz.
+* **Not done**: on phones (no button there); replaying a file in
+  `web888d --backend iq` needs resampling to 480 kS/s or more; the
+  receiver's own channel (12 kS/s IQ around the dial) as an alternative to
+  the bin on servers without one.
