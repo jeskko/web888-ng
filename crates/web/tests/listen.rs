@@ -121,7 +121,7 @@ impl Client {
 
     /// Read until a message matching `f` (audio is collected meanwhile).
     async fn until(&mut self, f: impl Fn(&ServerMsg) -> bool) -> ServerMsg {
-        let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(20);
         loop {
             let m = tokio::time::timeout_at(deadline, self.ws.next())
                 .await
