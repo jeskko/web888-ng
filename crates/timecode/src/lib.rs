@@ -1,0 +1,1403 @@
+// SPDX-License-Identifier: GPL-3.0-or-later
+//! Time-code stations in the receiver's audio: DCF77, MSF, WWVB and JJY
+//! (a keyed LF carrier heard as a tone) and WWV/WWVH (the 100 Hz BCD
+//! subcarrier, heard in AM). Written from the stations' published
+//! formats (PTB for DCF77, NPL for MSF, NIST SP 432 for WWVB and
+//! WWV/WWVH, NICT for JJY).
+//!
+//! * The tone: a complex mixer at its audio frequency, a 40 ms boxcar
+//!   (~25 Hz: an LF carrier on an HF antenna is too weak in a wider one),
+//!   its amplitude every 5 ms; impulses blanked before it; divided by its
+//!   up level over the 2 s around it (AGC and fades move the level over
+//!   seconds, the keying is a ratio within one).
+//! * The second's phase: the last 20 s folded into one second and
+//!   matched against the station's average keying.
+//! * Each second's symbol: its mean level in the station's windows
+//!   (scaled by the last 30 s' levels), nearest the symbols' templates
+//!   (see [`Station::symbols`]); the margin to the second nearest is its
+//!   quality.
+//! * Minutes: the alignment whose minute passes the station's checks,
+//!   then counted; the date voted over the last minutes; decoded into
+//!   [`Minute`]: the UTC the minute starts at, with the stream time it
+//!   was heard at, and whether an earlier minute agrees.
+
+use num_complex::Complex32;
+use std::f64::consts::PI;
+
+/// Frames a second (5 ms each).
+const FPS: usize = 200;
+const HOP: f64 = 1.0 / FPS as f64;
+/// The envelope's boxcar (s).
+const WIN: f64 = 0.04;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq)]
+pub enum Station {
+    Dcf77,
+    Msf,
+    Wwvb,
+    Jjy,
+    /// WWV and WWVH (the same code).
+    Wwv,
+}
+
+/// Each symbol's mean level (0 keyed down / off, 1 up / on) in the
+/// station's windows.
+type Templates = &'static [(char, &'static [f32])];
+
+impl Station {
+    pub const ALL: [Station; 5] = [
+        Station::Dcf77,
+        Station::Msf,
+        Station::Wwvb,
+        Station::Jjy,
+        Station::Wwv,
+    ];
+
+    pub fn name(self) -> &'static str {
+        match self {
+            Station::Dcf77 => "DCF77",
+            Station::Msf => "MSF",
+            Station::Wwvb => "WWVB",
+            Station::Jjy => "JJY",
+            Station::Wwv => "WWV/WWVH",
+        }
+    }
+
+    pub fn from_name(s: &str) -> Option<Station> {
+        Station::ALL.into_iter().find(|v| {
+            v.name().eq_ignore_ascii_case(s)
+                || (s.eq_ignore_ascii_case("wwv") && *v == Station::Wwv)
+        })
+    }
+
+    /// Carrier frequencies (Hz).
+    pub fn carriers(self) -> &'static [f64] {
+        match self {
+            Station::Dcf77 => &[77_500.0],
+            Station::Msf => &[60_000.0],
+            Station::Wwvb => &[60_000.0],
+            Station::Jjy => &[40_000.0, 60_000.0],
+            Station::Wwv => &[2.5e6, 5e6, 10e6, 15e6, 20e6, 25e6],
+        }
+    }
+
+    /// The stations a dial frequency may be (within 3 kHz of a carrier).
+    pub fn near(hz: f64) -> Vec<Station> {
+        Station::ALL
+            .into_iter()
+            .filter(|s| s.carriers().iter().any(|&c| (c - hz).abs() <= 3000.0))
+            .collect()
+    }
+
+    /// Windows (s from the second's start) and the symbols' levels in them.
+    pub fn symbols(self) -> (&'static [(f64, f64)], Templates) {
+        match self {
+            // 0.1 s reduced: 0, 0.2 s: 1, none: second 59
+            Station::Dcf77 => (
+                &[(0.01, 0.09), (0.12, 0.18), (0.25, 0.95)],
+                &[
+                    ('0', &[0.0, 1.0, 1.0]),
+                    ('1', &[0.0, 0.0, 1.0]),
+                    ('M', &[1.0, 1.0, 1.0]),
+                ],
+            ),
+            // off 0.1 s, then bit A (0.1-0.2 s off = 1), bit B (0.2-0.3 s);
+            // second 0: off 0.5 s. Symbols: '0' A0B0, '1' A1B0, '2' A0B1, '3' A1B1
+            Station::Msf => (
+                &[
+                    (0.01, 0.09),
+                    (0.12, 0.18),
+                    (0.22, 0.28),
+                    (0.33, 0.47),
+                    (0.55, 0.95),
+                ],
+                &[
+                    ('0', &[0.0, 1.0, 1.0, 1.0, 1.0]),
+                    ('1', &[0.0, 0.0, 1.0, 1.0, 1.0]),
+                    ('2', &[0.0, 1.0, 0.0, 1.0, 1.0]),
+                    ('3', &[0.0, 0.0, 0.0, 1.0, 1.0]),
+                    ('M', &[0.0, 0.0, 0.0, 0.0, 1.0]),
+                ],
+            ),
+            // reduced 0.2 s: 0, 0.5 s: 1, 0.8 s: marker
+            Station::Wwvb => (
+                &[(0.03, 0.17), (0.23, 0.47), (0.53, 0.77), (0.83, 0.97)],
+                &[
+                    ('0', &[0.0, 1.0, 1.0, 1.0]),
+                    ('1', &[0.0, 0.0, 1.0, 1.0]),
+                    ('M', &[0.0, 0.0, 0.0, 1.0]),
+                ],
+            ),
+            // on 0.8 s: 0, 0.5 s: 1, 0.2 s: marker
+            Station::Jjy => (
+                &[(0.03, 0.17), (0.23, 0.47), (0.53, 0.77), (0.83, 0.97)],
+                &[
+                    ('0', &[1.0, 1.0, 1.0, 0.0]),
+                    ('1', &[1.0, 1.0, 0.0, 0.0]),
+                    ('M', &[1.0, 0.0, 0.0, 0.0]),
+                ],
+            ),
+            // 100 Hz on from 0.03 s: 0.17 s: 0, 0.47 s: 1, 0.77 s: marker;
+            // second 0: none (the hole)
+            Station::Wwv => (
+                &[(0.06, 0.17), (0.23, 0.47), (0.53, 0.77), (0.83, 0.97)],
+                &[
+                    ('0', &[1.0, 0.0, 0.0, 0.0]),
+                    ('1', &[1.0, 1.0, 0.0, 0.0]),
+                    ('M', &[1.0, 1.0, 1.0, 0.0]),
+                    ('H', &[0.0, 0.0, 0.0, 0.0]),
+                ],
+            ),
+        }
+    }
+
+    /// The average level over a second (200 frames), symbols weighed as
+    /// sent (for the phase).
+    fn profile(self) -> [f32; FPS] {
+        let mut p = [0f32; FPS];
+        for (k, v) in p.iter_mut().enumerate() {
+            let t = k as f64 * HOP;
+            *v = match self {
+                Station::Dcf77 => {
+                    if t < 0.1 {
+                        0.02
+                    } else if t < 0.2 {
+                        0.6
+                    } else {
+                        1.0
+                    }
+                }
+                Station::Msf => {
+                    if t < 0.1 {
+                        0.02
+                    } else if t < 0.3 {
+                        0.6
+                    } else if t < 0.5 {
+                        0.98
+                    } else {
+                        1.0
+                    }
+                }
+                Station::Wwvb => {
+                    if t < 0.2 {
+                        0.0
+                    } else if t < 0.5 {
+                        0.5
+                    } else if t < 0.8 {
+                        0.9
+                    } else {
+                        1.0
+                    }
+                }
+                Station::Jjy => {
+                    if t < 0.2 {
+                        1.0
+                    } else if t < 0.5 {
+                        0.9
+                    } else if t < 0.8 {
+                        0.5
+                    } else {
+                        0.0
+                    }
+                }
+                Station::Wwv => {
+                    if t < 0.03 {
+                        0.0
+                    } else if t < 0.2 {
+                        0.98
+                    } else if t < 0.5 {
+                        0.5
+                    } else if t < 0.8 {
+                        0.1
+                    } else {
+                        0.0
+                    }
+                }
+            };
+        }
+        p
+    }
+
+    /// What a symbol costs on top of its distance: a minute's marker is
+    /// sent once (DCF77, MSF, WWV's hole) or 7 times a minute (WWVB, JJY),
+    /// so noise shouldn't read one where a bit was as easily.
+    fn rarity(self, c: char) -> f32 {
+        let r = 0.1;
+        match (self, c) {
+            (Station::Dcf77 | Station::Msf, 'M') | (Station::Wwv, 'H') => r,
+            (Station::Wwvb | Station::Jjy, 'M') => r / 3.0,
+            _ => 0.0,
+        }
+    }
+
+    /// Seconds whose symbols stay the same all day (the date, year,
+    /// zone): voted over the last minutes.
+    fn date_seconds(self) -> &'static [std::ops::RangeInclusive<usize>] {
+        match self {
+            Station::Dcf77 => &[17..=18, 36..=58],
+            Station::Msf => &[17..=38, 54..=56],
+            Station::Wwvb => &[22..=33, 45..=53],
+            Station::Jjy => &[22..=33, 41..=48, 50..=52],
+            Station::Wwv => &[4..=7, 30..=41, 51..=54],
+        }
+    }
+
+    /// The share of time keyed down (for the levels' percentiles).
+    fn down(self) -> f32 {
+        match self {
+            Station::Dcf77 => 0.15,
+            Station::Msf => 0.25,
+            Station::Wwvb | Station::Jjy => 0.5,
+            Station::Wwv => 0.65,
+        }
+    }
+
+    /// The UTC offset of the time sent (s), if fixed (DCF77 and MSF say
+    /// theirs per minute).
+    fn zone(self) -> i64 {
+        match self {
+            Station::Jjy => 9 * 3600,
+            _ => 0,
+        }
+    }
+}
+
+/// A decoded minute.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Minute {
+    pub station: Station,
+    /// Stream time (s) the minute starts at (its second 0).
+    pub t: f64,
+    /// UTC of that instant (Unix seconds).
+    pub utc: i64,
+    /// The station's own time, as it says it ("2026-11-16 11:24 CET").
+    pub local: String,
+    /// Parity and range checks passed (the date voted over the last
+    /// minutes, see [`Station::date_seconds`]).
+    pub ok: bool,
+    /// Its time of day agrees with an earlier minute that passed.
+    pub confirmed: bool,
+    /// Announcements and corrections (DUT1, summer time, leap second).
+    pub notes: Vec<String>,
+    /// The minute's symbols as read ('?' unread).
+    pub symbols: String,
+}
+
+/// A second read.
+#[derive(Clone, Debug, PartialEq)]
+pub struct Second {
+    /// Stream time (s) it starts at.
+    pub t: f64,
+    pub sym: char,
+    /// The margin between the nearest template and the next (0..1).
+    pub quality: f32,
+    /// Its index in the minute, once the minute's start is known.
+    pub index: Option<u8>,
+    /// Its level (0 down .. 1 up) in each of the station's windows.
+    pub levels: Vec<f32>,
+}
+
+#[derive(Clone, Debug, PartialEq)]
+pub enum Event {
+    Second(Second),
+    Minute(Minute),
+}
+
+/// The receiver for one station, its tone at an audio frequency.
+pub struct Receiver {
+    station: Station,
+    fs: f64,
+    t0: f64,
+    /// Mixer.
+    ph: f64,
+    dph: f64,
+    /// The boxcar: the last WIN of mixed samples, and their sum.
+    ring: Vec<Complex32>,
+    pos: usize,
+    sum: num_complex::Complex64,
+    hop: usize,
+    hop_n: usize,
+    n: u64,
+    /// The envelope (amplitude per 5 ms frame) as measured, and divided by
+    /// its up level over the 2 s around it (`env`, a second behind `raw`):
+    /// AGC recovering from an impulse, or a fade, moves the level over
+    /// seconds; the keying is a ratio within one. Frames env_base.. .
+    raw: Vec<f32>,
+    env: Vec<f32>,
+    env_base: u64,
+    /// The second's phase (frame index mod FPS) and when it was set.
+    phase: Option<usize>,
+    phase_at: u64,
+    /// The next second to read: its first frame (absolute).
+    next: Option<u64>,
+    syms: Vec<Second>,
+    /// The index in `syms` where the current minute starts.
+    minute_at: Option<usize>,
+    out: Vec<Event>,
+    pub level: f32,
+    /// The noise blanker's average |x|.
+    avg: f64,
+    /// Minutes in a row that failed (the minute's lock is dropped at 2).
+    bad: u32,
+    /// The last minutes' frames (for the date's vote) and the minutes
+    /// that passed (stream time, UTC).
+    frames: std::collections::VecDeque<Vec<Second>>,
+    passed: Vec<(f64, i64)>,
+}
+
+impl Receiver {
+    /// `tone`: the carrier's (or WWV's 100 Hz subcarrier's) audio
+    /// frequency (Hz); `t0`: the stream time of the first sample.
+    pub fn new(station: Station, fs: f64, tone: f64, t0: f64) -> Self {
+        let w = (WIN * fs).round() as usize;
+        Receiver {
+            station,
+            fs,
+            t0,
+            ph: 0.0,
+            dph: 2.0 * PI * tone / fs,
+            ring: vec![Complex32::new(0.0, 0.0); w],
+            pos: 0,
+            sum: num_complex::Complex64::new(0.0, 0.0),
+            hop: (fs * HOP).round() as usize,
+            hop_n: 0,
+            n: 0,
+            raw: Vec::new(),
+            env: Vec::new(),
+            env_base: 0,
+            phase: None,
+            phase_at: 0,
+            next: None,
+            syms: Vec::new(),
+            minute_at: None,
+            out: Vec::new(),
+            level: 0.0,
+            avg: 0.0,
+            bad: 0,
+            frames: std::collections::VecDeque::new(),
+            passed: Vec::new(),
+        }
+    }
+
+    pub fn station(&self) -> Station {
+        self.station
+    }
+
+    /// Retune the tone (Hz).
+    pub fn set_tone(&mut self, tone: f64) {
+        self.dph = 2.0 * PI * tone / self.fs;
+    }
+
+    /// Stream time of envelope frame k (the boxcar's centre).
+    fn frame_t(&self, k: u64) -> f64 {
+        self.t0 + (k as f64 + 1.0) * HOP - 0.5 * WIN
+    }
+
+    pub fn push(&mut self, x: &[f32]) {
+        let w = self.ring.len();
+        // the blanker: an impulse (|x| over 6 times the average) is zeroed
+        let a_ema = 1.0 / (0.2 * self.fs);
+        for &v in x {
+            let m = (v as f64).abs();
+            let v = if self.n > (self.fs as u64) && m > 6.0 * self.avg / 0.64 {
+                0.0
+            } else {
+                self.avg += (m - self.avg) * a_ema;
+                v
+            };
+            let z = Complex32::new(
+                (v as f64 * self.ph.cos()) as f32,
+                (-(v as f64) * self.ph.sin()) as f32,
+            );
+            self.ph = (self.ph + self.dph) % (2.0 * PI);
+            let old = self.ring[self.pos];
+            self.ring[self.pos] = z;
+            self.pos = (self.pos + 1) % w;
+            self.sum += num_complex::Complex64::new((z.re - old.re) as f64, (z.im - old.im) as f64);
+            self.n += 1;
+            self.hop_n += 1;
+            if self.hop_n == self.hop {
+                self.hop_n = 0;
+                self.raw.push((self.sum.norm() / w as f64) as f32);
+            }
+        }
+        // re-sum now and then (rounding)
+        if self.n % (self.fs as u64 * 10) < x.len() as u64 {
+            self.sum = self
+                .ring
+                .iter()
+                .map(|c| num_complex::Complex64::new(c.re as f64, c.im as f64))
+                .sum();
+        }
+        // normalise: frames with a second of envelope after them
+        let h = FPS;
+        let mut buf: Vec<f32> = Vec::with_capacity(2 * h);
+        while self.env.len() + h < self.raw.len() {
+            let k = self.env.len();
+            let a = k.saturating_sub(h);
+            buf.clear();
+            buf.extend_from_slice(&self.raw[a..k + h]);
+            // the up level: the station's percentile (DCF77's carrier is up
+            // 85 % of the time, WWVB's about half)
+            let dn = self.station.down();
+            let q = ((dn + (1.0 - dn) / 2.0) * buf.len() as f32) as usize;
+            let q = q.min(buf.len() - 1);
+            let up = *buf.select_nth_unstable_by(q, f32::total_cmp).1;
+            self.env.push(self.raw[k] / up.max(1e-30));
+        }
+        self.read();
+        // keep 40 s
+        let keep = 40 * FPS;
+        if self.env.len() > keep + 2 * FPS {
+            let d = self.env.len() - keep;
+            self.env.drain(..d);
+            self.raw.drain(..d);
+            self.env_base += d as u64;
+        }
+    }
+
+    pub fn poll(&mut self) -> Vec<Event> {
+        std::mem::take(&mut self.out)
+    }
+
+    /// The levels keyed down and up over the last `secs`: the middle of
+    /// each part by the station's share of time keyed down.
+    fn scale(&self, secs: usize) -> Option<(f32, f32)> {
+        let n = (secs * FPS).min(self.env.len());
+        if n < 5 * FPS {
+            return None;
+        }
+        let mut v: Vec<f32> = self.env[self.env.len() - n..].to_vec();
+        v.sort_by(f32::total_cmp);
+        let dn = self.station.down();
+        let lo = v[((dn / 2.0) * n as f32) as usize];
+        let hi = v[(((dn + (1.0 - dn) / 2.0) * n as f32) as usize).min(n - 1)];
+        (hi > lo * 1.2).then_some((lo, hi))
+    }
+
+    /// The second's phase from the last 20 s, and the match there and at
+    /// the current phase.
+    fn find_phase(&self, lo: f32, hi: f32) -> Option<(usize, f32, f32)> {
+        let n = (20 * FPS).min(self.env.len() / FPS * FPS);
+        if n < 8 * FPS {
+            return None;
+        }
+        let start = self.env.len() - n;
+        let first_abs = self.env_base + start as u64;
+        let mut fold = [0f32; FPS];
+        for (i, &v) in self.env[start..].iter().enumerate() {
+            let k = ((first_abs + i as u64) % FPS as u64) as usize;
+            fold[k] += ((v - lo) / (hi - lo)).clamp(-0.5, 1.5);
+        }
+        let m = fold.iter().sum::<f32>() / FPS as f32;
+        for v in &mut fold {
+            *v -= m;
+        }
+        let tpl = self.station.profile();
+        let tm = tpl.iter().sum::<f32>() / FPS as f32;
+        let corr =
+            |s: usize| -> f32 { (0..FPS).map(|k| fold[(k + s) % FPS] * (tpl[k] - tm)).sum() };
+        let mut best = (0, f32::MIN);
+        for s in 0..FPS {
+            let c = corr(s);
+            if c > best.1 {
+                best = (s, c);
+            }
+        }
+        let cur = self.phase.map(corr).unwrap_or(0.0);
+        (best.1 > 0.0).then_some((best.0, best.1, cur))
+    }
+
+    fn read(&mut self) {
+        let Some((lo, hi)) = self.scale(30) else {
+            return;
+        };
+        self.level = 20.0 * (hi / lo.max(1e-12)).log10();
+        // the phase: every 5 s, from 8 s on
+        let end_abs = self.env_base + self.env.len() as u64;
+        if self.phase.is_none() || end_abs >= self.phase_at + 5 * FPS as u64 {
+            self.phase_at = end_abs;
+            if let Some((p, c, cur)) = self.find_phase(lo, hi) {
+                // a better phase must be clearly better (noise moves the
+                // estimate around); a few frames is drift, followed
+                let near = self.phase.is_some_and(|q| {
+                    (p as i64 - q as i64)
+                        .rem_euclid(FPS as i64)
+                        .min((q as i64 - p as i64).rem_euclid(FPS as i64))
+                        <= 4
+                });
+                if self.phase != Some(p) && (self.phase.is_none() || near || c > 1.3 * cur) {
+                    let shift = self
+                        .phase
+                        .map(|q| (p as i64 - q as i64).rem_euclid(FPS as i64))
+                        .unwrap_or(0);
+                    // a small drift moves the next second; a jump restarts
+                    if self.phase.is_none() || (shift > 4 && shift < FPS as i64 - 4) {
+                        self.next = None;
+                        self.syms.clear();
+                        self.minute_at = None;
+                    }
+                    self.phase = Some(p);
+                }
+            }
+        }
+        let Some(p) = self.phase else { return };
+        let next = *self.next.get_or_insert_with(|| {
+            let s = self.env_base + (self.env.len() as u64).saturating_sub(10 * FPS as u64);
+            s + ((p as u64 + FPS as u64 - s % FPS as u64) % FPS as u64)
+        });
+        let next = next.max(self.env_base);
+        // the second start with this phase nearest the expected one (a
+        // phase estimate moving a few frames either way neither skips nor
+        // repeats a second)
+        let mut at = next - (next % FPS as u64) + p as u64;
+        if at + (FPS as u64) / 2 < next {
+            at += FPS as u64;
+        } else if at > next + (FPS as u64) / 2 && at >= FPS as u64 {
+            at -= FPS as u64;
+        }
+        let at0 = at.max(self.env_base);
+        let mut at = at0;
+        while at + FPS as u64 + 4 <= end_abs {
+            let i0 = (at - self.env_base) as usize;
+            let lv = self.window_levels(i0, lo, hi);
+            let (_, tpls) = self.station.symbols();
+            let mut d: Vec<(f32, char)> = tpls
+                .iter()
+                .map(|(c, t)| {
+                    let d = t.iter().zip(&lv).map(|(a, b)| (a - b).powi(2)).sum::<f32>()
+                        / t.len() as f32;
+                    (d + self.station.rarity(*c), *c)
+                })
+                .collect();
+            d.sort_by(|a, b| a.0.total_cmp(&b.0));
+            let q = (d[1].0.sqrt() - d[0].0.sqrt()).clamp(0.0, 1.0);
+            let sym = if q < 0.02 { '?' } else { d[0].1 };
+            let t = self.frame_t(at);
+            self.second(Second {
+                t,
+                sym,
+                quality: q,
+                index: None,
+                levels: lv,
+            });
+            at += FPS as u64;
+        }
+        self.next = Some(at);
+    }
+
+    /// The second starting at frame `i0`: its level in each of the
+    /// station's windows, 0 down .. 1 up (the envelope's mean there,
+    /// scaled by the levels over the last 30 s). Projecting on the
+    /// carrier's phase instead, or scaling by the last few seconds' up and
+    /// down windows, read more symbols wrong on a weak DCF77 (2026-11-16:
+    /// impulse noise sets the errors, and those references are noisier).
+    fn window_levels(&self, i0: usize, lo: f32, hi: f32) -> Vec<f32> {
+        let mag = &self.env[i0..i0 + FPS];
+        let fr = |t: f64| (t * FPS as f64) as usize;
+        let (wins, _) = self.station.symbols();
+        wins.iter()
+            .map(|&(a, b)| {
+                let m = mag[fr(a)..fr(b)].iter().sum::<f32>() / (fr(b) - fr(a)) as f32;
+                ((m - lo) / (hi - lo)).clamp(-0.5, 1.5)
+            })
+            .collect()
+    }
+
+    /// A minute's frame decoded: its date seconds voted with the last 10
+    /// minutes' (bit errors in the date often pass its one parity bit);
+    /// confirmed when its time of day agrees with an earlier minute that
+    /// passed, by the time between them.
+    fn minute(&mut self, frame: Vec<Second>, next_t: f64) -> Option<Minute> {
+        self.frames.push_back(frame.clone());
+        while self.frames.len() > 10 {
+            self.frames.pop_front();
+        }
+        let mut voted = frame;
+        for r in self.station.date_seconds() {
+            for i in r.clone() {
+                let mut count: Vec<(char, usize)> = Vec::new();
+                for f in &self.frames {
+                    let c = f[i].sym;
+                    if c == '?' {
+                        continue;
+                    }
+                    match count.iter_mut().find(|x| x.0 == c) {
+                        Some(x) => x.1 += 1,
+                        None => count.push((c, 1)),
+                    }
+                }
+                if let Some(&(c, k)) = count.iter().max_by_key(|x| x.1)
+                    && 2 * k > count.iter().map(|x| x.1).sum::<usize>()
+                {
+                    voted[i].sym = c;
+                }
+            }
+        }
+        let mut m = decode(self.station, &voted, next_t)?;
+        let raw: String = self
+            .frames
+            .back()
+            .map(|f| f.iter().map(|s| s.sym).collect())
+            .unwrap_or_default();
+        m.symbols = raw;
+        if m.ok {
+            m.confirmed = self.passed.iter().any(|&(t, u)| {
+                let k = ((m.t - t) / 60.0).round();
+                k >= 1.0 && ((m.t - t) - 60.0 * k).abs() < 0.5 && m.utc - u == 60 * k as i64
+            });
+            self.passed.push((m.t, m.utc));
+            self.passed.retain(|p| m.t - p.0 < 1200.0);
+        }
+        Some(m)
+    }
+
+    fn second(&mut self, mut s: Second) {
+        self.syms.push(s.clone());
+        let n = self.syms.len();
+        match self.minute_at {
+            // under way: the next minute starts 60 seconds on, whatever a
+            // second in between looked like; two wrong minutes drop it
+            Some(m0) if n - 1 - m0 == 60 => {
+                let frame: Vec<Second> = self.syms[m0..m0 + 60].to_vec();
+                let m = self.minute(frame, self.syms[n - 1].t);
+                let good = m.as_ref().is_some_and(|m| m.ok);
+                self.bad = if good { 0 } else { self.bad + 1 };
+                if let Some(m) = m {
+                    self.out.push(Event::Minute(m));
+                }
+                self.minute_at = (self.bad < 2).then_some(n - 1);
+            }
+            Some(_) => {}
+            // not yet: the latest alignment whose minute passes every check
+            None => {
+                for st in (0..n.saturating_sub(60)).rev() {
+                    let frame = &self.syms[st..st + 60];
+                    if decode(self.station, frame, self.syms[st + 60].t).is_some_and(|m| m.ok) {
+                        let frame = frame.to_vec();
+                        if let Some(m) = self.minute(frame, self.syms[st + 60].t) {
+                            self.out.push(Event::Minute(m));
+                        }
+                        self.minute_at = Some(st + 60);
+                        self.bad = 0;
+                        break;
+                    }
+                }
+            }
+        }
+        // keep the current minute (and one before it while searching)
+        let keep_from = match self.minute_at {
+            Some(m0) => m0,
+            None => n.saturating_sub(121),
+        };
+        if keep_from > 0 {
+            self.syms.drain(..keep_from);
+            if let Some(m0) = self.minute_at.as_mut() {
+                *m0 -= keep_from;
+            }
+        }
+        let n = self.syms.len();
+        s.index = self.minute_at.and_then(|m0| u8::try_from(n - 1 - m0).ok());
+        self.out.push(Event::Second(s));
+    }
+}
+
+// ------------------------------------------------------------- decoding
+
+/// Days from 1970-01-01 to a civil date (proleptic Gregorian).
+pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
+    let y = if m <= 2 { y - 1 } else { y };
+    let era = y.div_euclid(400);
+    let yoe = y - era * 400;
+    let mp = (m + 9) % 12;
+    let doy = (153 * mp + 2) / 5 + d - 1;
+    let doe = yoe * 365 + yoe / 4 - yoe / 100 + doy;
+    era * 146_097 + doe - 719_468
+}
+
+/// The civil date of a day count from 1970-01-01.
+pub fn civil_from_days(z: i64) -> (i64, i64, i64) {
+    let z = z + 719_468;
+    let era = z.div_euclid(146_097);
+    let doe = z - era * 146_097;
+    let yoe = (doe - doe / 1460 + doe / 36_524 - doe / 146_096) / 365;
+    let y = yoe + era * 400;
+    let doy = doe - (365 * yoe + yoe / 4 - yoe / 100);
+    let mp = (5 * doy + 2) / 153;
+    let d = doy - (153 * mp + 2) / 5 + 1;
+    let m = if mp < 10 { mp + 3 } else { mp - 9 };
+    (if m <= 2 { y + 1 } else { y }, m, d)
+}
+
+fn bits_of(frame: &[Second], station: Station) -> Option<Vec<u8>> {
+    // DCF77, WWVB, JJY, WWV: one bit a second ('M'/'H' 0 where a marker
+    // belongs); MSF: A and B, returned as A in 0..60 and B in 60..120
+    let mut a = vec![0u8; 60];
+    let mut b = vec![0u8; 60];
+    for (i, s) in frame.iter().enumerate().take(60) {
+        match (station, s.sym) {
+            (Station::Msf, c @ '0'..='3') => {
+                let v = c as u8 - b'0';
+                a[i] = v & 1;
+                b[i] = v >> 1;
+            }
+            (_, '0') => a[i] = 0,
+            (_, '1') => a[i] = 1,
+            (_, 'M' | 'H') => {}
+            _ => return None,
+        }
+    }
+    if station == Station::Msf {
+        a.extend(b);
+    }
+    Some(a)
+}
+
+fn num(b: &[u8], idx: &[(usize, u32)]) -> u32 {
+    idx.iter().map(|&(i, w)| u32::from(b[i]) * w).sum()
+}
+
+fn parity(b: &[u8], r: std::ops::RangeInclusive<usize>) -> u8 {
+    b[r].iter().fold(0, |a, &v| a ^ v)
+}
+
+fn markers_ok(frame: &[Second], at: &[usize], sym: char) -> bool {
+    at.iter()
+        .all(|&i| frame.get(i).is_some_and(|s| s.sym == sym))
+}
+
+fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
+    let symbols: String = frame.iter().map(|s| s.sym).collect();
+    let b = bits_of(frame, station);
+    let mut notes = Vec::new();
+    let (mut ok, t, y, mo, d, h, mi, zone, zname): (bool, f64, i64, i64, i64, i64, i64, i64, &str);
+    match station {
+        Station::Dcf77 => {
+            let b = b?;
+            // the time of the minute that follows
+            t = next_t;
+            mi = num(
+                &b,
+                &[
+                    (21, 1),
+                    (22, 2),
+                    (23, 4),
+                    (24, 8),
+                    (25, 10),
+                    (26, 20),
+                    (27, 40),
+                ],
+            ) as i64;
+            h = num(
+                &b,
+                &[(29, 1), (30, 2), (31, 4), (32, 8), (33, 10), (34, 20)],
+            ) as i64;
+            d = num(
+                &b,
+                &[(36, 1), (37, 2), (38, 4), (39, 8), (40, 10), (41, 20)],
+            ) as i64;
+            mo = num(&b, &[(45, 1), (46, 2), (47, 4), (48, 8), (49, 10)]) as i64;
+            y = 2000
+                + num(
+                    &b,
+                    &[
+                        (50, 1),
+                        (51, 2),
+                        (52, 4),
+                        (53, 8),
+                        (54, 10),
+                        (55, 20),
+                        (56, 40),
+                        (57, 80),
+                    ],
+                ) as i64;
+            let cest = b[17] == 1;
+            ok = b[0] == 0
+                && b[20] == 1
+                && (b[17] ^ b[18]) == 1
+                && parity(&b, 21..=28) == 0
+                && parity(&b, 29..=35) == 0
+                && parity(&b, 36..=58) == 0
+                && markers_ok(frame, &[59], 'M');
+            (zone, zname) = if cest { (7200, "CEST") } else { (3600, "CET") };
+            if b[16] == 1 {
+                notes.push("summer time change at the hour".into());
+            }
+            if b[19] == 1 {
+                notes.push("leap second at the hour".into());
+            }
+            if b[15] == 1 {
+                notes.push("call bit".into());
+            }
+        }
+        Station::Msf => {
+            let v = b?;
+            let (a, bb) = v.split_at(60);
+            t = next_t;
+            y = 2000
+                + num(
+                    a,
+                    &[
+                        (17, 80),
+                        (18, 40),
+                        (19, 20),
+                        (20, 10),
+                        (21, 8),
+                        (22, 4),
+                        (23, 2),
+                        (24, 1),
+                    ],
+                ) as i64;
+            mo = num(a, &[(25, 10), (26, 8), (27, 4), (28, 2), (29, 1)]) as i64;
+            d = num(a, &[(30, 20), (31, 10), (32, 8), (33, 4), (34, 2), (35, 1)]) as i64;
+            h = num(a, &[(39, 20), (40, 10), (41, 8), (42, 4), (43, 2), (44, 1)]) as i64;
+            mi = num(
+                a,
+                &[
+                    (45, 40),
+                    (46, 20),
+                    (47, 10),
+                    (48, 8),
+                    (49, 4),
+                    (50, 2),
+                    (51, 1),
+                ],
+            ) as i64;
+            let odd = |r: std::ops::RangeInclusive<usize>, p: usize| (parity(a, r) ^ bb[p]) == 1;
+            ok = a[52..60] == [0, 1, 1, 1, 1, 1, 1, 0]
+                && odd(17..=24, 54)
+                && odd(25..=35, 55)
+                && odd(36..=38, 56)
+                && odd(39..=51, 57)
+                && markers_ok(frame, &[0], 'M');
+            (zone, zname) = if bb[58] == 1 {
+                (3600, "BST")
+            } else {
+                (0, "GMT")
+            };
+            if bb[53] == 1 {
+                notes.push("summer time change within the hour".into());
+            }
+            let pos = bb[1..=8].iter().filter(|&&v| v == 1).count();
+            let neg = bb[9..=16].iter().filter(|&&v| v == 1).count();
+            if pos > 0 || neg > 0 {
+                notes.push(format!("DUT1 {:+.1} s", (pos as f64 - neg as f64) / 10.0));
+            }
+        }
+        Station::Wwvb | Station::Jjy => {
+            let b = b?;
+            t = frame[0].t;
+            mi = num(
+                &b,
+                &[(1, 40), (2, 20), (3, 10), (5, 8), (6, 4), (7, 2), (8, 1)],
+            ) as i64;
+            h = num(
+                &b,
+                &[(12, 20), (13, 10), (15, 8), (16, 4), (17, 2), (18, 1)],
+            ) as i64;
+            let doy = num(
+                &b,
+                &[
+                    (22, 200),
+                    (23, 100),
+                    (25, 80),
+                    (26, 40),
+                    (27, 20),
+                    (28, 10),
+                    (30, 8),
+                    (31, 4),
+                    (32, 2),
+                    (33, 1),
+                ],
+            ) as i64;
+            let marks = [0, 9, 19, 29, 39, 49, 59];
+            if station == Station::Wwvb {
+                y = 2000
+                    + num(
+                        &b,
+                        &[
+                            (45, 80),
+                            (46, 40),
+                            (47, 20),
+                            (48, 10),
+                            (50, 8),
+                            (51, 4),
+                            (52, 2),
+                            (53, 1),
+                        ],
+                    ) as i64;
+                let sign = match (b[36], b[37], b[38]) {
+                    (1, 0, 1) => Some(1.0),
+                    (0, 1, 0) => Some(-1.0),
+                    _ => None,
+                };
+                ok = markers_ok(frame, &marks, 'M') && sign.is_some();
+                let dut = num(&b, &[(40, 8), (41, 4), (42, 2), (43, 1)]) as f64 / 10.0;
+                if let Some(sg) = sign {
+                    notes.push(format!("DUT1 {:+.1} s", sg * dut));
+                }
+                if b[56] == 1 {
+                    notes.push("leap second at the end of the month".into());
+                }
+                match (b[57], b[58]) {
+                    (1, 1) => notes.push("DST in effect".into()),
+                    (1, 0) => notes.push("DST begins today".into()),
+                    (0, 1) => notes.push("DST ends today".into()),
+                    _ => {}
+                }
+                (zone, zname) = (0, "UTC");
+            } else {
+                y = 2000
+                    + num(
+                        &b,
+                        &[
+                            (41, 80),
+                            (42, 40),
+                            (43, 20),
+                            (44, 10),
+                            (45, 8),
+                            (46, 4),
+                            (47, 2),
+                            (48, 1),
+                        ],
+                    ) as i64;
+                ok = markers_ok(frame, &marks, 'M')
+                    && parity(&b, 12..=18) == b[36]
+                    && parity(&b, 1..=8) == b[37];
+                if b[53] == 1 {
+                    notes.push(
+                        if b[54] == 1 {
+                            "leap second (removed) at the end of the month"
+                        } else {
+                            "leap second at the end of the month"
+                        }
+                        .into(),
+                    );
+                }
+                (zone, zname) = (station.zone(), "JST");
+            }
+            let (yy, m2, d2) = civil_from_days(days_from_civil(y, 1, 1) + doy - 1);
+            ok &= (1..=366).contains(&doy) && yy == y;
+            (mo, d) = (m2, d2);
+        }
+        Station::Wwv => {
+            let b = b?;
+            t = frame[0].t;
+            mi = num(
+                &b,
+                &[
+                    (10, 1),
+                    (11, 2),
+                    (12, 4),
+                    (13, 8),
+                    (15, 10),
+                    (16, 20),
+                    (17, 40),
+                ],
+            ) as i64;
+            h = num(
+                &b,
+                &[(20, 1), (21, 2), (22, 4), (23, 8), (25, 10), (26, 20)],
+            ) as i64;
+            let doy = num(
+                &b,
+                &[
+                    (30, 1),
+                    (31, 2),
+                    (32, 4),
+                    (33, 8),
+                    (35, 10),
+                    (36, 20),
+                    (37, 40),
+                    (38, 80),
+                    (40, 100),
+                    (41, 200),
+                ],
+            ) as i64;
+            y = 2000
+                + num(
+                    &b,
+                    &[
+                        (4, 1),
+                        (5, 2),
+                        (6, 4),
+                        (7, 8),
+                        (51, 10),
+                        (52, 20),
+                        (53, 40),
+                        (54, 80),
+                    ],
+                ) as i64;
+            ok = markers_ok(frame, &[9, 19, 29, 39, 49, 59], 'M') && markers_ok(frame, &[0], 'H');
+            let dut = num(&b, &[(56, 1), (57, 2), (58, 4)]) as f64 / 10.0;
+            notes.push(format!(
+                "DUT1 {}{:.1} s",
+                if b[50] == 1 { '+' } else { '-' },
+                dut
+            ));
+            if b[3] == 1 {
+                notes.push("leap second at the end of the month".into());
+            }
+            if b[55] == 1 || b[2] == 1 {
+                notes.push(
+                    if b[55] == 1 && b[2] == 1 {
+                        "DST in effect"
+                    } else {
+                        "DST changes today"
+                    }
+                    .into(),
+                );
+            }
+            let (yy, m2, d2) = civil_from_days(days_from_civil(y, 1, 1) + doy - 1);
+            ok &= (1..=366).contains(&doy) && yy == y;
+            (mo, d) = (m2, d2);
+            (zone, zname) = (0, "UTC");
+        }
+    }
+    ok &= mi < 60 && h < 24 && (1..=12).contains(&mo) && (1..=31).contains(&d);
+    let local_s = days_from_civil(y, mo.clamp(1, 12), d.clamp(1, 31)) * 86_400 + h * 3600 + mi * 60;
+    let utc = local_s - zone;
+    let local = format!("{y:04}-{mo:02}-{d:02} {h:02}:{mi:02} {zname}");
+    Some(Minute {
+        station,
+        t,
+        utc,
+        local,
+        ok,
+        confirmed: false,
+        notes,
+        symbols,
+    })
+}
+
+// ------------------------------------------------------------- synthesis
+
+/// A station's keying for tests: the level (0..1) of each 1 ms over
+/// `minutes` minutes from the UTC `start` (a minute boundary).
+pub fn keying(station: Station, start: i64, minutes: usize) -> Vec<f32> {
+    let mut out = Vec::with_capacity(minutes * 60_000);
+    for m in 0..minutes as i64 {
+        let utc = start + 60 * m;
+        let syms = encode(station, utc);
+        for (i, s) in syms.iter().enumerate() {
+            let _ = i;
+            for ms in 0..1000 {
+                let t = ms as f64 / 1000.0;
+                out.push(level(station, *s, t));
+            }
+        }
+    }
+    out
+}
+
+fn level(station: Station, s: char, t: f64) -> f32 {
+    let on = match station {
+        Station::Dcf77 => match s {
+            '0' => t >= 0.1,
+            '1' => t >= 0.2,
+            _ => true,
+        },
+        Station::Msf => {
+            let v = s as u8 - b'0';
+            match s {
+                'M' => t >= 0.5,
+                _ => {
+                    !(t < 0.1 || (t < 0.2 && v & 1 == 1) || (0.2..0.3).contains(&t) && v >> 1 == 1)
+                }
+            }
+        }
+        Station::Wwvb => {
+            t >= match s {
+                '0' => 0.2,
+                '1' => 0.5,
+                _ => 0.8,
+            }
+        }
+        Station::Jjy => {
+            t < match s {
+                '0' => 0.8,
+                '1' => 0.5,
+                _ => 0.2,
+            }
+        }
+        Station::Wwv => {
+            t >= 0.03
+                && t < match s {
+                    '0' => 0.2,
+                    '1' => 0.5,
+                    'M' => 0.8,
+                    _ => 0.0,
+                }
+        }
+    };
+    if on {
+        1.0
+    } else if matches!(station, Station::Dcf77) {
+        0.15
+    } else if matches!(station, Station::Wwvb) {
+        0.14
+    } else {
+        0.0
+    }
+}
+
+/// The 60 symbols a station sends in the minute starting at `utc`.
+pub fn encode(station: Station, utc: i64) -> Vec<char> {
+    let mut b = [0u8; 60];
+    let mut bb = [0u8; 60];
+    let set = |b: &mut [u8; 60], v: i64, idx: &[(usize, i64)]| {
+        let mut v = v;
+        // weights high to low
+        let mut w: Vec<(usize, i64)> = idx.to_vec();
+        w.sort_by_key(|x| -x.1);
+        for (i, wt) in w {
+            if v >= wt {
+                b[i] = 1;
+                v -= wt;
+            }
+        }
+    };
+    let civil = |t: i64| {
+        let (y, m, d) = civil_from_days(t.div_euclid(86_400));
+        let s = t.rem_euclid(86_400);
+        let doy = days_from_civil(y, m, d) - days_from_civil(y, 1, 1) + 1;
+        let wd = (t.div_euclid(86_400) + 4).rem_euclid(7); // 0 Sunday
+        (y, m, d, s / 3600, s / 60 % 60, doy, wd)
+    };
+    let mut syms = vec!['0'; 60];
+    match station {
+        Station::Dcf77 => {
+            // the next minute, CET (no summer time in tests)
+            let (y, m, d, h, mi, _, wd) = civil(utc + 60 + 3600);
+            b[18] = 1;
+            b[20] = 1;
+            set(
+                &mut b,
+                mi,
+                &[
+                    (21, 1),
+                    (22, 2),
+                    (23, 4),
+                    (24, 8),
+                    (25, 10),
+                    (26, 20),
+                    (27, 40),
+                ],
+            );
+            set(
+                &mut b,
+                h,
+                &[(29, 1), (30, 2), (31, 4), (32, 8), (33, 10), (34, 20)],
+            );
+            set(
+                &mut b,
+                d,
+                &[(36, 1), (37, 2), (38, 4), (39, 8), (40, 10), (41, 20)],
+            );
+            set(
+                &mut b,
+                if wd == 0 { 7 } else { wd },
+                &[(42, 1), (43, 2), (44, 4)],
+            );
+            set(&mut b, m, &[(45, 1), (46, 2), (47, 4), (48, 8), (49, 10)]);
+            set(
+                &mut b,
+                y - 2000,
+                &[
+                    (50, 1),
+                    (51, 2),
+                    (52, 4),
+                    (53, 8),
+                    (54, 10),
+                    (55, 20),
+                    (56, 40),
+                    (57, 80),
+                ],
+            );
+            b[28] = parity(&b, 21..=27);
+            b[35] = parity(&b, 29..=34);
+            b[58] = parity(&b, 36..=57);
+            for i in 0..59 {
+                syms[i] = (b'0' + b[i]) as char;
+            }
+            syms[59] = 'M';
+        }
+        Station::Msf => {
+            let (y, m, d, h, mi, _, wd) = civil(utc + 60);
+            set(
+                &mut b,
+                y - 2000,
+                &[
+                    (17, 80),
+                    (18, 40),
+                    (19, 20),
+                    (20, 10),
+                    (21, 8),
+                    (22, 4),
+                    (23, 2),
+                    (24, 1),
+                ],
+            );
+            set(&mut b, m, &[(25, 10), (26, 8), (27, 4), (28, 2), (29, 1)]);
+            set(
+                &mut b,
+                d,
+                &[(30, 20), (31, 10), (32, 8), (33, 4), (34, 2), (35, 1)],
+            );
+            set(&mut b, wd, &[(36, 4), (37, 2), (38, 1)]);
+            set(
+                &mut b,
+                h,
+                &[(39, 20), (40, 10), (41, 8), (42, 4), (43, 2), (44, 1)],
+            );
+            set(
+                &mut b,
+                mi,
+                &[
+                    (45, 40),
+                    (46, 20),
+                    (47, 10),
+                    (48, 8),
+                    (49, 4),
+                    (50, 2),
+                    (51, 1),
+                ],
+            );
+            b[52..60].copy_from_slice(&[0, 1, 1, 1, 1, 1, 1, 0]);
+            bb[54] = 1 ^ parity(&b, 17..=24);
+            bb[55] = 1 ^ parity(&b, 25..=35);
+            bb[56] = 1 ^ parity(&b, 36..=38);
+            bb[57] = 1 ^ parity(&b, 39..=51);
+            for i in 1..60 {
+                syms[i] = (b'0' + b[i] + 2 * bb[i]) as char;
+            }
+            syms[0] = 'M';
+        }
+        Station::Wwvb | Station::Jjy => {
+            let off = if station == Station::Jjy { 9 * 3600 } else { 0 };
+            let (y, _, _, h, mi, doy, wd) = civil(utc + off);
+            set(
+                &mut b,
+                mi,
+                &[(1, 40), (2, 20), (3, 10), (5, 8), (6, 4), (7, 2), (8, 1)],
+            );
+            set(
+                &mut b,
+                h,
+                &[(12, 20), (13, 10), (15, 8), (16, 4), (17, 2), (18, 1)],
+            );
+            set(
+                &mut b,
+                doy,
+                &[
+                    (22, 200),
+                    (23, 100),
+                    (25, 80),
+                    (26, 40),
+                    (27, 20),
+                    (28, 10),
+                    (30, 8),
+                    (31, 4),
+                    (32, 2),
+                    (33, 1),
+                ],
+            );
+            if station == Station::Wwvb {
+                b[36] = 1;
+                b[38] = 1; // DUT1 +
+                set(&mut b, 3, &[(40, 8), (41, 4), (42, 2), (43, 1)]);
+                set(
+                    &mut b,
+                    y - 2000,
+                    &[
+                        (45, 80),
+                        (46, 40),
+                        (47, 20),
+                        (48, 10),
+                        (50, 8),
+                        (51, 4),
+                        (52, 2),
+                        (53, 1),
+                    ],
+                );
+            } else {
+                b[36] = parity(&b, 12..=18);
+                b[37] = parity(&b, 1..=8);
+                set(
+                    &mut b,
+                    y - 2000,
+                    &[
+                        (41, 80),
+                        (42, 40),
+                        (43, 20),
+                        (44, 10),
+                        (45, 8),
+                        (46, 4),
+                        (47, 2),
+                        (48, 1),
+                    ],
+                );
+                set(&mut b, wd, &[(50, 4), (51, 2), (52, 1)]);
+            }
+            for i in 0..60 {
+                syms[i] = (b'0' + b[i]) as char;
+            }
+            for i in [0, 9, 19, 29, 39, 49, 59] {
+                syms[i] = 'M';
+            }
+        }
+        Station::Wwv => {
+            let (y, _, _, h, mi, doy, _) = civil(utc);
+            set(&mut b, (y - 2000) % 10, &[(4, 1), (5, 2), (6, 4), (7, 8)]);
+            set(
+                &mut b,
+                (y - 2000) / 10 * 10,
+                &[(51, 10), (52, 20), (53, 40), (54, 80)],
+            );
+            set(
+                &mut b,
+                mi,
+                &[
+                    (10, 1),
+                    (11, 2),
+                    (12, 4),
+                    (13, 8),
+                    (15, 10),
+                    (16, 20),
+                    (17, 40),
+                ],
+            );
+            set(
+                &mut b,
+                h,
+                &[(20, 1), (21, 2), (22, 4), (23, 8), (25, 10), (26, 20)],
+            );
+            set(
+                &mut b,
+                doy,
+                &[
+                    (30, 1),
+                    (31, 2),
+                    (32, 4),
+                    (33, 8),
+                    (35, 10),
+                    (36, 20),
+                    (37, 40),
+                    (38, 80),
+                    (40, 100),
+                    (41, 200),
+                ],
+            );
+            b[50] = 1;
+            set(&mut b, 2, &[(56, 1), (57, 2), (58, 4)]);
+            for i in 0..60 {
+                syms[i] = (b'0' + b[i]) as char;
+            }
+            for i in [9, 19, 29, 39, 49, 59] {
+                syms[i] = 'M';
+            }
+            syms[0] = 'H';
+        }
+    }
+    syms
+}

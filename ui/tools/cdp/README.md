@@ -51,6 +51,7 @@ kill $P
 | `img.mjs` | Fax/SSTV decoding in the page: picks a station (`f<carrier Hz>` fax, `s<dial Hz>` SSTV), `start` as the 4th argument starts a fax by hand, prints the status every 15 s, saves img.png | real fax or SSTV (DWD 7880 kHz is in `2026-10-22_..._60s.cs8`, no start tone) |
 | `sigid.mjs` | signal identification in the page: the ID panel's rows (frequency, level, what it looks like) every 15 s; tune with the URL's hash, a passband button label as the 2nd argument | real signals (live, or a recording: FT8, RTTY, fax, SSB and AM are in `2026-10-22_..._60s.cs8`) |
 | `iqrec.mjs` | IQ recording from the page: Rec IQ with a length (2nd argument, s) and `FORMAT=cs16\|wav`; the file lands in `OUT` | a server with bins (`--bins 16` with the iq backend; give `--iq-rate` of the file) |
+| `timecode.mjs` | the Time panel: tunes a station from its list (`DCF77\|77500`; `-` keeps the URL's tuning), prints the panel every 30 s | a time station in the passband (live, or a recording of the unit's LF bin upsampled to 1.92 MS/s, `--bins 16`) |
 
 Set passwords in the throwaway config with
 `echo PASSWORD | web888d passwd --config /tmp/t/c.toml` (and

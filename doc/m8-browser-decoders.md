@@ -7,8 +7,11 @@ Status: in progress (planned 2026-11-15). Done: item 1 (CW; `crates/cw`,
 `crates/img`, `crates/img-wasm`, `ui/src/img.ts`, `ui/src/ctl/img.tsx`,
 §2.3-2.4); item 5 (SITOR-B decodes; NAVTEX messages listed per signal; not
 tried on air), item 7 (the neural CW decoder, §5), item 9 (wide
-skimming, §6) and item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
-`ui/src/psk.ts`, `ui/src/ctl/psk.tsx`, §2.5).
+skimming, §6), item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
+`ui/src/psk.ts`, `ui/src/ctl/psk.tsx`, §2.5) and item 6 (DSC in the RTTY
+panel, `crates/fsk/src/dsc.rs`, §2.8; time codes, `crates/timecode`,
+`crates/timecode-wasm`, `ui/src/timecode.ts`, `ui/src/ctl/timecode.tsx`,
+§2.9).
 
 ## 1. Todo
 
@@ -19,7 +22,7 @@ skimming, §6) and item 10 (PSK31/63/125; `crates/psk`, `crates/psk-wasm`,
 | 3 | **SSTV** | new (nothing in datarx) | VIS-detected Martin, Scottie, Robot and PD modes as images, slant corrected |
 | 4 | **HF fax** | new (nothing in datarx) | DWD/NOAA-style charts as images: start/stop tones, phasing, IOC 576/288, 60/90/120 LPM, slant corrected |
 | 5 | NAVTEX / SITOR-B | datarx `wahrx/fsk.py` (already decodes it) | falls out of item 2; a NAVTEX view (B1-B4 header, message list) |
-| 6 | later: DSC, time codes (DCF77, MSF, WWVB...) | new | as in `feature-gap.md` §2.4 |
+| 6 | DSC, time codes (DCF77, MSF, WWVB, JJY, WWV/WWVH) (done, §2.8-2.9) | new (ITU-R M.493; PTB, NPL, NIST SP 432, NICT) | calls read with their ECC; the time and date read with the stations' checks |
 | 7 | optional: **neural CW** | trained on datarx-style synthetic CW (§5) | beats item 1 on the synthetic sets and on real recordings; shipped only then |
 | 8 | optional: **signal identifier** (done, §5.3) | trained on synthetic + labelled recordings (§5) | names the mode of a signal in the passband (RTTY 50/450, fax, SSTV, FT8, STANAG 4285...) and starts its decoder |
 | 9 | **wide skimming**: a channelizer bin (60 kS/s IQ, ~40 kHz) to the browser for the CW and RTTY skimmers | — | a whole CW or RTTY sub-band skimmed at once in the page; the unit only passes the bin on |
@@ -374,6 +377,74 @@ run.
   any mode (FT8 included); a click tunes to the usual dial. On a replay
   of the 40 m recording (resampled to 1.92 MS/s for `--backend iq`):
   the three stations that sent grids. Not yet: the wide IQ path.
+
+### 2.8 DSC (new): done (2026-11-16)
+
+Digital selective calling (ITU-R M.493, written from the Recommendation)
+on MF/HF: 100 Bd FSK, 170 Hz shift, in the RTTY panel with the other
+FSK signals (`crates/fsk/src/dsc.rs`). The FSK analysis tries it after
+SITOR-B: a 100 Bd signal whose ten-bit words pass their check bits (seven
+information bits, LSB first, and the count of their zeros) or that holds
+a call is decoded as DSC.
+
+* **A call**: the phasing (DX symbol 125, RX 111 down to 104) is looked
+  for at every bit, accepted on §3.3's rule (two DX and one RX, two RX and
+  one DX, or three RX). Each character is its DX copy if that passes its
+  check, else its RX copy (five slots later); where both fail or disagree,
+  the choice that makes the error-check character right is taken (one
+  lost character, or up to four disagreements).
+* **Shown**: one line a call: the format (distress alert, all ships,
+  individual, group, geographic area, semi-automatic), category, to whom
+  and from whom (MMSI and what kind: coast, ship, group, SAR aircraft...),
+  the telecommands or the distress details (nature, position, time), the
+  frequencies offered, the end of sequence (ack RQ/BQ), and whether the
+  ECC was right. The station list has the six distress and safety
+  channels (2187.5 to 16804.5 kHz).
+* **Tests**: the code against M.493's Table 1, calls with errors in one
+  copy and in both (the ECC repairs them), a distress alert, a phasing
+  mostly lost, and a skimmer test with four calls in audio. **On air**
+  (the remote unit's bins, 2026-11-16 10:13-10:23 UTC, 6312, 8414.5 and
+  12577 kHz): 8 calls, all with a right ECC: ships' test calls to coast
+  stations and the coast stations' acknowledgements (one offering a
+  working frequency).
+
+### 2.9 Time codes (new): done (2026-11-16)
+
+`crates/timecode`: DCF77, MSF, WWVB and JJY (a keyed LF carrier heard as a
+tone in USB/LSB/CW) and WWV/WWVH (the 100 Hz BCD subcarrier, in AM),
+written from the stations' published formats (PTB, NPL, NIST SP 432,
+NICT). The Time panel (in the Decoders list) picks the station the tuning
+hears, or tunes one (USB with the carrier at 1 kHz; AM on WWV).
+
+* **The tone**: mixed to 0 Hz, a 40 ms boxcar (~25 Hz: on the unit's HF
+  antenna DCF77 is ~22 dB over the noise in 1 Hz, so about 0 dB in 200
+  Hz), its amplitude every 5 ms; impulses (6x the average) blanked; the
+  envelope divided by its up level over the 2 s around it (the AGC
+  recovers from an impulse over seconds, which otherwise reads as keying).
+* **Seconds**: the last 20 s folded into one second and matched against
+  the station's average keying gives the phase (moved only when clearly
+  better, or by a few frames); each second's mean level in the station's
+  windows, scaled by the 30 s levels, nearest the symbols' templates (a
+  marker costs a little more: it is rare).
+* **Minutes**: until locked, every alignment of the last seconds whose
+  minute passes all checks (parities, markers, ranges); then counted (a
+  stray marker-like second doesn't move it), dropped after two failed
+  minutes. The date fields are voted over the last ten minutes (two errors
+  in DCF77's date pass its one parity bit); a minute is confirmed when its
+  time of day agrees with an earlier passing one. The panel shows the
+  station's time, UTC, the checks, and when the minute began by the
+  server's clock less what it says (the path from the station, the
+  receiver and the server's clock).
+* **On air** (the unit's LF bin, 2026-11-16 10:13 UTC, 10 min): DCF77
+  ~9 % of symbols misread (impulse noise sets it; projecting on the
+  carrier's phase, or scaling by the last seconds' levels, read more
+  wrong); minutes pass every few minutes, 17 ms after the recording's
+  clock; the page's AGC'd audio (replayed) reads alike since the up-level
+  scaling. MSF can't be judged on this unit: a steady 60 kHz line (the
+  bins' 60 kHz frame rate?) fills its off periods. WWV's carriers came in
+  (10 MHz 32 dB in 1 Hz) but its 100 Hz code wasn't over the noise.
+  WWVB, JJY and WWV are tested on synthetic keying only.
+* **Not done**: CHU (300 Bd FSK), RBU, BPC; WWV's coherent subcarrier.
 
 ## 3. Shared UI
 

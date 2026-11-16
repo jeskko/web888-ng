@@ -5,8 +5,9 @@
 // with jtty.wasm (JTTY), digi-worker.js with digi.wasm (FT8/FT4/WSPR),
 // cw-worker.js with cw.wasm (CW), rtty-worker.js with fsk.wasm
 // (FSK/RTTY), psk-worker.js with psk.wasm (PSK31/63/125), hfdl-worker.js
-// with hfdl.wasm (HFDL), js8-worker.js with js8.wasm (JS8), img-worker.js with img.wasm (fax, SSTV) and sigid-worker.js
-// with sigid.wasm (the signal identifier); index.html, style.css, and the
+// with hfdl.wasm (HFDL), js8-worker.js with js8.wasm (JS8), img-worker.js with img.wasm (fax, SSTV), sigid-worker.js
+// with sigid.wasm (the signal identifier) and timecode-worker.js with
+// timecode.wasm (time-code stations); index.html, style.css, and the
 // map's world (map/*.json).
 // `node build.mjs --watch` rebuilds on change (development).
 import * as esbuild from "esbuild";
@@ -34,6 +35,7 @@ const copyStatic = {
         ["js8.wasm", "JS8 decoding"],
         ["img.wasm", "FAX/SSTV decoding"],
         ["sigid.wasm", "Signal identification"],
+        ["timecode.wasm", "Time-code decoding"],
       ]) {
         try {
           await access(`wasm/${f}`);
@@ -47,7 +49,7 @@ const copyStatic = {
 };
 
 const options = {
-  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "psk-worker": "src/psk/worker.ts", "hfdl-worker": "src/hfdl/worker.ts", "js8-worker": "src/js8/worker.ts", "img-worker": "src/img/worker.ts", "sigid-worker": "src/sigid/worker.ts" },
+  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "psk-worker": "src/psk/worker.ts", "hfdl-worker": "src/hfdl/worker.ts", "js8-worker": "src/js8/worker.ts", "img-worker": "src/img/worker.ts", "sigid-worker": "src/sigid/worker.ts", "timecode-worker": "src/timecode/worker.ts" },
   outdir: out,
   bundle: true,
   format: "esm",

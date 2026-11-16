@@ -33,6 +33,7 @@ import { SigPanel } from "./ctl/sigid.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
 import { DecodersCtl } from "./ctl/decoders.tsx";
 import { IqRecCtl } from "./ctl/iqrec.tsx";
+import { TcPanel } from "./ctl/timecode.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
@@ -168,6 +169,7 @@ function App() {
         <CwPanel />
         <RttyPanel />
         <PskPanel />
+        <TcPanel />
         <HfdlPanel />
         <Js8Panel />
         <ImgPanel />

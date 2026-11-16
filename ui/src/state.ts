@@ -23,6 +23,7 @@ import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
+import { applySeconds, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { IqRecorder, REC_MAX_S, type RecFormat } from "./iqrec.ts";
 import { TuneSync } from "./tunesync.ts";
@@ -234,6 +235,7 @@ export function connect(): void {
       if (!cwWideNow()) cwAudio(f);
       if (!rttyWideNow()) rttyAudio(f);
       pskAudio(f);
+      tcAudio(f);
       hfdlAudio(f);
       js8Audio(f);
       imgAudio(f);
@@ -879,6 +881,115 @@ export function pickPsk(dial: number): void {
   const span = wfSpan(r.adc_hz, v.decim);
   const c = dial + 1500;
   if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
+}
+
+// ---------------------------------------------------------- time codes
+
+/** Time-code stations (DCF77, MSF, WWVB, JJY, WWV/WWVH) read in this
+ * browser from this receiver's audio (remembered). */
+export const tcOn = signal(load("tc") === "1");
+/** The station wanted: a name, or "auto" (whichever the tuning hears). */
+export const tcWant = signal(load("tcWant") || "auto");
+/** The current minute's seconds as read. */
+export const tcSeconds = signal<{ s: string; q: number }[]>([]);
+export const tcMinutes = signal<TcMinute[]>([]);
+/** The carrier's keying depth (dB), once measured. */
+export const tcLevel = signal<number | null>(null);
+export const tcError = signal("");
+/** What the receiver listens to with this tuning, or what to change. */
+export const tcNow = computed(() => {
+  const s = st.value;
+  if (!s) return { error: "" };
+  return tcPlan(tcWant.value, s.mode, s.hz, s.lo, s.hi, s.pitch);
+});
+let tcWorker: Worker | null = null;
+const tcFeed = new JttyFeed();
+let tcKey = "";
+let tcGen = 0;
+let tcIndex = 0;
+/** The sample index of the receiver's stream time 0. */
+let tcBase = 0;
+let tcName = "";
+const tcClock = new SampleClock(DIGI_RATE);
+
+function tcStart(): Worker {
+  const w = new Worker("timecode-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: TcRun; gen?: number; error?: string };
+    if (d.error) tcError.value = d.error;
+    if (!d.run || d.gen !== tcGen) return;
+    const run = d.run;
+    batch(() => {
+      tcLevel.value = run.level;
+      if (run.sec.length) tcSeconds.value = applySeconds(tcSeconds.value, run);
+      if (run.min.length) {
+        const add: TcMinute[] = run.min.map((m) => {
+          // when the minute began by the server's clock, less what it says
+          const heard = tcClock.utc(tcBase + m.t * DIGI_RATE);
+          return { station: tcName, utc: m.utc, local: m.local, ok: m.ok, confirmed: m.confirmed, notes: m.notes, late: heard === null ? null : heard - m.utc };
+        });
+        tcMinutes.value = [...add.reverse(), ...tcMinutes.value].slice(0, TC_KEEP);
+      }
+    });
+  };
+  return w;
+}
+
+function tcAudio(f: AudioFrame): void {
+  if (!tcOn.value) return;
+  const plan = tcNow.value;
+  const s = st.value;
+  if (!s || !("station" in plan)) {
+    tcKey = "";
+    return;
+  }
+  tcWorker ??= tcStart();
+  const pcm = tcFeed.push(f.pcm, f.rate, f.stereo);
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}|${plan.station.id}|${plan.tone}`;
+  if (key !== tcKey || f.flags & FLAG_GAP) {
+    // retuned, or samples lost: a new stream
+    tcKey = key;
+    tcGen++;
+    tcName = plan.station.name;
+    tcBase = tcIndex;
+    tcSeconds.value = [];
+    tcLevel.value = null;
+    tcWorker.postMessage({ start: [plan.station.id, plan.tone] });
+  }
+  if (pcm.length === 0) return;
+  tcIndex += pcm.length;
+  tcClock.observe(tcIndex, serverClock.now(Date.now() / 1000));
+  tcWorker.postMessage({ pcm, gen: tcGen }, [pcm.buffer]);
+}
+
+export function setTc(on: boolean): void {
+  tcOn.value = on;
+  save("tc", on ? "1" : "0");
+  if (!on && tcWorker) {
+    tcWorker.terminate();
+    tcWorker = null;
+    tcKey = "";
+  }
+}
+
+export function setTcWant(name: string): void {
+  tcWant.value = name;
+  save("tcWant", name);
+}
+
+/** A station was picked: tuned (USB with its carrier at 1 kHz, or AM on
+ * WWV) and wanted. */
+export function pickTc(name: string, carrier: number): void {
+  const x = TC_STATIONS.find((v) => v.name === name);
+  if (!x) return;
+  setTcWant(name);
+  const t = tcTuning(x, carrier);
+  tune(t.dial);
+  setModePassband(t.mode, t.lo, t.hi);
+}
+
+export function clearTc(): void {
+  tcMinutes.value = [];
 }
 
 // ---------------------------------------------------------- HFDL

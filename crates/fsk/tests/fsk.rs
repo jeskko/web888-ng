@@ -592,3 +592,39 @@ fn skimmer_overs_with_pauses() {
     let all: String = texts(&ev).values().cloned().collect();
     assert!(all.matches("N0CALL N0CALL").count() >= 5, "{all:?}");
 }
+
+/// DSC (ITU-R M.493): calls from a coast station, 100 Bd 170 Hz with B (0)
+/// the upper tone, a few seconds apart, found in the passband and read.
+#[test]
+fn skimmer_reads_dsc_calls() {
+    use web888_fsk::dsc;
+    let mut rng = Rng::new(21);
+    let rate = AUDIO_RATE;
+    // individual call to ship 123456780 from coast 001234560, routine,
+    // J3E TP, 8291.0 kHz both ways, ack RQ
+    let call = [
+        120, 12, 34, 56, 78, 0, 100, 0, 12, 34, 56, 0, 109, 126, 8, 29, 10, 8, 29, 10, 117,
+    ];
+    let mut x = vec![0f32; (4.0 * rate) as usize];
+    for _ in 0..4 {
+        let seg: synth::Seg = dsc::call_bits(&call, 200)
+            .into_iter()
+            .map(|b| (b, 1.0))
+            .collect();
+        let mut c = Cond::new(1700.0);
+        c.mark_high = false;
+        x.extend(synth::audio(&seg, 100.0, 170.0, rate, &c, 0.1, &mut rng));
+        x.extend(std::iter::repeat_n(0.0, (5.0 * rate) as usize));
+    }
+    for v in &mut x {
+        *v += (0.01 * rng.normal()) as f32;
+    }
+    let (_, ev) = skim(&x, (200.0, 2800.0));
+    let all: String = texts(&ev).values().cloned().collect();
+    let want = "DSC individual | routine | to 123456780 (ship) | from 001234560 (coast) | J3E TP | RX 8291.0 kHz TX 8291.0 kHz | ack RQ | ECC ok";
+    assert!(all.matches(want).count() >= 3, "{all:?}");
+    assert!(
+        ev.iter()
+            .any(|e| matches!(e, Event::Lock { params, .. } if params.mode == Mode::Dsc))
+    );
+}

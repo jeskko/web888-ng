@@ -3,8 +3,8 @@
 //! signal: the tones (so shift and centre), the symbol rate, async framing
 //! (data bits, parity, stop bits), polarity and character set (ITA2 /
 //! US-TTY with unshift-on-space decided from the text, ASCII 7/8 bit LSB
-//! or MSB first); SITOR-B / NAVTEX decoded, reversals and other 4-of-7
-//! codes identified. [`Skimmer`] finds and decodes every FSK signal in a
+//! or MSB first); SITOR-B / NAVTEX and DSC (ITU-R M.493, [`dsc`])
+//! decoded, reversals and other 4-of-7 codes identified. [`Skimmer`] finds and decodes every FSK signal in a
 //! passband of audio.
 //!
 //! A port to Rust of datarx's `wahrx/fsk.py` and `wahrx/fskskim.py` (MIT,
@@ -17,6 +17,7 @@
 pub mod analyze;
 pub mod charset;
 pub mod demod;
+pub mod dsc;
 pub mod skim;
 pub mod synth;
 

@@ -1,0 +1,10 @@
+[package]
+name = "web888-timecode"
+description = "Time-code stations (DCF77, MSF, WWVB, JJY, WWV/WWVH) decoded from receiver audio"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true

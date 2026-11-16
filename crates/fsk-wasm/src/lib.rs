@@ -69,6 +69,7 @@ fn params(s: &mut String, p: &FskParams) {
     let mode = match p.mode {
         Mode::Async => "async",
         Mode::Sitor => "sitor",
+        Mode::Dsc => "dsc",
         Mode::Sync => "sync",
     };
     let _ = write!(

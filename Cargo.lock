@@ -2012,6 +2012,20 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-timecode"
+version = "0.13.0"
+dependencies = [
+ "num-complex",
+]
+
+[[package]]
+name = "web888-timecode-wasm"
+version = "0.13.0"
+dependencies = [
+ "web888-timecode",
+]
+
+[[package]]
 name = "web888-web"
 version = "0.13.0"
 dependencies = [

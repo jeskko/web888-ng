@@ -18,7 +18,7 @@ export interface FskP {
   charset: string;
   usos: boolean;
   msb: boolean;
-  mode: "async" | "sitor" | "sync";
+  mode: "async" | "sitor" | "dsc" | "sync";
 }
 
 export type FskEv =
@@ -67,6 +67,12 @@ export const RTTY_STATIONS: { name: string; hz: number }[] = [
   { name: "DWD 10100.8 kHz", hz: 10_100_800 },
   { name: "DWD 11039 kHz", hz: 11_039_000 },
   { name: "DWD 14467.3 kHz", hz: 14_467_300 },
+  { name: "DSC 2187.5 kHz", hz: 2_187_500 },
+  { name: "DSC 4207.5 kHz", hz: 4_207_500 },
+  { name: "DSC 6312 kHz", hz: 6_312_000 },
+  { name: "DSC 8414.5 kHz", hz: 8_414_500 },
+  { name: "DSC 12577 kHz", hz: 12_577_000 },
+  { name: "DSC 16804.5 kHz", hz: 16_804_500 },
   { name: "20 m RTTY 14.080 MHz", hz: 14_081_000 },
   { name: "40 m RTTY 7.040 MHz", hz: 7_041_000 },
 ];
@@ -85,10 +91,12 @@ export function rfOf(mode: Mode, dial: number, pitch: number, hz: number): numbe
 export function describe(p: FskP, mode: Mode): string {
   const parts = [`${p.baud} Bd`, `${Math.round(p.shift)} Hz`];
   if (p.mode === "sitor") parts.push("SITOR-B");
+  else if (p.mode === "dsc") parts.push("DSC");
   else if (p.mode === "async") parts.push(p.framing);
   // LSB mirrors: the upper audio tone is the lower RF one
   const upper = mode === "lsb" ? !p.markHigh : p.markHigh;
-  if (p.mode !== "sync") parts.push(`mark ${upper ? "upper" : "lower"}`);
+  if (p.mode !== "sync" && p.mode !== "dsc") parts.push(`mark ${upper ? "upper" : "lower"}`);
+  if (p.mode === "dsc") return parts.join(" · ");
   let cs = p.charset;
   if (p.msb) cs += " MSB first";
   if (cs === "ITA2" || cs === "US-TTY") cs += p.usos ? "" : ", no USOS";

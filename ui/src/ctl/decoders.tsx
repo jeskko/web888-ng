@@ -4,7 +4,7 @@
 
 import { useEffect, useRef, useState } from "preact/hooks";
 import type { Signal } from "@preact/signals";
-import { cwOn, digiOn, hfdlOn, imgOn, js8On, jttyOn, pskOn, rttyOn, setCw, setDigi, setHfdl, setImg, setJs8, setJtty, setPsk, setRtty, setSig, sigOn } from "../state.ts";
+import { cwOn, digiOn, hfdlOn, imgOn, js8On, jttyOn, pskOn, rttyOn, setCw, setDigi, setHfdl, setImg, setJs8, setJtty, setPsk, setRtty, setSig, setTc, sigOn, tcOn } from "../state.ts";
 
 interface Decoder {
   label: string;
@@ -16,11 +16,12 @@ interface Decoder {
 export const DECODERS: Decoder[] = [
   { label: "FT8/FT4/WSPR", hint: "on the frequency you tune; nothing is reported anywhere", on: digiOn, set: setDigi },
   { label: "CW", hint: "every keyed signal in the passband (Morse)", on: cwOn, set: setCw },
-  { label: "RTTY", hint: "FSK/RTTY and NAVTEX, every parameter found from the signal", on: rttyOn, set: setRtty },
+  { label: "RTTY", hint: "FSK/RTTY, NAVTEX and DSC, every parameter found from the signal", on: rttyOn, set: setRtty },
   { label: "PSK", hint: "PSK31, PSK63 and PSK125: every BPSK signal in the passband", on: pskOn, set: setPsk },
   { label: "JS8", hint: "JS8Call: heartbeats, directed messages and chat, every submode (USB)", on: js8On, set: setJs8 },
   { label: "HFDL", hint: "aircraft HF data link: position reports and ACARS (USB)", on: hfdlOn, set: setHfdl },
   { label: "FAX/SSTV", hint: "HF weather charts and SSTV pictures (USB)", on: imgOn, set: setImg },
+  { label: "Time", hint: "time-code stations: DCF77, MSF, WWVB, JJY, WWV/WWVH", on: tcOn, set: setTc },
   { label: "Signal ID", hint: "identify the signals in the passband", on: sigOn, set: setSig },
   { label: "JTTY", hint: "WSJT-X's keyboard mode", on: jttyOn, set: setJtty },
 ];

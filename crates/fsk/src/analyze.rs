@@ -17,6 +17,8 @@ pub enum Mode {
     Async,
     /// SITOR-B / NAVTEX (CCIR 476 with FEC repetition).
     Sitor,
+    /// Digital selective calling (ITU-R M.493, `dsc`): calls, one item each.
+    Dsc,
     /// Synchronous, not decoded (reversals, other codes).
     Sync,
 }
@@ -88,6 +90,7 @@ impl FskParams {
     pub fn framing(&self) -> String {
         match self.mode {
             Mode::Sitor => "SITOR-B".into(),
+            Mode::Dsc => "DSC".into(),
             Mode::Sync => "sync".into(),
             Mode::Async => {
                 let p = match self.parity {
@@ -747,6 +750,7 @@ pub struct FskDecoder {
     bit_t: Vec<f64>,
     bit_lv: Vec<(f32, f32)>,
     slot_done: usize,
+    dsc: crate::dsc::Scanner,
 }
 
 impl FskDecoder {
@@ -824,6 +828,7 @@ impl FskDecoder {
             bit_t: Vec::new(),
             bit_lv: Vec::new(),
             slot_done: 0,
+            dsc: crate::dsc::Scanner::default(),
         }
     }
 
@@ -896,6 +901,7 @@ impl FskDecoder {
         }
         let out = match self.p.mode {
             Mode::Sitor => self.sitor(),
+            Mode::Dsc => self.dsc_(),
             Mode::Async => self.async_(),
             Mode::Sync => Vec::new(),
         };
@@ -963,6 +969,46 @@ impl FskDecoder {
             if let Some(s) = s {
                 out.push((ch.t, s, !ch.fe, ch.margin));
             }
+        }
+        trim(&mut self.recent, 200);
+        trim(&mut self.levels, 200);
+        out
+    }
+
+    /// DSC: bits as SITOR's, calls from [`crate::dsc::Scanner`], one item
+    /// each (its summary; framed correctly = the ECC is right).
+    fn dsc_(&mut self) -> Vec<Item> {
+        let base = self.base as f64;
+        let tb = *self.tbit.get_or_insert(base + 0.5 * self.t);
+        let (vals, pos, t) = sync_bits(&self.d, self.t, tb - base, self.d.len(), 0.15);
+        self.tbit = Some(t + base);
+        self.pos = t + base - 2.0 * self.t;
+        let n = self.a.len();
+        for &q in &pos {
+            let i = (q.round().max(0.0) as usize).min(n - 1);
+            self.levels
+                .push((self.a[i].max(self.b[i]), self.a[i].min(self.b[i])));
+            self.bit_t.push(self.time(q + base - self.lag));
+        }
+        self.bits.extend(vals.iter().map(|&v| u8::from(v > 0.0)));
+        let mut out = Vec::new();
+        for c in self.dsc.scan(&self.bits) {
+            self.n_chars += 1;
+            self.recent.push(!c.ecc_ok);
+            self.last_good = self.bit_t[c.start.min(self.bit_t.len() - 1)];
+            out.push((
+                self.bit_t[c.start.min(self.bit_t.len() - 1)],
+                c.summary() + "\n",
+                c.ecc_ok,
+                f32::INFINITY,
+            ));
+        }
+        // keep a call's phasing (~130 bits) before the scan position
+        let drop = self.dsc.pos().saturating_sub(400);
+        if drop > 2000 {
+            self.bits.drain(..drop);
+            self.bit_t.drain(..drop);
+            self.dsc.shift(drop);
         }
         trim(&mut self.recent, 200);
         trim(&mut self.levels, 200);
@@ -1477,7 +1523,54 @@ fn analyze_at(
             }
         }
         p.snr = sync_snr(&d, &a, &b, t, bw);
+        // DSC (ITU-R M.493): 100 Bd ten-bit words; a call found, or most
+        // words passing their check
+        let dsc = if sitor.is_none() && (baud - 100.0).abs() < 3.0 {
+            [1, -1]
+                .into_iter()
+                .map(|sp| {
+                    let dd: Vec<f32> = d.iter().map(|v| v * sp as f32).collect();
+                    let (vals, _, _) = sync_bits(&dd, t, 0.5 * t, dd.len(), 0.15);
+                    let bits: Vec<u8> = vals.iter().map(|&v| u8::from(v > 0.0)).collect();
+                    let calls = crate::dsc::Scanner::default().scan(&bits);
+                    (
+                        sp,
+                        calls.iter().filter(|c| c.lost == 0).count(),
+                        crate::dsc::align(&bits).1,
+                    )
+                })
+                .max_by(|x, y| {
+                    (x.1, x.2)
+                        .partial_cmp(&(y.1, y.2))
+                        .unwrap_or(std::cmp::Ordering::Equal)
+                })
+                .filter(|&(_, calls, share)| calls > 0 || share >= 0.6)
+        } else {
+            None
+        };
+        if let Some((sp, _, _)) = dsc {
+            p.mode = Mode::Dsc;
+            p.charset = "DSC".into();
+            p.mark_high = sp > 0;
+            p.ndata = 7;
+            p.parity = Parity::None;
+            p.stop = 0.0;
+        }
         let Some((sp, off, share, bits)) = sitor else {
+            if p.mode == Mode::Dsc {
+                let mut dec = FskDecoder::new(fs, p.clone(), t0);
+                let items = dec.feed(x);
+                p.fe_rate = if dec.n_chars > 0 { dec.fe_rate() } else { 1.0 };
+                p.score = 1.0;
+                let text: String = items.iter().map(|i| i.1.as_str()).collect();
+                return FskResult {
+                    params: Some(p),
+                    text,
+                    chars: items,
+                    baud_fit: fit,
+                    notes,
+                };
+            }
             p.mode = Mode::Sync;
             p.charset = "framing unknown".into();
             p.fe_rate = fr.fe;
@@ -1552,6 +1645,10 @@ pub fn is_valid(r: &FskResult, min_chars: usize) -> bool {
     };
     if p.mode == Mode::Sync {
         return false;
+    }
+    if p.mode == Mode::Dsc {
+        // a call read (its ECC right), or the code seen and the signal clear
+        return r.chars.iter().any(|c| c.2) || p.snr >= 6.0;
     }
     let n = r.chars.iter().filter(|c| !c.1.trim().is_empty()).count();
     let lim = if p.mode == Mode::Async { 0.12 } else { 0.25 };
