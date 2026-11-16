@@ -523,6 +523,16 @@ that can't go are dropped. It applies live.
   1842, FT4 268 and 468 of 488, extras unchanged); 5-10 % less time on
   the desktop; on the unit page faults in the decoders 1.5 % -> 0.1 %
   of both cores.
+* Cheaper search and metrics (2026-11-17, A9 timings of 8 busy 40 m
+  FT8 slots / 12 FT4 slots, `perf stat` cycles): the coarse search's lag
+  loop a block of 64 bins at a time (its rows stay in L2), `soft_bits`'
+  per-bit maxima as integer maxima over runs (no VFP compares, no
+  branch), BP's compares on the float bits. FT8 9.74 -> 8.65 Gcycles
+  (-11 %: metrics 2.15 -> 1.16 s, search 6.4 -> 5.8 s, BP -4..11 %),
+  FT4 -5.5 %. Decodes identical on both sets. Tried and dropped: the
+  lag sums in registers (more instructions: bounds checks). Left: the
+  FFTs (about 28 % of the decoder; rustfft has no NEON path on ARMv7),
+  the lag loop's arithmetic (~13 %), BP (~13 %).
 
 ## 8. Open
 

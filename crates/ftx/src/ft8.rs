@@ -66,6 +66,8 @@ const SPEC_STEP: usize = SPEC_NSPS / 4;
 const SPEC_NFFT: usize = 2 * SPEC_NSPS;
 const SPEC_DF: f32 = BAUD / 2.0;
 const SPEC_EDGE: f32 = 100.0;
+/// Bins per block of the coarse search's lag loop.
+const LAG_BLOCK: usize = 64;
 /// Seconds per spectrogram step.
 const SPEC_DT: f32 = NSPS as f32 / 4.0 / RATE;
 
@@ -537,40 +539,49 @@ impl Decoder {
         let j0 = (self.cfg.t0 / SPEC_DT).round() as i32;
         let ni = i_max - i_min;
         let mut best = vec![(0f32, 0i32, 0f32, 0i32); ni]; // (sync, lag, sync near, lag near)
-        let mut ta = vec![[0f32; 3]; ni];
-        let mut t0 = vec![[0f32; 3]; ni];
-        for lag in -62..=62i32 {
-            ta.iter_mut().for_each(|v| *v = [0.0; 3]);
-            t0.iter_mut().for_each(|v| *v = [0.0; 3]);
-            for a in 0..3 {
-                for (k, &tone) in self.costas[a].iter().enumerate() {
-                    let j = j0 + lag + 4 * (36 * a as i32 + k as i32);
-                    if j < 0 || j as usize >= nsteps {
-                        continue;
-                    }
-                    let base = j as usize * nbins + i_min;
-                    let row = &s[base + 2 * tone as usize..][..ni];
-                    let trow = &tsum[base..][..ni];
-                    for ((ta, t0), (&v, &tv)) in
-                        ta.iter_mut().zip(t0.iter_mut()).zip(row.iter().zip(trow))
-                    {
-                        ta[a] += v;
-                        t0[a] += tv;
+        // A block of bins at a time through all the lags: the block's
+        // rows of `s` and `tsum` (~0.2 MB) stay in the A9's L2 across the
+        // lags, where the whole arrays (~3 MB) went through memory once
+        // per lag. Same sums, same order.
+        for c0 in (0..ni).step_by(LAG_BLOCK) {
+            let w = LAG_BLOCK.min(ni - c0);
+            let mut ta = [[0f32; 3]; LAG_BLOCK];
+            let mut t0 = [[0f32; 3]; LAG_BLOCK];
+            let (ta, t0) = (&mut ta[..w], &mut t0[..w]);
+            for lag in -62..=62i32 {
+                ta.iter_mut().for_each(|v| *v = [0.0; 3]);
+                t0.iter_mut().for_each(|v| *v = [0.0; 3]);
+                for a in 0..3 {
+                    for (k, &tone) in self.costas[a].iter().enumerate() {
+                        let j = j0 + lag + 4 * (36 * a as i32 + k as i32);
+                        if j < 0 || j as usize >= nsteps {
+                            continue;
+                        }
+                        let base = j as usize * nbins + i_min + c0;
+                        let row = &s[base + 2 * tone as usize..][..w];
+                        let trow = &tsum[base..][..w];
+                        for ((ta, t0), (&v, &tv)) in
+                            ta.iter_mut().zip(t0.iter_mut()).zip(row.iter().zip(trow))
+                        {
+                            ta[a] += v;
+                            t0[a] += tv;
+                        }
                     }
                 }
-            }
-            for ((b, ta), t0) in best.iter_mut().zip(&ta).zip(&t0) {
-                let score = |ta: f32, t0: f32| if t0 > ta { ta / ((t0 - ta) / 6.0) } else { 0.0 };
-                let abc = score(ta[0] + ta[1] + ta[2], t0[0] + t0[1] + t0[2]);
-                let bc = score(ta[1] + ta[2], t0[1] + t0[2]);
-                let sync = abc.max(bc);
-                if sync > b.0 {
-                    b.0 = sync;
-                    b.1 = lag;
-                }
-                if lag.abs() <= 10 && sync > b.2 {
-                    b.2 = sync;
-                    b.3 = lag;
+                for ((b, ta), t0) in best[c0..c0 + w].iter_mut().zip(&*ta).zip(&*t0) {
+                    let score =
+                        |ta: f32, t0: f32| if t0 > ta { ta / ((t0 - ta) / 6.0) } else { 0.0 };
+                    let abc = score(ta[0] + ta[1] + ta[2], t0[0] + t0[1] + t0[2]);
+                    let bc = score(ta[1] + ta[2], t0[1] + t0[2]);
+                    let sync = abc.max(bc);
+                    if sync > b.0 {
+                        b.0 = sync;
+                        b.1 = lag;
+                    }
+                    if lag.abs() <= 10 && sync > b.2 {
+                        b.2 = sync;
+                        b.3 = lag;
+                    }
                 }
             }
         }
@@ -1115,7 +1126,7 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f3
     // once, not per group (zeroing 6 kB each time): z[0] is the only
     // value read before it is written
     let mut z = [C32::default(); 512];
-    let mut s2 = [0f32; 512];
+    let mut s2 = [0u32; 512];
     for half in 0..2 {
         let base = if half == 0 { 7 } else { 43 };
         let mut ks = 0;
@@ -1139,22 +1150,19 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f3
                 }
                 len *= 8;
             }
+            // as bits: non-negative floats order as their bit patterns,
+            // and an integer max is a fraction of a VFP compare's cost
             for (v, z) in s2[..nt].iter_mut().zip(&z) {
-                *v = z.norm_sqr();
+                *v = z.norm_sqr().to_bits();
             }
             let nbits = 3 * ns;
             for ib in 0..nbits {
-                let mask = 1 << (nbits - 1 - ib);
-                let mut one = 0f32;
-                let mut zero = 0f32;
-                for (i, &v) in s2[..nt].iter().enumerate() {
-                    if i & mask != 0 {
-                        one = one.max(v);
-                    } else {
-                        zero = zero.max(v);
-                    }
-                }
-                out[(29 * half + ks) * 3 + ib] = one.sqrt() - zero.sqrt();
+                // the indices with this bit set: runs of `run` after runs
+                // of `run` without it
+                let run = 1 << (nbits - 1 - ib);
+                let (one, zero) = bit_maxima(&s2[..nt], run);
+                out[(29 * half + ks) * 3 + ib] =
+                    f32::from_bits(one).sqrt() - f32::from_bits(zero).sqrt();
             }
             ks += ns;
         }
@@ -1168,6 +1176,18 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f3
         *v *= scale / sd;
     }
     out
+}
+
+/// The largest of `v` (float bit patterns, non-negative) at indices with
+/// the bit of value `run` set, and the largest at those without.
+pub(crate) fn bit_maxima(v: &[u32], run: usize) -> (u32, u32) {
+    let (mut one, mut zero) = (0u32, 0u32);
+    for c in v.chunks_exact(2 * run) {
+        let (z, o) = c.split_at(run);
+        zero = z.iter().fold(zero, |m, &x| m.max(x));
+        one = o.iter().fold(one, |m, &x| m.max(x));
+    }
+    (one, zero)
 }
 
 /// Turn `v` by `cycles` per sample (a frequency shift).

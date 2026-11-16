@@ -194,7 +194,8 @@ impl Bp {
         for iter in 0..=max_iter {
             let mut c = [0u64; 3];
             for (n, &z) in zn.iter().enumerate() {
-                set(&mut c, n, z > 0.0);
+                // z > 0, on the bits (-0 and below are not)
+                set(&mut c, n, (z.to_bits() as i32) > 0);
             }
             let errors = self.errors(&c);
             stalled = if errors < last { 0 } else { stalled + 1 };
@@ -221,27 +222,31 @@ impl Bp {
                 let w = w as usize;
                 // Bits to the check: everything a bit knows except what
                 // this check told it.
-                let mut v = [0f32; 7];
+                // Compares on the bits (the A9's VFP compares are slow):
+                // magnitudes are non-negative, so they order as integers;
+                // t < 0 is the sign bit set and t not -0.
+                let mut neg = [false; 7];
                 let mut sign = if w % 2 == 1 { -1.0f32 } else { 1.0 };
-                let (mut min1, mut min2, mut imin) = (f32::MAX, f32::MAX, 0);
-                for (i, vi) in v[..w].iter_mut().enumerate() {
+                let (mut min1, mut min2, mut imin) = (f32::MAX.to_bits(), f32::MAX.to_bits(), 0);
+                for (i, ng) in neg[..w].iter_mut().enumerate() {
                     let (n, k) = self.nm[m][i];
-                    let t = zn[n as usize] - self.tov[n as usize][k as usize];
-                    *vi = t;
-                    if t < 0.0 {
+                    let t = (zn[n as usize] - self.tov[n as usize][k as usize]).to_bits();
+                    *ng = (t as i32) < 0 && t << 1 != 0;
+                    if *ng {
                         sign = -sign;
                     }
-                    let a = t.abs();
+                    let a = t & 0x7fff_ffff;
                     if a < min1 {
                         (min2, min1, imin) = (min1, a, i);
                     } else if a < min2 {
                         min2 = a;
                     }
                 }
-                for (i, &t) in v[..w].iter().enumerate() {
+                let (min1, min2) = (f32::from_bits(min1), f32::from_bits(min2));
+                for (i, &ng) in neg[..w].iter().enumerate() {
                     let (n, k) = self.nm[m][i];
                     let mag = if i == imin { min2 } else { min1 };
-                    let s = if t < 0.0 { -sign } else { sign };
+                    let s = if ng { -sign } else { sign };
                     self.tov[n as usize][k as usize] = ALPHA * s * mag;
                 }
             }

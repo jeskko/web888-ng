@@ -22,6 +22,8 @@ use crate::osd;
 use crate::realfft::RealFft;
 use crate::tones::{self, FT4_COSTAS, FT4_GRAY, FT4_SYMBOLS, Shape};
 use crate::{FftScratch, wrap};
+/// Bins per block of the coarse search's lag loop (as FT8's).
+const LAG_BLOCK: usize = 64;
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
 use std::cell::RefCell;
@@ -388,42 +390,48 @@ impl Decoder {
         let max_lag = (MAX_LAG_S / step_s).round() as i32;
         let ni = i_max - i_min;
         let mut best = vec![(0f32, 0i32, 0f32, 0i32); ni];
-        let mut ta = vec![[0f32; 4]; ni];
-        let mut t0 = vec![[0f32; 4]; ni];
-        for lag in -max_lag..=max_lag {
-            ta.iter_mut().for_each(|v| *v = [0.0; 4]);
-            t0.iter_mut().for_each(|v| *v = [0.0; 4]);
-            for (a, &at) in SYNC_AT.iter().enumerate() {
-                for (k, &tone) in FT4_COSTAS[a].iter().enumerate() {
-                    // +1: the ramp symbol
-                    let j = j0 + lag + 4 * (1 + at + k) as i32;
-                    if j < 0 || j as usize >= nsteps {
-                        continue;
-                    }
-                    let base = j as usize * nbins + i_min;
-                    let row = &s[base + 2 * tone as usize..][..ni];
-                    let trow = &tsum[base..][..ni];
-                    for ((ta, t0), (&v, &tv)) in
-                        ta.iter_mut().zip(t0.iter_mut()).zip(row.iter().zip(trow))
-                    {
-                        ta[a] += v;
-                        t0[a] += tv;
+        // A block of bins through all the lags at a time (as FT8's).
+        for c0 in (0..ni).step_by(LAG_BLOCK) {
+            let w = LAG_BLOCK.min(ni - c0);
+            let mut ta = [[0f32; 4]; LAG_BLOCK];
+            let mut t0 = [[0f32; 4]; LAG_BLOCK];
+            let (ta, t0) = (&mut ta[..w], &mut t0[..w]);
+            for lag in -max_lag..=max_lag {
+                ta.iter_mut().for_each(|v| *v = [0.0; 4]);
+                t0.iter_mut().for_each(|v| *v = [0.0; 4]);
+                for (a, &at) in SYNC_AT.iter().enumerate() {
+                    for (k, &tone) in FT4_COSTAS[a].iter().enumerate() {
+                        // +1: the ramp symbol
+                        let j = j0 + lag + 4 * (1 + at + k) as i32;
+                        if j < 0 || j as usize >= nsteps {
+                            continue;
+                        }
+                        let base = j as usize * nbins + i_min + c0;
+                        let row = &s[base + 2 * tone as usize..][..w];
+                        let trow = &tsum[base..][..w];
+                        for ((ta, t0), (&v, &tv)) in
+                            ta.iter_mut().zip(t0.iter_mut()).zip(row.iter().zip(trow))
+                        {
+                            ta[a] += v;
+                            t0[a] += tv;
+                        }
                     }
                 }
-            }
-            for ((b, ta), t0) in best.iter_mut().zip(&ta).zip(&t0) {
-                let score = |ta: f32, t0: f32| if t0 > ta { ta / ((t0 - ta) / 3.0) } else { 0.0 };
-                let all = score(ta.iter().sum(), t0.iter().sum());
-                let first = score(ta[0] + ta[1] + ta[2], t0[0] + t0[1] + t0[2]);
-                let last = score(ta[1] + ta[2] + ta[3], t0[1] + t0[2] + t0[3]);
-                let sync = all.max(first).max(last);
-                if sync > b.0 {
-                    b.0 = sync;
-                    b.1 = lag;
-                }
-                if lag.abs() <= 10 && sync > b.2 {
-                    b.2 = sync;
-                    b.3 = lag;
+                for ((b, ta), t0) in best[c0..c0 + w].iter_mut().zip(&*ta).zip(&*t0) {
+                    let score =
+                        |ta: f32, t0: f32| if t0 > ta { ta / ((t0 - ta) / 3.0) } else { 0.0 };
+                    let all = score(ta.iter().sum(), t0.iter().sum());
+                    let first = score(ta[0] + ta[1] + ta[2], t0[0] + t0[1] + t0[2]);
+                    let last = score(ta[1] + ta[2] + ta[3], t0[1] + t0[2] + t0[3]);
+                    let sync = all.max(first).max(last);
+                    if sync > b.0 {
+                        b.0 = sync;
+                        b.1 = lag;
+                    }
+                    if lag.abs() <= 10 && sync > b.2 {
+                        b.2 = sync;
+                        b.3 = lag;
+                    }
                 }
             }
         }
@@ -857,7 +865,7 @@ impl Decoder {
 /// Bit log-likelihoods from coherent sums over groups of `nsym` symbols.
 fn soft_bits(cs: &[[C32; 4]], nsym: usize, scale: f32) -> [f32; N] {
     let mut out = [0f32; N];
-    let mut s2 = vec![0f32; 1 << (2 * nsym)];
+    let mut s2 = vec![0u32; 1 << (2 * nsym)];
     for (g, &base) in DATA_AT.iter().enumerate() {
         let mut ks = 0;
         while ks < 29 {
@@ -869,21 +877,15 @@ fn soft_bits(cs: &[[C32; 4]], nsym: usize, scale: f32) -> [f32; N] {
                     let tone_bits = (i >> (2 * (ns - 1 - j))) & 3;
                     z += cs[base + ks + j][FT4_GRAY[tone_bits] as usize];
                 }
-                *v = z.norm();
+                // squared, as bits (FT8's): the square root of the
+                // winners only, the same values
+                *v = z.norm_sqr().to_bits();
             }
             let nbits = 2 * ns;
             for ib in 0..nbits {
-                let mask = 1 << (nbits - 1 - ib);
-                let mut one = f32::MIN;
-                let mut zero = f32::MIN;
-                for (i, &v) in s2[..nt].iter().enumerate() {
-                    if i & mask != 0 {
-                        one = one.max(v);
-                    } else {
-                        zero = zero.max(v);
-                    }
-                }
-                out[(29 * g + ks) * 2 + ib] = one - zero;
+                let (one, zero) = crate::ft8::bit_maxima(&s2[..nt], 1 << (nbits - 1 - ib));
+                out[(29 * g + ks) * 2 + ib] =
+                    f32::from_bits(one).sqrt() - f32::from_bits(zero).sqrt();
             }
             ks += ns;
         }
