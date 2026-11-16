@@ -39,7 +39,7 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
-      # the decoders' WebAssembly (ui/wasm/jtty.wasm, digi.wasm, cw.wasm, fsk.wasm, psk.wasm, hfdl.wasm, js8.wasm, img.wasm, sigid.wasm, copied by the build)
+      # the decoders' WebAssembly (ui/wasm/jtty.wasm, digi.wasm, cw.wasm, fsk.wasm, psk.wasm, hfdl.wasm, js8.wasm, img.wasm, sigid.wasm, timecode.wasm, opus.wasm, copied by the build)
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
@@ -47,7 +47,7 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm test
       - run: pnpm build
-      - run: test -s dist/jtty.wasm && test -s dist/digi.wasm && test -s dist/cw.wasm && test -s dist/fsk.wasm && test -s dist/psk.wasm && test -s dist/hfdl.wasm && test -s dist/js8.wasm && test -s dist/img.wasm && test -s dist/sigid.wasm
+      - run: test -s dist/jtty.wasm && test -s dist/digi.wasm && test -s dist/cw.wasm && test -s dist/fsk.wasm && test -s dist/psk.wasm && test -s dist/hfdl.wasm && test -s dist/js8.wasm && test -s dist/img.wasm && test -s dist/sigid.wasm && test -s dist/timecode.wasm && test -s dist/opus.wasm
       - uses: actions/upload-artifact@v4
         with:
           name: web888d-ui

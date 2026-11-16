@@ -4,6 +4,8 @@
 // in doc/m4-skimmers.md §5).
 // Fixtures shared with the Rust tests: crates/web/tests/proto/.
 
+import { mulawDecode } from "./audio/codec.ts";
+
 export const PROTO = 2;
 
 /** "iq": Kiwi protocol clients only (not offered in the UI). "nbfm":
@@ -62,6 +64,8 @@ export interface State {
   squelch_db: number;
   /** Audio sample rate: 12000, or 24000 for passbands to +-10 kHz. */
   audio_rate: number;
+  /** How the audio comes: "pcm16", "mulaw" or "opus". */
+  codec?: Codec;
   wf: WfReq;
   /** Others see this user's frequency and may listen along. */
   share: boolean;
@@ -83,6 +87,8 @@ export interface AudioReq {
   squelch_db?: number;
   /** One of the hello's `audio_rates`. */
   audio_rate?: number;
+  /** One of the hello's `codecs`. */
+  codec?: Codec;
 }
 
 /** Another user: in the user list, and (sharing, with a receiver) a
@@ -159,6 +165,8 @@ export type ServerMsg =
       /** The audio rates this session can choose (12000; 24000 where the
        * RX rate allows). */
       audio_rates?: number[];
+      /** The codecs this session can choose (none listed: pcm16 only). */
+      codecs?: string[];
       radio: RadioInfo;
       limits: Limits;
       session: number;
@@ -203,6 +211,13 @@ export const FLAG_OVERLOAD = 1;
 export const FLAG_GAP = 2;
 /** Audio: two channels, interleaved (left first). */
 export const FLAG_STEREO = 4;
+/** Audio: G.711 mu-law, a byte a sample. */
+export const FLAG_MULAW = 8;
+/** Audio: one Opus packet (`packet`), decoded by the page. */
+export const FLAG_OPUS = 16;
+
+/** How the server sends the audio. */
+export type Codec = "pcm16" | "mulaw" | "opus";
 /** Waterfall: first line of a new tuning/zoom. */
 export const FLAG_NEW_GEN = 2;
 /** Waterfall: no new samples since the previous line (a repeat). */
@@ -217,9 +232,15 @@ export interface AudioFrame {
   rate: number;
   /** Channel power before AGC, dBFS. */
   rssi: number;
-  /** Mono, or (`stereo`) left and right interleaved. */
+  /** Mono, or (`stereo`) left and right interleaved; empty for an Opus
+   * frame until the page decodes `packet`. */
   pcm: Float32Array;
   stereo: boolean;
+  /** Opus: the packet, and the samples it decodes to (both channels'). */
+  packet?: Uint8Array;
+  samples: number;
+  /** The frame's size on the wire (bytes). */
+  bytes: number;
 }
 
 export interface WfLine {
@@ -259,9 +280,19 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
   const flags = v.getUint8(1);
   const n = v.getUint16(2, true);
   if (kind === KIND_AUDIO) {
-    if (buf.byteLength < AUDIO_HEADER + 2 * n) return null;
-    const pcm = new Float32Array(n);
-    for (let k = 0; k < n; k++) pcm[k] = v.getInt16(AUDIO_HEADER + 2 * k, true) / 32768;
+    let pcm: Float32Array;
+    let packet: Uint8Array | undefined;
+    if (flags & FLAG_OPUS) {
+      packet = new Uint8Array(buf, AUDIO_HEADER);
+      pcm = new Float32Array(0);
+    } else if (flags & FLAG_MULAW) {
+      if (buf.byteLength < AUDIO_HEADER + n) return null;
+      pcm = mulawDecode(new Uint8Array(buf, AUDIO_HEADER, n));
+    } else {
+      if (buf.byteLength < AUDIO_HEADER + 2 * n) return null;
+      pcm = new Float32Array(n);
+      for (let k = 0; k < n; k++) pcm[k] = v.getInt16(AUDIO_HEADER + 2 * k, true) / 32768;
+    }
     return {
       kind,
       flags,
@@ -270,6 +301,9 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
       rssi: v.getFloat32(12, true),
       pcm,
       stereo: (flags & FLAG_STEREO) !== 0,
+      packet,
+      samples: n,
+      bytes: buf.byteLength,
     };
   }
   if (kind === KIND_WF) {

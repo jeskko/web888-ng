@@ -7,7 +7,8 @@
 // (FSK/RTTY), psk-worker.js with psk.wasm (PSK31/63/125), hfdl-worker.js
 // with hfdl.wasm (HFDL), js8-worker.js with js8.wasm (JS8), img-worker.js with img.wasm (fax, SSTV), sigid-worker.js
 // with sigid.wasm (the signal identifier) and timecode-worker.js with
-// timecode.wasm (time-code stations); index.html, style.css, and the
+// timecode.wasm (time-code stations); opus.wasm (the audio's Opus
+// decoder, loaded by the page itself); index.html, style.css, and the
 // map's world (map/*.json).
 // `node build.mjs --watch` rebuilds on change (development).
 import * as esbuild from "esbuild";
@@ -36,6 +37,7 @@ const copyStatic = {
         ["img.wasm", "FAX/SSTV decoding"],
         ["sigid.wasm", "Signal identification"],
         ["timecode.wasm", "Time-code decoding"],
+        ["opus.wasm", "Opus audio (the page falls back to mu-law)"],
       ]) {
         try {
           await access(`wasm/${f}`);

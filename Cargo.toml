@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm", "crates/markers", "crates/clock", "crates/digi-wasm", "crates/cw", "crates/cw-wasm", "crates/fsk", "crates/fsk-wasm", "crates/psk", "crates/psk-wasm", "crates/hfdl", "crates/js8", "crates/js8-wasm", "crates/hfdl-wasm", "crates/img", "crates/img-wasm", "crates/sigid", "crates/sigid-wasm", "crates/timecode", "crates/timecode-wasm"]
+members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm", "crates/markers", "crates/clock", "crates/digi-wasm", "crates/cw", "crates/cw-wasm", "crates/fsk", "crates/fsk-wasm", "crates/psk", "crates/psk-wasm", "crates/hfdl", "crates/js8", "crates/js8-wasm", "crates/hfdl-wasm", "crates/img", "crates/img-wasm", "crates/sigid", "crates/sigid-wasm", "crates/timecode", "crates/timecode-wasm", "crates/opus-wasm"]
 
 [workspace.package]
 version = "0.14.0"
@@ -37,6 +37,9 @@ libc = "0.2.190"
 num-complex = "0.4.6"
 rustfft = "6.4.1"
 clap = { version = "4.6.7", features = ["derive"] }
+# Opus for the web UI's audio (a Rust port of libopus 1.6; BSD-3-Clause);
+# the speech/music analysis is for complexity 7 and up
+opus1 = { version = "=0.3.0", default-features = false, features = ["std", "heap"] }
 
 [profile.release]
 lto = "thin"

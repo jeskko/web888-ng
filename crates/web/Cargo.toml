@@ -27,6 +27,7 @@ tower = { version = "0.5.3", features = ["util"] }
 argon2 = "0.6.0"
 getrandom = "0.4.3"
 libc.workspace = true
+opus1.workspace = true
 
 [features]
 default = ["kiwi"]

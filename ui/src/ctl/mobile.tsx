@@ -41,7 +41,7 @@ import { DigiCtl, DigiPanel } from "./digi.tsx";
 import { MapCtl, MapPanel } from "./map.tsx";
 import { LabelsCtl } from "./labels.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
-import { AttLamp, AudioCtl, ContrastCtl, DspCtl, LeaseBanner, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
+import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
 
 type SheetName = "keypad" | "bands" | "more" | null;
 
@@ -293,6 +293,9 @@ function More({ close }: { close: () => void }) {
     <Sheet title="More" close={close}>
       <h4>Audio</h4>
       <AudioCtl />
+      <div class="group">
+        <CodecCtl />
+      </div>
       <h4>Noise</h4>
       <DspCtl />
       <h4>Waterfall</h4>

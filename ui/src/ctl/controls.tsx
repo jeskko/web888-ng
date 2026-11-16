@@ -52,6 +52,13 @@ import {
   tuneInView,
   tuneStep,
   volume,
+  audioKbps,
+  codecNow,
+  codecPref,
+  opusDec,
+  serverCodecs,
+  setCodecPref,
+  type CodecPref,
 } from "../state.ts";
 
 /** Dial in kHz; wheel over a digit steps that digit, click to type. */
@@ -173,6 +180,7 @@ export function Bandwidth() {
           {b.label}
         </button>
       ))}
+      <CodecCtl />
       {audioRates.value.includes(24000) && (
         <span class="seg" title="Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)">
           {[12000, 24000].map((r) => (
@@ -183,6 +191,34 @@ export function Bandwidth() {
         </span>
       )}
     </div>
+  );
+}
+
+const CODECS: { pref: CodecPref; label: string; title: string }[] = [
+  {
+    pref: "auto",
+    label: "Opus",
+    title: "Opus: 24-48 kbit/s, for slow or metered connections. While a decoder reads the audio, μ-law instead (Opus would cost it weak signals)",
+  },
+  { pref: "mulaw", label: "μ-law", title: "μ-law: 96 kbit/s, as good as PCM for listening and for the decoders" },
+  { pref: "pcm16", label: "PCM", title: "PCM: 192 kbit/s, 16 bits, exactly as the receiver made it" },
+];
+
+/** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM. */
+export function CodecCtl() {
+  const sc = serverCodecs.value;
+  if (!sc.includes("mulaw") && !sc.includes("opus")) return null;
+  const pref = codecPref.value;
+  const now = codecNow.value;
+  const shown = CODECS.filter((c) => c.pref !== "auto" || (sc.includes("opus") && opusDec.value));
+  return (
+    <span class="seg" title={pref === "auto" && now !== "opus" ? "Opus is paused: a decoder reads the audio (μ-law until it closes)" : "How the audio comes"}>
+      {shown.map((c) => (
+        <button key={c.pref} class={pref === c.pref ? "on" : ""} title={c.title} onClick={() => setCodecPref(c.pref)}>
+          {c.pref === "auto" && pref === "auto" && now !== "opus" ? "Opus (μ-law)" : c.label}
+        </button>
+      ))}
+    </span>
   );
 }
 
@@ -610,6 +646,11 @@ export function StatusBar() {
       {latencyMs.value !== null && (
         <span>
           rtt <N v={latencyMs.value.toFixed(0)} w={4} /> ms
+        </span>
+      )}
+      {audioKbps.value !== null && st.value && (
+        <span title="How the audio comes, and its data rate">
+          {st.value.codec ?? "pcm16"} <N v={audioKbps.value.toFixed(0)} w={3} /> kbit/s
         </span>
       )}
       {audioOn.value && a && (

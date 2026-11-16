@@ -1,11 +1,11 @@
 {
   "client": [
-    {"type": "hello", "proto": 2, "codecs": ["pcm16"]},
+    {"type": "hello", "proto": 2, "codecs": ["opus", "mulaw", "pcm16"]},
     {"type": "tune", "hz": 7074000},
     {"type": "mode", "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700},
     {"type": "mode", "mode": "am"},
     {"type": "audio", "agc": true, "gain_db": 80},
-    {"type": "audio", "agc": true, "gain_db": 80, "agc_speed": "slow", "nb": 8, "nr": 0.5, "notch": true, "squelch": true, "squelch_db": -95, "audio_rate": 24000},
+    {"type": "audio", "agc": true, "gain_db": 80, "agc_speed": "slow", "nb": 8, "nr": 0.5, "notch": true, "squelch": true, "squelch_db": -95, "audio_rate": 24000, "codec": "opus"},
     {"type": "wf", "center_hz": 8600000, "decim": 16, "bins": 1024, "fps": 20},
     {"type": "ping", "t": 1234.5},
     {"type": "share", "on": false},
@@ -19,12 +19,12 @@
     {"type": "mode", "mode": "sas"}
   ],
   "server": [
-    {"type": "hello", "proto": 2, "server": "web888d 0.1.0", "codec": "pcm16", "audio_rate": 12000, "audio_rates": [12000, 24000],
+    {"type": "hello", "proto": 2, "server": "web888d 0.1.0", "codec": "pcm16", "audio_rate": 12000, "audio_rates": [12000, 24000], "codecs": ["pcm16", "mulaw", "opus"],
      "radio": {"backend": "sim", "variant": "hf", "adc_hz": 122880000, "rx_rate": 48000,
                "rf_lo": 0, "rf_hi": 61440000, "wf_decim_min": 1, "wf_decim_max": 8192},
      "limits": {"bins_max": 4096, "fps_max": 30}, "session": 12, "class": "web", "spots": true, "wide": true},
     {"type": "state", "hz": 7074000, "mode": "usb", "lo": 300, "hi": 2700, "pitch": 700, "agc": true, "gain_db": 100,
-     "agc_speed": "medium", "nb": 0, "nr": 0, "notch": false, "squelch": false, "squelch_db": -100, "audio_rate": 12000,
+     "agc_speed": "medium", "nb": 0, "nr": 0, "notch": false, "squelch": false, "squelch_db": -100, "audio_rate": 12000, "codec": "mulaw",
      "wf": {"center_hz": 30720000, "decim": 2, "bins": 1024, "fps": 20}, "share": true, "listen": null, "name": "N0CALL"},
     {"type": "lease", "granted": false, "position": 2},
     {"type": "users", "users": [{"id": 3, "name": "N0CALL", "hz": 7074000, "mode": "usb", "rx": true},

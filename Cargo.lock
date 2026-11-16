@@ -929,6 +929,12 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "384b8ab6d37215f3c5301a95a4accb5d64aa607f1fcb26a11b5303878451b4fe"
 
 [[package]]
+name = "opus1"
+version = "0.3.0"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "8371789de09e00d6805166461224f024848c1fd155c6df28da8c19eebcc3650d"
+
+[[package]]
 name = "password-hash"
 version = "0.6.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1953,6 +1959,13 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-opus-wasm"
+version = "0.14.0"
+dependencies = [
+ "opus1",
+]
+
+[[package]]
 name = "web888-psk"
 version = "0.14.0"
 dependencies = [
@@ -2037,6 +2050,7 @@ dependencies = [
  "hyper-util",
  "libc",
  "num-complex",
+ "opus1",
  "rcgen",
  "rustfft",
  "serde",

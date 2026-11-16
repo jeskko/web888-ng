@@ -9,7 +9,8 @@ import { bandOf, type Band } from "./bands.ts";
 import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
-import type { AudioFrame, AudioReq, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
+import type { AudioFrame, AudioReq, Codec, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
+import { OpusDec } from "./audio/codec.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
@@ -187,6 +188,7 @@ export function connect(): void {
           wideSync();
           audioRate = m.audio_rate;
           audioRates.value = m.audio_rates ?? [m.audio_rate];
+          serverCodecs.value = m.codecs ?? ["pcm16"];
           if (myName.value) link?.send({ type: "name", name: myName.value });
           if (m.spots) {
             spotsFresh = true;
@@ -231,6 +233,12 @@ export function connect(): void {
       }
     },
     onAudio(f: AudioFrame) {
+      audioBytes += f.bytes;
+      if (f.packet) {
+        const pcm = opusDec.value?.decode(f.packet, f.samples, f.rate, f.stereo);
+        if (!pcm) return;
+        f.pcm = pcm;
+      }
       rssi.value = f.rssi;
       if (f.flags & FLAG_OVERLOAD) overloadAt.value = performance.now();
       if (f.flags & FLAG_GAP) audioGaps.value++;
@@ -1856,3 +1864,65 @@ effect(() => {
   const id = window.setInterval(() => void loadMapDx(), 60_000);
   return () => window.clearInterval(id);
 });
+
+// ---- the audio's codec (server crates/web/src/codec.rs) ----
+
+/** What the listener chose: "auto" (Opus, mu-law while a decoder reads
+ * the audio), "mulaw" or "pcm16". */
+export type CodecPref = "auto" | "mulaw" | "pcm16";
+export const codecPref = signal<CodecPref>(((v) => (v === "mulaw" || v === "pcm16" ? v : "auto"))(load("codec")));
+export function setCodecPref(p: CodecPref): void {
+  codecPref.value = p;
+  save("codec", p);
+}
+
+/** The codecs the server sends (its hello). */
+export const serverCodecs = signal<string[]>(["pcm16"]);
+/** The Opus decoder (opus.wasm), once loaded; null when it can't load. */
+export const opusDec = signal<OpusDec | null>(null);
+void OpusDec.load("opus.wasm").then((d) => (opusDec.value = d));
+
+/** A decoder panel reads the audio (the wide skimmers read IQ): Opus
+ * would cost it decodes (/data/iq/codecs: FT8 -10 % at 24 kbit/s). */
+export const decodersOnAudio = computed(
+  () =>
+    jttyOn.value ||
+    (cwOn.value && !cwWideNow()) ||
+    (rttyOn.value && !rttyWideNow()) ||
+    pskOn.value ||
+    tcOn.value ||
+    hfdlOn.value ||
+    js8On.value ||
+    imgOn.value ||
+    digiOn.value ||
+    sigOn.value,
+);
+
+/** The codec to ask for now. */
+export const codecNow = computed<Codec>(() => {
+  const has = (c: Codec) => serverCodecs.value.includes(c);
+  const mulaw: Codec = has("mulaw") ? "mulaw" : "pcm16";
+  switch (codecPref.value) {
+    case "pcm16":
+      return "pcm16";
+    case "mulaw":
+      return mulaw;
+    default:
+      return !decodersOnAudio.value && opusDec.value && has("opus") ? "opus" : mulaw;
+  }
+});
+
+// ask until the session's state says it (a new session starts at pcm16)
+effect(() => {
+  const want = codecNow.value;
+  const have = st.value?.codec ?? "pcm16";
+  if (st.value && want !== have) link?.send({ type: "audio", codec: want });
+});
+
+/** The audio's data rate (kbit/s), over the last 2 s. */
+export const audioKbps = signal<number | null>(null);
+let audioBytes = 0;
+setInterval(() => {
+  audioKbps.value = conn.value === "open" ? (8 * audioBytes) / 2000 : null;
+  audioBytes = 0;
+}, 2000);

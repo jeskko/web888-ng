@@ -30,6 +30,7 @@ kill $P
 | script | checks | server needs |
 |---|---|---|
 | `receiver.mjs` | audio start, zoom, click-tune, mode key; `W`/`H`/`DPR` | — |
+| `codec.mjs` | the audio's codec: Opus, μ-law while the FT8 decoder is open, μ-law and PCM chosen; the status bar's codec, kbit/s and underruns at each step | — |
 | `soak.mjs` | status bar every minute while audio plays | — |
 | `shot.mjs` | one screenshot at a size, canvas sizes, horizontal scroll | — |
 | `login.mjs` | listener-password form, wrong then right | `web888d passwd --listener`; `LISTENER_PW` |

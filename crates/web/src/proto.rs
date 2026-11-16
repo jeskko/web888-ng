@@ -98,6 +98,10 @@ pub enum ClientMsg {
         /// where the RX rate allows, see `Hello::audio_rates`).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         audio_rate: Option<f64>,
+        /// How the audio is sent: "pcm16" (default), "mulaw" or "opus"
+        /// (`Hello::codecs`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        codec: Option<String>,
     },
     Wf(WfReq),
     Ping {
@@ -205,6 +209,9 @@ pub struct State {
     /// Audio sample rate (the passband's edges within 5/12 of it).
     #[serde(default = "default_audio_rate")]
     pub audio_rate: f64,
+    /// How the audio is sent.
+    #[serde(default = "default_codec")]
+    pub codec: String,
     pub wf: WfReq,
     /// Others see this user's frequency and may listen along.
     pub share: bool,
@@ -213,6 +220,10 @@ pub struct State {
     /// Callsign or nickname, as others see it.
     #[serde(default)]
     pub name: String,
+}
+
+fn default_codec() -> String {
+    "pcm16".into()
 }
 
 fn default_audio_rate() -> f64 {
@@ -336,6 +347,9 @@ pub enum ServerMsg {
         /// The audio rates a session can choose (`Audio::audio_rate`).
         #[serde(default)]
         audio_rates: Vec<f64>,
+        /// The codecs a session can choose (`Audio::codec`).
+        #[serde(default)]
+        codecs: Vec<String>,
         radio: RadioInfo,
         limits: Limits,
         /// This session's id (as others see it in `users`).
@@ -403,6 +417,11 @@ pub const FLAG_GAP: u8 = 2;
 /// Audio: two channels, interleaved (left first; the count is of samples,
 /// both channels').
 pub const FLAG_STEREO: u8 = 4;
+/// Audio: the payload is G.711 mu-law, a byte a sample (`codec`).
+pub const FLAG_MULAW: u8 = 8;
+/// Audio: the payload is one Opus packet (20 ms) decoding to the count's
+/// samples (`codec`).
+pub const FLAG_OPUS: u8 = 16;
 /// Waterfall: first line of a new tuning/zoom.
 pub const FLAG_NEW_GEN: u8 = 2;
 /// Waterfall: no new samples since the previous line (it repeats the

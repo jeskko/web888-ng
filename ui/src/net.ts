@@ -50,7 +50,7 @@ export class Conn {
       opened = true;
       this.retry = 0;
       this.h.onState("open");
-      this.send({ type: "hello", proto: PROTO, codecs: ["pcm16"] });
+      this.send({ type: "hello", proto: PROTO, codecs: ["opus", "mulaw", "pcm16"] });
       this.pinger = window.setInterval(() => this.send({ type: "ping", t: performance.now() }), 5000);
     };
     ws.onmessage = (e) => {

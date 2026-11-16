@@ -154,12 +154,15 @@ pub enum AudioCmd {
     Kiwi(crate::kiwi::wire::SndSet),
     /// The dial (Hz): for audio from the bins (`wideaudio`).
     Dial(f64),
+    /// How web frames carry the audio (`codec`).
+    Codec(crate::codec::Codec),
 }
 
 /// How a job packs its audio.
 pub enum Framing {
-    /// web888d's frames (`proto::audio_frame`), 20 ms each.
-    Web,
+    /// web888d's frames (`proto::audio_frame`, or another `codec`), 20 ms
+    /// each.
+    Web(Box<crate::codec::WebEnc>),
     /// Kiwi `SND` packets.
     Kiwi(Box<crate::kiwi::wire::SndEnc>),
 }
@@ -207,7 +210,7 @@ impl AudioJob {
             droop,
             cmd,
             out,
-            framing: Framing::Web,
+            framing: Framing::Web(Box::default()),
             wf_sink,
             chain: AudioChain::new(spec, rx_rate, droop),
             pcm: Vec::new(),
@@ -338,6 +341,11 @@ impl AudioJob {
                     self.sync_src();
                 }
                 Ok(AudioCmd::Wf(v)) => self.set_wf(v),
+                Ok(AudioCmd::Codec(c)) => {
+                    if let Framing::Web(e) = &mut self.framing {
+                        e.set_codec(c);
+                    }
+                }
                 Ok(AudioCmd::Kiwi(k)) => {
                     if let Framing::Kiwi(e) = &mut self.framing {
                         e.set(k);
@@ -390,7 +398,7 @@ impl Job for AudioJob {
         let per_12k = (self.chain.spec().rate / web888_dsp::audio::AUDIO_RATE).round() as usize;
         let len = chans
             * match &self.framing {
-                Framing::Web => AUDIO_FRAME * per_12k,
+                Framing::Web(_) => AUDIO_FRAME * per_12k,
                 Framing::Kiwi(e) => e.samples(chans),
             };
         let stereo = if chans == 2 { FLAG_STEREO } else { 0 };
@@ -401,12 +409,14 @@ impl Job for AudioJob {
             self.rssi = self.chain.take_power_db().unwrap_or(self.rssi);
             let pcm = &self.pcm[used..used + len];
             let f = match &mut self.framing {
-                Framing::Web => proto::audio_frame(
+                Framing::Web(e) => e.frame(
                     self.flags | stereo,
                     self.seq,
                     self.chain.spec().rate as u32,
                     self.rssi,
                     pcm,
+                    chans,
+                    self.chain.spec(),
                 ),
                 Framing::Kiwi(e) => e.encode(
                     self.flags & FLAG_OVERLOAD != 0,

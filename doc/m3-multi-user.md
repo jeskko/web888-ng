@@ -371,6 +371,7 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   | `status` | S→C | adds `cpu` (the device's load, % of all cores) and `temp_c` (SoC temperature), when known. Added 2026-10-28 |
   | `status` | S→C | adds `rf_atten_db`: the RF attenuator (dB) while it is in. Added 2026-11-16 |
   | `audio`, `state` | C→S, S→C | add `notch` (bool): the automatic notch. Added 2026-11-16 |
+  | `hello` (S→C), `audio`, `state` | S→C, C→S | `hello`'s `codecs` (what the server sends: `pcm16`, `mulaw`, `opus`); `audio`'s `codec` asks for one, `state`'s says which is in use (`pcm16` until asked). Audio frame flags bit3 `mulaw` (a byte a sample), bit4 `opus` (one 20 ms Opus packet; the count is the samples it decodes to). See "Audio codecs" below. Added 2026-11-16 |
   | audio frame | S→C | flags bit2 `stereo`: left and right interleaved, `n` counting both (SAS). Added 2026-10-28 |
   | `listen` | C→S | `user` (id or null). Refused with an `error` if the session has a receiver of its own, or the user doesn't share / has none |
   | WF frame | S→C | flags bit2 `stale`: no new samples since the previous line |
@@ -389,6 +390,34 @@ Sessions the server ends by its limits close with code 4001 (session
 time limit) or 4002 (idle), after an `error` message with the reason; a
 minute before, an `error` message warns. Clients shouldn't reconnect by
 themselves after these (the UI offers a button).
+
+### Audio codecs (2026-11-16)
+
+`crates/web/src/codec.rs`. PCM16 stays the default for clients that don't
+ask (and for Kiwi clients' framing, unchanged). Measured in
+`/data/iq/codecs` (FT8/FT4 scoring corpus through each codec; encoder CPU
+on the A9):
+
+* **μ-law** (G.711, 96 kbit/s): FT8 decodes -0.2 % against PCM16,
+  encoding ~0.
+* **Opus** (`opus1` 0.3.0, a Rust port of libopus 1.6, BSD-3-Clause;
+  pure Rust, as fast on the A9 as libopus with NEON): complexity 0
+  (~2 % of an A9 core a stream), 20 ms frames at 12 or 24 kS/s, mono or
+  stereo. The bandwidth is set from the passband: narrowband (4 kHz,
+  24 kbit/s) when the audio stays under 4 kHz (SSB, CW, the digital
+  modes), wideband (32 kbit/s) up to 8 kHz, super-wideband (48 kbit/s)
+  beyond at 24 kS/s; stereo half as much again. Left to itself Opus codes
+  12 kS/s audio as wideband, which costs FT8 a quarter of its decodes at
+  24 kbit/s; narrowband a tenth.
+* The page decodes Opus with `opus1`'s decoder as `opus.wasm`
+  (`crates/opus-wasm`, 376 kB, 142 kB gzipped) on the main thread, so
+  every browser decodes alike. Its **Opus · μ-law · PCM** choice (beside
+  the audio rate; the phone's More sheet) is kept in the browser. Opus
+  (the default) gives way to μ-law while a decoder panel reads the audio
+  (the wide CW/RTTY skimmers read IQ and don't count), and when
+  `opus.wasm` doesn't load. The status bar shows the codec and the
+  audio's kbit/s. Checked in headless Chromium (`ui/tools/cdp/codec.mjs`):
+  Opus ~32 kbit/s with the frame headers, μ-law ~100, PCM ~196.
 
 ## 9. Steps (each ends in a commit)
 

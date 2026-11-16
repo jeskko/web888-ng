@@ -63,7 +63,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Auto-notch | ✓ | ✓ | ✓ spectral, any number of carriers (web UI) | – |
 | Squelch | ✓ | ✓ | ✓ | – |
 | Wider audio (24/36 kHz) for AM/DRM broadcast | ✓ | ~ | ✓ 12k (±5 kHz) default, 24k (±10 kHz) per session in the web UI; Kiwi 12k | – |
-| Audio compression (IMA ADPCM) | ✓ | ✓ | ~ ADPCM to Kiwi clients; the web UI PCM16 | **R** (ADPCM or Opus in the web UI) |
+| Audio compression (IMA ADPCM) | ✓ | ✓ | ✓ the web UI: Opus 24-48 kbit/s (μ-law while a decoder reads the audio), μ-law or PCM16; ADPCM to Kiwi clients | – |
 | RF attenuator from the UI | ✓ | ✓ (Kiwi-2) | ✓ admin page (`[radio] atten_db`, live), shown to listeners; HPSDR | – |
 | S-meter calibration, overload mute | ✓ | ✓ | ~ `[kiwi] smeter_offset_db` (provisional -12 dB, not measured); no mute | **R** (measure; overload flag) |
 | Frequency offset (converters, transverters) | ✓ | ✓ | ✗ | **R** |
@@ -198,7 +198,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
    * a measured S-meter calibration (dBm) for both the web UI and Kiwi;
    * frequency offset (converters);
    * IQ in the web UI (24 kS/s audio: done);
-   * ADPCM or Opus for the web UI;
+   * (Opus and μ-law for the web UI: done);
    * AGC threshold/decay (auto-notch: done);
    * memories, client-side WAV recording, a few colormaps, peak hold,
      waterfall timestamps, a key help overlay.

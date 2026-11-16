@@ -185,6 +185,10 @@ impl Shared {
             proto: proto::PROTO,
             server: format!("web888d {}", env!("CARGO_PKG_VERSION")),
             codec: "pcm16".into(),
+            codecs: crate::codec::Codec::ALL
+                .iter()
+                .map(|c| c.name().into())
+                .collect(),
             audio_rate: AUDIO_RATE,
             audio_rates: self.audio_rates(),
             radio: self.radio.clone(),
@@ -585,7 +589,12 @@ impl Session<'_> {
                 squelch,
                 squelch_db,
                 audio_rate,
+                codec,
             } => {
+                if let Some(c) = codec.as_deref().and_then(crate::codec::Codec::parse) {
+                    self.st.codec = c.name().into();
+                    let _ = self.audio.send(AudioCmd::Codec(c));
+                }
                 let rates = self.sh.audio_rates();
                 let s = &mut self.st;
                 if let Some(r) = audio_rate {
@@ -743,6 +752,7 @@ pub async fn run(
         squelch: false,
         squelch_db: -100.0,
         audio_rate: AUDIO_RATE,
+        codec: "pcm16".into(),
         wf: sh.start_view(hz),
         share: sh.live.borrow().limits.share_default,
         listen: None,

@@ -649,3 +649,81 @@ async fn waterfalls_show_no_images_or_edge_aliases() {
 
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
+
+/// The codec changes at a frame boundary: PCM16, then mu-law, then Opus,
+/// each decoded to the simulated tone (USB on 7.074 MHz: +1500 Hz).
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn codecs_switch_mid_stream() {
+    use web888_web::codec::mulaw_decode;
+    let (addr, stop) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    let ServerMsg::Hello { codecs, .. } = json(&ws.next().await.unwrap().unwrap()).unwrap() else {
+        panic!()
+    };
+    assert_eq!(codecs, ["pcm16", "mulaw", "opus"]);
+    for m in [
+        r#"{"type":"mode","mode":"usb"}"#,
+        r#"{"type":"tune","hz":7074000}"#,
+    ] {
+        ws.send(Message::Text(m.into())).await.unwrap();
+    }
+    let mut dec =
+        opus1::OpusDecoder::new(opus1::SampleRate::Hz12000, opus1::Channels::Mono).unwrap();
+    for (codec, flag) in [
+        ("pcm16", 0),
+        ("mulaw", proto::FLAG_MULAW),
+        ("opus", proto::FLAG_OPUS),
+    ] {
+        let m = format!(r#"{{"type":"audio","codec":"{codec}"}}"#);
+        ws.send(Message::Text(m.into())).await.unwrap();
+        let mut audio: Vec<f32> = Vec::new();
+        let mut state_codec = None;
+        let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+        while audio.len() < 12_000 && tokio::time::Instant::now() < deadline {
+            let m = ws.next().await.unwrap().unwrap();
+            if let Some(ServerMsg::State(s)) = json(&m) {
+                state_codec = Some(s.codec);
+                continue;
+            }
+            let Message::Binary(b) = m else { continue };
+            if b[0] != proto::KIND_AUDIO {
+                continue;
+            }
+            let f = b[1] & (proto::FLAG_MULAW | proto::FLAG_OPUS);
+            if f != flag {
+                // frames from before the change
+                assert!(audio.is_empty(), "{codec}: flags {f} after the change");
+                continue;
+            }
+            let n = u16::from_le_bytes([b[2], b[3]]) as usize;
+            let p = &b[proto::AUDIO_HEADER..];
+            match codec {
+                "pcm16" => audio.extend(
+                    p.as_chunks::<2>()
+                        .0
+                        .iter()
+                        .map(|c| i16::from_le_bytes(*c) as f32 / 32768.0),
+                ),
+                "mulaw" => {
+                    assert_eq!(p.len(), n);
+                    audio.extend(p.iter().map(|&u| mulaw_decode(u) as f32 / 32768.0));
+                }
+                _ => {
+                    let mut out = vec![0f32; n];
+                    let got = dec.decode(p, n, &mut out).unwrap();
+                    assert_eq!(got, n);
+                    // Opus at 24 kbit/s narrowband: 60 bytes for 240 samples
+                    assert!(p.len() < 100, "{} bytes", p.len());
+                    audio.extend_from_slice(&out);
+                }
+            }
+        }
+        assert_eq!(state_codec.as_deref(), Some(codec));
+        assert!(audio.len() >= 12_000, "{codec}: {} samples", audio.len());
+        let f = dominant_hz(&audio[6000..], 12_000.0);
+        assert!((f - 1500.0).abs() < 10.0, "{codec}: tone at {f} Hz");
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
