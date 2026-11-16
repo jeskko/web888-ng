@@ -84,7 +84,7 @@ impl Rx {
         a.nb = self.nb.then_some(8.0);
         if self.agc {
             let base = if self.mode.is_am() && self.mode != Mode::Iq {
-                AgcSpec::am()
+                AgcSpec::am_at(self.agc_speed)
             } else {
                 AgcSpec::ssb_at(self.agc_speed)
             };

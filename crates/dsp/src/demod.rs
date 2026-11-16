@@ -94,24 +94,63 @@ impl Am {
     }
 
     /// Carrier-referenced AGC: the audio relative to the carrier, scaled so
-    /// that 100 % modulation peaks at `target`. The modulation depth is
-    /// kept (a peak AGC would bring every signal to the same loudness);
-    /// `min_carrier` caps the gain.
-    pub fn process_carrier_agc(
-        &mut self,
-        input: &[C32],
-        out: &mut Vec<f32>,
-        target: f32,
-        min_carrier: f32,
-    ) {
+    /// that 100 % modulation peaks at `agc`'s target. The modulation depth
+    /// is kept (a peak AGC would bring every signal to the same loudness);
+    /// how quickly the gain follows a fading carrier is `agc`'s.
+    pub fn process_carrier_agc(&mut self, input: &[C32], out: &mut Vec<f32>, agc: &mut CarrierAgc) {
         for z in input {
             let e = z.norm();
             if self.dc == 0.0 {
                 self.dc = e; // start on the carrier, not from silence
             }
             self.dc += self.alpha * (e - self.dc);
-            out.push(((e - self.dc) / self.dc.max(min_carrier) * target).clamp(-1.0, 1.0));
+            let g = agc.gain(self.dc);
+            out.push(((e - self.dc) * g).clamp(-1.0, 1.0));
         }
+    }
+}
+
+/// The AM modes' gain: the carrier level (the detector's ~10 Hz estimate)
+/// followed up at once and, after it drops, held for `hang` and then let
+/// down at `decay` dB/s, so that a fast fade dips the audio instead of
+/// raising the noise to full loudness. With no hang and an infinite decay
+/// the gain follows the carrier estimate both ways.
+#[derive(Clone, Debug)]
+pub struct CarrierAgc {
+    target: f32,
+    min_carrier: f32,
+    decay: f32,
+    hang: u32,
+    hang_left: u32,
+    level: f32,
+}
+
+impl CarrierAgc {
+    /// 100 % modulation peaks at `target`; the gain is at most
+    /// `target / min_carrier`.
+    pub fn new(target: f32, min_carrier: f32, hang_s: f64, decay_db_s: f64, fs: f64) -> Self {
+        CarrierAgc {
+            target,
+            min_carrier,
+            decay: 10f64.powf(-decay_db_s / 20.0 / fs) as f32,
+            hang: (hang_s * fs) as u32,
+            hang_left: 0,
+            level: 0.0,
+        }
+    }
+
+    /// The gain for carrier level `c` (one call per sample).
+    pub fn gain(&mut self, c: f32) -> f32 {
+        let c = c.abs();
+        if c >= self.level {
+            self.level = c;
+            self.hang_left = self.hang;
+        } else if self.hang_left > 0 {
+            self.hang_left -= 1;
+        } else {
+            self.level = (self.level * self.decay).max(c);
+        }
+        self.target / self.level.max(self.min_carrier)
     }
 }
 
@@ -203,16 +242,15 @@ impl Sync {
         self.freq * fs / (2.0 * std::f64::consts::PI)
     }
 
-    /// Demodulate into `out` (interleaved L, R for `Stereo`). With
-    /// `agc = Some((target, min_carrier))` the audio is relative to the
-    /// carrier, 100 % modulation peaking at `target` (as
-    /// `Am::process_carrier_agc`); without, the in-phase part less the
-    /// carrier.
+    /// Demodulate into `out` (interleaved L, R for `Stereo`). With `agc`
+    /// the audio is relative to the carrier, 100 % modulation peaking at
+    /// its target (as `Am::process_carrier_agc`); without, the in-phase
+    /// part less the carrier.
     pub fn process(
         &mut self,
         input: &[C32],
         kind: SyncOut,
-        agc: Option<(f32, f32)>,
+        mut agc: Option<&mut CarrierAgc>,
         out: &mut Vec<f32>,
     ) {
         let m = HILBERT_LEN / 2;
@@ -232,8 +270,8 @@ impl Sync {
                 self.dc = i.abs(); // start on the carrier, not from silence
             }
             self.dc += self.alpha * (i - self.dc);
-            let scale = match agc {
-                Some((target, min_carrier)) => target / self.dc.abs().max(min_carrier),
+            let scale = match agc.as_deref_mut() {
+                Some(a) => a.gain(self.dc),
                 None => 1.0,
             };
             let lim = |x: f32| if agc.is_some() { x.clamp(-1.0, 1.0) } else { x };
@@ -305,7 +343,12 @@ mod tests {
         let x = signal(40.0, &[(1000.0, 0.25), (-1000.0, 0.25)], 2.0);
         let mut s = Sync::new(FS);
         let mut out = vec![];
-        s.process(&x, SyncOut::Both, Some((0.3, 1e-4)), &mut out);
+        s.process(
+            &x,
+            SyncOut::Both,
+            Some(&mut CarrierAgc::new(0.3, 1e-4, 0.0, f64::INFINITY, FS)),
+            &mut out,
+        );
         assert!((s.offset_hz(FS) - 40.0).abs() < 0.5, "{}", s.offset_hz(FS));
         let a = amp(&out[12_000..], 1000.0);
         assert!((a / 0.15 - 1.0).abs() < 0.03, "{a}");
@@ -318,7 +361,12 @@ mod tests {
         let x = signal(-25.0, &[(1500.0, 0.3), (-700.0, 0.3)], 2.0);
         let mut s = Sync::new(FS);
         let mut out = vec![];
-        s.process(&x, SyncOut::Stereo, Some((0.3, 1e-4)), &mut out);
+        s.process(
+            &x,
+            SyncOut::Stereo,
+            Some(&mut CarrierAgc::new(0.3, 1e-4, 0.0, f64::INFINITY, FS)),
+            &mut out,
+        );
         let (l, r): (Vec<f32>, Vec<f32>) = out[24_000..].chunks(2).map(|f| (f[0], f[1])).unzip();
         let db = |a: f64, b: f64| 20.0 * (a / b).log10();
         // a sideband alone, doubled (as a double-sideband tone of the
@@ -337,5 +385,33 @@ mod tests {
         // one-sided tones (more at the lower one): 50 and 39 dB
         assert!(db(amp(&l, 700.0), amp(&l, 1500.0)) > 45.0);
         assert!(db(amp(&r, 1500.0), amp(&r, 700.0)) > 35.0);
+    }
+
+    #[test]
+    fn carrier_agc_holds_through_a_quick_fade() {
+        // carrier 0.1, a 200 ms fade to 0.01, then a long one
+        let run = |hang_s, decay| {
+            let mut a = CarrierAgc::new(0.3, 1e-5, hang_s, decay, FS);
+            let mut g = vec![];
+            for k in 0..(3.0 * FS) as usize {
+                let t = k as f64 / FS;
+                let c = if (1.0..1.2).contains(&t) || t >= 2.0 {
+                    0.01
+                } else {
+                    0.1
+                };
+                g.push(20.0 * a.gain(c).log10());
+            }
+            let at = |t: f64| g[(t * FS) as usize - 1];
+            (at(1.0), at(1.2), at(2.5), at(3.0))
+        };
+        // fast: the gain follows the fade (+20 dB)
+        let (g0, fade, ..) = run(0.0, f64::INFINITY);
+        assert!((fade - g0 - 20.0).abs() < 0.01, "{g0} {fade}");
+        // medium: held for 0.3 s, then up at 20 dB/s
+        let (g0, fade, mid, end) = run(0.3, 20.0);
+        assert!((fade - g0).abs() < 0.01, "{g0} {fade}");
+        assert!((mid - g0 - 4.0).abs() < 0.1, "{g0} {mid}");
+        assert!((end - g0 - 14.0).abs() < 0.1, "{g0} {end}");
     }
 }

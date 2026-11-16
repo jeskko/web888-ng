@@ -248,7 +248,7 @@ fn audio_spec(s: &State) -> AudioSpec {
     a.squelch_db = s.squelch.then_some(s.squelch_db);
     a.agc = if s.agc {
         let base = if s.mode.is_am() {
-            AgcSpec::am()
+            AgcSpec::am_at(s.agc_speed.into())
         } else {
             AgcSpec::ssb_at(s.agc_speed.into())
         };

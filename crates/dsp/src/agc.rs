@@ -52,13 +52,26 @@ impl AgcSpec {
         }
     }
 
-    /// AM: the gain follows the carrier (`AudioChain`); `target` is the
-    /// output peak at 100 % modulation.
-    pub fn am() -> Self {
-        AgcSpec {
-            hang_s: 0.0,
-            ..Self::ssb()
+    /// AM at `speed`: the gain follows the carrier (`AudioChain`,
+    /// `demod::CarrierAgc`); `target` is the output peak at 100 %
+    /// modulation. After the carrier drops the gain is held and let up as
+    /// SSB's at the same speed; fast follows the carrier both ways (as
+    /// before the speeds), which in quick fading raises the noise in each
+    /// fade.
+    pub fn am_at(speed: AgcSpeed) -> Self {
+        match speed {
+            AgcSpeed::Fast => AgcSpec {
+                hang_s: 0.0,
+                decay_db_s: f64::INFINITY,
+                ..Self::ssb()
+            },
+            s => Self::ssb_at(s),
         }
+    }
+
+    /// AM at medium speed.
+    pub fn am() -> Self {
+        Self::am_at(AgcSpeed::Medium)
     }
 }
 

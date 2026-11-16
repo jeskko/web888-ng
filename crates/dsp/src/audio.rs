@@ -28,6 +28,7 @@
 use crate::agc::{Agc, AgcSpec};
 use crate::chan::{ChannelSpec, Droop, design};
 use crate::decim::Decimator;
+use crate::demod::CarrierAgc;
 use crate::demod::{Am, Fm, Sync, SyncOut, ssb};
 use crate::nb::NoiseBlanker;
 use crate::nco::Shifter;
@@ -181,6 +182,8 @@ pub struct AudioChain {
     sync: Sync,
     fm: Fm,
     agc: Option<Agc>,
+    /// AM modes with AGC: the gain on the carrier.
+    carrier_agc: Option<CarrierAgc>,
     gain: f32,
     nb: Option<NoiseBlanker>,
     nr: Option<NoiseReduction>,
@@ -220,6 +223,7 @@ impl AudioChain {
             sync: Sync::new(AUDIO_RATE),
             fm: Fm::new(AUDIO_RATE),
             agc: spec.agc.map(|a| Agc::new(a, AUDIO_RATE)),
+            carrier_agc: Self::carrier_agc(&spec),
             gain: Self::gain(&spec),
             nb: spec.nb.map(NoiseBlanker::new),
             nr: (spec.nr > 0.0).then(|| NoiseReduction::new(spec.nr)),
@@ -241,6 +245,18 @@ impl AudioChain {
         // about 60 ms blocks instead of 150 ms with the default size
         let n = (2 * taps.len()).next_power_of_two().max(512);
         OverlapSave::with_fft_size(&taps, n)
+    }
+
+    fn carrier_agc(spec: &AudioSpec) -> Option<CarrierAgc> {
+        let a = spec.agc.filter(|_| spec.mode.is_am())?;
+        let min_carrier = 10f32.powf(-a.max_gain_db / 20.0);
+        Some(CarrierAgc::new(
+            a.target,
+            min_carrier,
+            a.hang_s,
+            a.decay_db_s,
+            AUDIO_RATE,
+        ))
     }
 
     fn gain(spec: &AudioSpec) -> f32 {
@@ -269,6 +285,7 @@ impl AudioChain {
         }
         if spec.mode != old.mode || spec.agc != old.agc {
             self.agc = spec.agc.map(|a| Agc::new(a, AUDIO_RATE));
+            self.carrier_agc = Self::carrier_agc(&spec);
             self.am = Am::new(AUDIO_RATE);
             self.fm = Fm::new(AUDIO_RATE);
             if !(spec.mode.is_am() && old.mode.is_am()) {
@@ -360,23 +377,15 @@ impl AudioChain {
         self.pow_sum += self.pw.iter().map(|&p| p as f64).sum::<f64>();
         self.pow_n += self.z.len();
         let start = out.len();
-        let carrier_agc = self.spec.mode.is_am() && self.agc.is_some();
-        let agc = self
-            .spec
-            .agc
-            .map(|a| (a.target, 10f32.powf(-a.max_gain_db / 20.0)));
+        let carrier_agc = self.carrier_agc.is_some();
         match self.spec.mode {
             Mode::Usb | Mode::Lsb => ssb(&self.z, out),
             Mode::Cw => {
                 self.shift.process(&mut self.z);
                 ssb(&self.z, out);
             }
-            Mode::Am => match self.spec.agc {
-                Some(a) => {
-                    let min_carrier = 10f32.powf(-a.max_gain_db / 20.0);
-                    self.am
-                        .process_carrier_agc(&self.z, out, a.target, min_carrier)
-                }
+            Mode::Am => match &mut self.carrier_agc {
+                Some(a) => self.am.process_carrier_agc(&self.z, out, a),
                 None => self.am.process(&self.z, out),
             },
             Mode::Sam | Mode::Sal | Mode::Sar | Mode::Sas => {
@@ -385,7 +394,8 @@ impl AudioChain {
                     Mode::Sas => SyncOut::Stereo,
                     _ => SyncOut::Single,
                 };
-                self.sync.process(&self.z, kind, agc, out);
+                self.sync
+                    .process(&self.z, kind, self.carrier_agc.as_mut(), out);
             }
             Mode::Iq => out.extend(self.z.iter().flat_map(|s| [s.re, s.im])),
             Mode::Nbfm => self.fm.process(&self.z, out),

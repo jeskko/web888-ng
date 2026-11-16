@@ -182,7 +182,10 @@ implementation if the board still needs it.
 
 * **AGC**: AM switches to a carrier-referenced AGC (gain from the
   carrier level, so modulation depth is kept); SSB/CW get a threshold
-  ("AGC knee") and a fast/slow choice.
+  ("AGC knee") and a fast/slow choice. AM has the same F/M/S choice:
+  fast follows the carrier both ways (in quick fading the noise rises in
+  each fade), medium and slow hold the gain 0.3/0.8 s after the carrier
+  drops and then let it up at 20/10 dB/s (`demod::CarrierAgc`).
 * **Noise blanker** (NB): impulse blanker on the channel's IQ before the
   channel filter (at 48 k, where pulses are still short): blank samples
   above k × the running mean magnitude, with a short taper.

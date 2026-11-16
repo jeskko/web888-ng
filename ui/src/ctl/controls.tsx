@@ -184,8 +184,8 @@ export function AudioCtl() {
       <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control (AM: follows the carrier)">
         AGC
       </button>
-      {s.agc && !isAm(s.mode) && (
-        <span class="seg" title="AGC recovery: fast, medium, slow">
+      {s.agc && (
+        <span class="seg" title={isAm(s.mode) ? "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades" : "AGC recovery: fast, medium, slow"}>
           {(["fast", "medium", "slow"] as AgcSpeed[]).map((v) => (
             <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
               {v[0].toUpperCase()}
