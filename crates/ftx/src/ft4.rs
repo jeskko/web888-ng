@@ -21,8 +21,10 @@ use crate::msg::{self, CallHashes, Message};
 use crate::osd;
 use crate::realfft::RealFft;
 use crate::tones::{self, FT4_COSTAS, FT4_GRAY, FT4_SYMBOLS, Shape};
+use crate::{FftScratch, wrap};
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
+use std::cell::RefCell;
 use std::sync::Arc;
 use web888_clock::Instant;
 
@@ -160,6 +162,17 @@ pub struct Decoder {
     tone_ref: [[C32; DS_NSPS]; 4],
     fine_tw: [[C32; DS_NSPS]; FINE_DF.len()],
     pub stats: Stats,
+    scratch: FftScratch,
+    /// The coarse search's arrays, kept between passes and slots (as FT8's).
+    search: RefCell<SearchBufs>,
+    slot: Vec<f32>,
+}
+
+#[derive(Default)]
+struct SearchBufs {
+    z: Vec<C32>,
+    s: Vec<f32>,
+    tsum: Vec<f32>,
 }
 
 impl Decoder {
@@ -188,6 +201,9 @@ impl Decoder {
                 })
             }),
             stats: Stats::default(),
+            scratch: FftScratch::default(),
+            search: RefCell::default(),
+            slot: vec![],
         }
     }
 
@@ -203,13 +219,15 @@ impl Decoder {
         hashes: &mut CallHashes,
         deadline: Option<Instant>,
     ) -> Vec<Decode> {
-        let mut x = vec![0f32; SLOT];
+        let mut x = std::mem::take(&mut self.slot);
         let n = audio.len().min(SLOT);
-        x[..n].copy_from_slice(&audio[..n]);
+        x.clear();
+        x.extend_from_slice(&audio[..n]);
+        x.resize(SLOT, 0.0);
         let mut found: Vec<Decode> = vec![];
         self.stats.slots += 1;
         let mut spectrum = self.fft1.forward(&x);
-        drop(x);
+        self.slot = x;
         let mut tried: Vec<(f32, f32)> = vec![];
         'passes: for pass in 1..=self.cfg.passes {
             let t = Instant::now();
@@ -283,7 +301,7 @@ impl Decoder {
             0.0,
             DS_RATE as f64,
         );
-        let at = |n: usize| (i0 + n as i64).rem_euclid(NFFT2 as i64) as usize;
+        let at = |n: usize| wrap(i0 + n as i64, NFFT2);
         let camp: Vec<C32> = reference
             .iter()
             .enumerate()
@@ -307,7 +325,7 @@ impl Decoder {
         for (n, (a, r)) in amp.iter().zip(&reference).enumerate() {
             s[at(n)] = a * r;
         }
-        self.fft2.process(&mut s);
+        self.scratch.run(&*self.fft2, &mut s);
         let scale = ((NFFT1 * NFFT2) as f32).sqrt() / NFFT2 as f32;
         let ib0 = (d.freq / DF1).round() as i64;
         let ib = (ib0 - (SUB_BELOW / DF1) as i64).max(1);
@@ -315,15 +333,16 @@ impl Decoder {
         for bin in ib..=it {
             let k = bin - ib0;
             let ph = -2.0 * std::f32::consts::PI * k as f32 * DF1 * frac;
-            let v = s[k.rem_euclid(NFFT2 as i64) as usize] * C32::new(ph.cos(), ph.sin()) * scale;
+            let v = s[wrap(k, NFFT2)] * C32::new(ph.cos(), ph.sin()) * scale;
             spectrum[bin as usize] -= v;
         }
     }
 
     /// The slot's lower band as a complex signal for the spectrogram (as
     /// FT8's).
-    fn baseband(&self, spectrum: &[C32]) -> Vec<C32> {
-        let mut c: Vec<C32> = spectrum[..SPEC_N].to_vec();
+    fn baseband(&self, spectrum: &[C32], c: &mut Vec<C32>) {
+        c.clear();
+        c.extend_from_slice(&spectrum[..SPEC_N]);
         // Raised-cosine edges, SPEC_EDGE Hz wide.
         let ne = (SPEC_EDGE / DF1) as usize;
         for k in 0..ne {
@@ -331,8 +350,7 @@ impl Decoder {
             c[k] *= w;
             c[SPEC_N - 1 - k] *= w;
         }
-        self.spec_ifft.process(&mut c);
-        c
+        self.scratch.run(&*self.spec_ifft, c);
     }
 
     /// Coarse search on a spectrogram (as FT8's, with FT4's sync).
@@ -342,23 +360,28 @@ impl Decoder {
         let top = ((RATE * SPEC_NSPS as f32 / NSPS as f32 - SPEC_EDGE) / SPEC_DF) as usize;
         let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(top - 8);
         let nbins = i_max + 8;
-        let z = self.baseband(spectrum);
-        let mut s = vec![0f32; nsteps * nbins];
+        let mut bufs = self.search.borrow_mut();
+        let SearchBufs { z, s, tsum } = &mut *bufs;
+        self.baseband(spectrum, z);
+        // every value written below (tsum: but its last 6 columns)
+        s.resize(nsteps * nbins, 0.0);
+        tsum.resize(nsteps * nbins, 0.0);
+        let (s, tsum) = (&mut s[..nsteps * nbins], &mut tsum[..nsteps * nbins]);
         let mut buf = vec![C32::default(); SPEC_NFFT];
         for j in 0..nsteps {
             buf[..SPEC_NSPS].copy_from_slice(&z[j * SPEC_STEP..][..SPEC_NSPS]);
             buf[SPEC_NSPS..].fill(C32::default());
-            self.spec_fft.process(&mut buf);
+            self.scratch.run(&*self.spec_fft, &mut buf);
             for (v, b) in s[j * nbins..][..nbins].iter_mut().zip(&buf) {
                 *v = b.norm_sqr();
             }
         }
-        let mut tsum = vec![0f32; nsteps * nbins];
         for j in 0..nsteps {
             let row = &s[j * nbins..(j + 1) * nbins];
             for i in 0..nbins - 6 {
                 tsum[j * nbins + i] = (0..4).map(|t| row[i + 2 * t]).sum();
             }
+            tsum[j * nbins + nbins - 6..(j + 1) * nbins].fill(0.0);
         }
         let step_s = SPEC_DT;
         let j0 = (T0 / step_s).round() as i32;
@@ -491,10 +514,10 @@ impl Decoder {
                 v *= rot;
                 rot *= step;
             }
-            let dst = ((ib + k as i64 - i0).rem_euclid(NFFT2 as i64)) as usize;
+            let dst = wrap(ib + k as i64 - i0, NFFT2);
             c[dst] = v;
         }
-        self.ifft2.process(&mut c);
+        self.scratch.run(&*self.ifft2, &mut c);
         let scale = 1.0 / ((NFFT1 * NFFT2) as f32).sqrt();
         for v in c.iter_mut() {
             *v *= scale;

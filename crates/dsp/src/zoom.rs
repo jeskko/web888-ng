@@ -194,7 +194,7 @@ impl ZoomAcc {
         }
         let k = self.norm / c as f32;
         let s = &self.sum[i * self.half..(i + 1) * self.half];
-        out.extend(s.iter().map(|&p| 10.0 * (p * k).max(1e-30).log10()));
+        out.extend(s.iter().map(|&p| crate::fastdb::db10(p * k)));
         true
     }
 
@@ -324,7 +324,8 @@ mod tests {
         assert!(a.bin_db(2, &mut db));
         // (1 + 0.01) / 2
         assert_eq!(db.len(), n / 2);
-        assert!((db[0] - 10.0 * 0.505f32.log10()).abs() < 1e-4, "{}", db[0]);
+        // fastdb: within a thousandth of a dB
+        assert!((db[0] - 10.0 * 0.505f32.log10()).abs() < 2e-3, "{}", db[0]);
         a.clear();
         assert!(!a.has(1));
     }

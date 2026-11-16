@@ -3,6 +3,7 @@
 //! and its inverse: half the work of a complex FFT of the zero-imaginary
 //! signal.
 
+use crate::FftScratch;
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
 use std::sync::Arc;
@@ -13,6 +14,7 @@ pub struct RealFft {
     inv: Arc<dyn Fft<f32>>,
     /// exp(-j 2 pi k / N), k < N/2.
     tw: Vec<C32>,
+    scratch: FftScratch,
 }
 
 impl RealFft {
@@ -30,6 +32,7 @@ impl RealFft {
             fwd: p.plan_fft_forward(n / 2),
             inv: p.plan_fft_inverse(n / 2),
             tw,
+            scratch: FftScratch::default(),
         }
     }
 
@@ -38,7 +41,7 @@ impl RealFft {
         let h = self.n / 2;
         let at = |i: usize| x.get(i).copied().unwrap_or(0.0);
         let mut z: Vec<C32> = (0..h).map(|i| C32::new(at(2 * i), at(2 * i + 1))).collect();
-        self.fwd.process(&mut z);
+        self.scratch.run(&*self.fwd, &mut z);
         let mut out: Vec<C32> = (0..h)
             .map(|k| {
                 let a = z[k];
@@ -67,7 +70,7 @@ impl RealFft {
                 even + odd * C32::new(0.0, 1.0)
             })
             .collect();
-        self.inv.process(&mut z);
+        self.scratch.run(&*self.inv, &mut z);
         let mut x = Vec::with_capacity(self.n);
         for v in z {
             x.push(v.re);

@@ -290,7 +290,7 @@ pub fn view_bins(caps: &BinCaps, lo: f64, hi: f64) -> Vec<usize> {
 }
 
 fn db(p: f64) -> f32 {
-    (10.0 * p.max(1e-30).log10()) as f32
+    web888_dsp::fastdb::db10(p as f32)
 }
 
 impl BinViewJob {

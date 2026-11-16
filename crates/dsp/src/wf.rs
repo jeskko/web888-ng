@@ -17,6 +17,7 @@
 //! §3).
 
 use crate::chan::Droop;
+use crate::fastdb::{db10, undb10};
 use crate::{C32, rx_to_c32};
 use rustfft::Fft;
 use std::sync::Arc;
@@ -93,8 +94,8 @@ pub fn rebin_db(db: &[f32], g: usize) -> Vec<f32> {
     }
     db.chunks(g)
         .map(|c| {
-            let p: f32 = c.iter().map(|d| 10f32.powf(d / 10.0)).sum::<f32>() / c.len() as f32;
-            10.0 * p.max(1e-30).log10()
+            let p: f32 = c.iter().map(|&d| undb10(d)).sum::<f32>() / c.len() as f32;
+            db10(p)
         })
         .collect()
 }

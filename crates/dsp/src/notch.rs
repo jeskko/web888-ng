@@ -144,7 +144,7 @@ impl AutoNotch {
         let first = self.frames == 0;
         self.frames += 1;
         for b in 0..bins {
-            let l = 10.0 * (self.work[b].norm_sqr() + 1e-20).log10();
+            let l = crate::fastdb::db10(self.work[b].norm_sqr() + 1e-20);
             if first {
                 self.mean[b] = l;
                 self.fast[b] = l;

@@ -25,8 +25,10 @@ use crate::msg::{self, CallHashes, Message};
 use crate::osd;
 use crate::realfft::RealFft;
 use crate::tones::{self, FT8_COSTAS, FT8_GRAY, Shape};
+use crate::{FftScratch, wrap};
 use num_complex::Complex32 as C32;
 use rustfft::{Fft, FftPlanner};
+use std::cell::RefCell;
 use std::sync::Arc;
 use web888_clock::Instant;
 
@@ -224,6 +226,19 @@ pub struct Decoder {
     map: [u8; 8],
     pub stats: Stats,
     residual: Vec<f32>,
+    scratch: FftScratch,
+    /// The coarse search's arrays, kept between passes and slots (each
+    /// is most of a megabyte: a fresh mapping, zeroed, every pass).
+    search: RefCell<SearchBufs>,
+    /// The slot's audio, zero-padded.
+    slot: Vec<f32>,
+}
+
+#[derive(Default)]
+struct SearchBufs {
+    z: Vec<C32>,
+    s: Vec<f32>,
+    tsum: Vec<f32>,
 }
 
 impl Decoder {
@@ -257,6 +272,9 @@ impl Decoder {
             }),
             stats: Stats::default(),
             residual: vec![],
+            scratch: FftScratch::default(),
+            search: RefCell::default(),
+            slot: vec![],
         }
     }
 
@@ -284,13 +302,15 @@ impl Decoder {
         hashes: &mut CallHashes,
         deadline: Option<Instant>,
     ) -> Vec<Decode> {
-        let mut x = vec![0f32; SLOT];
+        let mut x = std::mem::take(&mut self.slot);
         let n = audio.len().min(SLOT);
-        x[..n].copy_from_slice(&audio[..n]);
+        x.clear();
+        x.extend_from_slice(&audio[..n]);
+        x.resize(SLOT, 0.0);
         let mut found: Vec<Decode> = vec![];
         self.stats.slots += 1;
         let mut spectrum = self.spectrum(&x);
-        drop(x);
+        self.slot = x;
         // Candidates tried so far, (freq, dt).
         let mut tried: Vec<(f32, f32)> = vec![];
         'passes: for pass in 1..=self.cfg.passes {
@@ -427,7 +447,7 @@ impl Decoder {
             0.0,
             DS_RATE as f64,
         );
-        let at = |n: usize| (i0 + n as i64).rem_euclid(NFFT2 as i64) as usize;
+        let at = |n: usize| wrap(i0 + n as i64, NFFT2);
         let camp: Vec<C32> = reference
             .iter()
             .enumerate()
@@ -439,7 +459,7 @@ impl Decoder {
         for (n, (a, r)) in amp.iter().zip(&reference).enumerate() {
             s[at(n)] = a * r;
         }
-        self.fft2.process(&mut s);
+        self.scratch.run(&*self.fft2, &mut s);
         // Back to the unshifted time base, and to the spectrum's scale
         // (downsampling scaled by 1 / sqrt(NFFT1 NFFT2)).
         let scale = ((NFFT1 * NFFT2) as f32).sqrt() / NFFT2 as f32;
@@ -452,7 +472,7 @@ impl Decoder {
         for bin in ib..=it {
             let k = bin - ib0;
             let ph = -2.0 * std::f32::consts::PI * k as f32 * DF1 * frac;
-            let v = s[k.rem_euclid(NFFT2 as i64) as usize] * C32::new(ph.cos(), ph.sin()) * scale;
+            let v = s[wrap(k, NFFT2)] * C32::new(ph.cos(), ph.sin()) * scale;
             spectrum[bin as usize] -= v;
         }
     }
@@ -465,8 +485,9 @@ impl Decoder {
     /// for the spectrogram: a symbol is then a power of two samples
     /// long, and the frames' FFTs are short and radix-2 (on the A9 a
     /// tenth of the time of FFTs of the audio itself).
-    fn baseband(&self, spectrum: &[C32]) -> Vec<C32> {
-        let mut c: Vec<C32> = spectrum[..SPEC_N].to_vec();
+    fn baseband(&self, spectrum: &[C32], c: &mut Vec<C32>) {
+        c.clear();
+        c.extend_from_slice(&spectrum[..SPEC_N]);
         // Raised-cosine edges, SPEC_EDGE Hz wide.
         let ne = (SPEC_EDGE / DF1) as usize;
         for k in 0..ne {
@@ -474,8 +495,7 @@ impl Decoder {
             c[k] *= w;
             c[SPEC_N - 1 - k] *= w;
         }
-        self.spec_ifft.process(&mut c);
-        c
+        self.scratch.run(&*self.spec_ifft, c);
     }
 
     /// Coarse search on a spectrogram of the slot spectrum.
@@ -487,24 +507,29 @@ impl Decoder {
         let i_max = ((self.cfg.f_max / SPEC_DF) as usize).min(top - 16);
         let nbins = i_max + 16;
         // Power spectra of symbol-length frames.
-        let z = self.baseband(spectrum);
-        let mut s = vec![0f32; nsteps * nbins];
+        let mut bufs = self.search.borrow_mut();
+        let SearchBufs { z, s, tsum } = &mut *bufs;
+        self.baseband(spectrum, z);
+        // every value written below (tsum: but its last 14 columns)
+        s.resize(nsteps * nbins, 0.0);
+        tsum.resize(nsteps * nbins, 0.0);
+        let (s, tsum) = (&mut s[..nsteps * nbins], &mut tsum[..nsteps * nbins]);
         let mut buf = vec![C32::default(); SPEC_NFFT];
         for j in 0..nsteps {
             buf[..SPEC_NSPS].copy_from_slice(&z[j * SPEC_STEP..][..SPEC_NSPS]);
             buf[SPEC_NSPS..].fill(C32::default());
-            self.spec_fft.process(&mut buf);
+            self.scratch.run(&*self.spec_fft, &mut buf);
             for (v, b) in s[j * nbins..][..nbins].iter_mut().zip(&buf) {
                 *v = b.norm_sqr();
             }
         }
         // Sum of the 7 tones from each bin (the sync score's reference).
-        let mut tsum = vec![0f32; nsteps * nbins];
         for j in 0..nsteps {
             let row = &s[j * nbins..(j + 1) * nbins];
             for i in 0..nbins - 14 {
                 tsum[j * nbins + i] = (0..7).map(|t| row[i + 2 * t]).sum();
             }
+            tsum[j * nbins + nbins - 14..(j + 1) * nbins].fill(0.0);
         }
         // Lags in steps from the nominal start: 0.04 s each, ±2.5 s. For
         // each lag, the three Costas arrays' power and reference sums go
@@ -639,10 +664,10 @@ impl Decoder {
                 v *= rot;
                 rot *= step;
             }
-            let dst = ((ib + k as i64 - i0).rem_euclid(NFFT2 as i64)) as usize;
+            let dst = wrap(ib + k as i64 - i0, NFFT2);
             c[dst] = v;
         }
-        self.ifft2.process(&mut c);
+        self.scratch.run(&*self.ifft2, &mut c);
         let scale = 1.0 / ((NFFT1 * NFFT2) as f32).sqrt();
         for v in c.iter_mut() {
             *v *= scale;
@@ -1087,6 +1112,10 @@ pub(crate) fn parabola_peak(a: f32, b: f32, c: f32) -> f32 {
 /// Bit log-likelihoods from coherent sums over groups of `nsym` symbols.
 fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f32; N] {
     let mut out = [0f32; N];
+    // once, not per group (zeroing 6 kB each time): z[0] is the only
+    // value read before it is written
+    let mut z = [C32::default(); 512];
+    let mut s2 = [0f32; 512];
     for half in 0..2 {
         let base = if half == 0 { 7 } else { 43 };
         let mut ks = 0;
@@ -1098,7 +1127,7 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f3
             // The sums over the group's symbols for every tone sequence,
             // the first symbol's tone in the top bits: built a symbol at a
             // time, sharing the partial sums.
-            let mut z = [C32::default(); 512];
+            z[0] = C32::default();
             let mut len = 1;
             for j in 0..ns {
                 let row = &cs[base + ks + j];
@@ -1110,7 +1139,6 @@ fn soft_bits(cs: &[[C32; 8]; 79], nsym: usize, scale: f32, map: &[u8; 8]) -> [f3
                 }
                 len *= 8;
             }
-            let mut s2 = [0f32; 512];
             for (v, z) in s2[..nt].iter_mut().zip(&z) {
                 *v = z.norm_sqr();
             }

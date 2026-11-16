@@ -8,6 +8,7 @@ pub mod binrx;
 pub mod chan;
 pub mod decim;
 pub mod demod;
+pub mod fastdb;
 pub mod fir;
 pub mod nb;
 pub mod nco;

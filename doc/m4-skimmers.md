@@ -513,6 +513,16 @@ that can't go are dropped. It applies live.
   due by the slot's own deadline. The unit keeps the twenty bands. With
   listeners the decoders get less (they run at `SCHED_IDLE`) and the
   shedding takes the quiet bands first, as before.
+* Allocation churn out (2026-11-16, from a profile on the unit,
+  `/data/iq/profile`): the coarse search's arrays (most of a megabyte
+  each, a fresh musl mapping zeroed by the kernel every pass) and the
+  slot buffer stay in the decoder, FFTs run with one scratch buffer
+  (rustfft's `process` allocates one per call), modular indices
+  without 64-bit division, `soft_bits` no longer zeroes 6 kB per symbol
+  group. Decodes identical on both sets (FT8 1173 + 1458 and 1623 of
+  1842, FT4 268 and 468 of 488, extras unchanged); 5-10 % less time on
+  the desktop; on the unit page faults in the decoders 1.5 % -> 0.1 %
+  of both cores.
 
 ## 8. Open
 
