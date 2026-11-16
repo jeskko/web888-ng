@@ -59,6 +59,9 @@ pub const CLASSES: &[&str] = &[
     "fax",
     "ssb",
     "am",
+    "interference",
+    "radar",
+    "hfdl",
 ];
 
 static WEIGHTS: &[u8] = include_bytes!("../model/sigid.bin");

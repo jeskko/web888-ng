@@ -7,7 +7,8 @@ made on the fly. Nothing here is shipped; the trained weights are, as
 
 | file | what |
 |---|---|
-| `modes.py` | clean signals of the 15 classes: noise, carrier, CW, 2-FSK (RTTY, SITOR-B, ASCII, DWD), PSK31/63/125, FT8 and FT4 (with their neighbours), WSPR, ALE, STANAG 4285, MIL-STD-188-110A, SSTV (13 modes), HF fax, SSB voice, AM (speech or music; sometimes one sideband, as heard in SSB) |
+| `modes.py` | clean signals of the 18 classes: noise, carrier, CW, 2-FSK (RTTY, SITOR-B, ASCII, DWD), PSK31/63/125, FT8 and FT4 (with their neighbours), WSPR, ALE, STANAG 4285, MIL-STD-188-110A, SSTV (13 modes), HF fax, SSB voice, AM (speech or music; sometimes one sideband, as heard in SSB), local interference (carriers with phase-noise or bursting skirts, pairs and combs, noise bands still, drifting or wandering, mains hum; regular wideband ticks or pulsing skirts), OTH radar (FMCW sweeps, pulse trains), HFDL (1800 Bd bursts: prekey, preamble, data and probe frames) |
+| `onair.py` | on-air speech: SSB clips cut from a phone segment of a wideband recording, where a model says SSB (`SIGID_ONAIR`: 40 % of the speech in training) |
 | `voices.py` | the speech bank (espeak-ng, ~40 languages and voice variants) for voice and AM |
 | `data.py` | an example: a signal off centre, fading (QSB or auroral flutter), multipath, neighbours of other classes, a birdie, impulse noise, white noise at −6..+30 dB in 2500 Hz, the receiver's passband edges, LSB, any level |
 | `common.py` | features and model (must match `crates/sigid/src/lib.rs` exactly) |
@@ -23,7 +24,9 @@ spacings, SSTV line timings). Needs PyTorch, scipy and espeak-ng.
 ```sh
 cd tools/ml/sigid
 python3 voices.py voices.npz 600                                        # ~20 s
-SIGID_VOICES=voices.npz python3 train.py --steps 20000 --out /tmp/sid   # ~1 h 40 on 16 threads + RTX 5070 (data-bound)
+python3 onair.py REC.cs8 4e6 7100000 7060000 7200000 lsb MODEL.pt onair.npz  # optional: on-air speech
+SIGID_VOICES=voices.npz SIGID_ONAIR=onair.npz python3 train.py --steps 30000 --out /tmp/sid   # ~2 h 10 on 16 threads + RTX 5070 (data-bound)
+SIGID_VOICES=voices.npz SIGID_ONAIR=onair.npz python3 train.py --resume /tmp/sid/best.pt --steps 10000 --lr 5e-4 --out /tmp/sid2   # a fine-tune after changing a generator
 python3 real.py eval /tmp/sid/best.pt LABELS.txt                        # real recordings
 python3 export.py /tmp/sid/best.pt ../../../crates/sigid/model
 cargo test -p web888-sigid --release                                    # the Rust inference matches PyTorch

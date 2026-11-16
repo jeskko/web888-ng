@@ -554,11 +554,13 @@ scanner; 529k parameters as f16, 1.1 MB), `crates/sigid-wasm`
 (`sigid.wasm`, 1.5 MB, loaded only when used), `tools/ml/sigid/`
 (training, `README.md`), the ID button and its panel beside the waterfall.
 
-* **Classes** (15): noise, carrier, CW, 2-FSK (RTTY 45-75 Bd, SITOR-B /
+* **Classes** (18): noise, carrier, CW, 2-FSK (RTTY 45-75 Bd, SITOR-B /
   NAVTEX, ASCII, DWD 50/450: the RTTY panel works out which), PSK31/63/125,
   FT8, FT4, WSPR, ALE, STANAG 4285, MIL-STD-188-110A, SSTV (13 modes), HF
-  fax, SSB voice, AM. A row's Decode opens the page's decoder (CW, RTTY,
-  fax/SSTV, FT8/FT4/WSPR); Tune tunes to voice (LSB below 10 MHz) or AM.
+  fax, SSB voice, AM, local interference, OTH radar, HFDL (since
+  2026-11-16). A row's Decode opens the page's decoder (CW, RTTY, PSK,
+  fax/SSTV, FT8/FT4/WSPR, HFDL: the nearest listed channel); Tune tunes to
+  voice (LSB below 10 MHz) or AM; interference and radar are only named.
 * **Input**: 4.096 s of complex baseband at 6 kS/s, the signal at the
   centre. Three views: a two-resolution spectrogram (43 ms and 11 ms
   windows on one grid), a 1.46 Hz periodogram (FT8 and WSPR tones), and
@@ -599,8 +601,37 @@ FT4 regions right. In the page (the 60 s recording replayed): FT8 on
 7074 kHz 78-99 %, DWD fax 86 %, DWD RTTY 95-98 %, AM heard in USB 70 %.
 Weakest: SSB voice. espeak speech isn't on-air speech, and a weak voice
 shows only its lowest few hundred Hz to the scanner; LSB QSOs come out as
-voice at 20-40 % (top, unsure) or as CW. Next: on-air speech in training
-(the SSB segments of the 2026-11-15 contest recordings).
+voice at 20-40 % (top, unsure) or as CW.
+
+**Retrain (2026-11-16).** Run over four 10-minute wideband recordings of
+2026-11-15 (80, 40, 20 and 15 m; 1404 windows as the scanner finds them,
+`/data/iq/sigid-wide`), the 15-class model was right on STANAG 4285 and the
+ham signals, but a third of the windows were local interference it called
+fax, SSTV or MIL-110A, an OTH radar had no class, and HFDL bursts were
+MIL-110A. Three classes were added with generators modelled on those
+windows (the real ones kept as a test set, so as not to learn one site's
+interference), and 803 SSB clips from the 40 m phone segment
+(`onair.py`) joined the espeak speech. 30k steps from scratch, then two
+fine-tunes of 10k after the generators were matched to what the real
+interference showed: carriers with phase-noise skirts, pairs with the
+window on one line, and their regular beat (wideband ticks every 0.405 s
+on 20 m, skirts pulsing every 0.1-0.14 s or 1.1 s on 80 m), which the
+model had taken for fax's 0.5 s lines.
+
+| test | 15 classes | 18 classes |
+|---|---|---|
+| synthetic validation | 97.7 % | 96.9 % (of 18; 93 % at −6..0 dB) |
+| HFDL bursts the decoder found (6646 and 8942 kHz) | 0/88 (MIL-110A) | 83/88 (5 interference) |
+| STANAG 4285 windows with its 106.67 ms frame | 148/169 | 148/160 |
+| windows called MIL-110A without its 20 ms frame | 100 | 22 |
+| 80 m interference comb (535 windows) | 0 interference, 255 fax | 246 interference, 101 fax |
+| AM in USB audio, carrier at 300 Hz (three stations) | 13-46 % | 55-85 % |
+| AM in USB audio, carrier at 1500 Hz | 52-88 % | 70-92 % |
+
+Left: the 20 m carrier pairs (~610 Hz apart with ticks every 0.4 s) are
+still fax (76 of 303 windows); two steady tones and a regular tick are
+what a black-and-white fax looks like at this resolution. Weak SSB in USB
+audio is still unsure (20-35 %).
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 

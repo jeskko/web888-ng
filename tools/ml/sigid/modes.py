@@ -428,19 +428,26 @@ def fax(n, rng):
 
 # --- speech: SSB voice and AM broadcast ----------------------------------------------------------
 _BANK = None
+_ONAIR = []
 
 
 def speech(n, rng) -> np.ndarray:
     """n samples of real audio at FS from the espeak bank (pauses kept),
     several utterances end to end."""
-    global _BANK
+    global _BANK, _ONAIR
     if _BANK is None:
         z = np.load(os.environ.get("SIGID_VOICES", "voices.npz"))
         a, lens = z["audio"].astype(np.float32), z["lens"]
         _BANK = np.split(a, np.cumsum(lens)[:-1])
+        # on-air SSB speech (onair.py), when given: 40 % of the time
+        _ONAIR = []
+        for f in filter(None, os.environ.get("SIGID_ONAIR", "").split(":")):
+            z = np.load(f)
+            _ONAIR += np.split(z["audio"].astype(np.float32), np.cumsum(z["lens"])[:-1])
+    bank = _ONAIR if _ONAIR and rng.random() < 0.4 else _BANK
     out = []
     while sum(len(o) for o in out) < 2 * n:
-        c = _BANK[rng.integers(len(_BANK))]
+        c = bank[rng.integers(len(bank))]
         out += [c * rng.uniform(0.5, 1.0), np.zeros(int(rng.exponential(0.3) * FS), np.float32)]
     x = np.concatenate(out)
     a = rng.integers(0, len(x) - n)
@@ -514,8 +521,185 @@ def am(n, rng):
     return x
 
 
+# --- not signals: interference, radar --------------------------------------------------------------
+def _noise_band(n, rng, width):
+    """Complex noise of `width` Hz around 0 (unit power)."""
+    X = np.fft.fft(rng.normal(size=n) + 1j * rng.normal(size=n))
+    f = np.fft.fftfreq(n, 1 / FS)
+    edge = rng.uniform(5, 60)
+    X *= 1 / (1 + np.exp((np.abs(f) - width / 2) / edge))
+    x = np.fft.ifft(X)
+    return (x / (np.std(x) + 1e-12)).astype(np.complex64)
+
+
+def _gate(n, rng):
+    """On/off: always, from or until a point, or bursts."""
+    k = rng.choice(["on", "step", "bursts"], p=[0.6, 0.2, 0.2])
+    t = np.arange(n) / FS
+    if k == "on":
+        return np.ones(n, np.float32)
+    if k == "step":
+        a = rng.uniform(0.3, 0.8) * n / FS
+        g = (t >= a) if rng.random() < 0.5 else (t < a)
+        return g.astype(np.float32)
+    per, duty = rng.uniform(0.2, 1.5), rng.uniform(0.2, 0.7)
+    return ((t / per + rng.uniform()) % 1 < duty).astype(np.float32)
+
+
+def _pulses(n, rng):
+    """A regular on/off envelope: period 0.08-1.2 s, on 20-60 % of it, soft edges."""
+    t = np.arange(n) / FS
+    per = float(np.exp(rng.uniform(np.log(0.08), np.log(1.2))))
+    on = (((t / per) + rng.uniform()) % 1 < rng.uniform(0.2, 0.6)).astype(float)
+    k = max(1, int(per * FS * 0.1))
+    on = np.convolve(on, np.ones(k) / k, mode="same")
+    return rng.uniform(0, 0.4) + on
+
+
+def interference(n, rng):
+    """Local interference as recorded (2026-11-15, /data/iq/sigid-wide):
+    a carrier with a noisy, bursting skirt (switching supplies); steady
+    carriers in pairs or combs, now and then with wideband ticks; noise
+    bands, static, drifting or wandering (zigzag), some switching on or
+    off; mains hum on a carrier."""
+    t = np.arange(n) / FS
+    k = rng.choice(["skirt", "pnoise", "comb", "band", "hum"], p=[0.15, 0.2, 0.3, 0.27, 0.08])
+    if k == "pnoise":
+        # a steady carrier with phase noise: a skirt tapering away from it
+        # (80 m: every 16 kHz, -10..-30 dB at 100 Hz, gone by ~1 kHz)
+        fc = rng.uniform(30, 600)
+        ph = sosfilt(butter(1, fc, fs=FS, output="sos"), rng.normal(size=n))
+        ph = ph / (ph.std() + 1e-9) * rng.uniform(0.1, 1.2)
+        if rng.random() < 0.5:                 # the skirt pulsing (80 m: every 0.1-0.14 s or ~1.1 s)
+            ph = ph * _pulses(n, rng)
+        x = fm(np.full(n, rng.uniform(-3, 3)), rng) * np.exp(1j * ph)
+    elif k == "skirt":
+        c = fm(rng.uniform(-1, 1) * t / t[-1], rng)
+        sk = _noise_band(n, rng, rng.uniform(100, 900))
+        env = np.abs(sosfilt(butter(2, rng.uniform(1, 8), fs=FS, output="sos"), rng.normal(size=n)))
+        env = (env / (env.max() + 1e-9)) ** rng.uniform(1, 3) if rng.random() < 0.5 else 1.0
+        if rng.random() < 0.4:
+            env = env * _pulses(n, rng)
+        x = rng.uniform(0.3, 1.0) * c + sk * env * rng.uniform(0.5, 2.0)
+    elif k == "comb":
+        m = rng.choice([2, 2, 3, 4, 6])
+        sp = float(np.exp(rng.uniform(np.log(40), np.log(1000))))
+        # the scanner centres the window on one of the lines (20 m: pairs
+        # ~300-610 Hz apart, the window on either) as often as on the middle
+        i0 = rng.integers(0, m) if rng.random() < 0.6 else (m - 1) / 2
+        x = np.zeros(n, np.complex64)
+        for i in range(m):
+            df = (i - i0) * sp * (1 + 0.05 * rng.normal())
+            x = x + 10 ** rng.uniform(-1, 0) * fm(np.full(n, df) + rng.uniform(-0.5, 0.5) * t / t[-1], rng)
+        if rng.random() < 0.3:                 # wideband ticks
+            for a in rng.integers(0, n, rng.integers(3, 30)):
+                x[a:a + 3] += rng.uniform(2, 6) * np.exp(1j * rng.uniform(0, TAU))
+    elif k == "band":
+        w = rng.uniform(200, 2500)
+        x = _noise_band(n, rng, w)
+        how = rng.choice(["still", "drift", "zigzag"])
+        if how == "drift":
+            x = x * fm((t - t[-1] / 2) * rng.choice([-1, 1]) * rng.uniform(100, 1500) / t[-1], rng)
+        elif how == "zigzag":
+            x = x * fm(rng.uniform(200, 1500) * np.sin(TAU * rng.uniform(0.3, 3) * t + rng.uniform(0, TAU)), rng)
+    else:                                      # hum: a carrier with 50/60 Hz and harmonics
+        mains = rng.choice([50.0, 60.0])
+        a = sum(rng.uniform(0, 1) / h * np.cos(TAU * mains * h * t + rng.uniform(0, TAU)) for h in range(1, 6))
+        x = (1 + rng.uniform(0.3, 0.9) * a / (np.abs(a).max() + 1e-9)) * fm(np.zeros(n), rng)
+    if rng.random() < 0.5:                     # wideband ticks, regular (20 m: every 0.405 s)
+        per = float(np.exp(rng.uniform(np.log(0.08), np.log(1.2))))
+        w = int(rng.uniform(0.002, 0.015) * FS)
+        a = rng.uniform(0.05, 0.6) * np.sqrt(np.mean(np.abs(x) ** 2))
+        for s0 in np.arange(rng.uniform(0, per), n / FS, per * (1 + 0.003 * rng.normal())):
+            i = int(s0 * FS)
+            x[i:i + w] += a * (rng.normal(size=len(x[i:i + w])) + 1j * rng.normal(size=len(x[i:i + w])))
+    return (x * _gate(n, rng)).astype(np.complex64)
+
+
+def radar(n, rng):
+    """Over-the-horizon radar and sounders: FMCW sweeps repeating at 5-60
+    Hz, most much wider than the window (a click each pass, the window
+    pulsing), some slow enough to cross it as sloped lines; or pulse
+    trains at 10-50 Hz. Only what falls in the window (±3 kHz) is kept."""
+    t = np.arange(n) / FS
+    if rng.random() < 0.75:
+        prf = rng.uniform(5, 60)
+        width = float(np.exp(rng.uniform(np.log(4e3), np.log(1e5))))   # Hz swept a period
+        f = (((t * prf + rng.uniform()) % 1) - 0.5) * width * rng.choice([-1, 1])
+        if rng.random() < 0.3:                 # several sweeps at once (offset)
+            f2 = f + rng.uniform(-0.5, 0.5) * width
+            x = np.exp(1j * TAU * np.cumsum(f) / FS) * (np.abs(f) < 2950) + np.exp(1j * TAU * np.cumsum(f2) / FS) * (np.abs(f2) < 2950)
+        else:
+            x = np.exp(1j * TAU * np.cumsum(f) / FS) * (np.abs(f) < 2950)
+    else:
+        prf = rng.uniform(10, 50)
+        w = rng.uniform(0.2e-3, 3e-3)
+        on = ((t * prf + rng.uniform()) % 1) < w * prf
+        x = on * fm(np.full(n, rng.uniform(-500, 500)), rng)
+        x = np.convolve(x, np.hanning(5) / 2, mode="same")
+    return x.astype(np.complex64)
+
+
+# --- HFDL (ARINC 635): 1800 Bd PSK bursts ------------------------------------------------------------
+_HFDL_A = [int(b) for o in [0x5b, 0xbc, 0x74, 0x57, 0x03, 0xd9, 0x89, 0x39, 0xf2, 0x08, 0xd5, 0x36, 0x94, 0x2c, 0x32, 0xfe]
+           for b in f"{o:08b}"][:127]
+_HFDL_M1 = [int(c) for c in "0111011011110100010110010111110001000000110011011000111001110101"
+            "110000100110000010101011010010010100111100100011010100001111111"]
+_HFDL_T = [0, 0, 0, 1, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1]
+
+
+def _hfdl_scr():
+    v, out = 0x4D4B, []
+    for _ in range(120):
+        b = bin(v & 0x4001).count("1") & 1
+        out.append(b)
+        v = ((v << 1) | b) & 0x7FFF
+    return np.array(out)
+
+
+HFDL_SCR = _hfdl_scr()
+
+
+def hfdl(n, rng):
+    """HFDL bursts as the hfdl crate makes them: prekey, A twice, M1 (one
+    of 8 rotations) and M2, 9 probes, then frames of 30 data symbols
+    (BPSK/QPSK/8PSK on the period-120 scrambler) and a 15-symbol probe;
+    72 or 168 frames; RRC 0.3 at 1800 Bd. Squitters and replies come and
+    go: a window holds one burst, part of one, or two."""
+    idx = int(rng.integers(8))
+    bits = [1, 1, 2, 3][idx % 4]
+    frames = 72 if idx < 4 else 168
+    sh = [72, 82, 113, 123, 61, 103, 93, 9][idx]
+    m1 = [_HFDL_M1[(sh + j) % 127] for j in range(127)]
+    bp = lambda b: np.where(np.array(b) == 1, np.pi, 0.0)
+    ph = [bp(rng.integers(0, 2, 448)), bp(_HFDL_A), bp(_HFDL_A), bp(m1), bp(m1[:15]), bp(_HFDL_T * 9)]
+    npt = 1 << bits
+    k = np.arange(frames * 30)
+    data = TAU * rng.integers(0, npt, len(k)) / npt + np.pi * HFDL_SCR[k % 120]
+    fr = np.concatenate([np.r_[data[i * 30:(i + 1) * 30], bp(_HFDL_T)] for i in range(frames)])
+    sym = np.exp(1j * np.concatenate(ph + [fr]))
+    # RRC 0.3 at 4 samples a symbol (7200 S/s), then to FS
+    tt = np.arange(-32, 33) / 4
+    beta = 0.3
+    den = 1 - (4 * beta * tt) ** 2
+    h = (np.sin(np.pi * tt * (1 - beta)) + 4 * beta * tt * np.cos(np.pi * tt * (1 + beta))) / (np.pi * tt * np.where(np.abs(den) < 1e-8, 1e-8, den) + 1e-12)
+    h[tt == 0] = 1 - beta + 4 * beta / np.pi
+    h[np.abs(den) < 1e-8] = beta / np.sqrt(2) * ((1 + 2 / np.pi) * np.sin(np.pi / (4 * beta)) + (1 - 2 / np.pi) * np.cos(np.pi / (4 * beta)))
+    up = np.zeros(len(sym) * 4, np.complex64)
+    up[::4] = sym
+    x = resample_poly(np.convolve(up, h / np.sqrt((h ** 2).sum()), mode="same") * 2.0, 5, 6)
+    x = (x * np.exp(1j * rng.uniform(0, TAU))).astype(np.complex64)
+    if rng.random() < 0.5:
+        return window(x, n, rng)
+    out = bursts(x, n, rng)
+    if rng.random() < 0.3:                     # another (an aircraft's reply), weaker or stronger
+        out = out + bursts(x[::-1].copy(), n, rng) * 10 ** rng.uniform(-0.5, 0.5)
+    return out
+
+
 CLASSES = ["noise", "carrier", "cw", "fsk", "psk31", "ft8", "ft4", "wspr", "ale", "stanag4285",
-           "mil110a", "sstv", "fax", "ssb", "am"]
-GEN = [noise, carrier, cw, fsk, psk31, ft8, ft4, wspr, ale, stanag4285, mil110a, sstv, fax, ssb_voice, am]
+           "mil110a", "sstv", "fax", "ssb", "am", "interference", "radar", "hfdl"]
+GEN = [noise, carrier, cw, fsk, psk31, ft8, ft4, wspr, ale, stanag4285, mil110a, sstv, fax, ssb_voice, am,
+       interference, radar, hfdl]
 # half the occupied width of each (Hz): how far a neighbour must stay
-HALF = [0, 5, 20, 450, 60, 300, 300, 100, 950, 1600, 1600, 650, 450, 1300, 2950]
+HALF = [0, 5, 20, 450, 60, 300, 300, 100, 950, 1600, 1600, 650, 450, 1300, 2950, 1250, 2950, 1200]

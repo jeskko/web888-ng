@@ -25,6 +25,6 @@ test("sigid: rows by RF, the LSB edges in order, unknown classes dropped", () =>
 test("sigid: every class has a label; the decoders opened exist", () => {
   for (const [c, v] of Object.entries(CLASS_INFO)) {
     assert.ok(v.label.length > 0, c);
-    assert.ok([null, "cw", "rtty", "psk", "img", "ft8", "ft4", "wspr", "ssb", "am"].includes(v.opens), c);
+    assert.ok([null, "cw", "rtty", "psk", "img", "ft8", "ft4", "wspr", "hfdl", "ssb", "am"].includes(v.opens), c);
   }
 });

@@ -17,7 +17,7 @@ import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyR
 import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
 import { applyPsk, type PskRun, type PskSignal } from "./psk.ts";
-import { applyHfdl, hfdlCentre, type HfdlMsg, type HfdlRun, type HfdlStation } from "./hfdl.ts";
+import { applyHfdl, hfdlCentre, hfdlChannels, type HfdlMsg, type HfdlRun, type HfdlStation } from "./hfdl.ts";
 import { applyJs8, JS8_SUBMODES, type Js8Msg, type Js8Result } from "./js8.ts";
 import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
@@ -1349,6 +1349,15 @@ export function openSig(row: SigRow, cls: SigClass): void {
       }
       setDigi(true);
       break;
+    case "hfdl": {
+      // the listed channel (integer kHz) whose bursts sit 1440 Hz above it
+      const want = row.rf - 1440;
+      const chans = hfdlChannels(hfdlStations.value).map((c) => c.khz * 1000);
+      const near = chans.reduce((b, f) => (Math.abs(f - want) < Math.abs(b - want) ? f : b), Math.round(want / 1000) * 1000);
+      setHfdl(true);
+      pickHfdl(Math.abs(near - want) <= 1000 ? near : Math.round(want / 1000) * 1000);
+      break;
+    }
     case "ssb": {
       const lsb = row.rf < 10e6;
       tune(lsb ? row.rf + 1500 : row.rf - 1500);
