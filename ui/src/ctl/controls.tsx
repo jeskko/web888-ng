@@ -9,6 +9,7 @@ import { bandwidths, formatKhz, parseFreq, stepFor, stepLabel, STEPS, stepTo } f
 import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
+  audioRates,
   cycleAm,
   followable,
   lease,
@@ -167,11 +168,20 @@ export function Bandwidth() {
   if (!s) return null;
   return (
     <div class="group" title="Passband">
-      {bandwidths(s.mode).map((b) => (
+      {bandwidths(s.mode, s.audio_rate).map((b) => (
         <button key={b.label} class={s.lo === b.lo && s.hi === b.hi ? "on" : ""} onClick={() => setPassband(b.lo, b.hi)}>
           {b.label}
         </button>
       ))}
+      {audioRates.value.includes(24000) && (
+        <span class="seg" title="Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)">
+          {[12000, 24000].map((r) => (
+            <button key={r} class={s.audio_rate === r ? "on" : ""} onClick={() => setAudio({ audio_rate: r })}>
+              {r / 1000} kS/s
+            </button>
+          ))}
+        </span>
+      )}
     </div>
   );
 }

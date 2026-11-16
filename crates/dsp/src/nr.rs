@@ -2,7 +2,8 @@
 //! Noise reduction (`doc/m3-multi-user.md` §5): spectral subtraction on
 //! the audio.
 //!
-//! Short-time spectra (256 samples, 21 ms at 12 kS/s, sqrt-Hann windows
+//! Short-time spectra (256 samples, 21 ms at 12 kS/s; 512 at 24 kS/s,
+//! the same time and resolution), sqrt-Hann windows
 //! at 50 % overlap, so analysis + synthesis add back to the input when
 //! nothing is changed). The noise power per bin is estimated by minimum
 //! statistics: the minimum of the smoothed power over the last ~1.3 s
@@ -16,9 +17,8 @@ use rustfft::Fft;
 use std::collections::VecDeque;
 use std::sync::Arc;
 
+/// The spectra's length at 12 kS/s.
 const N: usize = 256;
-const HOP: usize = N / 2;
-const BINS: usize = N / 2 + 1;
 /// Power smoothing per frame.
 const ALPHA_P: f32 = 0.8;
 /// Minimum statistics: sub-windows of frames, kept for the whole window.
@@ -35,10 +35,11 @@ const FALL: f32 = 0.3;
 
 pub struct NoiseReduction {
     strength: f32,
+    n: usize,
     fft: Arc<dyn Fft<f32>>,
     ifft: Arc<dyn Fft<f32>>,
     window: Vec<f32>,
-    /// The frame being filled (starts with HOP samples of the last one).
+    /// The frame being filled (starts with the last one's second half).
     inbuf: Vec<f32>,
     /// Second half of the previous frame's output, to overlap-add.
     tail: Vec<f32>,
@@ -55,34 +56,44 @@ pub struct NoiseReduction {
 }
 
 impl NoiseReduction {
-    /// Delay added (samples): 21 ms at 12 kS/s.
+    /// Delay added at 12 kS/s (samples): 21 ms.
     pub const DELAY: usize = N;
 
-    /// `strength` 0..1 (0 passes the audio unchanged, but delayed).
+    /// `strength` 0..1 (0 passes the audio unchanged, but delayed), at
+    /// 12 kS/s.
     pub fn new(strength: f32) -> Self {
-        let fft = crate::fft_plan(N, false);
-        let ifft = crate::fft_plan(N, true);
+        Self::at(strength, 12_000.0)
+    }
+
+    /// The same at `fs` (a multiple of 12 kS/s: the spectra as long in
+    /// time).
+    pub fn at(strength: f32, fs: f64) -> Self {
+        let n = N * ((fs / 12_000.0).round() as usize).max(1);
+        let (hop, bins) = (n / 2, n / 2 + 1);
+        let fft = crate::fft_plan(n, false);
+        let ifft = crate::fft_plan(n, true);
         let scratch_len = fft
             .get_inplace_scratch_len()
             .max(ifft.get_inplace_scratch_len());
         // periodic Hann, square-rooted: w^2 at 50 % overlap sums to 1
-        let window = (0..N)
-            .map(|k| (0.5 - 0.5 * (2.0 * std::f32::consts::PI * k as f32 / N as f32).cos()).sqrt())
+        let window = (0..n)
+            .map(|k| (0.5 - 0.5 * (2.0 * std::f32::consts::PI * k as f32 / n as f32).cos()).sqrt())
             .collect();
         NoiseReduction {
             strength: strength.clamp(0.0, 1.0),
+            n,
             fft,
             ifft,
             window,
-            inbuf: vec![0.0; HOP],
-            tail: vec![0.0; HOP],
-            out: VecDeque::from(vec![0.0; HOP]),
-            power: vec![0.0; BINS],
-            sub_min: vec![f32::MAX; BINS],
+            inbuf: vec![0.0; hop],
+            tail: vec![0.0; hop],
+            out: VecDeque::from(vec![0.0; hop]),
+            power: vec![0.0; bins],
+            sub_min: vec![f32::MAX; bins],
             mins: VecDeque::new(),
             frames: 0,
-            gain: vec![1.0; BINS],
-            work: vec![C32::new(0.0, 0.0); N],
+            gain: vec![1.0; bins],
+            work: vec![C32::new(0.0, 0.0); n],
             scratch: vec![C32::new(0.0, 0.0); scratch_len],
         }
     }
@@ -95,15 +106,16 @@ impl NoiseReduction {
     pub fn process(&mut self, x: &mut [f32]) {
         for s in x {
             self.inbuf.push(*s);
-            if self.inbuf.len() == N {
+            if self.inbuf.len() == self.n {
                 self.frame();
-                self.inbuf.drain(..HOP);
+                self.inbuf.drain(..self.n / 2);
             }
             *s = self.out.pop_front().expect("output primed");
         }
     }
 
     fn frame(&mut self) {
+        let (n, hop, bins) = (self.n, self.n / 2, self.n / 2 + 1);
         for ((w, x), win) in self.work.iter_mut().zip(&self.inbuf).zip(&self.window) {
             *w = C32::new(x * win, 0.0);
         }
@@ -112,7 +124,7 @@ impl NoiseReduction {
 
         // noise estimate: minimum statistics of the smoothed power
         let first = self.frames == 0;
-        for b in 0..BINS {
+        for b in 0..bins {
             let p = self.work[b].norm_sqr();
             self.power[b] = if first {
                 p
@@ -124,14 +136,14 @@ impl NoiseReduction {
         self.frames += 1;
         if self.frames.is_multiple_of(SUB) {
             self.mins
-                .push_back(std::mem::replace(&mut self.sub_min, vec![f32::MAX; BINS]));
+                .push_back(std::mem::replace(&mut self.sub_min, vec![f32::MAX; bins]));
             if self.mins.len() > SUBS {
                 self.mins.pop_front();
             }
         }
 
         let floor = 1.0 - 0.9 * self.strength; // -20 dB at full strength
-        for b in 0..BINS {
+        for b in 0..bins {
             let min = self
                 .mins
                 .iter()
@@ -144,20 +156,20 @@ impl NoiseReduction {
             self.gain[b] += k * (g - self.gain[b]);
             let g = self.gain[b];
             self.work[b] *= g;
-            if b != 0 && b != N / 2 {
-                self.work[N - b] *= g;
+            if b != 0 && b != n / 2 {
+                self.work[n - b] *= g;
             }
         }
 
         self.ifft
             .process_with_scratch(&mut self.work, &mut self.scratch);
-        let k = 1.0 / N as f32;
-        for i in 0..HOP {
+        let k = 1.0 / n as f32;
+        for i in 0..hop {
             let y = self.work[i].re * k * self.window[i];
             self.out.push_back(self.tail[i] + y);
         }
-        for i in 0..HOP {
-            self.tail[i] = self.work[HOP + i].re * k * self.window[HOP + i];
+        for i in 0..hop {
+            self.tail[i] = self.work[hop + i].re * k * self.window[hop + i];
         }
     }
 }

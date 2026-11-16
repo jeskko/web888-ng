@@ -213,6 +213,24 @@ it > 10 dB down; AM 50 % at -70 dBFS vs 25 % at -20 dBFS 6 dB apart.
 Protocol: `state` and `audio` gain `agc_speed`, `nb` (threshold, 0 =
 off), `nr` (0..1), `squelch`, `squelch_db`.
 
+* **Audio rate** (later): `audio_rate` in `state` and `audio`, 12000
+  (default) or 24000 (`hello`'s `audio_rates` lists what a session can
+  choose): from the RX channel where its rate is a multiple of 24 k
+  (48 kS/s), else from the channelizer's bins (`wideaudio`: the bins
+  tuner's receivers are 12 kS/s, the bins' 60 kS/s no multiple of 24 k;
+  the job reads the bin nearest the passband from the bin tap, turns the
+  dial to 0 Hz and resamples 60 → 48 kS/s, at most 8 sessions, beyond
+  them 12 kS/s; the bin is changed when the passband leaves its clean
+  ±21 kHz). At
+  24 kS/s the passband's edges go to ±10 kHz (`max_edge_hz`: 5/12 of
+  the rate) for broadcast AM, NBFM and I/Q; the chain is rebuilt at the
+  new rate (filters, demodulators, AGC, NR with 512-sample spectra: the
+  same 21 ms), and the audio frames carry their rate. The web UI shows
+  12/24 kS/s beside the passband presets (wider presets at 24k); its
+  in-browser decoders still get 12 kS/s (a 63-tap half-band filter,
+  then every other sample). Kiwi clients stay at 12 kS/s. Twice the
+  audio data (48 kB/s as PCM16) and about twice the chain's CPU.
+
 ## 6. Configuration
 
 * TOML file (`--config`, default `/etc/web888d/web888d.toml`); every CLI

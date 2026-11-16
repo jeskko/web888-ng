@@ -91,6 +91,10 @@ pub enum ClientMsg {
         squelch: Option<bool>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         squelch_db: Option<f32>,
+        /// Audio sample rate: 12000 (default) or 24000 (wider passbands;
+        /// where the RX rate allows, see `Hello::audio_rates`).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        audio_rate: Option<f64>,
     },
     Wf(WfReq),
     Ping {
@@ -192,6 +196,9 @@ pub struct State {
     pub squelch: bool,
     /// Squelch threshold, channel power (dBFS).
     pub squelch_db: f32,
+    /// Audio sample rate (the passband's edges within 5/12 of it).
+    #[serde(default = "default_audio_rate")]
+    pub audio_rate: f64,
     pub wf: WfReq,
     /// Others see this user's frequency and may listen along.
     pub share: bool,
@@ -200,6 +207,10 @@ pub struct State {
     /// Callsign or nickname, as others see it.
     #[serde(default)]
     pub name: String,
+}
+
+fn default_audio_rate() -> f64 {
+    web888_dsp::audio::AUDIO_RATE
 }
 
 /// Another user: in the user list, and (sharing, with a receiver) a
@@ -314,7 +325,11 @@ pub enum ServerMsg {
         proto: u32,
         server: String,
         codec: String,
+        /// The default audio rate.
         audio_rate: f64,
+        /// The audio rates a session can choose (`Audio::audio_rate`).
+        #[serde(default)]
+        audio_rates: Vec<f64>,
         radio: RadioInfo,
         limits: Limits,
         /// This session's id (as others see it in `users`).

@@ -163,7 +163,7 @@ in `ui/src/proto.ts`. A round-trip test checks the JSON against fixtures in
 
 | type | fields |
 |---|---|
-| `hello` | `proto`, `server` (version), `codec` (chosen), `audio_rate`, `radio: {backend, variant, adc_hz, rx_rate, rf_lo, rf_hi, wf_decim_min, wf_decim_max}`, `limits: {bins_max, fps_max}` |
+| `hello` | `proto`, `server` (version), `codec` (chosen), `audio_rate` (default), `audio_rates` (choosable), `radio: {backend, variant, adc_hz, rx_rate, rf_lo, rf_hi, wf_decim_min, wf_decim_max}`, `limits: {bins_max, fps_max}` |
 | `state` | the full authoritative state after any change: `hz`, `mode`, `lo`, `hi`, `pitch`, `agc`, `gain_db`, `wf {center_hz, decim, bins, fps}` |
 | `status` | 1 Hz: `adc_overloads`, `clock_ppm`, `audio_drops`, `wf_drops`, `hw_rate_ok` |
 | `busy`, `error` | `msg` |

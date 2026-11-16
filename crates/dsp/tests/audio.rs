@@ -11,6 +11,11 @@ const F0: f64 = 7_074_000.0;
 
 /// Amplitude of the real tone at `f` (Blackman-Harris windowed DFT).
 fn amp(x: &[f32], f: f64) -> f64 {
+    amp_at(x, f, AUDIO_RATE)
+}
+
+/// The same at audio rate `fs`.
+fn amp_at(x: &[f32], f: f64, fs: f64) -> f64 {
     let n = x.len();
     let (a0, a1, a2, a3) = (0.35875, 0.48829, 0.14128, 0.01168);
     let mut acc = Complex64::new(0.0, 0.0);
@@ -20,7 +25,7 @@ fn amp(x: &[f32], f: f64) -> f64 {
         let w = a0 - a1 * t.cos() + a2 * (2.0 * t).cos() - a3 * (3.0 * t).cos();
         acc += Complex64::from_polar(
             v as f64 * w,
-            -2.0 * std::f64::consts::PI * f * k as f64 / AUDIO_RATE,
+            -2.0 * std::f64::consts::PI * f * k as f64 / fs,
         );
         wsum += w;
     }
@@ -143,6 +148,32 @@ fn am_agc_keeps_the_modulation_depth_at_any_level() {
         "depth difference {:.2} dB",
         w - s
     );
+}
+
+#[test]
+fn am_at_24k_hears_8_khz() {
+    // 50 % at 8 kHz: outside the 12 kS/s chain, heard at 24 kS/s with a
+    // +-10 kHz passband
+    let scene = || Scene::new().am(F0, -50.0, 8000.0, 0.5);
+    let wide = AudioSpec {
+        rate: 24_000.0,
+        lo_hz: -10_000.0,
+        hi_hz: 10_000.0,
+        ..AudioSpec::new(Mode::Am)
+    };
+    let (a, _) = run(scene(), wide, 2.0);
+    // run() drops 6000 samples: 0.25 s here; skip the AGC's start too
+    let tone = amp_at(&a[12_000..], 8000.0, 24_000.0);
+    assert!((tone / (0.5 * 0.3) - 1.0).abs() < 0.05, "tone {tone}");
+    let (n, _) = run(scene(), AudioSpec::new(Mode::Am), 2.0);
+    assert!(db(amp(&n[6000..], 8000.0)) < -80.0);
+    // edges past 10 kHz are clamped
+    assert_eq!(wide.clamped().hi_hz, 10_000.0);
+    let past = AudioSpec {
+        hi_hz: 12_000.0,
+        ..wide
+    };
+    assert_eq!(past.clamped().hi_hz, 10_000.0);
 }
 
 #[test]

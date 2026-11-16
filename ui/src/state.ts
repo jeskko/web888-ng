@@ -78,6 +78,8 @@ export const tuneStep = signal(Number(load("step")) || 0);
 /** The phone's VFO wheel resolution (Hz), remembered in this browser. */
 export const wheelStep = signal(WHEEL_STEPS.includes(Number(load("wheel"))) ? Number(load("wheel")) : 1000);
 let audioRate = 12000;
+/** The audio rates the server offers this session. */
+export const audioRates = signal<number[]>([12000]);
 /** Waterfall colour range (dB); `auto` follows the noise floor. */
 export const range = signal({ min: -130, max: -60, auto: true });
 
@@ -184,6 +186,7 @@ export function connect(): void {
           wideAsked = null; // a new session: ask again
           wideSync();
           audioRate = m.audio_rate;
+          audioRates.value = m.audio_rates ?? [m.audio_rate];
           if (myName.value) link?.send({ type: "name", name: myName.value });
           if (m.spots) {
             spotsFresh = true;
@@ -412,7 +415,7 @@ export function setStereo(on: boolean): void {
 let stereoKey = "";
 effect(() => {
   const s = st.value;
-  const spec = s && stereo.value ? stereoSpec(s.mode, s.lo, s.hi, s.pitch, audioRate) : null;
+  const spec = s && stereo.value ? stereoSpec(s.mode, s.lo, s.hi, s.pitch, s.audio_rate ?? audioRate) : null;
   const key = spec ? JSON.stringify(spec) : "";
   if (key === stereoKey) return;
   stereoKey = key;

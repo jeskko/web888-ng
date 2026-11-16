@@ -58,6 +58,8 @@ export interface State {
   squelch: boolean;
   /** Squelch threshold, channel power (dBFS). */
   squelch_db: number;
+  /** Audio sample rate: 12000, or 24000 for passbands to +-10 kHz. */
+  audio_rate: number;
   wf: WfReq;
   /** Others see this user's frequency and may listen along. */
   share: boolean;
@@ -76,6 +78,8 @@ export interface AudioReq {
   nr?: number;
   squelch?: boolean;
   squelch_db?: number;
+  /** One of the hello's `audio_rates`. */
+  audio_rate?: number;
 }
 
 /** Another user: in the user list, and (sharing, with a receiver) a
@@ -146,6 +150,9 @@ export type ServerMsg =
       server: string;
       codec: string;
       audio_rate: number;
+      /** The audio rates this session can choose (12000; 24000 where the
+       * RX rate allows). */
+      audio_rates?: number[];
       radio: RadioInfo;
       limits: Limits;
       session: number;

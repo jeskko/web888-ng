@@ -38,10 +38,33 @@ use crate::squelch::Squelch;
 use crate::{C32, rx_to_c32};
 use web888_radio::Iq32;
 
-/// Audio sample rate.
+/// Audio sample rate (the default; Kiwi clients' always).
 pub const AUDIO_RATE: f64 = 12_000.0;
+/// The audio rates a chain makes: the default, and twice it for wide AM,
+/// NBFM and I/Q.
+pub const AUDIO_RATES: [f64; 2] = [AUDIO_RATE, 24_000.0];
 /// Widest passband edge (Hz from the carrier) the 12 kS/s chain supports.
 pub const MAX_EDGE_HZ: f64 = 5_000.0;
+
+/// Widest passband edge at audio rate `rate`: 5 kHz at 12 kS/s, 10 kHz at
+/// 24 kS/s.
+pub fn max_edge_hz(rate: f64) -> f64 {
+    MAX_EDGE_HZ * rate / AUDIO_RATE
+}
+
+/// The audio rate a chain makes from `rx_rate` for the asked `rate`: one
+/// of `AUDIO_RATES` that divides the RX rate, else the default.
+pub fn audio_rate_for(rate: f64, rx_rate: f64) -> f64 {
+    let fits = |a: f64| {
+        let r = (rx_rate / a).round();
+        r >= 1.0 && (r * a - rx_rate).abs() < 1e-6
+    };
+    if AUDIO_RATES.contains(&rate) && fits(rate) {
+        rate
+    } else {
+        AUDIO_RATE
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Mode {
@@ -95,6 +118,9 @@ pub struct AudioSpec {
     pub nr: f32,
     /// Squelch threshold (channel power, dBFS); `None`: off.
     pub squelch_db: Option<f32>,
+    /// Audio sample rate (one of `AUDIO_RATES`; the chain falls back to
+    /// `AUDIO_RATE` when the RX rate isn't a multiple of it).
+    pub rate: f64,
 }
 
 impl AudioSpec {
@@ -122,14 +148,19 @@ impl AudioSpec {
             nb: None,
             nr: 0.0,
             squelch_db: None,
+            rate: AUDIO_RATE,
         }
     }
 
     /// Keep the passband within what the chain supports (at least 50 Hz
-    /// wide, edges within +-`MAX_EDGE_HZ`) and the pitch audible.
+    /// wide, edges within +-`max_edge_hz(rate)`) and the pitch audible.
     pub fn clamped(mut self) -> Self {
-        self.lo_hz = self.lo_hz.clamp(-MAX_EDGE_HZ, MAX_EDGE_HZ - 50.0);
-        self.hi_hz = self.hi_hz.clamp(self.lo_hz + 50.0, MAX_EDGE_HZ);
+        if !AUDIO_RATES.contains(&self.rate) {
+            self.rate = AUDIO_RATE;
+        }
+        let e = max_edge_hz(self.rate);
+        self.lo_hz = self.lo_hz.clamp(-e, e - 50.0);
+        self.hi_hz = self.hi_hz.clamp(self.lo_hz + 50.0, e);
         self.pitch_hz = self.pitch_hz.clamp(200.0, 2000.0);
         self.gain_db = self.gain_db.clamp(-20.0, 100.0);
         self.nb = self.nb.map(|k| k.clamp(2.0, 50.0));
@@ -162,13 +193,14 @@ impl AudioSpec {
 }
 
 /// The decimator's passband edge for `spec`'s passband, with a margin, in
-/// 500 Hz steps: what it lets through between there and 6 kHz lands outside
-/// the passband at 12 kS/s, where the channel filter takes it out. A
-/// narrow passband (SSB, CW) gets a wide transition band and few taps.
+/// 500 Hz steps: what it lets through between there and half the audio
+/// rate lands outside the passband, where the channel filter takes it
+/// out. A narrow passband (SSB, CW) gets a wide transition band and few
+/// taps.
 fn decim_pass(spec: &AudioSpec) -> f64 {
     let c = spec.channel();
     let edge = c.lo_hz.abs().max(c.hi_hz.abs()) + 300.0;
-    ((edge / 500.0).ceil() * 500.0).min(MAX_EDGE_HZ + 300.0)
+    ((edge / 500.0).ceil() * 500.0).min(max_edge_hz(spec.rate) + 300.0)
 }
 
 pub struct AudioChain {
@@ -204,31 +236,37 @@ pub struct AudioChain {
 
 impl AudioChain {
     /// `rx_rate` must be an integer multiple of `AUDIO_RATE`; `droop` is the
-    /// hardware channel response to compensate.
+    /// hardware channel response to compensate. The audio rate is
+    /// `spec.rate` if it divides `rx_rate`, else `AUDIO_RATE` (`spec()`
+    /// tells which).
     pub fn new(spec: AudioSpec, rx_rate: f64, droop: Droop) -> Self {
         let r = (rx_rate / AUDIO_RATE).round() as usize;
         assert!(
             r >= 1 && (r as f64 * AUDIO_RATE - rx_rate).abs() < 1e-6,
             "RX rate {rx_rate} is not a multiple of {AUDIO_RATE}"
         );
+        let mut spec = spec;
+        spec.rate = audio_rate_for(spec.rate, rx_rate);
         let spec = spec.clamped();
+        let fs = spec.rate;
+        let r = (rx_rate / fs).round() as usize;
         AudioChain {
             spec,
             droop,
             rx_rate,
             decim: Decimator::new(rx_rate, r, decim_pass(&spec), 80.0),
             filter: Self::filter(&spec, droop),
-            shift: Shifter::new(spec.pitch_hz, AUDIO_RATE),
-            am: Am::new(AUDIO_RATE),
-            sync: Sync::new(AUDIO_RATE),
-            fm: Fm::new(AUDIO_RATE),
-            agc: spec.agc.map(|a| Agc::new(a, AUDIO_RATE)),
+            shift: Shifter::new(spec.pitch_hz, fs),
+            am: Am::new(fs),
+            sync: Sync::new(fs),
+            fm: Fm::new(fs),
+            agc: spec.agc.map(|a| Agc::new(a, fs)),
             carrier_agc: Self::carrier_agc(&spec),
             gain: Self::gain(&spec),
             nb: spec.nb.map(NoiseBlanker::new),
-            nr: (spec.nr > 0.0).then(|| NoiseReduction::new(spec.nr)),
-            nr_r: (spec.nr > 0.0).then(|| NoiseReduction::new(spec.nr)),
-            squelch: spec.squelch_db.map(|d| Squelch::new(d, AUDIO_RATE)),
+            nr: (spec.nr > 0.0).then(|| NoiseReduction::at(spec.nr, fs)),
+            nr_r: (spec.nr > 0.0).then(|| NoiseReduction::at(spec.nr, fs)),
+            squelch: spec.squelch_db.map(|d| Squelch::new(d, fs)),
             x: Vec::new(),
             y: Vec::new(),
             z: Vec::new(),
@@ -241,7 +279,7 @@ impl AudioChain {
     }
 
     fn filter(spec: &AudioSpec, droop: Droop) -> OverlapSave {
-        let taps = design(spec.channel(), AUDIO_RATE, droop);
+        let taps = design(spec.channel(), spec.rate, droop);
         // about 60 ms blocks instead of 150 ms with the default size
         let n = (2 * taps.len()).next_power_of_two().max(512);
         OverlapSave::with_fft_size(&taps, n)
@@ -255,7 +293,7 @@ impl AudioChain {
             min_carrier,
             a.hang_s,
             a.decay_db_s,
-            AUDIO_RATE,
+            spec.rate,
         ))
     }
 
@@ -270,27 +308,35 @@ impl AudioChain {
     /// Change mode, passband or gain. The filter is redesigned only if the
     /// passband changed; the AGC restarts on a mode or AGC change.
     pub fn set_spec(&mut self, spec: AudioSpec) {
+        let mut spec = spec;
+        spec.rate = audio_rate_for(spec.rate, self.rx_rate);
         let spec = spec.clamped();
         let old = self.spec;
+        if spec.rate != old.rate {
+            // another rate: every stage anew
+            *self = Self::new(spec, self.rx_rate, self.droop);
+            return;
+        }
+        let fs = spec.rate;
         if spec.channel() != old.channel() {
             self.filter = Self::filter(&spec, self.droop);
         }
         if decim_pass(&spec) != decim_pass(&old) {
-            let r = (self.rx_rate / AUDIO_RATE).round() as usize;
+            let r = (self.rx_rate / fs).round() as usize;
             let taps = Decimator::design(self.rx_rate, r, decim_pass(&spec), 80.0);
             self.decim.set_taps(taps);
         }
         if spec.pitch_hz != old.pitch_hz {
-            self.shift = Shifter::new(spec.pitch_hz, AUDIO_RATE);
+            self.shift = Shifter::new(spec.pitch_hz, fs);
         }
         if spec.mode != old.mode || spec.agc != old.agc {
-            self.agc = spec.agc.map(|a| Agc::new(a, AUDIO_RATE));
+            self.agc = spec.agc.map(|a| Agc::new(a, fs));
             self.carrier_agc = Self::carrier_agc(&spec);
-            self.am = Am::new(AUDIO_RATE);
-            self.fm = Fm::new(AUDIO_RATE);
+            self.am = Am::new(fs);
+            self.fm = Fm::new(fs);
             if !(spec.mode.is_am() && old.mode.is_am()) {
                 // between AM modes the loop stays locked
-                self.sync = Sync::new(AUDIO_RATE);
+                self.sync = Sync::new(fs);
             }
         }
         self.gain = Self::gain(&spec);
@@ -303,13 +349,13 @@ impl AudioChain {
             match (spec.nr > 0.0, nr.as_mut()) {
                 (false, _) => *nr = None,
                 (true, Some(n)) => n.set_strength(spec.nr),
-                (true, None) => *nr = Some(NoiseReduction::new(spec.nr)),
+                (true, None) => *nr = Some(NoiseReduction::at(spec.nr, fs)),
             }
         }
         match (spec.squelch_db, &mut self.squelch) {
             (None, _) => self.squelch = None,
             (Some(d), Some(sq)) => sq.set_threshold(d),
-            (Some(d), None) => self.squelch = Some(Squelch::new(d, AUDIO_RATE)),
+            (Some(d), None) => self.squelch = Some(Squelch::new(d, fs)),
         }
         self.spec = spec;
     }
@@ -351,7 +397,7 @@ impl AudioChain {
             self.spec.mode,
             Mode::Sam | Mode::Sal | Mode::Sar | Mode::Sas
         )
-        .then(|| self.sync.offset_hz(AUDIO_RATE))
+        .then(|| self.sync.offset_hz(self.spec.rate))
     }
 
     /// Process RX samples of this channel, appending audio to `out`
@@ -433,5 +479,27 @@ impl AudioChain {
         if let Some(sq) = &mut self.squelch {
             sq.process_frames(&self.pw, a, self.spec.mode.channels());
         }
+    }
+}
+
+#[cfg(test)]
+mod rate_tests {
+    use super::*;
+
+    #[test]
+    fn the_audio_rate_must_divide_the_rx_rate() {
+        assert_eq!(audio_rate_for(24_000.0, 48_000.0), 24_000.0);
+        assert_eq!(audio_rate_for(24_000.0, 60_000.0), AUDIO_RATE);
+        assert_eq!(audio_rate_for(24_000.0, 12_000.0), AUDIO_RATE);
+        assert_eq!(audio_rate_for(16_000.0, 48_000.0), AUDIO_RATE);
+        let c = AudioChain::new(
+            AudioSpec {
+                rate: 24_000.0,
+                ..AudioSpec::new(Mode::Am)
+            },
+            36_000.0,
+            Droop::None,
+        );
+        assert_eq!(c.spec().rate, AUDIO_RATE);
     }
 }

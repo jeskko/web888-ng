@@ -18,7 +18,7 @@ use web888_core::leases::{Channels, Class, Lease, LeaseState};
 use web888_core::pool::DspPool;
 use web888_core::wf::SessionId;
 use web888_dsp::agc::AgcSpec;
-use web888_dsp::audio::{AUDIO_RATE, AudioSpec};
+use web888_dsp::audio::{AUDIO_RATE, AUDIO_RATES, AudioSpec, audio_rate_for};
 use web888_dsp::chan::Droop;
 use web888_hw::HwStatus;
 
@@ -168,6 +168,16 @@ impl Shared {
         self.live.borrow().web.wf_budget.max(1)
     }
 
+    /// The audio rates a session can choose: those its RX channel gives,
+    /// and with the channelizer's bins all (`wideaudio`).
+    pub fn audio_rates(&self) -> Vec<f64> {
+        let bins = self.waterfalls.tap().is_some();
+        AUDIO_RATES
+            .into_iter()
+            .filter(|&r| bins || audio_rate_for(r, self.radio.rx_rate) == r)
+            .collect()
+    }
+
     pub fn hello(&self, session: SessionId, class: Class) -> ServerMsg {
         ServerMsg::Hello {
             session,
@@ -176,6 +186,7 @@ impl Shared {
             server: format!("web888d {}", env!("CARGO_PKG_VERSION")),
             codec: "pcm16".into(),
             audio_rate: AUDIO_RATE,
+            audio_rates: self.audio_rates(),
             radio: self.radio.clone(),
             limits: Limits {
                 bins_max: BINS_MAX,
@@ -246,6 +257,7 @@ fn audio_spec(s: &State) -> AudioSpec {
     a.nb = (s.nb > 0.0).then_some(s.nb);
     a.nr = s.nr;
     a.squelch_db = s.squelch.then_some(s.squelch_db);
+    a.rate = s.audio_rate;
     a.agc = if s.agc {
         let base = if s.mode.is_am() {
             AgcSpec::am_at(s.agc_speed.into())
@@ -459,6 +471,7 @@ impl Session<'_> {
     /// Point the audio and the waterfall at the current channel and dial.
     fn route(&self) {
         let ch = self.channel();
+        let _ = self.audio.send(AudioCmd::Dial(self.st.hz));
         let _ = self.audio.send(AudioCmd::Channel(ch));
         apply_wf(
             self.sh,
@@ -569,8 +582,13 @@ impl Session<'_> {
                 nr,
                 squelch,
                 squelch_db,
+                audio_rate,
             } => {
+                let rates = self.sh.audio_rates();
                 let s = &mut self.st;
+                if let Some(r) = audio_rate {
+                    s.audio_rate = if rates.contains(&r) { r } else { AUDIO_RATE };
+                }
                 s.agc = agc.unwrap_or(s.agc);
                 s.gain_db = gain_db.unwrap_or(s.gain_db);
                 s.agc_speed = agc_speed.unwrap_or(s.agc_speed);
@@ -720,6 +738,7 @@ pub async fn run(
         nr: 0.0,
         squelch: false,
         squelch_db: -100.0,
+        audio_rate: AUDIO_RATE,
         wf: sh.start_view(hz),
         share: sh.live.borrow().limits.share_default,
         listen: None,
@@ -764,7 +783,8 @@ pub async fn run(
             total: Some(&crate::metrics::WEB.audio),
         },
         sink.clone(),
-    );
+    )
+    .with_tap(sh.waterfalls.tap().cloned());
     let placed = sh.pool.add(Box::new(job));
     // the worker's losses count from here
     let rx_lost0 = placed.rx_dropped.load(Ordering::Relaxed);

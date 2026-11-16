@@ -79,7 +79,8 @@ export function clamp(x: number, lo: number, hi: number): number {
 }
 
 /** Passband presets (Hz, lo..hi relative to the dial) per mode. */
-export function bandwidths(mode: Mode): { label: string; lo: number; hi: number }[] {
+export function bandwidths(mode: Mode, rate = 12000): { label: string; lo: number; hi: number }[] {
+  const wide = rate >= 24000;
   switch (mode) {
     case "usb":
       return [1.8, 2.4, 2.7, 3.0].map((k) => ({ label: `${k}k`, lo: 300, hi: 300 + k * 1000 }));
@@ -92,11 +93,11 @@ export function bandwidths(mode: Mode): { label: string; lo: number; hi: number 
     case "sas":
     case "iq":
     case "nbfm":
-      return [6, 8, 10].map((k) => ({ label: `${k}k`, lo: (-k * 1000) / 2, hi: (k * 1000) / 2 }));
+      return (wide ? [6, 10, 16, 20] : [6, 8, 10]).map((k) => ({ label: `${k}k`, lo: (-k * 1000) / 2, hi: (k * 1000) / 2 }));
     // one sideband and the carrier (50 Hz inside the edge)
     case "sal":
-      return [3, 4, 5].map((k) => ({ label: `${k}k`, lo: -k * 1000, hi: 50 }));
+      return (wide ? [4, 5, 8, 10] : [3, 4, 5]).map((k) => ({ label: `${k}k`, lo: -k * 1000, hi: 50 }));
     case "sar":
-      return [3, 4, 5].map((k) => ({ label: `${k}k`, lo: -50, hi: k * 1000 }));
+      return (wide ? [4, 5, 8, 10] : [3, 4, 5]).map((k) => ({ label: `${k}k`, lo: -50, hi: k * 1000 }));
   }
 }

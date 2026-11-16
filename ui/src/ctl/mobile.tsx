@@ -64,7 +64,7 @@ function Top({ open }: { open: (s: SheetName) => void }) {
   const pos = Math.min(1, Math.max(0, (p + 140) / 120));
   const over = performance.now() - overloadAt.value < 1000;
   const band = s ? bandOf(s.hz) : null;
-  const bw = s ? bandwidths(s.mode).find((b) => b.lo === s.lo && b.hi === s.hi)?.label : undefined;
+  const bw = s ? bandwidths(s.mode, s.audio_rate).find((b) => b.lo === s.lo && b.hi === s.hi)?.label : undefined;
   return (
     <div class="m-top">
       <button class="m-freq" onClick={() => open("keypad")} aria-label="Enter a frequency">
@@ -154,12 +154,12 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
   const am = s && isAm(s.mode) ? s.mode : null;
   const cycleBw = () => {
     if (!s) return;
-    const list = bandwidths(s.mode);
+    const list = bandwidths(s.mode, s.audio_rate);
     const i = list.findIndex((b) => b.lo === s.lo && b.hi === s.hi);
     const n = list[(i + 1) % list.length];
     setPassband(n.lo, n.hi);
   };
-  const bw = s ? bandwidths(s.mode).find((b) => b.lo === s.lo && b.hi === s.hi)?.label : undefined;
+  const bw = s ? bandwidths(s.mode, s.audio_rate).find((b) => b.lo === s.lo && b.hi === s.hi)?.label : undefined;
   return (
     <div class="m-dock">
       <div class="m-keys">

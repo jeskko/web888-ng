@@ -10,6 +10,7 @@
 //! drops the frame (counted), it never blocks.
 
 use crate::proto::{self, FLAG_GAP, FLAG_NEW_GEN, FLAG_OVERLOAD, FLAG_STALE, FLAG_STEREO};
+use crate::wideaudio::{self, BinSource};
 use crossbeam_channel::{Receiver as CbReceiver, TryRecvError};
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
@@ -18,12 +19,15 @@ use tokio::sync::mpsc::Sender;
 use tokio::sync::mpsc::error::TrySendError;
 use web888_core::pool::{Ctx, Job};
 use web888_core::wf::SessionId;
-use web888_dsp::audio::{AUDIO_RATE, AudioChain, AudioSpec};
+use web888_dsp::C32;
+use web888_dsp::audio::{AudioChain, AudioSpec, audio_rate_for};
+use web888_dsp::binrx::BinTap;
 use web888_dsp::chan::Droop;
 use web888_dsp::wf::{WF_DB_STEP, WF_DB0, WfEngine, WfLine, WfSpec, quantize};
 use web888_radio::{RxBlock, WfBlock};
 
-/// Audio frame length: 20 ms at 12 kS/s.
+/// Audio frame length: 20 ms at 12 kS/s (twice that at 24 kS/s: the same
+/// 20 ms).
 pub const AUDIO_FRAME: usize = 240;
 
 /// Frames to the WebSocket task, with a drop counter.
@@ -148,6 +152,8 @@ pub enum AudioCmd {
     Wf(Option<ChanView>),
     /// Kiwi protocol packets: their settings.
     Kiwi(crate::kiwi::wire::SndSet),
+    /// The dial (Hz): for audio from the bins (`wideaudio`).
+    Dial(f64),
 }
 
 /// How a job packs its audio.
@@ -176,6 +182,13 @@ pub struct AudioJob {
     seq: u32,
     rssi: f32,
     wf: Option<ChanWf>,
+    /// The bins, for an audio rate the RX channel can't give.
+    tap: Option<BinTap>,
+    dial: Option<f64>,
+    /// The spec as asked (the chain's may have fallen back to 12 kS/s).
+    asked: AudioSpec,
+    src: Option<BinSource>,
+    wide: Vec<C32>,
 }
 
 impl AudioJob {
@@ -203,6 +216,51 @@ impl AudioJob {
             seq: 0,
             rssi: -200.0,
             wf: None,
+            tap: None,
+            dial: None,
+            asked: spec,
+            src: None,
+            wide: Vec::new(),
+        }
+    }
+
+    /// Take audio rates the RX channel can't give from these bins.
+    pub fn with_tap(mut self, tap: Option<BinTap>) -> Self {
+        self.tap = tap;
+        self
+    }
+
+    fn make_chain(&self) -> AudioChain {
+        match &self.src {
+            Some(_) => AudioChain::new(self.asked, wideaudio::RATE, Droop::None),
+            None => AudioChain::new(self.asked, self.rx_rate, self.droop),
+        }
+    }
+
+    /// Read the bins when the asked rate needs them (and there are
+    /// sources left; else the chain falls back to 12 kS/s).
+    fn sync_src(&mut self) {
+        let want =
+            self.ch.is_some() && audio_rate_for(self.asked.rate, self.rx_rate) != self.asked.rate;
+        let was = self.src.is_some();
+        match (&self.tap, self.dial) {
+            (Some(tap), Some(d)) if want => {
+                let (lo, hi) = (self.asked.lo_hz, self.asked.hi_hz);
+                match &mut self.src {
+                    Some(s) if s.covers(d, lo, hi) => s.retune(d),
+                    _ => {
+                        self.src = None;
+                        self.src = BinSource::new(tap, d, lo, hi);
+                        self.flags |= FLAG_GAP;
+                    }
+                }
+            }
+            _ => self.src = None,
+        }
+        if was != self.src.is_some() {
+            self.chain = self.make_chain();
+            self.pcm.clear();
+            self.flags |= FLAG_GAP;
         }
     }
 
@@ -254,6 +312,8 @@ impl AudioJob {
             match self.cmd.try_recv() {
                 Ok(AudioCmd::Spec(s)) => {
                     let ch = self.chain.channels();
+                    self.asked = s;
+                    self.sync_src();
                     self.chain.set_spec(s);
                     if self.chain.channels() != ch {
                         // mono and stereo samples don't mix
@@ -263,7 +323,8 @@ impl AudioJob {
                 Ok(AudioCmd::Channel(c)) if c != self.ch => {
                     // another channel's history: start over
                     self.ch = c;
-                    self.chain = AudioChain::new(*self.chain.spec(), self.rx_rate, self.droop);
+                    self.sync_src();
+                    self.chain = self.make_chain();
                     self.pcm.clear();
                     self.next_frame = None;
                     self.flags |= FLAG_GAP;
@@ -272,6 +333,10 @@ impl AudioJob {
                     }
                 }
                 Ok(AudioCmd::Channel(_)) => {}
+                Ok(AudioCmd::Dial(hz)) => {
+                    self.dial = Some(hz);
+                    self.sync_src();
+                }
                 Ok(AudioCmd::Wf(v)) => self.set_wf(v),
                 Ok(AudioCmd::Kiwi(k)) => {
                     if let Framing::Kiwi(e) = &mut self.framing {
@@ -309,13 +374,23 @@ impl Job for AudioJob {
             w.engine.push_rx(b.channel(ch), w.contiguous && contiguous);
             w.contiguous = true;
         }
-        self.chain.process(b.channel(ch), &mut self.pcm);
+        match &mut self.src {
+            Some(s) => {
+                self.wide.clear();
+                if s.read(&mut self.wide) {
+                    self.flags |= FLAG_GAP;
+                }
+                self.chain.process_c32(self.wide.drain(..), &mut self.pcm);
+            }
+            None => self.chain.process(b.channel(ch), &mut self.pcm),
+        }
         // frames of AUDIO_FRAME sample times (Kiwi: its packet), of every
         // channel
         let chans = self.chain.channels();
+        let per_12k = (self.chain.spec().rate / web888_dsp::audio::AUDIO_RATE).round() as usize;
         let len = chans
             * match &self.framing {
-                Framing::Web => AUDIO_FRAME,
+                Framing::Web => AUDIO_FRAME * per_12k,
                 Framing::Kiwi(e) => e.samples(chans),
             };
         let stereo = if chans == 2 { FLAG_STEREO } else { 0 };
@@ -329,7 +404,7 @@ impl Job for AudioJob {
                 Framing::Web => proto::audio_frame(
                     self.flags | stereo,
                     self.seq,
-                    AUDIO_RATE as u32,
+                    self.chain.spec().rate as u32,
                     self.rssi,
                     pcm,
                 ),
