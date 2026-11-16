@@ -60,11 +60,11 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | AGC controls (threshold, slope, decay, hang) | ✓ | ✓ | ~ F/M/S + gain | **R** (threshold, decay) |
 | Noise blanker (2 algorithms) | ✓ | ✓ | ✓ (1) | – |
 | NR (LMS, WDSP, spectral) | ✓ | ✓ | ✓ spectral | – |
-| Auto-notch | ✓ | ✓ | ✗ | **R** |
+| Auto-notch | ✓ | ✓ | ✓ spectral, any number of carriers (web UI) | – |
 | Squelch | ✓ | ✓ | ✓ | – |
 | Wider audio (24/36 kHz) for AM/DRM broadcast | ✓ | ~ | ✓ 12k (±5 kHz) default, 24k (±10 kHz) per session in the web UI; Kiwi 12k | – |
 | Audio compression (IMA ADPCM) | ✓ | ✓ | ~ ADPCM to Kiwi clients; the web UI PCM16 | **R** (ADPCM or Opus in the web UI) |
-| RF attenuator from the UI | ✓ | ✓ (Kiwi-2) | ✗ (HPSDR only) | **R** |
+| RF attenuator from the UI | ✓ | ✓ (Kiwi-2) | ✓ admin page (`[radio] atten_db`, live), shown to listeners; HPSDR | – |
 | S-meter calibration, overload mute | ✓ | ✓ | ~ `[kiwi] smeter_offset_db` (provisional -12 dB, not measured); no mute | **R** (measure; overload flag) |
 | Frequency offset (converters, transverters) | ✓ | ✓ | ✗ | **R** |
 | DRM (Dream + FDK-AAC) | ✓ | ✓ | ✗ | **D** (out of process; A9 CPU?) |
@@ -193,13 +193,13 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
    (FM broadcast), NBFM and AM audio. Small in work, decides whether
    VHF leaves "experimental".
 2. **R — the rest of receiver parity**, the parts a listener notices:
-   * the RF attenuator and the ADC controls (dither, PGA) in the UI or
-     admin; overload shown;
+   * the ADC controls (dither, PGA) in the UI or admin (the RF
+     attenuator and the overload lamp: done);
    * a measured S-meter calibration (dBm) for both the web UI and Kiwi;
    * frequency offset (converters);
    * IQ in the web UI (24 kS/s audio: done);
    * ADPCM or Opus for the web UI;
-   * AGC threshold/decay, auto-notch;
+   * AGC threshold/decay (auto-notch: done);
    * memories, client-side WAV recording, a few colormaps, peak hold,
      waterfall timestamps, a key help overlay.
 3. **O — access and presentation** (for public receivers):

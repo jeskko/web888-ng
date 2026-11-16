@@ -226,6 +226,11 @@ pub struct Radio {
     /// Bins mode: zoomed waterfalls from the source's zoom engine when it
     /// has one (`hw/docs/channelizer.md` §3.9), instead of FFTs here.
     pub zoom_engine: bool,
+    /// zynqsdr: the RF attenuator before the ADC, 0 (off) to 31.5 dB in
+    /// 0.5 dB steps, for every listener at once: against ADC overloads
+    /// from strong signals. Applies at once (no restart); an HPSDR client
+    /// may change it while it runs.
+    pub atten_db: f32,
     /// Backend sim: the simulated scene.
     pub sim: Sim,
     /// Backend iq: the wideband IQ input.
@@ -241,6 +246,7 @@ impl Default for Radio {
             si5351_adc: None,
             bins: None,
             zoom_engine: true,
+            atten_db: 0.0,
             sim: Sim::default(),
             iq: Iq::default(),
         }
@@ -811,7 +817,12 @@ impl Config {
     /// Classify the differences from `self` (running) to `new`.
     pub fn changes(&self, new: &Config) -> Changes {
         let mut c = Changes::default();
-        if self.radio != new.radio {
+        // the attenuator applies at once
+        let fixed = |r: &Radio| Radio {
+            atten_db: 0.0,
+            ..r.clone()
+        };
+        if fixed(&self.radio) != fixed(&new.radio) {
             c.restart.push("radio");
         }
         if self.hpsdr != new.hpsdr {
@@ -831,7 +842,8 @@ impl Config {
         if web_restart {
             c.restart.push("web");
         }
-        c.live = self.station != new.station
+        c.live = self.radio.atten_db != new.radio.atten_db
+            || self.station != new.station
             || self.skimmer != new.skimmer
             || self.report != new.report
             || self.syslog != new.syslog
@@ -971,6 +983,7 @@ mod tests {
         b.web.metrics = true;
         b.web.metrics_allow = vec!["10.0.0.0/8".parse().unwrap()];
         b.web.trusted_proxies = vec!["10.0.0.1".parse().unwrap()];
+        b.radio.atten_db = 10.0;
         assert_eq!(
             a.changes(&b),
             Changes {

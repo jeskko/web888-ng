@@ -256,6 +256,7 @@ fn audio_spec(s: &State) -> AudioSpec {
     a.gain_db = s.gain_db;
     a.nb = (s.nb > 0.0).then_some(s.nb);
     a.nr = s.nr;
+    a.notch = s.notch;
     a.squelch_db = s.squelch.then_some(s.squelch_db);
     a.rate = s.audio_rate;
     a.agc = if s.agc {
@@ -580,6 +581,7 @@ impl Session<'_> {
                 agc_speed,
                 nb,
                 nr,
+                notch,
                 squelch,
                 squelch_db,
                 audio_rate,
@@ -594,6 +596,7 @@ impl Session<'_> {
                 s.agc_speed = agc_speed.unwrap_or(s.agc_speed);
                 s.nb = nb.filter(|v| v.is_finite()).unwrap_or(s.nb);
                 s.nr = nr.filter(|v| v.is_finite()).unwrap_or(s.nr);
+                s.notch = notch.unwrap_or(s.notch);
                 s.squelch = squelch.unwrap_or(s.squelch);
                 s.squelch_db = squelch_db
                     .filter(|v| v.is_finite())
@@ -736,6 +739,7 @@ pub async fn run(
         agc_speed: Default::default(),
         nb: 0.0,
         nr: 0.0,
+        notch: false,
         squelch: false,
         squelch_db: -100.0,
         audio_rate: AUDIO_RATE,
@@ -942,6 +946,7 @@ pub async fn run(
                     hw_rate_ok: hw.rx_rate_ok.load(Ordering::Relaxed),
                     cpu: sys.cpu.map(|c| f64::from(c).round()),
                     temp_c: sys.temp_c.map(|t| (f64::from(t) * 10.0).round() / 10.0),
+                    rf_atten_db: Some(hw.atten_db()).filter(|&d| d > 0.0),
                 }];
                 let users = sh.users.marks(id);
                 if users_sent.as_ref() != Some(&users) {

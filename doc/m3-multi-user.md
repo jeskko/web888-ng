@@ -193,6 +193,8 @@ implementation if the board still needs it.
   STFT at 12 k, noise estimate by minimum statistics), strength 0..1.
 * **Squelch** for AM/CW (RSSI threshold with hysteresis).
 * Not M3: SAM, NFM, notch filters (candidates for M3.5 if wanted).
+  SAM and NBFM came in v0.7.0/v0.10.0, the automatic notch later
+  (below).
 
 Each block gets unit tests in `crates/dsp` like the M2 ones (e.g. NB: a
 -60 dBFS tone with 100 Hz impulses at +40 dB, tone SNR restored within
@@ -230,6 +232,26 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   in-browser decoders still get 12 kS/s (a 63-tap half-band filter,
   then every other sample). Kiwi clients stay at 12 kS/s. Twice the
   audio data (48 kB/s as PCM16) and about twice the chain's CPU.
+* **Automatic notch** (later, `dsp::notch`): steady carriers out of the
+  audio (heterodynes, birdies, an AM carrier heard in SSB), speech, CW
+  and noise left as they are. 512-point spectra at 12 kS/s (23 Hz bins,
+  50 % sqrt-Hann, 43 ms delay; 1024 at 24 kS/s). A bin is a carrier
+  while the mean square of its level's change from frame to frame
+  (21 ms, smoothed over ~0.3 s) stays under 4 dB² (noise alone: ~62;
+  a fading carrier changes by fractions of a dB a frame) and its level
+  (smoothed over ~70 ms, following fades) is 10 dB over the lower
+  quartile of the bins 3 to 20 away; it is brought down to that floor,
+  so no hole opens. Caught within about a second, let go in the frame it
+  stops; any number of carriers at once. In the chain after the demod,
+  before NR (a carrier would hold up NR's noise estimate); per channel
+  in SAS, not in I/Q. Tests: two carriers 30 and 20 dB over the noise
+  down 43 and 34 dB with the noise left within 0.1 dB; a carrier fading
+  20 dB at 0.5 Hz down > 25 dB; speech-like audio and CW within 0.5 dB.
+  On recordings (`examples/notch`, `/data/iq/sigid-wide/app`): AM
+  stations' carriers heard in USB 27-37 dB down with the programme
+  around them within 0.1 dB; four 20 m SSB recordings within 0.02 dB.
+  Protocol: `notch` (bool) in `state` and `audio`; the web UI's
+  **Notch** beside NR. Kiwi clients: no.
 
 ## 6. Configuration
 
@@ -258,6 +280,13 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
 * **Admin API** (JSON, `/api/admin/...`): sessions (list, kick), leases,
   channel reservations, config (get, validate, put), stats (per-thread CPU
   from `/proc/self/task`, queue depths, drops, WF fairness), restart.
+  Later: `POST /api/admin/atten {"db"}` sets the RF attenuator (0 to
+  31.5 dB in 0.5 dB steps) for every listener: saved as `[radio]
+  atten_db` and applied at once (a live setting; an HPSDR client can
+  still change it while it runs). Stats give it as set and as
+  configured; the status page has it beside the ADC overloads (and
+  their rate now), and listeners see **ATT n** beside the overload lamp
+  (`status`'s `rf_atten_db`).
 * **Metrics**: `GET /metrics` (Prometheus text), off by default.
 * As built (step 7, `crates/web/src/{auth,admin}.rs`):
   * argon2id with the crate's default parameters (19 MiB, 2 passes);
@@ -340,6 +369,8 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   | `name` | C→S | `name`: the user's callsign or nickname, shown to others; trimmed, control characters dropped, at most 8 characters (`state.name` echoes what was kept). Added 2026-10-28 |
   | `mode` | C→S | adds `sam`, `sal`, `sar`, `sas` (synchronous AM: both sidebands, lower, upper, stereo). Added 2026-10-28 |
   | `status` | S→C | adds `cpu` (the device's load, % of all cores) and `temp_c` (SoC temperature), when known. Added 2026-10-28 |
+  | `status` | S→C | adds `rf_atten_db`: the RF attenuator (dB) while it is in. Added 2026-11-16 |
+  | `audio`, `state` | C→S, S→C | add `notch` (bool): the automatic notch. Added 2026-11-16 |
   | audio frame | S→C | flags bit2 `stereo`: left and right interleaved, `n` counting both (SAS). Added 2026-10-28 |
   | `listen` | C→S | `user` (id or null). Refused with an `error` if the session has a receiver of its own, or the user doesn't share / has none |
   | WF frame | S→C | flags bit2 `stale`: no new samples since the previous line |

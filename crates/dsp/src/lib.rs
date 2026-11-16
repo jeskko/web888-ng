@@ -11,6 +11,7 @@ pub mod demod;
 pub mod fir;
 pub mod nb;
 pub mod nco;
+pub mod notch;
 pub mod nr;
 pub mod ols;
 pub mod pfb;

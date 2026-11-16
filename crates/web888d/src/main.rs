@@ -812,6 +812,7 @@ struct Reloader {
     running: std::sync::Mutex<Config>,
     tx: tokio::sync::watch::Sender<Arc<Config>>,
     channels: Arc<Channels>,
+    hw: mpsc::Sender<web888_hw::HwCmd>,
 }
 
 impl Reloader {
@@ -824,6 +825,12 @@ impl Reloader {
                 "config: changes to [{}] take effect after a restart",
                 ch.restart.join("], [")
             );
+        }
+        if new.radio.atten_db != running.radio.atten_db {
+            eprintln!("config: RF attenuator {} dB", new.radio.atten_db);
+            let _ = self.hw.send(web888_hw::HwCmd::Atten {
+                db: new.radio.atten_db,
+            });
         }
         if ch.live {
             eprintln!("config: reloaded");
@@ -969,7 +976,13 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         running: std::sync::Mutex::new(cfg.clone()),
         tx: live_tx,
         channels: channels.clone(),
+        hw: ctl_tx.clone(),
     });
+    if cfg.radio.atten_db != 0.0 {
+        ctl_tx.send(web888_hw::HwCmd::Atten {
+            db: cfg.radio.atten_db,
+        })?;
+    }
     {
         let r = reloader.clone();
         std::thread::Builder::new()

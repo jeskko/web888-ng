@@ -32,6 +32,7 @@ use crate::demod::CarrierAgc;
 use crate::demod::{Am, Fm, Sync, SyncOut, ssb};
 use crate::nb::NoiseBlanker;
 use crate::nco::Shifter;
+use crate::notch::AutoNotch;
 use crate::nr::NoiseReduction;
 use crate::ols::OverlapSave;
 use crate::squelch::Squelch;
@@ -116,6 +117,8 @@ pub struct AudioSpec {
     pub nb: Option<f32>,
     /// Noise reduction strength 0..1 (0: off).
     pub nr: f32,
+    /// Automatic notch: steady carriers out (`notch`).
+    pub notch: bool,
     /// Squelch threshold (channel power, dBFS); `None`: off.
     pub squelch_db: Option<f32>,
     /// Audio sample rate (one of `AUDIO_RATES`; the chain falls back to
@@ -147,6 +150,7 @@ impl AudioSpec {
             gain_db: 0.0,
             nb: None,
             nr: 0.0,
+            notch: false,
             squelch_db: None,
             rate: AUDIO_RATE,
         }
@@ -221,6 +225,8 @@ pub struct AudioChain {
     nr: Option<NoiseReduction>,
     /// SAS: the right channel's.
     nr_r: Option<NoiseReduction>,
+    notch: Option<AutoNotch>,
+    notch_r: Option<AutoNotch>,
     squelch: Option<Squelch>,
     // scratch
     x: Vec<C32>,
@@ -266,6 +272,8 @@ impl AudioChain {
             nb: spec.nb.map(NoiseBlanker::new),
             nr: (spec.nr > 0.0).then(|| NoiseReduction::at(spec.nr, fs)),
             nr_r: (spec.nr > 0.0).then(|| NoiseReduction::at(spec.nr, fs)),
+            notch: spec.notch.then(|| AutoNotch::at(fs)),
+            notch_r: spec.notch.then(|| AutoNotch::at(fs)),
             squelch: spec.squelch_db.map(|d| Squelch::new(d, fs)),
             x: Vec::new(),
             y: Vec::new(),
@@ -350,6 +358,13 @@ impl AudioChain {
                 (false, _) => *nr = None,
                 (true, Some(n)) => n.set_strength(spec.nr),
                 (true, None) => *nr = Some(NoiseReduction::at(spec.nr, fs)),
+            }
+        }
+        for n in [&mut self.notch, &mut self.notch_r] {
+            match (spec.notch, n.is_some()) {
+                (false, _) => *n = None,
+                (true, true) => {}
+                (true, false) => *n = Some(AutoNotch::at(fs)),
             }
         }
         match (spec.squelch_db, &mut self.squelch) {
@@ -449,24 +464,36 @@ impl AudioChain {
         let a = &mut out[start..];
         let iq = self.spec.mode == Mode::Iq;
         if iq {
-            // no NR on I/Q
+            // no notch or NR on I/Q
         } else if self.channels() == 2 {
-            if let (Some(nl), Some(nr)) = (&mut self.nr, &mut self.nr_r) {
+            if self.notch.is_some() || self.nr.is_some() {
                 self.l.clear();
                 self.r.clear();
                 for f in a.chunks(2) {
                     self.l.push(f[0]);
                     self.r.push(f[1]);
                 }
-                nl.process(&mut self.l);
-                nr.process(&mut self.r);
+                if let (Some(nl), Some(nr)) = (&mut self.notch, &mut self.notch_r) {
+                    nl.process(&mut self.l);
+                    nr.process(&mut self.r);
+                }
+                if let (Some(nl), Some(nr)) = (&mut self.nr, &mut self.nr_r) {
+                    nl.process(&mut self.l);
+                    nr.process(&mut self.r);
+                }
                 for ((f, l), r) in a.chunks_mut(2).zip(&self.l).zip(&self.r) {
                     f[0] = *l;
                     f[1] = *r;
                 }
             }
-        } else if let Some(nr) = &mut self.nr {
-            nr.process(a);
+        } else {
+            // the notch first: a carrier would hold up NR's noise estimate
+            if let Some(n) = &mut self.notch {
+                n.process(a);
+            }
+            if let Some(nr) = &mut self.nr {
+                nr.process(a);
+            }
         }
         match &mut self.agc {
             Some(_) if carrier_agc => {}

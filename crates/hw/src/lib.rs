@@ -203,6 +203,15 @@ pub struct HwStatus {
     /// blocks' frame numbers skip them, so the audio after one is flagged
     /// as a gap to its listener.
     pub rx_lost_frames: AtomicU64,
+    /// The RF attenuator as set, in 0.5 dB steps.
+    pub atten_half_db: std::sync::atomic::AtomicU32,
+}
+
+impl HwStatus {
+    /// The RF attenuator as set (dB).
+    pub fn atten_db(&self) -> f32 {
+        self.atten_half_db.load(Ordering::Relaxed) as f32 / 2.0
+    }
 }
 
 pub struct HwLoop {
@@ -424,8 +433,12 @@ impl HwLoop {
                         tuned[ch] = None;
                     }),
                     HwCmd::Atten { db } => {
-                        fe.atten_db = db.clamp(0.0, 31.5);
-                        self.radio.front_end(fe)
+                        fe.atten_db = (db.clamp(0.0, 31.5) * 2.0).round() / 2.0;
+                        self.radio.front_end(fe).map(|()| {
+                            self.status
+                                .atten_half_db
+                                .store((fe.atten_db * 2.0) as u32, Ordering::Relaxed);
+                        })
                     }
                     HwCmd::WfPlan { slot, views } if slot < wf.len() => {
                         self.plan_wf(slot, &mut wf[slot], views)

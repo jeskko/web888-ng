@@ -124,7 +124,7 @@ function StatusPage() {
   const [stats, setStats] = useState<Stats | null>(null);
   const [leases, setLeases] = useState<{ channels: number; leases: LeaseRow[] } | null>(null);
   const prev = useRef<{ t: number; s: Stats } | null>(null);
-  const [rates, setRates] = useState<{ frames: number; busy: number[] } | null>(null);
+  const [rates, setRates] = useState<{ frames: number; busy: number[]; overloads: number } | null>(null);
   const [skim, setSkim] = useState<Skimmers | null>(null);
   usePoll(async () => {
     const [s, l, k] = await Promise.all([
@@ -139,6 +139,7 @@ function StatusPage() {
       const dt = (t - p.t) / 1000;
       setRates({
         frames: (s.hw.rx_frames - p.s.hw.rx_frames) / dt,
+        overloads: (s.hw.adc_overloads - p.s.hw.adc_overloads) / dt,
         busy: s.pool.map((w, k) => (100 * (w.busy_s - (p.s.pool[k]?.busy_s ?? 0))) / dt),
       });
     }
@@ -167,7 +168,13 @@ function StatusPage() {
             {stats.hw.rx_lost_frames}
           </dd>
           <dt>ADC overloads</dt>
-          <dd>{stats.hw.adc_overloads} blocks</dd>
+          <dd class={rates && rates.overloads > 0 ? "warn" : ""} title="RX blocks read while the ADC clipped: strong signals distort every listener's audio. The RF attenuator helps.">
+            {stats.hw.adc_overloads} blocks{rates && rates.overloads > 0 ? ` (${rates.overloads.toFixed(1)}/s now)` : ""}
+          </dd>
+          <dt>RF attenuator</dt>
+          <dd>
+            <AttenCtl set={stats.hw.atten_db} cfg={stats.hw.atten_cfg_db} />
+          </dd>
           <dt>Clock</dt>
           <dd>{stats.hw.clock_ppm === 0 ? "no GPS correction" : `${stats.hw.clock_ppm.toFixed(3)} ppm`}</dd>
         </dl>
@@ -274,6 +281,54 @@ function StatusPage() {
         <p class="dim">% of one core since the last refresh, summed over threads of a name.</p>
       </section>
     </div>
+  );
+}
+
+const ATTEN_STEPS = [3, 6, 10, 15, 20, 25, 31.5];
+/** The level the attenuator goes back in at. */
+const attenLevel = { v: 10 };
+
+/** The RF attenuator: in or out, and its level. It acts on every
+ * listener's signals at once, so it's here and not on the receiver page;
+ * saved to the configuration (`radio.atten_db`). */
+function AttenCtl({ set, cfg }: { set: number; cfg: number }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  if (cfg > 0) attenLevel.v = cfg;
+  const put = async (db: number) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await call("POST", "api/admin/atten", { db });
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  const on = cfg > 0;
+  return (
+    <>
+      <label title="Weakens every signal before the ADC, for all listeners: against overloads from strong signals">
+        <input type="checkbox" checked={on} disabled={busy} onChange={() => void put(on ? 0 : attenLevel.v)} /> in
+      </label>{" "}
+      <select
+        value={String(attenLevel.v)}
+        disabled={busy}
+        onChange={(e) => {
+          attenLevel.v = Number(e.currentTarget.value);
+          if (on) void put(attenLevel.v);
+        }}
+      >
+        {(ATTEN_STEPS.includes(attenLevel.v) ? ATTEN_STEPS : [...ATTEN_STEPS, attenLevel.v].sort((a, b) => a - b)).map((d) => (
+          <option key={d} value={String(d)}>
+            {d} dB
+          </option>
+        ))}
+      </select>
+      {set !== cfg && <span class="warn"> now {set} dB (set by an HPSDR client)</span>}
+      {err && <span class="warn"> {err}</span>}
+    </>
   );
 }
 

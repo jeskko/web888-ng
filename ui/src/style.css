@@ -76,6 +76,7 @@ header .tools { margin-left: auto; }
 .smeter .fill { height: 100%; background: linear-gradient(90deg, #2a7a4a, var(--ok) 60%, var(--warn) 85%, var(--bad)); transition: width 60ms linear; }
 .lamp { font-size: 11px; padding: 1px 5px; border-radius: 3px; border: 1px solid var(--line); color: var(--dim); }
 .lamp.lit { background: var(--bad); color: #fff; border-color: var(--bad); }
+.lamp.att { color: var(--warn); border-color: var(--warn); }
 
 .pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
 .pane canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }

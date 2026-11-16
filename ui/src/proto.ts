@@ -55,6 +55,8 @@ export interface State {
   nb: number;
   /** Noise reduction strength 0..1; 0: off. */
   nr: number;
+  /** Automatic notch: steady carriers out. */
+  notch: boolean;
   squelch: boolean;
   /** Squelch threshold, channel power (dBFS). */
   squelch_db: number;
@@ -76,6 +78,7 @@ export interface AudioReq {
   agc_speed?: AgcSpeed;
   nb?: number;
   nr?: number;
+  notch?: boolean;
   squelch?: boolean;
   squelch_db?: number;
   /** One of the hello's `audio_rates`. */
@@ -134,6 +137,9 @@ export interface Spot {
 
 export interface Status {
   adc_overloads: number;
+  /** The RF attenuator (dB), when it is in: every listener's signals are
+   * this much weaker. */
+  rf_atten_db?: number;
   clock_ppm: number;
   audio_drops: number;
   wf_drops: number;

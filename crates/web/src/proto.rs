@@ -87,6 +87,9 @@ pub enum ClientMsg {
         nb: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         nr: Option<f32>,
+        /// Automatic notch (steady carriers out) on/off.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        notch: Option<bool>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         squelch: Option<bool>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -193,6 +196,9 @@ pub struct State {
     pub nb: f32,
     /// Noise reduction strength 0..1; 0: off.
     pub nr: f32,
+    /// Automatic notch.
+    #[serde(default)]
+    pub notch: bool,
     pub squelch: bool,
     /// Squelch threshold, channel power (dBFS).
     pub squelch_db: f32,
@@ -373,6 +379,10 @@ pub enum ServerMsg {
         cpu: Option<f64>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         temp_c: Option<f64>,
+        /// The RF attenuator (dB), when it is in: every listener's
+        /// signals are this much weaker.
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        rf_atten_db: Option<f32>,
     },
     Pong {
         t: f64,

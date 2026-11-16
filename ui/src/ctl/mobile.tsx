@@ -41,7 +41,7 @@ import { DigiCtl, DigiPanel } from "./digi.tsx";
 import { MapCtl, MapPanel } from "./map.tsx";
 import { LabelsCtl } from "./labels.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
-import { AudioCtl, ContrastCtl, DspCtl, LeaseBanner, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
+import { AttLamp, AudioCtl, ContrastCtl, DspCtl, LeaseBanner, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
 
 type SheetName = "keypad" | "bands" | "more" | null;
 
@@ -82,6 +82,7 @@ function Top({ open }: { open: (s: SheetName) => void }) {
         <span class={over ? "lamp lit" : "lamp"} hidden={!over}>
           OVL
         </span>
+        <AttLamp />
       </div>
       <div class="m-meter" title="Channel power before AGC (dBFS)">
         <div class="fill" style={{ width: `${(pos * 100).toFixed(1)}%` }} />

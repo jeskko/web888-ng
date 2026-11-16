@@ -289,6 +289,13 @@ export function DspCtl() {
         />
       )}
       <button
+        class={s.notch ? "on" : ""}
+        onClick={() => setAudio({ notch: !s.notch })}
+        title="Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW"
+      >
+        Notch
+      </button>
+      <button
         class={s.squelch ? "on" : ""}
         onClick={() => setAudio({ squelch: !s.squelch })}
         title="Squelch: mute while the signal is below the threshold (marked on the S-meter)"
@@ -544,6 +551,17 @@ export function ContrastCtl() {
   );
 }
 
+/** The RF attenuator, while the owner has it in (for every listener). */
+export function AttLamp() {
+  const db = status.value?.rf_atten_db;
+  if (!db) return null;
+  return (
+    <span class="lamp att" title={`RF attenuator in: every signal is ${db} dB weaker (set by the receiver's owner, against overloads)`}>
+      ATT {db}
+    </span>
+  );
+}
+
 export function SMeter() {
   const p = rssi.value;
   const lo = -140;
@@ -562,6 +580,7 @@ export function SMeter() {
       <span class={over ? "lamp lit" : "lamp"} title="ADC overload">
         OVL
       </span>
+      <AttLamp />
     </div>
   );
 }

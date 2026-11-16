@@ -95,6 +95,7 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/password", post(password))
         .route("/api/admin/stats", get(stats))
         .route("/api/admin/restart", post(restart))
+        .route("/api/admin/atten", post(atten))
         .route("/api/admin/skimmers", get(skimmers))
         .route("/metrics", get(metrics))
 }
@@ -434,6 +435,32 @@ async fn config_put(_: AdminOnly, State(sh): State<Arc<Shared>>, Json(v): Json<V
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct AttenReq {
+    db: f32,
+}
+
+/// Set the RF attenuator: saved as `[radio] atten_db` and applied at once
+/// (for every listener).
+async fn atten(_: AdminOnly, State(sh): State<Arc<Shared>>, Json(r): Json<AttenReq>) -> Response {
+    if !(0.0..=31.5).contains(&r.db) || (r.db * 2.0).fract() != 0.0 {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "the attenuator takes 0 to 31.5 dB in 0.5 dB steps",
+        );
+    }
+    let mut c = match file_config(&sh) {
+        Ok(c) => c,
+        Err(r) => return r.into_response(),
+    };
+    c.radio.atten_db = r.db;
+    match save(&sh, &c) {
+        Ok(()) => Json(json!({ "atten_db": r.db })).into_response(),
+        Err(r) => r.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PasswordReq {
     role: Role,
     /// None: remove the listener password (an open receiver).
@@ -596,6 +623,8 @@ async fn stats(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
             "hw_rate_ok": s.rx_rate_ok.load(Ordering::Relaxed),
             "rx_frames": s.rx_frames.load(Ordering::Relaxed),
             "rx_lost_frames": s.rx_lost_frames.load(Ordering::Relaxed),
+            "atten_db": s.atten_db(),
+            "atten_cfg_db": sh.live.borrow().radio.atten_db,
         },
     }))
 }
