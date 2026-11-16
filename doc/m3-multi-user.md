@@ -371,6 +371,7 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   | `status` | S→C | adds `cpu` (the device's load, % of all cores) and `temp_c` (SoC temperature), when known. Added 2026-10-28 |
   | `status` | S→C | adds `rf_atten_db`: the RF attenuator (dB) while it is in. Added 2026-11-16 |
   | `audio`, `state` | C→S, S→C | add `notch` (bool): the automatic notch. Added 2026-11-16 |
+  | `wf` | C→S | adds `pack` (bool): packed lines, waterfall frame flags bit3 `packed` (see "Packed waterfall lines" below; `state`'s `wf` echoes it). Added 2026-11-16 |
   | `hello` (S→C), `audio`, `state` | S→C, C→S | `hello`'s `codecs` (what the server sends: `pcm16`, `mulaw`, `opus`); `audio`'s `codec` asks for one, `state`'s says which is in use (`pcm16` until asked). Audio frame flags bit3 `mulaw` (a byte a sample), bit4 `opus` (one 20 ms Opus packet; the count is the samples it decodes to). See "Audio codecs" below. Added 2026-11-16 |
   | audio frame | S→C | flags bit2 `stereo`: left and right interleaved, `n` counting both (SAS). Added 2026-10-28 |
   | `listen` | C→S | `user` (id or null). Refused with an `error` if the session has a receiver of its own, or the user doesn't share / has none |
@@ -390,6 +391,23 @@ Sessions the server ends by its limits close with code 4001 (session
 time limit) or 4002 (idle), after an `error` message with the reason; a
 minute before, an `error` message warns. Clients shouldn't reconnect by
 themselves after these (the UI offers a button).
+
+### Packed waterfall lines and the data saver (2026-11-16)
+
+`crates/web/src/wfpack.rs`, `ui/src/wfpack.ts`. `wf`'s `pack` (the page
+always asks; older servers ignore it) has each line sent as the
+difference of each level from the one before it in frequency, Rice-coded
+with the parameter chosen per 64 bins, flag bit3 `packed` (the count is
+the bins'). Lines are packed on their own: nothing carries over, so gaps,
+new views and time-shared views need no care. On the remote unit's 40 m
+view (1024 bins) a line takes 55 % of its bytes (`/data/iq/wfcomp`:
+DEFLATE 58-64 %, the LOCO-I predictor another 5 % but needing the
+previous line); a line that wouldn't shrink is sent as it is. ~10 µs a
+line on the desktop. The page's **Saver** (beside the codec; kept in
+the browser) asks for 10 lines a second instead of 20 and a bin per two
+pixels: about a quarter of the waterfall's data. The status bar shows
+the waterfall's kbit/s. Headless Chromium on the sim: 170 kbit/s, packed
+58, with the saver 16.
 
 ### Audio codecs (2026-11-16)
 

@@ -6,7 +6,7 @@
     {"type": "mode", "mode": "am"},
     {"type": "audio", "agc": true, "gain_db": 80},
     {"type": "audio", "agc": true, "gain_db": 80, "agc_speed": "slow", "nb": 8, "nr": 0.5, "notch": true, "squelch": true, "squelch_db": -95, "audio_rate": 24000, "codec": "opus"},
-    {"type": "wf", "center_hz": 8600000, "decim": 16, "bins": 1024, "fps": 20},
+    {"type": "wf", "center_hz": 8600000, "decim": 16, "bins": 1024, "fps": 20, "pack": true},
     {"type": "ping", "t": 1234.5},
     {"type": "share", "on": false},
     {"type": "listen", "user": 7},

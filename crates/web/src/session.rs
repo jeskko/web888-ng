@@ -214,6 +214,7 @@ impl Shared {
             decim,
             bins: 1024,
             fps: 20.0,
+            pack: false,
         })
     }
 
@@ -236,6 +237,7 @@ impl Shared {
             decim,
             bins: 1024,
             fps: 20.0,
+            pack: false,
         }
     }
 
@@ -618,6 +620,7 @@ impl Session<'_> {
             }
             ClientMsg::Wf(w) => {
                 self.st.wf = self.sh.clamp_wf(w);
+                self.sink.set_pack(w.pack);
                 self.route();
                 vec![st(self)]
             }
@@ -1012,6 +1015,7 @@ fn clamp_view(r: &RadioInfo, w: WfReq) -> WfReq {
         } else {
             20.0
         },
+        pack: w.pack,
     }
 }
 
@@ -1036,6 +1040,7 @@ mod tests {
             decim,
             bins: 1024,
             fps: 20.0,
+            pack: false,
         };
         // 480 kHz span: its edges, not its centre, stop at 0 and 61.44 MHz
         assert_eq!(clamp_view(&r, w(100_000.0, 256)).center_hz, 240_000.0);

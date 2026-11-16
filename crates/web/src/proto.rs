@@ -166,6 +166,10 @@ pub struct WfReq {
     pub decim: u16,
     pub bins: usize,
     pub fps: f64,
+    /// Lines packed (`wfpack`: Rice-coded differences, `FLAG_PACKED`)
+    /// where that makes them smaller.
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub pack: bool,
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize)]
@@ -427,6 +431,8 @@ pub const FLAG_NEW_GEN: u8 = 2;
 /// Waterfall: no new samples since the previous line (it repeats the
 /// newest ones: a time-shared view, or a narrow span).
 pub const FLAG_STALE: u8 = 4;
+/// Waterfall: the levels are packed (`wfpack`); the count is the bins'.
+pub const FLAG_PACKED: u8 = 8;
 
 pub const AUDIO_HEADER: usize = 16;
 pub const WF_HEADER: usize = 40;
@@ -459,10 +465,38 @@ pub fn wf_frame(
     time_ms: f64,
     levels: &[u8],
 ) -> Vec<u8> {
+    wf_frame_payload(
+        flags,
+        seq,
+        first_hz,
+        bin_hz,
+        db0,
+        db_step,
+        time_ms,
+        levels.len(),
+        levels,
+    )
+}
+
+/// A waterfall frame of `bins` levels carried as `payload` (the levels,
+/// or with `FLAG_PACKED` packed).
+#[allow(clippy::too_many_arguments)]
+pub fn wf_frame_payload(
+    flags: u8,
+    seq: u32,
+    first_hz: f64,
+    bin_hz: f64,
+    db0: f32,
+    db_step: f32,
+    time_ms: f64,
+    bins: usize,
+    payload: &[u8],
+) -> Vec<u8> {
+    let levels = payload;
     let mut b = Vec::with_capacity(WF_HEADER + levels.len());
     b.push(KIND_WF);
     b.push(flags);
-    b.extend_from_slice(&(levels.len() as u16).to_le_bytes());
+    b.extend_from_slice(&(bins as u16).to_le_bytes());
     b.extend_from_slice(&seq.to_le_bytes());
     b.extend_from_slice(&first_hz.to_le_bytes());
     b.extend_from_slice(&bin_hz.to_le_bytes());

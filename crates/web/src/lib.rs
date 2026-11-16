@@ -22,6 +22,7 @@ pub mod sysstat;
 pub mod tls;
 pub mod update;
 pub mod users;
+pub mod wfpack;
 pub mod wfsvc;
 pub mod wideaudio;
 pub mod wideiq;

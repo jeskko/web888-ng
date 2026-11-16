@@ -727,3 +727,47 @@ async fn codecs_switch_mid_stream() {
     }
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
+
+/// Packed waterfall lines when asked (`wf`'s `pack`): FLAG_PACKED, smaller
+/// than the bins, and unpacking to a line with the tone where it is.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn waterfall_lines_pack_when_asked() {
+    let (addr, stop) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    let req = r#"{"type":"wf","center_hz":7100000,"decim":256,"bins":1024,"fps":20,"pack":true}"#;
+    ws.send(Message::Text(req.into())).await.unwrap();
+    let (mut packed, mut state_pack) = (0, None);
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(10);
+    while packed < 5 && tokio::time::Instant::now() < deadline {
+        let m = ws.next().await.unwrap().unwrap();
+        if let Some(ServerMsg::State(s)) = json(&m) {
+            state_pack = Some(s.wf.pack);
+            continue;
+        }
+        let Message::Binary(b) = m else { continue };
+        if b[0] != proto::KIND_WF || b[1] & proto::FLAG_PACKED == 0 {
+            continue;
+        }
+        let bins = u16::from_le_bytes([b[2], b[3]]) as usize;
+        let payload = &b[proto::WF_HEADER..];
+        assert!(
+            payload.len() < bins,
+            "{} bytes for {bins} bins",
+            payload.len()
+        );
+        let lv = web888_web::wfpack::unpack(payload, bins).expect("unpacks");
+        let f0 = f64::from_le_bytes(b[8..16].try_into().unwrap());
+        let df = f64::from_le_bytes(b[16..24].try_into().unwrap());
+        if (f0 - (7_100_000.0 - ADC_HZ_HF / 256.0 / 2.0)).abs() > df {
+            continue; // the first view's lines
+        }
+        let k = (0..bins).max_by_key(|&k| lv[k]).unwrap();
+        assert!((f0 + k as f64 * df - TONE).abs() <= df, "peak at bin {k}");
+        packed += 1;
+    }
+    assert_eq!(state_pack, Some(true));
+    assert!(packed >= 5, "{packed} packed lines");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}

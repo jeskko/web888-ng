@@ -12,7 +12,7 @@ import { wfSpan } from "../proto.ts";
 import { WheelSteps, wheelPx } from "../wheelzoom.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { bandPlan, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
 import { markerColour, markerTitle, ribbon, type FreqMarker, type RibbonPiece } from "../markers.ts";
 import { pick } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
@@ -76,12 +76,13 @@ export function Pane() {
       return { start: s.wf.center_hz - span / 2, span };
     };
 
-    // ask for about one bin per CSS pixel
+    // ask for about one bin per CSS pixel (the data saver: per two)
     const wantBins = () => {
       const s = st.value;
       const lim = limits.value;
       if (!s || !lim) return;
-      const bins = Math.min(lim.bins_max, Math.max(256, 2 ** Math.round(Math.log2(box.clientWidth))));
+      const px = box.clientWidth / (dataSaver.value ? 2 : 1);
+      const bins = Math.min(lim.bins_max, Math.max(256, 2 ** Math.round(Math.log2(px))));
       if (bins !== s.wf.bins) setView({ ...s.wf, bins });
     };
 
@@ -100,6 +101,7 @@ export function Pane() {
       dirty = true;
     });
     const unsubBins = limits.subscribe(() => wantBins());
+    const unsubSaver = dataSaver.subscribe(() => wantBins());
     const unsubUsers = users.subscribe(() => {
       dirty = true;
     });
@@ -407,6 +409,7 @@ export function Pane() {
       ro.disconnect();
       unsub();
       unsubBins();
+      unsubSaver();
       unsubUsers();
       unsubName();
       unsubSpots();

@@ -189,6 +189,7 @@ export function connect(): void {
           audioRate = m.audio_rate;
           audioRates.value = m.audio_rates ?? [m.audio_rate];
           serverCodecs.value = m.codecs ?? ["pcm16"];
+          packAsked = false; // a new session: its view starts unpacked
           if (myName.value) link?.send({ type: "name", name: myName.value });
           if (m.spots) {
             spotsFresh = true;
@@ -262,6 +263,7 @@ export function connect(): void {
       if (rttyWideNow()) rttyIq(f, f.iq);
     },
     onWf(l) {
+      wfBytes += l.bytes;
       serverClock.observe(l.time / 1000, Date.now() / 1000);
       for (const s of sinks) s(l);
     },
@@ -1618,6 +1620,8 @@ export function setView(w: WfReq): void {
       center_hz: clampCenter(w.center_hz, w.decim, r),
     };
   }
+  // lines packed (lossless; older servers ignore it); the data saver's rate
+  w = { ...w, pack: true, fps: dataSaver.value ? Math.min(w.fps, SAVER_FPS) : w.fps };
   update({ wf: w });
   viewPending = w;
   if (viewTimer === undefined) {
@@ -1925,4 +1929,38 @@ let audioBytes = 0;
 setInterval(() => {
   audioKbps.value = conn.value === "open" ? (8 * audioBytes) / 2000 : null;
   audioBytes = 0;
+}, 2000);
+
+// ---- data saver: fewer waterfall lines and bins ----
+
+/** Waterfall lines a second with the data saver (else the server's 20). */
+export const SAVER_FPS = 10;
+const FULL_FPS = 20;
+/** Half the lines a second and a bin per two pixels (view/pane.tsx). */
+export const dataSaver = signal(load("dataSaver") === "1");
+export function setDataSaver(on: boolean): void {
+  dataSaver.value = on;
+  save("dataSaver", on ? "1" : "0");
+  const s = st.value;
+  // the pane asks for its bins again (it watches the signal)
+  if (s) setView({ ...s.wf, fps: on ? SAVER_FPS : FULL_FPS });
+}
+
+/** Ask once a session for packed lines (the first view is the server's,
+ * unpacked; an older server never says pack, so only once). */
+let packAsked = false;
+effect(() => {
+  const s = st.value;
+  if (s && !s.wf.pack && !packAsked) {
+    packAsked = true;
+    setView({ ...s.wf });
+  }
+});
+
+/** The waterfall's data rate (kbit/s), over the last 2 s. */
+export const wfKbps = signal<number | null>(null);
+let wfBytes = 0;
+setInterval(() => {
+  wfKbps.value = conn.value === "open" ? (8 * wfBytes) / 2000 : null;
+  wfBytes = 0;
 }, 2000);

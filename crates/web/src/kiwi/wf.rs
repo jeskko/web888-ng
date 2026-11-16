@@ -62,6 +62,7 @@ pub(crate) fn hw_view(sh: &Shared, v: &WfView, fps: u32) -> HwView {
         decim,
         bins,
         fps: fps as f64,
+        pack: false,
     });
     HwView {
         center_hz: w.center_hz,
@@ -168,15 +169,12 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64) {
         seq: paired.unwrap_or_else(|| Arc::new(AtomicU32::new(0))),
     });
     let (tx, mut lines) = tokio::sync::mpsc::channel(16);
-    let sink = WfSink {
-        out: Out {
-            tx,
-            drops: Arc::new(AtomicU64::new(0)),
-            total: Some(&crate::metrics::KIWI.wf),
-        },
-        seq: Arc::default(),
-        kiwi: Some(enc.clone()),
-    };
+    let mut sink = WfSink::new(Out {
+        tx,
+        drops: Arc::new(AtomicU64::new(0)),
+        total: Some(&crate::metrics::KIWI.wf),
+    });
+    sink.kiwi = Some(enc.clone());
     // a view needs a zoom and a speed (as upstream: all of them first)
     let mut placed = false;
     let mut fps: Option<u32> = None;

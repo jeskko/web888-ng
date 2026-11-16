@@ -5,6 +5,7 @@
 // Fixtures shared with the Rust tests: crates/web/tests/proto/.
 
 import { mulawDecode } from "./audio/codec.ts";
+import { unpackWf } from "./wfpack.ts";
 
 export const PROTO = 2;
 
@@ -26,6 +27,8 @@ export interface WfReq {
   decim: number;
   bins: number;
   fps: number;
+  /** Packed lines (FLAG_PACKED) where that makes them smaller. */
+  pack?: boolean;
 }
 
 export interface RadioInfo {
@@ -222,6 +225,8 @@ export type Codec = "pcm16" | "mulaw" | "opus";
 export const FLAG_NEW_GEN = 2;
 /** Waterfall: no new samples since the previous line (a repeat). */
 export const FLAG_STALE = 4;
+/** Waterfall: the levels are packed (wfpack.ts). */
+export const FLAG_PACKED = 8;
 export const AUDIO_HEADER = 16;
 export const WF_HEADER = 40;
 
@@ -257,6 +262,8 @@ export interface WfLine {
   /** Unix time (ms) of the end of the line's interval. */
   time: number;
   levels: Uint8Array;
+  /** The frame's size on the wire (bytes). */
+  bytes: number;
 }
 
 export interface IqFrame {
@@ -307,7 +314,10 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
     };
   }
   if (kind === KIND_WF) {
-    if (buf.byteLength < WF_HEADER + n) return null;
+    let levels: Uint8Array | null;
+    if (flags & FLAG_PACKED) levels = unpackWf(new Uint8Array(buf, WF_HEADER), n);
+    else levels = buf.byteLength < WF_HEADER + n ? null : new Uint8Array(buf, WF_HEADER, n);
+    if (!levels) return null;
     return {
       kind,
       flags,
@@ -317,7 +327,8 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
       db0: v.getFloat32(24, true),
       dbStep: v.getFloat32(28, true),
       time: v.getFloat64(32, true),
-      levels: new Uint8Array(buf, WF_HEADER, n),
+      levels,
+      bytes: buf.byteLength,
     };
   }
   if (kind === KIND_IQ) {

@@ -9,7 +9,9 @@
 //! They hand encoded frames to the sessions' WebSocket tasks; a full queue
 //! drops the frame (counted), it never blocks.
 
-use crate::proto::{self, FLAG_GAP, FLAG_NEW_GEN, FLAG_OVERLOAD, FLAG_STALE, FLAG_STEREO};
+use crate::proto::{
+    self, FLAG_GAP, FLAG_NEW_GEN, FLAG_OVERLOAD, FLAG_PACKED, FLAG_STALE, FLAG_STEREO,
+};
 use crate::wideaudio::{self, BinSource};
 use crossbeam_channel::{Receiver as CbReceiver, TryRecvError};
 use std::sync::Arc;
@@ -64,6 +66,9 @@ pub struct WfSink {
     pub seq: Arc<AtomicU32>,
     /// Kiwi protocol lines instead of web888d's.
     pub kiwi: Option<Arc<crate::kiwi::wire::WfEnc>>,
+    /// Lines packed (`wfpack`) when the client asked.
+    pack: Arc<std::sync::atomic::AtomicBool>,
+    packer: Arc<std::sync::Mutex<crate::wfpack::WfPack>>,
 }
 
 impl WfSink {
@@ -72,7 +77,14 @@ impl WfSink {
             out,
             seq: Arc::default(),
             kiwi: None,
+            pack: Arc::default(),
+            packer: Arc::default(),
         }
+    }
+
+    /// Pack this session's lines (`wf`'s `pack`).
+    pub fn set_pack(&self, on: bool) {
+        self.pack.store(on, Ordering::Relaxed);
     }
 
     /// Send levels `db` (dBFS) for bins from `f0` (Hz) every `df`.
@@ -84,16 +96,27 @@ impl WfSink {
         if !fresh {
             flags |= FLAG_STALE;
         }
-        let f = proto::wf_frame(
-            flags,
-            self.seq.fetch_add(1, Ordering::Relaxed),
-            f0,
-            df,
-            WF_DB0,
-            WF_DB_STEP,
-            unix_ms(),
-            &quantize(db),
-        );
+        let levels = quantize(db);
+        let seq = self.seq.fetch_add(1, Ordering::Relaxed);
+        if self.pack.load(Ordering::Relaxed) {
+            let mut p = self.packer.lock().unwrap_or_else(|e| e.into_inner());
+            if let Some(packed) = p.pack(&levels) {
+                let f = proto::wf_frame_payload(
+                    flags | FLAG_PACKED,
+                    seq,
+                    f0,
+                    df,
+                    WF_DB0,
+                    WF_DB_STEP,
+                    unix_ms(),
+                    levels.len(),
+                    packed,
+                );
+                drop(p);
+                return self.out.send(f);
+            }
+        }
+        let f = proto::wf_frame(flags, seq, f0, df, WF_DB0, WF_DB_STEP, unix_ms(), &levels);
         self.out.send(f)
     }
 }
