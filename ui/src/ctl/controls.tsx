@@ -7,6 +7,7 @@ import { useEffect, useRef } from "preact/hooks";
 import { setFloor, setTop } from "../view/range.ts";
 import { cssGradient, PALETTE_NAMES, type Palette } from "../view/colormap.ts";
 import { helpOpen } from "./keys.tsx";
+import { infoOpen } from "./info.tsx";
 import { Drop } from "./drop.tsx";
 import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
@@ -834,6 +835,18 @@ export function StatusBar() {
           </>
         )}
         {server.value} ·{" "}
+        <a
+          href="#info"
+          class={infoOpen.value ? "on" : ""}
+          onClick={(e) => {
+            e.preventDefault();
+            infoOpen.value = !infoOpen.value;
+          }}
+          title="About this receiver: where it is, its antenna, its limits, privacy, licences"
+        >
+          info
+        </a>{" "}
+        ·{" "}
         <a
           href="#"
           onClick={(e) => {

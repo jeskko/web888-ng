@@ -65,7 +65,7 @@ for (const f of readdirSync(out).filter((f) => !seen.has(f) && f.endsWith(".wav"
 await p.shot(`${out}/access-iq-af.png`);
 
 console.log("== info page");
-await p.ev(`${btn("Info")}.click()`);
+await p.ev(`${q(".status .right a[href=\"#info\"]")}.click()`);
 await sleep(3000);
 console.log("  ", (await p.ev(`${q(".info-box")}?.textContent`))?.slice(0, 300));
 
@@ -91,7 +91,7 @@ console.log("  photo:", await a.ev(`${q(".card .ok, .card .warn")}?.textContent`
 await a.shot(`${out}/access-admin-info.png`);
 // the listener's info page with the photo
 await p.ev(`${btn("✕", "document.querySelector('.info-box')")}.click()`);
-await p.ev(`${btn("Info")}.click()`);
+await p.ev(`${q(".status .right a[href=\"#info\"]")}.click()`);
 await sleep(1500);
 await p.shot(`${out}/access-info.png`);
 console.log("  listener sees the photo:", await p.ev(`${q(".info-box img")}?.complete`));

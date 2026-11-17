@@ -592,3 +592,16 @@ commercial activity (sellers of hardware with it are another matter).
 * **SBOM**: each release gets `web888d-vX.Y.Z.cdx.json` (CycloneDX 1.5,
   every library with its version, purl and licence), from
   `crates/web/src/third-party.json` by `scripts/third-party.py --sbom`.
+
+## 17. Info in the status bar; the key help fits its box (2026-11-17)
+
+* On the desktop, Info moved from the header to the status bar's right
+  end: `info · keys · admin` (the link opens and closes the info box,
+  `#info` as before). The phone layout keeps its Info button in the
+  sheet.
+* The key help overflowed its box: the global `td { white-space:
+  nowrap }` kept the descriptions on one line, and the pointer gestures
+  sat in `<kbd>`. Now the cells wrap, the gestures are plain words, the
+  tables take the box's width, and the box scrolls when the window is
+  short. `ui/tools/cdp/keys.mjs` measures it: before, 171 px out to the
+  right at 1400×900; now nothing sticks out at 1400×900 or 1024×640.

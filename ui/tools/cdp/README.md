@@ -32,6 +32,7 @@ kill $P
 | `receiver.mjs` | audio start, zoom, click-tune, mode key; `W`/`H`/`DPR` | — |
 | `codec.mjs` | the audio's codec: Opus, μ-law while the FT8 decoder is open, μ-law and PCM chosen; then the data saver on and off; the status bar's codec, audio and waterfall kbit/s and underruns at each step | — |
 | `soak.mjs` | status bar every minute while audio plays | — |
+| `keys.mjs` | the key help (`?`) at 1400×900, 1024×640 and phone sizes: anything sticking out of its box, the box inside the window; screenshots | — |
 | `shot.mjs` | one screenshot at a size, canvas sizes, horizontal scroll | — |
 | `login.mjs` | listener-password form, wrong then right | `web888d passwd --listener`; `LISTENER_PW` |
 | `admin.mjs` | admin pages, config form, phone layout | an admin password; `ADMIN_PW` |

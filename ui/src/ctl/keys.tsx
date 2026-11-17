@@ -48,12 +48,11 @@ export function KeyHelp() {
     };
   }, [open]);
   if (!open) return null;
-  const rows = (list: [string, string][]) =>
+  // keys in <kbd>; the pointer's gestures are words, which may wrap
+  const rows = (list: [string, string][], keys: boolean) =>
     list.map(([k, what]) => (
       <tr key={k}>
-        <td>
-          <kbd>{k}</kbd>
-        </td>
+        <td class={keys ? "k" : "g"}>{keys ? <kbd>{k}</kbd> : k}</td>
         <td>{what}</td>
       </tr>
     ));
@@ -62,11 +61,11 @@ export function KeyHelp() {
       <div class="keyhelp-box">
         <h3>Keys</h3>
         <table>
-          <tbody>{rows(KEYS)}</tbody>
+          <tbody>{rows(KEYS, true)}</tbody>
         </table>
         <h3>Mouse and touch</h3>
         <table>
-          <tbody>{rows(POINTER)}</tbody>
+          <tbody>{rows(POINTER, false)}</tbody>
         </table>
         <p class="dim">Any key or a click closes this.</p>
       </div>
