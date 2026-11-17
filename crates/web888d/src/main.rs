@@ -1100,8 +1100,11 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
             TlsMode::SelfSigned => web888_web::Tls::SelfSigned(w.state_dir.clone()),
         };
         let acceptor = web888_web::tls::acceptor(&tls).map_err(|e| format!("tls: {e}"))?;
+        // One worker: two (one per core) spent ~2 % of both cores parking
+        // and waking each other; blocking work (password hashing, RAUC,
+        // logs) goes to the blocking pool either way.
         let rt = tokio::runtime::Builder::new_multi_thread()
-            .worker_threads(2)
+            .worker_threads(1)
             .thread_name("web")
             .enable_all()
             .build()?;
