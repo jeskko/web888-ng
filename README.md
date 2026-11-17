@@ -7,7 +7,7 @@ on [web888-ng-os](https://github.com/jeskko/web888-ng-os), the open SD card
 image, with the open driver and bitstreams from
 [web888-ng-hw](https://github.com/jeskko/web888-ng-hw).
 
-Status (see `doc/design.md` §11), release v0.14.0:
+Status (see `doc/design.md` §11), release v0.15.0:
 
 * **Done:** **M1** stock-driver backend and HPSDR, **M2** web UI, **M3**
   multi-user, **M4** skimmers (FT8, FT4, WSPR; PSKReporter, WSPRnet,
@@ -21,6 +21,9 @@ Status (see `doc/design.md` §11), release v0.14.0:
   neural CW decoder), RTTY/NAVTEX/DSC, PSK, HF fax, SSTV, HFDL, JS8,
   time stations, a signal identifier, IQ recording; AM AGC speeds and
   24 kS/s audio (v0.14.0, `doc/m8-browser-decoders.md`).
+  Listener tools, Opus audio, a packed waterfall, IQ mode and an audio
+  spectrum, access limits, an info page, HF propagation forecasts
+  (VOACAP), ADC overload events and a lighter CPU load (v0.15.0).
 * **Mostly done: M6**, bins mode for the channelizer bitstream (30 kHz
   bins and a tuner in the FPGA, `doc/m6-channelizer.md`). It has run a
   Web-888 since 2026-10-29: 32 receivers, the full-band waterfall, FT8
