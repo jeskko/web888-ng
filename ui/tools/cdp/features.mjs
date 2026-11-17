@@ -26,10 +26,15 @@ const p = await launch({ width: 1400, height: 900 });
 await p.goto(base + "#f=7255&m=am&z=1024&c=7255");
 await sleep(3000);
 await p.ev("document.querySelector('.start')?.click()");
-await p.type(q("input.name"), "n0call-long");
-await p.ev(`(() => { const e = ${q("input.name")}; e.dispatchEvent(new Event('change', {bubbles: true})); e.blur(); })()`);
+// the name is in the Config box
+const configBtn = "[...document.querySelectorAll('button')].find(b => b.textContent.trim() === 'Config')";
+await p.ev(`${configBtn}.click()`);
+await sleep(200);
+await p.type(q(".config-box input.name"), "n0call-long");
+await p.ev(`(() => { const e = ${q(".config-box input.name")}; e.dispatchEvent(new Event('change', {bubbles: true})); e.blur(); })()`);
 await sleep(2500);
-console.log("name input:", await p.ev(`${q("input.name")}.value`), "stored:", await p.ev("localStorage.getItem('web888.name')"));
+console.log("name input:", await p.ev(`${q(".config-box input.name")}.value`), "stored:", await p.ev("localStorage.getItem('web888.name')"));
+await p.ev(`${configBtn}.click()`);
 console.log("status:", await p.ev("document.querySelector('.status').textContent"));
 // hover over the waterfall
 await p.mouse("mouseMoved", 900, 600, { button: "none" });

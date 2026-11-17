@@ -39,14 +39,14 @@ import { RttyCtl, RttyPanel } from "./rtty.tsx";
 import { ImgCtl, ImgPanel } from "./img.tsx";
 import { DigiCtl, DigiPanel } from "./digi.tsx";
 import { MapCtl, MapPanel } from "./map.tsx";
-import { LabelsCtl } from "./labels.tsx";
+import { ConfigBody } from "./config.tsx";
 import { MemCtl } from "./memories.tsx";
 import { InfoCtl, InfoPanel } from "./info.tsx";
 import { PropCtl, PropPanel } from "./prop.tsx";
 import { AfPanel } from "./afspec.tsx";
 import { AudioRecCtl } from "./audiorec.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
-import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, LookCtl, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
+import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, LookCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
 
 type SheetName = "keypad" | "bands" | "more" | null;
 
@@ -311,12 +311,11 @@ function More({ close }: { close: () => void }) {
       <LookCtl />
       <h4>Memories</h4>
       <MemCtl inline />
-      <h4>Labels</h4>
-      <LabelsCtl inline />
-      <h4>You</h4>
+      <h3>Configuration</h3>
+      <ConfigBody />
+      <h4>Users</h4>
       <UsersCtl />
       <div class="m-panels">
-        <ShareCtl />
         <SpotsCtl />
         <MapCtl />
         <DigiCtl />

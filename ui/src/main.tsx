@@ -13,7 +13,6 @@ import {
   FreqDisplay,
   LeaseBanner,
   ModeBar,
-  ShareCtl,
   SMeter,
   StepCtl,
   StatusBar,
@@ -36,7 +35,7 @@ import { DecodersCtl } from "./ctl/decoders.tsx";
 import { IqRecCtl } from "./ctl/iqrec.tsx";
 import { AudioRecCtl } from "./ctl/audiorec.tsx";
 import { TcPanel } from "./ctl/timecode.tsx";
-import { LabelsCtl } from "./ctl/labels.tsx";
+import { ConfigCtl, ConfigPanel } from "./ctl/config.tsx";
 import { MemCtl, memOpen, VfoCtl } from "./ctl/memories.tsx";
 import { helpOpen, KeyHelp } from "./ctl/keys.tsx";
 import { InfoPanel } from "./ctl/info.tsx";
@@ -171,15 +170,14 @@ function App() {
         <SMeter />
         {/* what opens beside the waterfall, and sharing */}
         <div class="group tools">
-          <ShareCtl />
           <SpotsCtl />
           <MapCtl />
           <DecodersCtl />
           <MemCtl />
           <AudioRecCtl />
           <IqRecCtl />
-          <LabelsCtl />
           <PropCtl />
+          <ConfigCtl />
         </div>
       </header>
       <LeaseBanner />
@@ -215,6 +213,7 @@ function App() {
       <KeyHelp />
       <InfoPanel />
       <PropPanel />
+      <ConfigPanel />
     </>
   );
 }

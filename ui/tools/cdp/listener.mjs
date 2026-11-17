@@ -35,9 +35,13 @@ const newFiles = async (wait = 3000) => {
 };
 
 console.log("== look");
-await p.ev(`(() => { const s = ${q("select.palette")}; s.value = "heat"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+// the colours and time marks are in the Config box
+await p.ev(`${btn("Config")}.click()`);
+await sleep(200);
+await p.ev(`(() => { const s = ${q(".config-box select.palette")}; s.value = "heat"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+await p.ev(`${q(".config-box input.times")}.click()`);
+await p.ev(`${btn("Config")}.click()`);
 await p.ev(`${btn("Peak")}.click()`);
-await p.ev(`${btn("Time")}.click()`);
 await sleep(6000);
 console.log("  palette", await p.ev(`localStorage.getItem("web888.palette")`), "peak", await p.ev(`localStorage.getItem("web888.peak")`), "times", await p.ev(`localStorage.getItem("web888.wfTimes")`));
 await p.shot(`${out}/listener-look.png`);

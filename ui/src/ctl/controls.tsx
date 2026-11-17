@@ -5,12 +5,11 @@
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { setFloor, setTop } from "../view/range.ts";
-import { cssGradient, PALETTE_NAMES, type Palette } from "../view/colormap.ts";
 import { helpOpen } from "./keys.tsx";
 import { infoOpen } from "./info.tsx";
 import { Drop } from "./drop.tsx";
 import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
-import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
+import { isAm, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
   audioRates,
@@ -21,12 +20,10 @@ import {
   pickSkimmer,
   pickUser,
   sessionId,
-  setName,
   skimmers,
   usersOpen,
   listenTo,
   notice,
-  setShare,
   users,
   audioOn,
   audioStats,
@@ -63,16 +60,10 @@ import {
   serverCodecs,
   setCodecPref,
   type CodecPref,
-  dataSaver,
-  setDataSaver,
   wfKbps,
-  palette,
   paneHooks,
   peakHold,
-  setPalette,
   setPeakHold,
-  setWfTimes,
-  wfTimes,
   guestOpen,
   guestLogin,
   afOn,
@@ -230,20 +221,11 @@ const CODECS: { pref: CodecPref; label: string; title: string }[] = [
   { pref: "pcm16", label: "PCM", title: "PCM: 192 kbit/s, 16 bits, exactly as the receiver made it" },
 ];
 
-/** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM;
- * and the data saver. `drop`: the codec as a drop-down. */
+/** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM
+ * (the data saver is in Config). `drop`: the codec as a drop-down. */
 export function CodecCtl({ drop = false }: { drop?: boolean }) {
   const sc = serverCodecs.value;
-  const saver = (
-    <button
-      class={dataSaver.value ? "on" : ""}
-      onClick={() => setDataSaver(!dataSaver.value)}
-      title="Data saver: half the waterfall lines a second and a bin for every two pixels (about a quarter of its data)"
-    >
-      Saver
-    </button>
-  );
-  if (!sc.includes("mulaw") && !sc.includes("opus")) return saver;
+  if (!sc.includes("mulaw") && !sc.includes("opus")) return null;
   const pref = codecPref.value;
   const now = codecNow.value;
   const shown = CODECS.filter((c) => c.pref !== "auto" || (sc.includes("opus") && opusDec.value));
@@ -268,7 +250,6 @@ export function CodecCtl({ drop = false }: { drop?: boolean }) {
           ))}
         </span>
       )}
-      {saver}
     </>
   );
 }
@@ -469,8 +450,8 @@ export function ZoomCtl() {
   );
 }
 
-/** The user's callsign or nickname, and the button for the list of
- * users and skimmers. */
+/** The button for the list of users and skimmers (the user's own name
+ * is set in Config). */
 export function UsersCtl() {
   const s = st.value;
   const open = usersOpen.value;
@@ -488,16 +469,6 @@ export function UsersCtl() {
   const others = users.value;
   return (
     <div class="group users-ctl" ref={box}>
-      <input
-        type="text"
-        class="name"
-        maxLength={NAME_MAX}
-        placeholder="callsign"
-        value={myName.value}
-        onChange={(e) => setName(e.currentTarget.value)}
-        onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
-        title={`Your callsign or nickname (at most ${NAME_MAX} characters), shown to others`}
-      />
       <button class={open ? "on" : ""} onClick={() => (usersOpen.value = !open)} title="Users and background decoders">
         Users {others.length + 1}
       </button>
@@ -570,27 +541,6 @@ function UserList() {
           </>
         )}
       </table>
-    </div>
-  );
-}
-
-/** Whether others see this user's frequency and may listen along. */
-export function ShareCtl() {
-  const s = st.value;
-  if (!s) return null;
-  return (
-    <div class="group">
-      <button
-        class={s.share ? "on" : ""}
-        onClick={() => setShare(!s.share)}
-        title={
-          s.share
-            ? "Others see your frequency on their scale and may listen along while they wait for a receiver. Click to stop."
-            : "Your frequency is private. Click to share it."
-        }
-      >
-        {s.share ? "Shared" : "Private"}
-      </button>
     </div>
   );
 }
@@ -676,27 +626,11 @@ export function ContrastCtl() {
   );
 }
 
-const PALETTE_LABELS: Record<Palette, string> = {
-  web888: "Default",
-  viridis: "Viridis",
-  heat: "Heat",
-  phosphor: "Phosphor",
-  grey: "Grey",
-};
-
-/** The waterfall's palette, peak hold, time marks, and a snapshot. */
+/** Peak hold, a snapshot and the audio spectrum (the waterfall's colours
+ * and time marks are in Config). */
 export function LookCtl() {
-  const p = palette.value;
   return (
     <div class="group look">
-      <span class="swatch" style={{ backgroundImage: cssGradient(p) }} />
-      <select class="palette" value={p} onChange={(e) => setPalette(e.currentTarget.value as Palette)} title="Waterfall colours">
-        {PALETTE_NAMES.map((n) => (
-          <option key={n} value={n}>
-            {PALETTE_LABELS[n]}
-          </option>
-        ))}
-      </select>
       <button class={peakHold.value ? "on" : ""} onClick={() => setPeakHold(!peakHold.value)} title="Peak hold: the highest level each frequency reached (pink), on the spectrum">
         Peak
       </button>
@@ -705,9 +639,6 @@ export function LookCtl() {
           ↺
         </button>
       )}
-      <button class={wfTimes.value ? "on" : ""} onClick={() => setWfTimes(!wfTimes.value)} title="Time marks (UTC) down the waterfall's left edge">
-        Time
-      </button>
       <button onClick={() => paneHooks.saveImage?.()} title="Save the spectrum and waterfall as a PNG image (with time marks and the frequency)">
         PNG
       </button>

@@ -639,3 +639,23 @@ Fixes from what the log showed:
   three strongest are now distinct signals, bins next to one already
   taken skipped.
 * A single block reads "N clocks over in one block" instead of "0.0 s".
+
+## 19. The listener's Config box (2026-11-17)
+
+The listener's own settings moved out of the header and footer into one
+box (`ui/src/ctl/config.tsx`): the header's **Config** button, `#config`,
+Escape or a click outside closes it. Sections:
+
+* **You**: callsign or nickname (was the header's text field), "Share
+  my frequency" (was the Shared/Private button);
+* **Data**: the data saver (was Saver beside the codec);
+* **Waterfall**: the colours and the time marks (were in the footer);
+* **Labels**: the label sources, the band ribbon and the region (was
+  the header's Labels popup).
+
+Peak, PNG and AF stay in the footer (actions, not settings); the codec
+stays in the header. The phone's More sheet shows the same settings
+under Configuration. Checked in headless Chromium with
+`ui/tools/cdp/config.mjs` (each setting takes effect and is stored; the
+phone sheet doesn't scroll sideways); `codec.mjs`, `listener.mjs` and
+`features.mjs` now reach the moved controls through the box.

@@ -111,7 +111,7 @@ header .tools { margin-left: auto; }
 .pane canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
 .pane .spectrum { flex: 0 0 30%; }
 .pane .waterfall { flex: 1; min-height: 0; }
-.look .swatch { display: inline-block; width: 28px; height: 12px; border-radius: 2px; border: 1px solid var(--line); }
+.look .swatch, .user-config .swatch { display: inline-block; width: 28px; height: 12px; border-radius: 2px; border: 1px solid var(--line); }
 .pane .wf-ticks { position: absolute; left: 0; width: 84px; pointer-events: none; cursor: default; }
 .pane .ghost { position: absolute; top: 0; bottom: 0; pointer-events: none; background: rgba(255, 255, 255, 0.07); border: 1px dashed rgba(255, 255, 255, 0.35); border-width: 0 1px; }
 .pane .ghost span { position: absolute; top: 2px; left: 100%; margin-left: 4px; padding: 0 4px; border-radius: 3px; background: rgba(11, 14, 22, 0.8); color: var(--text); font: 12px ui-monospace, Menlo, Consolas, monospace; white-space: nowrap; }
@@ -402,3 +402,13 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .afspec .afspec-canvas { display: block; width: 100%; height: 260px; cursor: crosshair; }
 .afspec p.dim { margin: 4px 8px; font-size: 12px; }
 .ovl-events td { padding-right: 10px; vertical-align: top; font-size: 13px; }
+/* the listener's Config box (ctl/config.tsx); also inline in the phone's More sheet */
+.user-config h4 { margin: 12px 0 4px; font-size: 13px; color: var(--dim); text-transform: uppercase; letter-spacing: 0.04em; }
+.user-config h4:first-child { margin-top: 4px; }
+.user-config .config-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 4px 0; }
+.user-config .config-row input.name { width: 14ch; }
+.user-config .config-check { display: flex; align-items: flex-start; gap: 8px; padding: 4px 0; }
+.user-config .config-check input { margin-top: 3px; }
+.user-config .config-palette { display: inline-flex; align-items: center; gap: 6px; }
+.user-config .labels-opts p { max-width: none; }
+.config-box { width: min(30rem, 92vw); }
