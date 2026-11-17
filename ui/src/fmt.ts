@@ -4,8 +4,20 @@
 import { isAm, type Mode } from "./proto.ts";
 
 /** "7 074.000" style: kHz with grouped thousands and 3 decimals (Hz). */
-export function formatKhz(hz: number): string {
-  const r = Math.round(hz);
+/** A converter's offset (Hz) added to every frequency shown (the
+ * receiver's `[radio] freq_offset_hz`; 0: none). */
+let shown = 0;
+export function setShownOffset(hz: number): void {
+  shown = Number.isFinite(hz) ? hz : 0;
+}
+export function shownOffset(): number {
+  return shown;
+}
+
+/** `hz` (the receiver's) as shown, in kHz with a point and spaced
+ * thousands; `raw`: `hz` is already as shown. */
+export function formatKhz(hz: number, raw = false): string {
+  const r = Math.round(raw ? hz : hz + shown);
   const khz = Math.floor(r / 1000);
   const frac = String(r - khz * 1000).padStart(3, "0");
   const g = String(khz).replace(/\B(?=(\d{3})+(?!\d))/g, " ");

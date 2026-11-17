@@ -9,7 +9,7 @@ import { useSignal, type Signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useRef } from "preact/hooks";
 import { BANDS, bandLabel, bandOf, bandsIn } from "../bands.ts";
-import { bandwidths, formatKhz, stepTo } from "../fmt.ts";
+import { bandwidths, formatKhz, shownOffset, stepTo } from "../fmt.ts";
 import { keypadHz, keypadPress } from "../keypad.ts";
 import { isAm, type Mode } from "../proto.ts";
 import { Pane } from "../view/pane.tsx";
@@ -40,8 +40,10 @@ import { ImgCtl, ImgPanel } from "./img.tsx";
 import { DigiCtl, DigiPanel } from "./digi.tsx";
 import { MapCtl, MapPanel } from "./map.tsx";
 import { LabelsCtl } from "./labels.tsx";
+import { MemCtl } from "./memories.tsx";
+import { AudioRecCtl } from "./audiorec.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
-import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
+import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, LookCtl, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
 
 type SheetName = "keypad" | "bands" | "more" | null;
 
@@ -187,7 +189,8 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
           <button onClick={cycleBw} title="Passband">
             {bw ?? "BW"}
           </button>
-          <button onClick={() => open("bands")}>Bands</button>
+          {/* the amateur bands are on air: not with a converter's offset */}
+          {!radio.value?.freq_offset_hz && <button onClick={() => open("bands")}>Bands</button>}
         </div>
         <div class="m-row">
           {audioOn.value ? (
@@ -235,7 +238,7 @@ function Keypad({ close }: { close: () => void }) {
   const mhz = keypadHz(buf.value, true);
   const go = (hz: number | null) => {
     if (hz === null) return;
-    tuneInView(hz);
+    tuneInView(hz - shownOffset());
     close();
   };
   const key = (k: string) => (
@@ -254,7 +257,7 @@ function Keypad({ close }: { close: () => void }) {
       </div>
       <div class="m-row">
         <button class="go" disabled={khz === null} onClick={() => go(khz)}>
-          {khz === null ? "kHz" : `${formatKhz(khz)} kHz`}
+          {khz === null ? "kHz" : `${formatKhz(khz, true)} kHz`}
         </button>
         <button disabled={mhz === null || (mhz ?? 0) > 1e9} onClick={() => go(mhz)}>
           {mhz === null ? "MHz" : `${(mhz / 1e6).toFixed(3)} MHz`}
@@ -296,11 +299,15 @@ function More({ close }: { close: () => void }) {
       <div class="group">
         <CodecCtl />
       </div>
+      <AudioRecCtl />
       <h4>Noise</h4>
       <DspCtl />
       <h4>Waterfall</h4>
       <ZoomCtl />
       <ContrastCtl />
+      <LookCtl />
+      <h4>Memories</h4>
+      <MemCtl inline />
       <h4>Labels</h4>
       <LabelsCtl inline />
       <h4>You</h4>

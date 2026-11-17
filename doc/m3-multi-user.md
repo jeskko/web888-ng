@@ -372,6 +372,8 @@ off), `nr` (0..1), `squelch`, `squelch_db`.
   | `status` | S→C | adds `cpu` (the device's load, % of all cores) and `temp_c` (SoC temperature), when known. Added 2026-10-28 |
   | `status` | S→C | adds `rf_atten_db`: the RF attenuator (dB) while it is in. Added 2026-11-16 |
   | `audio`, `state` | C→S, S→C | add `notch` (bool): the automatic notch. Added 2026-11-16 |
+  | `audio`, `state` | C→S, S→C | `agc_speed` may be `custom`, with `agc_hang_ms` (0-5000) and `agc_decay_db_s` (1-200; both clamped; `state` has them always, medium's 300 and 20 by default). Added 2026-11-17 |
+  | `hello` | S→C | `radio.freq_offset_hz`: a converter's offset (`[radio] freq_offset_hz`); the page shows frequencies plus it; spots come with it added. Absent when 0. Added 2026-11-17 |
   | `wf` | C→S | adds `pack` (bool): packed lines, waterfall frame flags bit3 `packed` (see "Packed waterfall lines" below; `state`'s `wf` echoes it). Added 2026-11-16 |
   | `hello` (S→C), `audio`, `state` | S→C, C→S | `hello`'s `codecs` (what the server sends: `pcm16`, `mulaw`, `opus`); `audio`'s `codec` asks for one, `state`'s says which is in use (`pcm16` until asked). Audio frame flags bit3 `mulaw` (a byte a sample), bit4 `opus` (one 20 ms Opus packet; the count is the samples it decodes to). See "Audio codecs" below. Added 2026-11-16 |
   | audio frame | S→C | flags bit2 `stereo`: left and right interleaved, `n` counting both (SAS). Added 2026-10-28 |

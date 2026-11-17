@@ -86,6 +86,7 @@ async fn start_skim(
             rf_hi: *caps.rf_range.end(),
             wf_decim_min: caps.wf_decim_min,
             wf_decim_max: caps.wf_decim_max,
+            freq_offset_hz: 0.0,
         },
         channels: channels.clone(),
         pool,
@@ -770,4 +771,46 @@ async fn waterfall_lines_pack_when_asked() {
     assert_eq!(state_pack, Some(true));
     assert!(packed >= 5, "{packed} packed lines");
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn custom_agc_speed_is_kept_and_clamped() {
+    let (addr, _) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    // the state the server answers `m` with
+    macro_rules! ask {
+        ($m:expr) => {{
+            ws.send(Message::Text($m.to_string().into())).await.unwrap();
+            let deadline = tokio::time::Instant::now() + Duration::from_secs(5);
+            loop {
+                assert!(
+                    tokio::time::Instant::now() < deadline,
+                    "no state for {}",
+                    $m
+                );
+                if let Some(ServerMsg::State(s)) = json(&ws.next().await.unwrap().unwrap()) {
+                    break s;
+                }
+            }
+        }};
+    }
+    // the state sent on connect first
+    while !matches!(
+        json(&ws.next().await.unwrap().unwrap()),
+        Some(ServerMsg::State(_))
+    ) {}
+    let s = ask!(r#"{"type":"audio","agc_speed":"slow"}"#);
+    assert_eq!(s.agc_speed, proto::AgcSpeed::Slow);
+    // medium's by default
+    assert_eq!((s.agc_hang_ms, s.agc_decay_db_s), (300.0, 20.0));
+    let s = ask!(r#"{"type":"audio","agc_speed":"custom","agc_hang_ms":1200,"agc_decay_db_s":6}"#);
+    assert_eq!(s.agc_speed, proto::AgcSpeed::Custom);
+    assert_eq!((s.agc_hang_ms, s.agc_decay_db_s), (1200.0, 6.0));
+    // out of range: clamped; one alone leaves the other
+    let s = ask!(r#"{"type":"audio","agc_hang_ms":99999}"#);
+    assert_eq!((s.agc_hang_ms, s.agc_decay_db_s), (5000.0, 6.0));
+    let s = ask!(r#"{"type":"audio","agc_decay_db_s":0}"#);
+    assert_eq!(s.agc_decay_db_s, 1.0);
 }

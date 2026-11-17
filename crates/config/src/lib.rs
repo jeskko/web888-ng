@@ -231,6 +231,14 @@ pub struct Radio {
     /// from strong signals. Applies at once (no restart); an HPSDR client
     /// may change it while it runs.
     pub atten_db: f32,
+    /// A converter in front of the receiver (Hz): every frequency shown to
+    /// web listeners and every skimmer spot (PSKReporter, WSPRnet, MQTT,
+    /// syslog, the map) is the receiver's own plus this, e.g. 116000000
+    /// for a 2 m converter with its 144 MHz at 28 MHz. 0: none. Skimmer
+    /// dials and the label lists stay the receiver's own; the frequency
+    /// labels and the band ribbon are hidden while it is set. Kiwi and
+    /// HPSDR clients see the receiver's own frequencies.
+    pub freq_offset_hz: f64,
     /// Backend sim: the simulated scene.
     pub sim: Sim,
     /// Backend iq: the wideband IQ input.
@@ -247,6 +255,7 @@ impl Default for Radio {
             bins: None,
             zoom_engine: true,
             atten_db: 0.0,
+            freq_offset_hz: 0.0,
             sim: Sim::default(),
             iq: Iq::default(),
         }

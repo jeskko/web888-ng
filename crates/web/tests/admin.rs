@@ -66,6 +66,7 @@ async fn start(config: Config, path: PathBuf) -> (std::net::SocketAddr, Arc<Atom
             rf_hi: *caps.rf_range.end(),
             wf_decim_min: caps.wf_decim_min,
             wf_decim_max: caps.wf_decim_max,
+            freq_offset_hz: 0.0,
         },
         channels,
         pool,

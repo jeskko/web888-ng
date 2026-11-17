@@ -266,10 +266,14 @@ fn audio_spec(s: &State) -> AudioSpec {
     a.squelch_db = s.squelch.then_some(s.squelch_db);
     a.rate = s.audio_rate;
     a.agc = if s.agc {
-        let base = if s.mode.is_am() {
-            AgcSpec::am_at(s.agc_speed.into())
-        } else {
-            AgcSpec::ssb_at(s.agc_speed.into())
+        let base = match s.agc_speed.preset() {
+            Some(p) if s.mode.is_am() => AgcSpec::am_at(p),
+            Some(p) => AgcSpec::ssb_at(p),
+            None => AgcSpec {
+                hang_s: f64::from(s.agc_hang_ms) / 1000.0,
+                decay_db_s: f64::from(s.agc_decay_db_s),
+                ..AgcSpec::ssb()
+            },
         };
         Some(AgcSpec {
             max_gain_db: s.gain_db,
@@ -585,6 +589,8 @@ impl Session<'_> {
                 agc,
                 gain_db,
                 agc_speed,
+                agc_hang_ms,
+                agc_decay_db_s,
                 nb,
                 nr,
                 notch,
@@ -605,6 +611,16 @@ impl Session<'_> {
                 s.agc = agc.unwrap_or(s.agc);
                 s.gain_db = gain_db.unwrap_or(s.gain_db);
                 s.agc_speed = agc_speed.unwrap_or(s.agc_speed);
+                let (h0, h1) = crate::proto::AGC_HANG_MS;
+                s.agc_hang_ms = agc_hang_ms
+                    .filter(|v| v.is_finite())
+                    .unwrap_or(s.agc_hang_ms)
+                    .clamp(h0, h1);
+                let (d0, d1) = crate::proto::AGC_DECAY_DB_S;
+                s.agc_decay_db_s = agc_decay_db_s
+                    .filter(|v| v.is_finite())
+                    .unwrap_or(s.agc_decay_db_s)
+                    .clamp(d0, d1);
                 s.nb = nb.filter(|v| v.is_finite()).unwrap_or(s.nb);
                 s.nr = nr.filter(|v| v.is_finite()).unwrap_or(s.nr);
                 s.notch = notch.unwrap_or(s.notch);
@@ -749,6 +765,8 @@ pub async fn run(
         agc: true,
         gain_db: 100.0,
         agc_speed: Default::default(),
+        agc_hang_ms: crate::proto::AGC_HANG_MS_DEFAULT,
+        agc_decay_db_s: crate::proto::AGC_DECAY_DB_S_DEFAULT,
         nb: 0.0,
         nr: 0.0,
         notch: false,
@@ -1034,6 +1052,7 @@ mod tests {
             rf_hi: 61_440_000.0,
             wf_decim_min: 2,
             wf_decim_max: 8192,
+            freq_offset_hz: 0.0,
         };
         let w = |center_hz, decim| WfReq {
             center_hz,

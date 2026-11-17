@@ -501,6 +501,7 @@ mod tests {
             rf_hi: 61_440_000.0,
             wf_decim_min: 2,
             wf_decim_max: 8192,
+            freq_offset_hz: 0.0,
         };
         let g = Geometry::new(&r);
         assert_eq!(g.span(0), 61_440_000.0);

@@ -6,7 +6,7 @@
 import { batch, computed, effect, signal } from "@preact/signals";
 import { Player, type PlayerStats } from "./audio/player.ts";
 import { bandOf, type Band } from "./bands.ts";
-import { clamp, formatKhz, snapFor, stepFor } from "./fmt.ts";
+import { clamp, formatKhz, setShownOffset, shownOffset, snapFor, stepFor } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Codec, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
@@ -27,8 +27,11 @@ import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
 import { applySeconds, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { IqRecorder, REC_MAX_S, type RecFormat } from "./iqrec.ts";
+import { AREC_MAX_S, AudioRecorder } from "./audiorec.ts";
 import { TuneSync } from "./tunesync.ts";
 import { WHEEL_STEPS } from "./wheel.ts";
+import { isPalette, type Palette } from "./view/colormap.ts";
+import { asMemory, asTuning, cleanMemName, merge, parseMemories, remove, store, type Memory, type Tuning } from "./memories.ts";
 import { covered, fetchRange, LABEL_MAX_SPAN, parseSources, tuneTo, type BandPlan, type FreqMarker } from "./markers.ts";
 
 export const conn = signal<ConnState>("connecting");
@@ -177,6 +180,7 @@ export function connect(): void {
       switch (m.type) {
         case "hello":
           batch(() => {
+            setShownOffset(m.radio.freq_offset_hz ?? 0);
             radio.value = m.radio;
             limits.value = m.limits;
             server.value = m.server;
@@ -220,10 +224,14 @@ export function connect(): void {
         case "skimmers":
           skimmers.value = m.skimmers;
           break;
-        case "spots":
-          spots.value = spotsFresh ? m.spots : addSpots(spots.value, m.spots);
+        case "spots": {
+          // on air (a converter's offset added): to the receiver's own
+          const off = shownOffset();
+          const got = off ? m.spots.map((p) => ({ ...p, dial: p.dial - off, hz: p.hz - off })) : m.spots;
+          spots.value = spotsFresh ? got : addSpots(spots.value, got);
           spotsFresh = false;
           break;
+        }
         case "busy":
           connNote.value = m.msg;
           break;
@@ -253,6 +261,7 @@ export function connect(): void {
       imgAudio(f);
       digiAudio(f);
       sigAudio(f);
+      recAudio(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
     onIq(f: IqFrame) {
@@ -1964,3 +1973,161 @@ setInterval(() => {
   wfKbps.value = conn.value === "open" ? (8 * wfBytes) / 2000 : null;
   wfBytes = 0;
 }, 2000);
+
+// ---------------------------------------------------- waterfall display
+
+/** The waterfall's palette (remembered). */
+export const palette = signal<Palette>(((p) => (isPalette(p) ? p : "web888"))(load("palette")));
+export function setPalette(p: Palette): void {
+  palette.value = p;
+  save("palette", p);
+}
+
+/** Peak hold on the spectrum (remembered; cleared by `clearPeak`). */
+export const peakHold = signal(load("peak") === "1");
+export function setPeakHold(on: boolean): void {
+  peakHold.value = on;
+  save("peak", on ? "1" : "0");
+  paneHooks.clearPeak?.();
+}
+
+/** Time marks (UTC) along the waterfall's left edge (remembered). */
+export const wfTimes = signal(load("wfTimes") === "1");
+export function setWfTimes(on: boolean): void {
+  wfTimes.value = on;
+  save("wfTimes", on ? "1" : "0");
+}
+
+/** What the spectrum/waterfall pane offers the controls, while it is up. */
+export const paneHooks: { clearPeak: (() => void) | null; saveImage: (() => void) | null } = { clearPeak: null, saveImage: null };
+
+// ------------------------------------------------ memories, VFO A/B
+
+function loadJson(key: string): unknown {
+  try {
+    return JSON.parse(load(key) ?? "null");
+  } catch {
+    return null;
+  }
+}
+
+/** Frequency memories (this browser's). */
+export const memories = signal<Memory[]>(((v) => (Array.isArray(v) ? merge([], v.map(asMemory).filter((m): m is Memory => m !== null)) : []))(loadJson("memories")));
+function keepMemories(list: Memory[]): void {
+  memories.value = list;
+  save("memories", JSON.stringify(list));
+}
+
+/** The dial now, as a tuning. */
+export function tuningNow(): Tuning | null {
+  const s = st.value;
+  return s ? { hz: s.hz, mode: s.mode, lo: s.lo, hi: s.hi } : null;
+}
+
+/** Tune to `t`: mode and passband in one go, the view along. */
+export function recall(t: Tuning): void {
+  const s = st.value;
+  if (!s) return;
+  if (s.mode !== t.mode || s.lo !== t.lo || s.hi !== t.hi) setModePassband(t.mode, t.lo, t.hi);
+  tuneInView(t.hz);
+}
+
+/** Store the dial as a memory named `name`. */
+export function storeMemory(name: string): void {
+  const t = tuningNow();
+  if (t) keepMemories(store(memories.value, { ...t, name: cleanMemName(name) }));
+}
+
+export function deleteMemory(m: Memory): void {
+  keepMemories(remove(memories.value, m));
+}
+
+/** Add the memories of an exported file; how many it had. */
+export function importMemories(text: string): number {
+  const more = parseMemories(text);
+  keepMemories(merge(memories.value, more));
+  return more.length;
+}
+
+/** The other VFO: where "A/B" goes (remembered). */
+export const vfoOther = signal<Tuning | null>(asTuning(loadJson("vfoOther")));
+/** Which VFO the dial is: A or B. */
+export const vfoName = signal<"A" | "B">(load("vfoName") === "B" ? "B" : "A");
+function keepVfo(t: Tuning | null, name: "A" | "B"): void {
+  vfoOther.value = t;
+  vfoName.value = name;
+  save("vfoOther", JSON.stringify(t));
+  save("vfoName", name);
+}
+
+/** Swap the dial with the other VFO (the first time: the other becomes
+ * a copy of this one). */
+export function swapVfo(): void {
+  const now = tuningNow();
+  if (!now) return;
+  const other = vfoOther.value;
+  keepVfo(now, vfoName.value === "A" ? "B" : "A");
+  if (other) recall(other);
+}
+
+/** The other VFO to this one's tuning (A=B). */
+export function equalVfo(): void {
+  keepVfo(tuningNow(), vfoName.value);
+}
+
+// ---------------------------------------------------- audio recording
+
+/** The audio recording under way: how far, how much silence was left out. */
+export const audioRec = signal<{ seconds: number; maxS: number; skippedS: number } | null>(null);
+/** The last recording's file name, or why there was none. */
+export const audioRecDone = signal("");
+/** Leave out silence (squelch closed) (remembered). */
+export const audioRecSkip = signal(load("arecSkip") === "1");
+let aRecorder: AudioRecorder | null = null;
+
+export function setAudioRecSkip(on: boolean): void {
+  audioRecSkip.value = on;
+  save("arecSkip", on ? "1" : "0");
+}
+
+/** Record the audio for up to `maxS` seconds. */
+export function startAudioRec(maxS: number): void {
+  const s = st.value;
+  if (!s || aRecorder) return;
+  aRecorder = new AudioRecorder(Date.now(), s.hz, s.mode, Math.min(maxS, AREC_MAX_S), audioRecSkip.value);
+  audioRecDone.value = "";
+  audioRec.value = { seconds: 0, maxS: aRecorder.maxS, skippedS: 0 };
+}
+
+/** Stop; `keep`: save what was recorded as a WAV file. */
+export function stopAudioRec(keep = true): void {
+  const r = aRecorder;
+  if (!r) return;
+  aRecorder = null;
+  audioRec.value = null;
+  if (!keep) return;
+  if (r.frames === 0) {
+    audioRecDone.value = r.skippedS > 0 ? "only silence was heard" : "nothing was received";
+    return;
+  }
+  const { bytes, name } = r.file();
+  const url = URL.createObjectURL(new Blob([bytes as BlobPart], { type: "audio/wav" }));
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = name;
+  a.click();
+  setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  const skipped = r.skippedS >= 1 ? `, ${r.skippedS.toFixed(0)} s of silence left out` : "";
+  const ended = r.ended ? "; ended when the audio format changed" : "";
+  audioRecDone.value = `${name} (${r.seconds.toFixed(1)} s${skipped}${ended})`;
+}
+
+function recAudio(f: AudioFrame): void {
+  const r = aRecorder;
+  if (!r) return;
+  const going = r.push(f.pcm, f.rate, f.stereo);
+  const v = audioRec.value;
+  if (!v || r.seconds - v.seconds >= 0.25 || r.skippedS - v.skippedS >= 1) audioRec.value = { seconds: r.seconds, maxS: r.maxS, skippedS: r.skippedS };
+  if (!going) stopAudioRec();
+}
+

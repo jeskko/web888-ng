@@ -12,7 +12,7 @@ export const PROTO = 2;
 /** "iq": Kiwi protocol clients only (not offered in the UI). "nbfm":
  * narrow-band FM (VHF voice). */
 export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas" | "iq" | "nbfm";
-export type AgcSpeed = "fast" | "medium" | "slow";
+export type AgcSpeed = "fast" | "medium" | "slow" | "custom";
 export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas", "nbfm"];
 /** The AM family, in the order the AM button cycles through: envelope,
  * then synchronous (both sidebands, lower, upper, stereo). */
@@ -40,6 +40,9 @@ export interface RadioInfo {
   rf_hi: number;
   wf_decim_min: number;
   wf_decim_max: number;
+  /** A converter's offset: the frequencies to show are these plus it
+   * (absent: 0). Spots come with it added. */
+  freq_offset_hz?: number;
 }
 
 export interface Limits {
@@ -56,6 +59,9 @@ export interface State {
   agc: boolean;
   gain_db: number;
   agc_speed: AgcSpeed;
+  /** The custom speed's hang time (ms) and decay (dB/s) (older servers: absent). */
+  agc_hang_ms?: number;
+  agc_decay_db_s?: number;
   /** Noise blanker threshold (impulse / mean level); 0: off. */
   nb: number;
   /** Noise reduction strength 0..1; 0: off. */
@@ -83,6 +89,9 @@ export interface AudioReq {
   agc?: boolean;
   gain_db?: number;
   agc_speed?: AgcSpeed;
+  /** With agc_speed "custom": hang 0-5000 ms, decay 1-200 dB/s. */
+  agc_hang_ms?: number;
+  agc_decay_db_s?: number;
   nb?: number;
   nr?: number;
   notch?: boolean;

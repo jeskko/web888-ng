@@ -7,7 +7,7 @@
 // ribbon between the plot and the scale.
 
 import { FLAG_NEW_GEN, type WfLine } from "../proto.ts";
-import { tickLabel, tickStep } from "../fmt.ts";
+import { shownOffset, tickLabel, tickStep } from "../fmt.ts";
 import { placeLabels } from "../spots.ts";
 import type { RibbonPiece } from "../markers.ts";
 
@@ -117,6 +117,10 @@ export class Spectrum {
   private ctx: CanvasRenderingContext2D;
   private last: WfLine | null = null;
   private avg: Float32Array | null = null;
+  /** The highest level each bin reached (dB), while peak hold is on. */
+  private peak: Float32Array | null = null;
+  /** Peak hold: drawn, and kept up to date. */
+  peakOn = false;
   /** The spot labels of the last draw. */
   spotHits: SpotHit[] = [];
   /** The frequency labels of the last draw. */
@@ -149,7 +153,30 @@ export class Spectrum {
     } else {
       for (let k = 0; k < l.levels.length; k++) this.avg![k] += 0.15 * (l.db0 + l.levels[k] * l.dbStep - this.avg![k]);
     }
+    if (!this.peakOn) this.peak = null;
+    else if (fresh || !this.peak) {
+      this.peak = new Float32Array(l.levels.length);
+      for (let k = 0; k < l.levels.length; k++) this.peak[k] = l.db0 + l.levels[k] * l.dbStep;
+    } else if (moved) {
+      // the view moved: the peaks go along where it overlaps
+      const old = this.peak;
+      const shift = (l.f0 - this.last!.f0) / l.df;
+      this.peak = new Float32Array(l.levels.length);
+      for (let k = 0; k < l.levels.length; k++) {
+        const v = l.db0 + l.levels[k] * l.dbStep;
+        const j = Math.round(k + shift);
+        this.peak[k] = j >= 0 && j < old.length ? Math.max(old[j], v) : v;
+      }
+    } else {
+      const p = this.peak;
+      for (let k = 0; k < l.levels.length; k++) p[k] = Math.max(p[k], l.db0 + l.levels[k] * l.dbStep);
+    }
     this.last = l;
+  }
+
+  /** Start the peaks afresh from the next line. */
+  clearPeak(): void {
+    this.peak = null;
   }
 
   /** A small label on a dark box with its top at `y`: starting at `x`,
@@ -274,6 +301,8 @@ export class Spectrum {
       const avg = this.avg;
       trace((k) => avg[k], "rgba(255, 210, 90, 0.9)", false);
       trace((k) => l.db0 + l.levels[k] * l.dbStep, "rgba(180, 220, 255, 0.45)", true);
+      const pk = this.peakOn ? this.peak : null;
+      if (pk && pk.length === l.levels.length) trace((k) => pk[k], "rgba(255, 110, 140, 0.85)", true);
     }
 
     // spots: a tick each, and labels in rows above the scale where they fit
@@ -384,8 +413,10 @@ export class Spectrum {
     ctx.fillStyle = "#aab4c5";
     ctx.textBaseline = "middle";
     ctx.textAlign = "center";
-    for (let f = Math.ceil(start / step) * step; f <= start + span; f += step) {
-      const xx = Math.round(x(f)) + 0.5;
+    // ticks at round frequencies as shown (a converter's offset added)
+    const off = shownOffset();
+    for (let f = Math.ceil((start + off) / step) * step; f <= start + span + off; f += step) {
+      const xx = Math.round(x(f - off)) + 0.5;
       ctx.beginPath();
       ctx.moveTo(xx, sy);
       ctx.lineTo(xx, sy + 4 * dpr);

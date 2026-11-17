@@ -328,3 +328,64 @@ Behaviour:
    pages in M3.
 3. **Packaging:** CI tarball on `v*` tags + os recipe `web888d-ui` (§7).
 4. **Port:** 8073 by default.
+
+## 11. Listener tools (2026-11-17)
+
+The receiver-parity items from `doc/feature-gap.md` §2.1-2.3 that live
+in the page. All settings and memories are kept in the browser
+(`localStorage`); nothing here costs the unit anything except the
+custom AGC speed and the converter offset, which are server settings.
+
+* **Palettes** (`ui/src/view/colormap.ts`): Default, Viridis, Heat,
+  Phosphor, Grey, beside the waterfall's floor and top. Switching
+  uploads a new 256-entry table to the shader; the history stays (it
+  holds levels, not colours).
+* **Peak hold** (`view/spectrum.ts`): the highest level each bin reached,
+  drawn pink over the spectrum; ↺ clears it. It follows a pan like the
+  average does, and starts afresh when the view's bin width changes.
+* **Time marks** (`view/wfticks.ts`): UTC marks down the waterfall's left
+  edge at round times (1 s to 6 h, chosen so marks stay ~40 px apart at
+  the current line rate), from each line's server time.
+* **PNG**: the spectrum and waterfall as they are, with the time marks
+  and a caption (dial, mode, view, UTC, server), saved as
+  `2026-11-17_091024_7066k_web888.png`.
+* **Memories** (`ui/src/memories.ts`, the **Mem** button, key m): the
+  dial with its mode and passband under an optional name; one per
+  frequency and mode, sorted by frequency, at most 500. A click tunes
+  (mode and passband in one request), ✕ forgets. Export/import as JSON
+  (`{"web888_memories": 1, "memories": [...]}`); imports are checked
+  entry by entry. On the phone: in More.
+* **VFO A/B** (beside the dial, key v): A/B swaps the dial with the
+  other VFO (frequency, mode, passband; the first swap copies), A=B
+  copies the dial there.
+* **Audio recording** (`ui/src/audiorec.ts`, **Rec**): the audio as it
+  arrives (after the server's AGC, before the page's volume and
+  pseudo-stereo) as a 16-bit WAV at the audio rate, 1 min to 1 h. *Skip
+  silence* leaves out frames under -80 dBFS (squelch closed), so a long
+  watch keeps only what was heard. A change of audio rate or to a
+  stereo mode ends the file. Separate from **Rec IQ** (the bin's IQ,
+  `doc/m8-browser-decoders.md` §7).
+* **Key help** (key ?, or *keys* in the status bar): the keys and the
+  mouse and touch gestures.
+* **Custom AGC speed** (**C** beside F/M/S): the hang time (0-2 s on the
+  slider, the protocol takes 0-5 s) and the decay (2-100 dB/s on a log
+  slider, the protocol 1-200). Server: `agc_speed: "custom"` with
+  `agc_hang_ms`, `agc_decay_db_s` in `audio` and `state`
+  (`doc/m3-multi-user.md` §8). Kiwi clients keep their mapping of the
+  decay time onto F/M/S. With the max gain (the Kiwi "threshold") this
+  covers Kiwi's AGC controls but its slope.
+* **Converter offset** (`[radio] freq_offset_hz`, a restart): every
+  frequency the page shows is the receiver's own plus this (the dial, the
+  scale, typed frequencies, lists, decoder panels, the title). The
+  server sends it in `hello`'s `radio.freq_offset_hz` and adds it to the
+  skimmers' spots, so PSKReporter, WSPRnet, MQTT, syslog and the map get
+  frequencies on air; the page takes it off again to place spots on the
+  scale. The URL's `#f=` stays the receiver's own. The frequency labels,
+  the band ribbon and the phone's band picker are hidden while it is set
+  (they are for frequencies on air). Kiwi and HPSDR clients see the
+  receiver's own frequencies.
+
+Checked with `ui/tools/cdp/listener.mjs` on the sim backend (every item
+above; the offset with `freq_offset_hz = 116000000`: the dial and scale
+at 144 MHz, 144300 typed tunes 28.3 MHz) and the phone layout
+(`phone.mjs`).

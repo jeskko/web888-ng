@@ -13,7 +13,7 @@
 // waterfall mapped below the line's first bin).
 
 import type { WfLine } from "../proto.ts";
-import { colormap } from "./colormap.ts";
+import { colormap, type Palette } from "./colormap.ts";
 import { COARSE_PX } from "./spectrum.ts";
 
 const ROWS = 2048;
@@ -74,6 +74,9 @@ export class Waterfall {
   private prog: WebGLProgram;
   private hist: WebGLTexture;
   private params: WebGLTexture;
+  private lut: WebGLTexture;
+  /** Each history row's time (Unix ms; NaN: none), for the time marks. */
+  private times = new Float64Array(ROWS).fill(NaN);
   private u: Record<string, WebGLUniformLocation | null> = {};
   private head = -1;
   private count = 0;
@@ -102,6 +105,7 @@ export class Waterfall {
     this.hist = texture(gl, 0, gl.R8, MAX_BINS, ROWS, gl.RED, gl.UNSIGNED_BYTE);
     this.params = texture(gl, 1, gl.RGBA32F, 2, ROWS, gl.RGBA, gl.FLOAT);
     const lut = texture(gl, 2, gl.RGBA8, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, colormap());
+    this.lut = lut;
     gl.bindTexture(gl.TEXTURE_2D, lut);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.LINEAR);
     gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
@@ -110,10 +114,26 @@ export class Waterfall {
     gl.uniform1i(this.u.uLut, 2);
   }
 
+  /** Draw with another palette (the history is kept: it holds levels). */
+  setPalette(p: Palette): void {
+    const gl = this.gl;
+    gl.activeTexture(gl.TEXTURE2);
+    gl.bindTexture(gl.TEXTURE_2D, this.lut);
+    gl.texSubImage2D(gl.TEXTURE_2D, 0, 0, 0, 256, 1, gl.RGBA, gl.UNSIGNED_BYTE, colormap(p));
+  }
+
+  /** The times of the newest `n` rows, newest first (NaN: no line). */
+  rowTimes(n: number): Float64Array {
+    const out = new Float64Array(Math.min(n, ROWS)).fill(NaN);
+    for (let i = 0; i < Math.min(out.length, this.count); i++) out[i] = this.times[(this.head - i + ROWS) % ROWS];
+    return out;
+  }
+
   push(l: WfLine): void {
     const gl = this.gl;
     this.head = (this.head + 1) % ROWS;
     this.count = Math.min(this.count + 1, ROWS);
+    this.times[this.head] = l.time;
     const n = Math.min(l.levels.length, MAX_BINS);
     gl.activeTexture(gl.TEXTURE0);
     gl.bindTexture(gl.TEXTURE_2D, this.hist);

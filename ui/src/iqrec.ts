@@ -12,6 +12,8 @@
 //   (-1 dBFS); the name says when (UTC), the centre and the rate:
 //   2026-11-16_0412_7080k_60k_web888.cs16.
 
+import { wavFile } from "./wav.ts";
+
 /** Longest recording (s): 60 kS/s complex as f32 is 480 kB/s here. */
 export const REC_MAX_S = 300;
 /** Longest run of lost samples filled with zeros (s); a longer one is cut short. */
@@ -99,7 +101,7 @@ export class IqRecorder {
     const data = new Uint8Array(pcm.buffer, pcm.byteOffset, pcm.byteLength);
     const name = recName(this.start, this.centre, this.rate, format);
     if (format === "cs16") return { bytes: data, name };
-    return { bytes: wav(data, Math.round(this.rate)), name };
+    return { bytes: wavFile(data, Math.round(this.rate), 2), name };
   }
 }
 
@@ -110,28 +112,4 @@ export function recName(startMs: number, centre: number, rate: number, ext: stri
   const when = `${d.getUTCFullYear()}-${p(d.getUTCMonth() + 1)}-${p(d.getUTCDate())}_${p(d.getUTCHours())}${p(d.getUTCMinutes())}`;
   const k = (hz: number) => `${Math.round(hz / 100) / 10}k`;
   return `${when}_${k(centre)}_${k(rate)}_web888.${ext}`;
-}
-
-/** A stereo 16-bit WAV of interleaved samples. */
-function wav(data: Uint8Array, rate: number): Uint8Array {
-  const out = new Uint8Array(44 + data.length);
-  const v = new DataView(out.buffer);
-  const str = (o: number, s: string) => {
-    for (let i = 0; i < s.length; i++) out[o + i] = s.charCodeAt(i);
-  };
-  str(0, "RIFF");
-  v.setUint32(4, 36 + data.length, true);
-  str(8, "WAVE");
-  str(12, "fmt ");
-  v.setUint32(16, 16, true);
-  v.setUint16(20, 1, true); // PCM
-  v.setUint16(22, 2, true); // I, Q
-  v.setUint32(24, rate, true);
-  v.setUint32(28, rate * 4, true);
-  v.setUint16(32, 4, true);
-  v.setUint16(34, 16, true);
-  str(36, "data");
-  v.setUint32(40, data.length, true);
-  out.set(data, 44);
-  return out;
 }

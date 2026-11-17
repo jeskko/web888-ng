@@ -8,6 +8,7 @@ import {
   AudioCtl,
   Bandwidth,
   ContrastCtl,
+  LookCtl,
   DspCtl,
   FreqDisplay,
   LeaseBanner,
@@ -33,8 +34,11 @@ import { SigPanel } from "./ctl/sigid.tsx";
 import { MapCtl, MapPanel } from "./ctl/map.tsx";
 import { DecodersCtl } from "./ctl/decoders.tsx";
 import { IqRecCtl } from "./ctl/iqrec.tsx";
+import { AudioRecCtl } from "./ctl/audiorec.tsx";
 import { TcPanel } from "./ctl/timecode.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
+import { MemCtl, memOpen, VfoCtl } from "./ctl/memories.tsx";
+import { helpOpen, KeyHelp } from "./ctl/keys.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
@@ -51,6 +55,7 @@ import {
   setMode,
   start,
   startAudio,
+  swapVfo,
   st,
   stepOf,
   tune,
@@ -73,6 +78,9 @@ function useKeys() {
       else if (e.key === "ArrowLeft") tune(stepTo(s.hz, step, -1));
       else if (KEY_MODES[e.key]) setMode(KEY_MODES[e.key]);
       else if (e.key === "a") cycleAm();
+      else if (e.key === "v") swapVfo();
+      else if (e.key === "m") memOpen.value = !memOpen.value;
+      else if (e.key === "?") helpOpen.value = true;
       else return;
       e.preventDefault();
     };
@@ -144,6 +152,7 @@ function App() {
     <>
       <header>
         <FreqDisplay />
+        <VfoCtl />
         <StepCtl />
         <ModeBar />
         <Bandwidth />
@@ -155,6 +164,8 @@ function App() {
           <SpotsCtl />
           <MapCtl />
           <DecodersCtl />
+          <MemCtl />
+          <AudioRecCtl />
           <IqRecCtl />
           <LabelsCtl />
         </div>
@@ -184,9 +195,11 @@ function App() {
           <DspCtl />
           <ZoomCtl />
           <ContrastCtl />
+          <LookCtl />
         </div>
         <StatusBar />
       </footer>
+      <KeyHelp />
     </>
   );
 }

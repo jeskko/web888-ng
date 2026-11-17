@@ -14,6 +14,7 @@
         "bins": null,
         "zoom_engine": true,
         "atten_db": 0.0,
+        "freq_offset_hz": 0.0,
         "sim": {
           "tones": [],
           "noise": false
@@ -225,6 +226,12 @@
           "description": "zynqsdr: the RF attenuator before the ADC, 0 (off) to 31.5 dB in\n0.5 dB steps, for every listener at once: against ADC overloads\nfrom strong signals. Applies at once (no restart); an HPSDR client\nmay change it while it runs.",
           "type": "number",
           "format": "float",
+          "default": 0.0
+        },
+        "freq_offset_hz": {
+          "description": "A converter in front of the receiver (Hz): every frequency shown to\nweb listeners and every skimmer spot (PSKReporter, WSPRnet, MQTT,\nsyslog, the map) is the receiver's own plus this, e.g. 116000000\nfor a 2 m converter with its 144 MHz at 28 MHz. 0: none. Skimmer\ndials and the label lists stay the receiver's own; the frequency\nlabels and the band ribbon are hidden while it is set. Kiwi and\nHPSDR clients see the receiver's own frequencies.",
+          "type": "number",
+          "format": "double",
           "default": 0.0
         },
         "sim": {

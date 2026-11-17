@@ -123,6 +123,7 @@ mod tests {
             cfg: Skimmer::default(),
             label: label.into(),
             status: BandStatus::default(),
+            offset_hz: 0.0,
         });
         b.status.granted.store(true, Ordering::Relaxed);
         b.status.set_recent(recent);

@@ -69,6 +69,7 @@ async fn start(channels: usize, users: usize) -> (String, Arc<AtomicBool>) {
             rf_hi: *caps.rf_range.end(),
             wf_decim_min: caps.wf_decim_min,
             wf_decim_max: caps.wf_decim_max,
+            freq_offset_hz: 0.0,
         },
         channels: web888_core::leases::Channels::new(
             caps.rx_channels,

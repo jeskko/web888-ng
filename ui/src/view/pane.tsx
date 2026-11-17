@@ -5,6 +5,8 @@
 // shift+wheel steps the dial, a click on a user marker picks that user,
 // a click on a spot label tunes to it, two fingers pinch to zoom. Hovering
 // shows where a click would tune: the frequency and the passband there.
+// Also: the palette, peak hold, UTC time marks down the waterfall's left
+// edge, and a snapshot of the pane as a PNG (`paneHooks.saveImage`).
 
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
@@ -12,11 +14,12 @@ import { wfSpan } from "../proto.ts";
 import { WheelSteps, wheelPx } from "../wheelzoom.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, setView, skimmers, snapOf, spots, st, stepOf, tune, users } from "../state.ts";
+import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, palette, paneHooks, peakHold, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, server, setView, skimmers, snapOf, spots, st, stepOf, tune, users, wfTimes } from "../state.ts";
 import { markerColour, markerTitle, ribbon, type FreqMarker, type RibbonPiece } from "../markers.ts";
 import { pick } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
+import { timeTicks } from "./wfticks.ts";
 
 /** Auto colour range: follows the noise floor of recent lines. */
 const auto = { min: NaN, max: NaN, n: 0 };
@@ -45,12 +48,15 @@ export function Pane() {
   const boxRef = useRef<HTMLDivElement>(null);
   const errRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
+  const ticksRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
     const sc = specRef.current!;
     const wc = wfRef.current!;
     const box = boxRef.current!;
     const ghost = ghostRef.current!;
+    const tc = ticksRef.current!;
+    const tctx = tc.getContext("2d")!;
     let wf: Waterfall | null = null;
     try {
       wf = new Waterfall(wc);
@@ -58,6 +64,8 @@ export function Pane() {
       errRef.current!.textContent = `Waterfall unavailable: ${e instanceof Error ? e.message : e}`;
     }
     const spec = new Spectrum(sc);
+    spec.peakOn = peakHold.value;
+    wf?.setPalette(palette.value);
     let dirty = true;
     let dpr = window.devicePixelRatio || 1;
 
@@ -92,6 +100,11 @@ export function Pane() {
         c.width = Math.round(c.clientWidth * dpr);
         c.height = Math.round(c.clientHeight * dpr);
       }
+      // the time marks' strip lies over the waterfall's left edge
+      tc.style.top = `${sc.offsetHeight}px`;
+      tc.style.height = `${wc.clientHeight}px`;
+      tc.width = Math.round(tc.clientWidth * dpr);
+      tc.height = wc.height;
       wantBins();
       dirty = true;
     };
@@ -114,19 +127,94 @@ export function Pane() {
     const unsubSkims = skimmers.subscribe(() => {
       dirty = true;
     });
+    const unsubLook = [
+      palette.subscribe((p) => {
+        wf?.setPalette(p);
+        dirty = true;
+      }),
+      peakHold.subscribe((on) => {
+        spec.peakOn = on;
+        dirty = true;
+      }),
+      wfTimes.subscribe(() => {
+        dirty = true;
+      }),
+    ];
+    paneHooks.clearPeak = () => {
+      spec.clearPeak();
+      dirty = true;
+    };
     const unsubLabels = [freqMarkers, bandPlan, ribbonOn].map((sig) =>
       sig.subscribe(() => {
         dirty = true;
       }),
     );
 
+    /** UTC marks down the left edge of `ctx` (device px; the waterfall's
+     * rows from `y0`, `h` of them). */
+    const drawTicks = (ctx: CanvasRenderingContext2D, y0: number, h: number) => {
+      if (!wf) return;
+      const ticks = timeTicks(wf.rowTimes(h), 40 * dpr);
+      ctx.font = `${10 * dpr}px ui-monospace, Menlo, Consolas, monospace`;
+      ctx.textBaseline = "middle";
+      for (const t of ticks) {
+        const y = y0 + t.row + 0.5;
+        const tw = ctx.measureText(t.label).width;
+        ctx.fillStyle = "rgba(11, 14, 22, 0.7)";
+        ctx.fillRect(0, y - 7 * dpr, tw + 12 * dpr, 14 * dpr);
+        ctx.fillStyle = "#e8edf5";
+        ctx.fillRect(0, Math.round(y), 5 * dpr, dpr);
+        ctx.fillText(t.label, 7 * dpr, y);
+      }
+    };
+
+    /** The pane as it is now, with the time marks and a caption, as a PNG. */
+    paneHooks.saveImage = () => {
+      const s = st.value;
+      const v = view();
+      if (!wf || !s || !v) return;
+      const { min, max } = currentRange();
+      // the waterfall's buffer is only good right after a draw
+      wf.draw(v.start, v.span, min, max);
+      const cap = 18 * dpr;
+      const out = document.createElement("canvas");
+      out.width = sc.width;
+      out.height = sc.height + wc.height + cap;
+      const ctx = out.getContext("2d")!;
+      ctx.fillStyle = "#0b0e16";
+      ctx.fillRect(0, 0, out.width, out.height);
+      ctx.drawImage(sc, 0, 0);
+      ctx.drawImage(wc, 0, sc.height);
+      drawTicks(ctx, sc.height, wc.height);
+      const now = new Date();
+      const iso = now.toISOString();
+      ctx.font = `${11 * dpr}px system-ui, sans-serif`;
+      ctx.textBaseline = "middle";
+      ctx.fillStyle = "#aab4c5";
+      const where = `${formatKhz(s.hz)} kHz ${s.mode.toUpperCase()} · view ${formatKhz(v.start)}-${formatKhz(v.start + v.span)} kHz`;
+      ctx.fillText(`${where} · ${iso.slice(0, 19).replace("T", " ")} UTC · ${server.value || "web888d"}`, 6 * dpr, out.height - cap / 2);
+      out.toBlob((b) => {
+        if (!b) return;
+        const a = document.createElement("a");
+        a.href = URL.createObjectURL(b);
+        const stamp = `${iso.slice(0, 10)}_${iso.slice(11, 13)}${iso.slice(14, 16)}${iso.slice(17, 19)}`;
+        a.download = `${stamp}_${Math.round(s.hz / 100) / 10}k_web888.png`;
+        a.click();
+        setTimeout(() => URL.revokeObjectURL(a.href), 10_000);
+      }, "image/png");
+      dirty = true;
+    };
+
     let raf = 0;
     const frame = () => {
       raf = requestAnimationFrame(frame);
       if (!dirty) return;
       dirty = false;
+      tctx.clearRect(0, 0, tc.width, tc.height);
+      if (wfTimes.value) drawTicks(tctx, 0, tc.height);
       const v = view();
       const s = st.value;
+      const r = radio.value;
       if (!v || !s) return;
       const { min, max } = currentRange();
       wf?.draw(v.start, v.span, min, max);
@@ -139,8 +227,10 @@ export function Pane() {
         item: p,
       }));
       const bars = skimmers.value.map((k) => ({ lo: k.lo, hi: k.hi, colour: modeColour(k.mode), waiting: !k.on }));
-      const labels = freqMarkers.value.map((m) => ({ hz: m.hz, text: m.name, colour: markerColour(m), item: m }));
-      const plan = ribbonOn.value ? bandPlan.value : null;
+      // labels and the band plan are on air: not with a converter's offset
+      const direct = !r?.freq_offset_hz;
+      const labels = direct ? freqMarkers.value.map((m) => ({ hz: m.hz, text: m.name, colour: markerColour(m), item: m })) : [];
+      const plan = ribbonOn.value && direct ? bandPlan.value : null;
       const rib = plan ? ribbon(plan, v.start, v.start + v.span) : [];
       spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars, labels, rib);
     };
@@ -415,6 +505,9 @@ export function Pane() {
       unsubSpots();
       unsubSkims();
       for (const u of unsubLabels) u();
+      for (const u of unsubLook) u();
+      paneHooks.clearPeak = null;
+      paneHooks.saveImage = null;
       unsubRange();
       unsubGhost();
     };
@@ -424,6 +517,7 @@ export function Pane() {
     <div class="pane" ref={boxRef}>
       <canvas class="spectrum" ref={specRef} />
       <canvas class="waterfall" ref={wfRef} />
+      <canvas class="wf-ticks" ref={ticksRef} />
       <div class="pane-error" ref={errRef} />
       <div class="ghost" ref={ghostRef} style={{ display: "none" }}>
         <span />

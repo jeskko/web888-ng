@@ -567,6 +567,7 @@ fn start_skimmers(
 ) -> AnyResult<web888_web::session::Skim> {
     let threads = pool.workers();
     let sk = web888_skim::Skimmers::new(channels, pool, rx_rate, radio_live, rf, threads)?;
+    sk.set_offset(cfg.radio.freq_offset_hz);
     let hour = || {
         (std::time::SystemTime::now()
             .duration_since(std::time::UNIX_EPOCH)
@@ -1050,6 +1051,7 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
                 rf_hi: *rf.end(),
                 wf_decim_min: wf_span_decim_min(&caps),
                 wf_decim_max: caps.wf_decim_max,
+                freq_offset_hz: cfg.radio.freq_offset_hz,
             },
             channels: channels.clone(),
             waterfalls: match bin_tap {

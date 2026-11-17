@@ -1,11 +1,12 @@
 # Feature gap: web888-ng vs the stock Web-888 server and KiwiSDR
 
 Status: **proposal** (2026-10-22), **revisited 2026-11-12** for web888-ng
-v0.10.0 and brought up to v0.12.0. Done since: S (skimmers, M4), K (the
-Kiwi protocol, M5), the channelizer with its zoom engine (M6), VHF
-(experimental), the os side of O with metrics and OS updates from the
-admin page, a first map (M), and parts of R and B. The ng column shows
-v0.12.0; the
+v0.10.0, brought up to v0.12.0, and on 2026-11-17 to main after v0.14.0.
+Done since: S (skimmers, M4), K (the Kiwi protocol, M5), the channelizer
+with its zoom engine (M6), VHF (experimental), the os side of O with
+metrics and OS updates from the admin page, logs and backups, a first
+map (M), B (the browser decoders, M8), and most of R (the listener tools
+of 2026-11-17: `doc/m2-web-ui.md` §11). The ng column shows main; the
 stock, Kiwi and OWRX+ columns are still the 2026-10-22 survey (not
 re-checked). Milestone letters here are this proposal's; `design.md` §11
 has the numbered milestones. §3 is the remaining order, proposed again;
@@ -57,7 +58,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | NBFM/NNFM + de-emphasis, noise squelch | ✓ | ✓ | ✓ NBFM (v0.10.0: ±5 kHz at 12 kS/s, 300 Hz de-emphasis, squelch; Kiwi `nbfm`) | – |
 | IQ mode (stereo IQ to the browser / recorder) | ✓ | ✓ | ~ Kiwi clients only (kiwirecorder, SuperSDR); not in the web UI | **R** (web UI) |
 | C-QUAM AM stereo | ✓ | ✓ | ✗ | omit |
-| AGC controls (threshold, slope, decay, hang) | ✓ | ✓ | ~ F/M/S + gain | **R** (threshold, decay) |
+| AGC controls (threshold, slope, decay, hang) | ✓ | ✓ | ✓ F/M/S or custom hang and decay, max gain (threshold); no slope | – |
 | Noise blanker (2 algorithms) | ✓ | ✓ | ✓ (1) | – |
 | NR (LMS, WDSP, spectral) | ✓ | ✓ | ✓ spectral | – |
 | Auto-notch | ✓ | ✓ | ✓ spectral, any number of carriers (web UI) | – |
@@ -66,7 +67,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Audio compression (IMA ADPCM) | ✓ | ✓ | ✓ the web UI: Opus 24-48 kbit/s (μ-law while a decoder reads the audio), μ-law or PCM16; ADPCM to Kiwi clients | – |
 | RF attenuator from the UI | ✓ | ✓ (Kiwi-2) | ✓ admin page (`[radio] atten_db`, live), shown to listeners; HPSDR | – |
 | S-meter calibration, overload mute | ✓ | ✓ | ~ `[kiwi] smeter_offset_db` (provisional -12 dB, not measured); no mute | **R** (measure; overload flag) |
-| Frequency offset (converters, transverters) | ✓ | ✓ | ✗ | **R** |
+| Frequency offset (converters, transverters) | ✓ | ✓ | ✓ `[radio] freq_offset_hz`: the page and the skimmers' spots (uploads) on air; Kiwi/HPSDR clients see the receiver's own | – |
 | DRM (Dream + FDK-AAC) | ✓ | ✓ | ✗ | **D** (out of process; A9 CPU?) |
 
 ### 2.2 Waterfall and spectrum
@@ -77,11 +78,11 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Waterfall per user / views | share or exclusive | ✓ 8 ch (v1.900) | ✓ every user their own view: the channelizer's power line and zoom engine (16 distinct zooms at 20 lines/s); shared/time-shared views on the standard bitstream | – |
 | Full-band waterfall for everyone at once | ~ (zoom 0 takes one of the 2 slots) | ~ (one of its channels) | ✓ (channelizer: the power line, 0-61 MHz, any number of viewers) | – |
 | Auto levels | ✓ | ✓ | ✓ | – |
-| Colormaps (several + editor) | ✓ | ✓ | ✗ (1) | **R** (a few, no editor) |
-| Spectrum peak hold, audio (AF) spectrum | ✓ | ✓ | ✗ | **R** |
-| Timestamps on the waterfall, save as image | ✓ | ✓ | ✗ | **R** |
+| Colormaps (several + editor) | ✓ | ✓ | ✓ five (Default, Viridis, Heat, Phosphor, Grey), no editor | – |
+| Spectrum peak hold, audio (AF) spectrum | ✓ | ✓ | ~ peak hold ✓; no AF spectrum | **R** (AF spectrum) |
+| Timestamps on the waterfall, save as image | ✓ | ✓ | ✓ UTC marks; PNG with marks and a caption | – |
 | Window/interpolation/averaging choices | ✓ | ✓ | fixed (Welch) | omit (ours averages) |
-| Waterfall compression | ✓ ADPCM | ✓ | ✗ (u8 dB per bin) | later (measure first) |
+| Waterfall compression | ✓ ADPCM | ✓ | ✓ lossless Rice-coded lines (55 % of raw), a data saver | – |
 
 ### 2.3 Listener UI
 
@@ -89,12 +90,12 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 |---|---|---|---|---|---|
 | Band bars + band plan (ITU regions) | ✓ | ✓ | ✓ | ✓ band ribbon (IARU R1-3, ITU services), the phone's band picker | – |
 | DX labels: own, EiBi schedules, community | ✓ | ✓ | bookmarks | ✓ own (admin upload), EiBi on air now, utility and amateur lists (v0.7.0); live DX cluster spots from Spothole (POTA/SOTA/... configurable); no community list | – |
-| Frequency memories, VFO A/B | ✓ | ✓ | ✓ | ✗ | **R** |
-| Audio recording (WAV), squelch-triggered | ✓ | ✓ | MP3 | ✗ | **R** (client side) |
+| Frequency memories, VFO A/B | ✓ | ✓ | ✓ | ✓ in the browser, export/import JSON; A/B, A=B | – |
+| Audio recording (WAV), squelch-triggered | ✓ | ✓ | MP3 | ✓ WAV in the browser, silence (squelch) left out on request; IQ recording too | – |
 | Queue / camp on a user's channel | ✓ | ✓ | ✗ | ✓ (listen-along) | – |
 | Users on the scale | list | list | ✗ | ✓ markers, names (callsign/nickname), list, private users | – |
 | Chat | ✗ | ✗ | ✓ | ✗ | omit |
-| Mobile layout, keyboard shortcuts, URL state | ✓ | ✓ | ✓ | ✓ phone layout (PR #1), keys (u/l/c/a/f, arrows), `#f=&m=&z=&c=` links, tuning steps, hover preview | – (a key help overlay: **R**) |
+| Mobile layout, keyboard shortcuts, URL state | ✓ | ✓ | ✓ | ✓ phone layout (PR #1), keys (u/l/c/a/f/v/m, arrows) and their help (?), `#f=&m=&z=&c=` links, tuning steps, hover preview | – |
 | Themes | ✓ | ~ | ✓ | ✗ (dark) | later |
 | Map (receivers, spots, aircraft) | ✗ | TDoA map | ✓ | ✓ skimmer spots, the browser's own decodes and live DX spots with great circle lines; great circle (azimuthal equidistant), globe or Mercator, greyline; on phones too (tap, tap again to tune) (no aircraft, no other receivers) | **M** (more layers) |
 | Languages | ✗ | ✗ | ✗ | ✗ | omit |
@@ -108,12 +109,12 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Autorun pre-empted by users, resumes after | ~ (stock #55: doesn't resume) | ✓ | – | ✓ skimmers yield and resume (`skimmers_yield`); with the channelizer's 32 receivers they rarely have to | – |
 | JTTY (Finnish teletype) | ✗ | ✗ | ✗ | ✓ in the browser (v0.6.0, WASM); not as a skimmer (the A9 is 4x too slow) | – |
 | FT8/FT4/WSPR on the user's frequency, in the browser | ✗ | ✗ | ✓ (server-side) | ✓ (WASM, the skimmers' decoders; not reported; `m4-skimmers.md` §10) | – |
-| CW decoder (single) | ✓ | ✓ | ✓ | ✗ | **B** |
-| CW skimmer (multi-signal; RBN?) | ✓ | ✓ exp. | ✗ | ✗ | later |
-| FSK/RTTY, NAVTEX, DSC, SITOR | ✓ | ✓ | ✓ | ✗ | **B** |
-| HF FAX, SSTV | ✓ | ✓ | ✓ background | ✗ | **B** |
-| Time codes (DCF77, MSF, WWVB, …) | ✓ | ✓ | ✗ | ✗ | **B** |
-| HFDL | ✓ (opt.) | ✓ | ✓ | ✗ | **D** (dumphfdl process) |
+| CW decoder (single) | ✓ | ✓ | ✓ | ✓ every signal in the passband, classical or neural (browser) | – |
+| CW skimmer (multi-signal; RBN?) | ✓ | ✓ exp. | ✗ | ~ in the browser over a 40 kHz bin (wide skimming); not on the unit (A9: 5.7x real time a busy bin) | later (off the unit) |
+| FSK/RTTY, NAVTEX, DSC, SITOR | ✓ | ✓ | ✓ | ✓ RTTY/FSK (parameters detected), NAVTEX, DSC; no SITOR-A | – |
+| HF FAX, SSTV | ✓ | ✓ | ✓ background | ✓ in the browser (fax APT/phasing/slant; SSTV Martin, Scottie, Robot, PD) | – |
+| Time codes (DCF77, MSF, WWVB, …) | ✓ | ✓ | ✗ | ✓ DCF77, MSF, WWVB, JJY, WWV/WWVH (browser) | – |
+| HFDL | ✓ (opt.) | ✓ | ✓ | ✓ in the browser (own decoder), aircraft on the map | – |
 | ALE 2G | ✓ | ✓ | ✗ | ✗ | later |
 | AIS, ACARS (VHF airband mode) | ✓ | ✗ | ✓ | ✗ (ACARS 131.5 MHz is in the VHF range; AIS 162 MHz is not, at 98.304 MHz) | with **V** |
 | MFSK (digi_modes), STANAG-4285, Loran-C, IBP scan | ✓ | ✓ | ~ | ✗ | omit (IBP: maybe as a UI tool) |
@@ -143,12 +144,12 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Per-IP daily limit, IP block list, ban from the user list | ✓ | ✓ | per-IP sessions only | **O** |
 | Channels without a password (open + private sets) | ✓ | ✓ | ✗ (all or nothing) | **O** |
 | Receiver info page (name, location, antenna, photo) | ✓ | ✓ | ✗ | **O** |
-| Logs in the admin page | ✓ | ✓ | ✗ (journald) | **O** |
+| Logs in the admin page | ✓ | ✓ | ✓ (v0.13.0: the journal, the setup log) | – |
 | Updates (channels, rollback) | ✓ zip | ✓ | ✓ os: A/B with rollback (RAUC, since os v0.3.0); the admin page looks for a release (daily too), installs it with progress and reboots into it | – |
 | Network config (static IP, Wi-Fi) | ✓ | ✓ | ✓ os: DHCP or static from `web888.txt` (the board has no Wi-Fi) | – |
 | Usage analytics (heatmaps, visitors) | ✓ | ~ | metrics | omit (Prometheus/Grafana) |
 | Browser shell console | ✓ | ✓ | ✗ | omit (ssh) |
-| Backup / restore | ✓ SD | ✓ | ~ the config on its own partition (kept by updates); the label list downloads and uploads; no config download/upload | **O** |
+| Backup / restore | ✓ SD | ✓ | ✓ settings backup/restore from the admin page (v0.13.0); the config on its own partition | – |
 
 ### 2.7 Hardware modes (with the hw repo)
 
@@ -192,32 +193,31 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
    generator on the VHF connector): levels, the input filter's images
    (FM broadcast), NBFM and AM audio. Small in work, decides whether
    VHF leaves "experimental".
-2. **R — the rest of receiver parity**, the parts a listener notices:
-   * the ADC controls (dither, PGA) in the UI or admin (the RF
-     attenuator and the overload lamp: done);
-   * a measured S-meter calibration (dBm) for both the web UI and Kiwi;
-   * frequency offset (converters);
-   * IQ in the web UI (24 kS/s audio: done);
-   * (Opus and μ-law for the web UI: done);
-   * AGC threshold/decay (auto-notch: done);
-   * memories, client-side WAV recording, a few colormaps, peak hold,
-     waterfall timestamps, a key help overlay.
+2. **R — the rest of receiver parity** (done 2026-11-17: frequency
+   offset, AGC hang/decay, memories and VFO A/B, WAV recording,
+   colormaps, peak hold, waterfall time marks and PNG, key help; before:
+   the attenuator, 24 kS/s audio, Opus/μ-law, the auto-notch):
+   * the ADC controls (dither, PGA) in the admin page;
+   * a measured S-meter calibration (dBm) for both the web UI and Kiwi
+     (waits for a signal source: the second unit);
+   * IQ in the web UI; an audio (AF) spectrum.
 3. **O — access and presentation** (for public receivers):
    * per-IP daily limit, a block list, open + private channel sets;
-   * a receiver info page (name, location, antenna);
-   * logs in the admin page; config download/upload.
-4. **B — more decoders in the browser**: CW, RTTY/NAVTEX/DSC, FAX/SSTV,
-   time codes, as JTTY was done (WASM/JS on the page's own audio); the
-   todo and plan: `m8-browser-decoders.md`.
+   * a receiver info page (name, location, antenna).
+   (Logs and settings backup: done in v0.13.0.)
+4. **B — more decoders in the browser**: done (M8: CW, RTTY/NAVTEX/DSC,
+   PSK, FAX/SSTV, HFDL, JS8, time codes, the signal identifier); what is
+   left is in `m8-browser-decoders.md`.
 5. **M — more map layers**: EiBi transmitters on air, other receivers.
-6. **D — heavy server-side decoders**: HFDL (dumphfdl), DRM (FDK-AAC
-   strictly out of process); measure the A9 first.
+6. **D — heavy server-side decoders**: DRM (FDK-AAC strictly out of
+   process); measure the A9 first. (HFDL went to the browser instead.)
 7. **V — the rest**: the external 10 MHz reference, ACARS on VHF,
    110.592 MHz on the channelizer (a fractional rate) if marine VHF is
    wanted.
-8. **Later**: S2 (CW/RTTY skimmers), FST4W, GPS timestamps and TDoA
-   (M6's open item), IQ stream/rtl_tcp/SpyServer, ACME, themes, ALE,
-   waterfall compression, public listing (§5).
+8. **Later**: S2 (CW/RTTY skimmers, off the unit), FST4W, GPS
+   timestamps and TDoA (M6's open item; the second unit has a GPS
+   antenna), IQ stream/rtl_tcp/SpyServer, ACME, themes, ALE, public
+   listing (§5).
 
 **Omissions** (unchanged unless §5 says otherwise):
 * languages (chat: see §5)
@@ -253,12 +253,12 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Bookmarks + scanner | Auto-bookmarks from EiBi (in range) and band plans; scanner steps through visible bookmarks with squelch | The scanner is client-side retuning; the server has squelch and power | **R** |
 | Chat, admin broadcast | Random nicknames, timestamps, federated over MQTT | Small. Moved from "omit" to a question (§5) | ? |
 | Abuse protection | Robot score from connection rate and rapid profile changes, timed IP bans, trusted proxies, session timeout with a policy page, LAN-only admin login | Trusted proxies are fixed now; the rest goes with **O** | **O** |
-| Opus audio | Wanted for years (upstream #220, a 2022 WebCodecs branch abandoned) | ADPCM first, Opus via WebCodecs where the browser has it | **R** |
+| Opus audio | Wanted for years (upstream #220, a 2022 WebCodecs branch abandoned) | Done: Opus (pure-Rust encoder, WASM decoder in the page), μ-law, PCM | – |
 | Whisper speech-to-text | 20 s WAV chunks POSTed to an external Whisper server; transcripts to the page and MQTT | No inference on the unit; an optional URL in the config. Tried offline on our audio (2026-10-29): AM usable, SSB poor, hallucinations without voice detection | later (AM broadcast / VHF AM first) |
 | FreeDV (700D/E, RADE) | Server-side decoder per user | HF digital voice. Better as WASM in the browser (RADE is a neural network) | later, browser |
 | Selcall/DTMF/EAS, POCSAG, ISM, AIS, ADS-B, DAB, HD Radio, LoRa, radiosondes | Many decoders, mostly VHF/UHF | Mostly outside our bands (HF, and 98.3-147.5 MHz on VHF); ACARS fits the VHF range | omit (except DSC in **B**, ACARS with **V**) |
 | Secondary audio-passband waterfall for digimodes (click sets the decoder offset) | Panels for text, tables and images | The browser-side decoder UI | **B** |
-| Keyboard help overlay, themes, Hz pointer readout, pinch zoom, log volume, saved passband per mode | Many small UI items | Cheap, client side | **R** |
+| Keyboard help overlay, themes, Hz pointer readout, pinch zoom, log volume, saved passband per mode | Many small UI items | Cheap, client side; key help, pinch zoom and the hover readout done | **R** (the rest) |
 | Rig follow (Hamlib) | Radio follows the receiver, optional PTT | Private stations only | later |
 | JavaScript plugin API | Buttons, windows and panels from plugins | Against "small, owned surface" (design §1) for now | omit for now |
 

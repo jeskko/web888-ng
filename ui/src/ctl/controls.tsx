@@ -5,7 +5,9 @@
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
 import { setFloor, setTop } from "../view/range.ts";
-import { bandwidths, formatKhz, parseFreq, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
+import { cssGradient, PALETTE_NAMES, type Palette } from "../view/colormap.ts";
+import { helpOpen } from "./keys.tsx";
+import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
@@ -62,6 +64,13 @@ import {
   dataSaver,
   setDataSaver,
   wfKbps,
+  palette,
+  paneHooks,
+  peakHold,
+  setPalette,
+  setPeakHold,
+  setWfTimes,
+  wfTimes,
 } from "../state.ts";
 
 /** Dial in kHz; wheel over a digit steps that digit, click to type. */
@@ -80,7 +89,7 @@ export function FreqDisplay() {
           if (e.key === "Enter") {
             const f = parseFreq(el.value);
             // a typed frequency off the waterfall brings the view along
-            if (f !== null) tuneInView(f);
+            if (f !== null) tuneInView(f - shownOffset());
             editing.value = false;
           } else if (e.key === "Escape") editing.value = false;
         }}
@@ -247,13 +256,42 @@ export function AudioCtl() {
         AGC
       </button>
       {s.agc && (
-        <span class="seg" title={isAm(s.mode) ? "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades" : "AGC recovery: fast, medium, slow"}>
-          {(["fast", "medium", "slow"] as AgcSpeed[]).map((v) => (
+        <span class="seg" title={isAm(s.mode) ? "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay" : "AGC recovery: fast, medium, slow, or custom (your own hang time and decay)"}>
+          {(["fast", "medium", "slow", ...(s.agc_hang_ms !== undefined ? ["custom"] : [])] as AgcSpeed[]).map((v) => (
             <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
               {v[0].toUpperCase()}
             </button>
           ))}
         </span>
+      )}
+      {s.agc && s.agc_speed === "custom" && s.agc_hang_ms !== undefined && s.agc_decay_db_s !== undefined && (
+        <>
+          <label title="Hang: how long the gain is held after the signal drops">
+            hang
+            <input
+              type="range"
+              min={0}
+              max={2000}
+              step={50}
+              value={s.agc_hang_ms}
+              onInput={(e) => setAudio({ agc_hang_ms: Number(e.currentTarget.value) })}
+            />
+            <span class="num">{(s.agc_hang_ms / 1000).toFixed(2)} s</span>
+          </label>
+          <label title="Decay: how fast the gain comes back after the hang (dB a second)">
+            decay
+            <input
+              type="range"
+              min={0}
+              max={1}
+              step={0.01}
+              // log scale, 2-100 dB/s
+              value={Math.log(s.agc_decay_db_s / 2) / Math.log(50)}
+              onInput={(e) => setAudio({ agc_decay_db_s: Math.round(2 * 50 ** Number(e.currentTarget.value)) })}
+            />
+            <span class="num">{s.agc_decay_db_s.toFixed(0)} dB/s</span>
+          </label>
+        </>
       )}
       <label title={s.agc ? "Maximum AGC gain" : "Fixed gain"}>
         {s.agc ? "max" : "gain"}
@@ -603,6 +641,45 @@ export function ContrastCtl() {
   );
 }
 
+const PALETTE_LABELS: Record<Palette, string> = {
+  web888: "Default",
+  viridis: "Viridis",
+  heat: "Heat",
+  phosphor: "Phosphor",
+  grey: "Grey",
+};
+
+/** The waterfall's palette, peak hold, time marks, and a snapshot. */
+export function LookCtl() {
+  const p = palette.value;
+  return (
+    <div class="group look">
+      <span class="swatch" style={{ backgroundImage: cssGradient(p) }} />
+      <select class="palette" value={p} onChange={(e) => setPalette(e.currentTarget.value as Palette)} title="Waterfall colours">
+        {PALETTE_NAMES.map((n) => (
+          <option key={n} value={n}>
+            {PALETTE_LABELS[n]}
+          </option>
+        ))}
+      </select>
+      <button class={peakHold.value ? "on" : ""} onClick={() => setPeakHold(!peakHold.value)} title="Peak hold: the highest level each frequency reached (pink), on the spectrum">
+        Peak
+      </button>
+      {peakHold.value && (
+        <button onClick={() => paneHooks.clearPeak?.()} title="Clear the peaks">
+          ↺
+        </button>
+      )}
+      <button class={wfTimes.value ? "on" : ""} onClick={() => setWfTimes(!wfTimes.value)} title="Time marks (UTC) down the waterfall's left edge">
+        Time
+      </button>
+      <button onClick={() => paneHooks.saveImage?.()} title="Save the spectrum and waterfall as a PNG image (with time marks and the frequency)">
+        PNG
+      </button>
+    </div>
+  );
+}
+
 /** The RF attenuator, while the owner has it in (for every listener). */
 export function AttLamp() {
   const db = status.value?.rf_atten_db;
@@ -704,7 +781,18 @@ export function StatusBar() {
         </span>
       )}
       <span class="right">
-        {server.value} · <a href="#/admin">admin</a>
+        {server.value} ·{" "}
+        <a
+          href="#"
+          onClick={(e) => {
+            e.preventDefault();
+            helpOpen.value = true;
+          }}
+          title="Keys and mouse (key ?)"
+        >
+          keys
+        </a>{" "}
+        · <a href="#/admin">admin</a>
       </span>
     </div>
   );

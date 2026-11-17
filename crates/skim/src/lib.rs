@@ -126,6 +126,8 @@ pub struct Band {
     pub cfg: Skimmer,
     pub label: String,
     pub status: BandStatus,
+    /// A converter's offset added to the spots' frequencies (Hz).
+    pub offset_hz: f64,
 }
 
 /// A slot of audio to decode.
@@ -370,7 +372,8 @@ fn decoder_thread(queue: Arc<Queue>, bus: Arc<SpotBus>, threads: usize) {
         let deadline = Instant::now() + Duration::from_secs_f64(share);
         let cpu0 = thread_cpu();
         let cut0 = ft8.stats.cut_short + ft4.stats.cut_short + wspr.cut_short;
-        let dial = w.band.cfg.dial;
+        // on air: the converter's offset added
+        let dial = w.band.cfg.dial + w.band.offset_hz;
         let spot = |mode, freq: f64, snr, dt, message: String, sender, grid, uncertain| Spot {
             time: w.start,
             mode,
@@ -477,6 +480,8 @@ pub struct Skimmers {
     queue: Arc<Queue>,
     pub bus: Arc<SpotBus>,
     running: Mutex<Vec<Running>>,
+    /// A converter's offset (Hz, as f64 bits), added to spots.
+    offset_bits: std::sync::atomic::AtomicU64,
 }
 
 impl Skimmers {
@@ -508,7 +513,15 @@ impl Skimmers {
             queue,
             bus,
             running: Mutex::new(vec![]),
+            offset_bits: std::sync::atomic::AtomicU64::new(0f64.to_bits()),
         }))
+    }
+
+    /// A converter in front (`[radio] freq_offset_hz`): spots report the
+    /// receiver's frequencies plus `hz` (bands started from now on).
+    pub fn set_offset(&self, hz: f64) {
+        let hz = if hz.is_finite() { hz } else { 0.0 };
+        self.offset_bits.store(hz.to_bits(), Ordering::Relaxed);
     }
 
     /// Run the bands of `cfg` that are enabled at UTC hour `hour`; stop
@@ -542,6 +555,7 @@ impl Skimmers {
                 cfg: w.clone(),
                 label: label.clone(),
                 status: BandStatus::default(),
+                offset_hz: f64::from_bits(self.offset_bits.load(Ordering::Relaxed)),
             });
             let stop = Arc::new(AtomicBool::new(false));
             let lease = self

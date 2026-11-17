@@ -83,6 +83,12 @@ pub enum ClientMsg {
         gain_db: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         agc_speed: Option<AgcSpeed>,
+        /// With `agc_speed` "custom": the hang time (ms, 0-5000) and the
+        /// gain's recovery after it (dB/s, 1-200).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agc_hang_ms: Option<f32>,
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        agc_decay_db_s: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
         nb: Option<f32>,
         #[serde(default, skip_serializing_if = "Option::is_none")]
@@ -139,7 +145,8 @@ pub enum ClientMsg {
     },
 }
 
-/// SSB/CW AGC recovery speed.
+/// AGC recovery speed: a preset, or `Custom` (the state's
+/// `agc_hang_ms` and `agc_decay_db_s`).
 #[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
 pub enum AgcSpeed {
@@ -147,17 +154,35 @@ pub enum AgcSpeed {
     #[default]
     Medium,
     Slow,
+    Custom,
 }
 
-impl From<AgcSpeed> for web888_dsp::agc::AgcSpeed {
-    fn from(s: AgcSpeed) -> Self {
+impl AgcSpeed {
+    /// The preset's speed; `None` for `Custom`.
+    pub fn preset(self) -> Option<web888_dsp::agc::AgcSpeed> {
         use web888_dsp::agc::AgcSpeed as S;
-        match s {
-            AgcSpeed::Fast => S::Fast,
-            AgcSpeed::Medium => S::Medium,
-            AgcSpeed::Slow => S::Slow,
+        match self {
+            AgcSpeed::Fast => Some(S::Fast),
+            AgcSpeed::Medium => Some(S::Medium),
+            AgcSpeed::Slow => Some(S::Slow),
+            AgcSpeed::Custom => None,
         }
     }
+}
+
+/// Custom AGC hang time's range (ms) and default (medium's).
+pub const AGC_HANG_MS: (f32, f32) = (0.0, 5000.0);
+pub const AGC_HANG_MS_DEFAULT: f32 = 300.0;
+/// Custom AGC decay's range (dB/s) and default (medium's).
+pub const AGC_DECAY_DB_S: (f32, f32) = (1.0, 200.0);
+pub const AGC_DECAY_DB_S_DEFAULT: f32 = 20.0;
+
+fn default_agc_hang_ms() -> f32 {
+    AGC_HANG_MS_DEFAULT
+}
+
+fn default_agc_decay_db_s() -> f32 {
+    AGC_DECAY_DB_S_DEFAULT
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -182,6 +207,14 @@ pub struct RadioInfo {
     pub rf_hi: f64,
     pub wf_decim_min: u16,
     pub wf_decim_max: u16,
+    /// A converter's offset (Hz): the frequencies to show are these plus
+    /// it (`[radio] freq_offset_hz`); absent: 0.
+    #[serde(default, skip_serializing_if = "is_zero")]
+    pub freq_offset_hz: f64,
+}
+
+fn is_zero(v: &f64) -> bool {
+    *v == 0.0
 }
 
 #[derive(Clone, Copy, Debug, PartialEq, Serialize, Deserialize)]
@@ -200,6 +233,11 @@ pub struct State {
     pub agc: bool,
     pub gain_db: f32,
     pub agc_speed: AgcSpeed,
+    /// The custom AGC speed's hang time (ms) and decay (dB/s).
+    #[serde(default = "default_agc_hang_ms")]
+    pub agc_hang_ms: f32,
+    #[serde(default = "default_agc_decay_db_s")]
+    pub agc_decay_db_s: f32,
     /// Noise blanker threshold (impulse / mean level); 0: off.
     pub nb: f32,
     /// Noise reduction strength 0..1; 0: off.
@@ -521,6 +559,7 @@ mod tests {
             },
             label: String::new(),
             status: Default::default(),
+            offset_hz: 0.0,
         };
         let ft8 = band(web888_config::SkimMode::Ft8, 7_074_000.0);
         ft8.status
