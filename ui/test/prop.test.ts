@@ -59,7 +59,7 @@ test("cells: colour and tooltip", () => {
   assert.equal(relColor(1), "rgb(253,231,37)");
   const p = f.paths[0];
   assert.equal(cellTitle(f, p, 0, 0, 5), "Europe, 40 m, 05 UTC: SSB gets through on 10 % of days, SNR 40 dB in 1 Hz");
-  assert.equal(cellTitle(f, p, 1, 2, 23), "Europe, 26 MHz, 23 UTC: FT8 gets through on – of days");
+  assert.equal(cellTitle(f, p, 1, 2, 23), "Europe, 26 MHz, 23 UTC: no reliability figure for FT8");
 });
 
 test("a storm warning from Kp 5 up", () => {

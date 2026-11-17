@@ -5,6 +5,7 @@
 // in WebAssembly) kept as the current minute's seconds and the minutes read.
 
 import { AM_MODES, type Mode } from "./proto.ts";
+import { N_, t } from "./i18n.ts";
 
 export interface TcStation {
   /** The crate's index (tc_start). */
@@ -19,12 +20,13 @@ export interface TcStation {
   about: string;
 }
 
+// i18n: about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
 export const TC_STATIONS: TcStation[] = [
-  { id: 0, name: "DCF77", carriers: [77_500], am: false, about: "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST" },
-  { id: 1, name: "MSF", carriers: [60_000], am: false, about: "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST" },
-  { id: 2, name: "WWVB", carriers: [60_000], am: false, about: "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC" },
-  { id: 3, name: "JJY", carriers: [40_000, 60_000], am: false, about: "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST" },
-  { id: 4, name: "WWV/WWVH", carriers: [2_500_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000], am: true, about: "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC" },
+  { id: 0, name: "DCF77", carriers: [77_500], am: false, about: N_("Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST") },
+  { id: 1, name: "MSF", carriers: [60_000], am: false, about: N_("Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST") },
+  { id: 2, name: "WWVB", carriers: [60_000], am: false, about: N_("Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC") },
+  { id: 3, name: "JJY", carriers: [40_000, 60_000], am: false, about: N_("Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST") },
+  { id: 4, name: "WWV/WWVH", carriers: [2_500_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000], am: true, about: N_("Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC") },
 ];
 
 /** WWV's subcarrier (Hz in AM audio). */
@@ -66,10 +68,15 @@ export function tcPlan(
   }
   if (want !== "auto") {
     const s = list[0];
-    if (!s) return { error: `no station ${want}` };
-    return { error: s.am ? `${s.name}: tune AM to ${s.carriers.map((c) => c / 1e6).join(", ")} MHz` : `${s.name}: tune its carrier (${s.carriers.map((c) => c / 1e3).join(" or ")} kHz) into the passband in USB, LSB or CW` };
+    if (!s) return { error: t("no station {name}", { name: want }) };
+    // i18n: AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
+    return {
+      error: s.am
+        ? t("{name}: tune AM to {mhz} MHz", { name: s.name, mhz: s.carriers.map((c) => c / 1e6).join(", ") })
+        : t("{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW", { name: s.name, khz: s.carriers.map((c) => c / 1e3).join(" or ") }),
+    };
   }
-  return { error: "No time station in the passband: pick one to tune to." };
+  return { error: t("No time station in the passband: pick one to tune to.") };
 }
 
 /** How to tune a station: USB with its carrier at 1 kHz in a narrow

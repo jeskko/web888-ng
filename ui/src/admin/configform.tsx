@@ -5,6 +5,7 @@
 // applies at once, what needs a restart); Save writes the file.
 
 import { useEffect, useMemo, useState } from "preact/hooks";
+import { t } from "../i18n.ts";
 import { call, get, type Changes, type ConfigView, type Json } from "./api.ts";
 import { getIn, kindOf, label, parse, resolve, same, setIn, show, type Schema } from "./schema.ts";
 
@@ -29,7 +30,7 @@ function Notes({ ctx, path }: { ctx: Ctx; path: string[] }) {
   const d = getIn(ctx.draft, path);
   return (
     <>
-      {!same(d, f) && <span class="tag edit">changed</span>}
+      {!same(d, f) && <span class="tag edit">{t("changed")}</span>}
       {!same(r, f) && (
         <span class="tag" title="The server runs with another value: set on its command line, or saved and waiting for a restart">
           running: {show(r ?? null) || "none"}
@@ -44,9 +45,9 @@ function TextField({ ctx, path, s }: { ctx: Ctx; path: string[]; s: Schema }) {
   const v = getIn(ctx.draft, path);
   const [text, setText] = useState(k.kind === "json" ? JSON.stringify(v ?? null) : show(v ?? null));
   const [err, setErr] = useState<string | null>(null);
-  const onInput = (t: string) => {
-    setText(t);
-    const p = parse(k, t);
+  const onInput = (text: string) => {
+    setText(text);
+    const p = parse(k, text);
     const e = "error" in p ? p.error : null;
     setErr(e);
     ctx.error(path, e);
@@ -62,7 +63,7 @@ function TextField({ ctx, path, s }: { ctx: Ctx; path: string[]; s: Schema }) {
         autocomplete="off"
         value={text}
         disabled={ctx.readOnly}
-        placeholder={nullable ? "(none)" : ""}
+        placeholder={nullable ? t("(none)") : ""}
         spellcheck={false}
         onInput={(e) => onInput((e.target as HTMLInputElement).value)}
       />
@@ -107,7 +108,7 @@ function Field({ ctx, path, schema }: { ctx: Ctx; path: string[]; schema: Schema
           ctx.set(path, x === "" ? null : x);
         }}
       >
-        {k.nullable && <option value="">(none)</option>}
+        {k.nullable && <option value="">{t("(none)")}</option>}
         {k.options.map((o) => (
           <option value={o.value} title={o.help}>
             {o.value}
@@ -170,12 +171,12 @@ export function ConfigPage({ onRestart }: { onRestart(): void }) {
       setCheck(null);
       return;
     }
-    const t = window.setTimeout(() => {
+    const timer = window.setTimeout(() => {
       call<Changes>("POST", "api/admin/config/validate", draft)
         .then(setCheck)
         .catch((e: Error) => setCheck(e.message));
     }, 400);
-    return () => clearTimeout(t);
+    return () => clearTimeout(timer);
   }, [draft, dirty, hasErrors]);
 
   const ctx = useMemo<Ctx | null>(
@@ -217,31 +218,30 @@ export function ConfigPage({ onRestart }: { onRestart(): void }) {
   };
 
   if (fail && !ctx) return <p class="warn">{fail}</p>;
-  if (!ctx || !schema) return <p class="dim">Loading…</p>;
+  if (!ctx || !schema) return <p class="dim">{t("Loading…")}</p>;
   const sections = Object.entries(schema.properties ?? {});
   return (
     <div class="config">
       <p class="dim">
-        {cfg?.path ? <>File: {cfg.path}. </> : null}
-        {cfg?.writable ? "" : "This server has no config file to write; the form is read-only. "}
-        Values marked “running” differ in the running server: given on its command line (which overrides the file), or
-        saved and waiting for a restart.
+        {cfg?.path ? <>{t("File: {path}.", { path: cfg.path })} </> : null}
+        {cfg?.writable ? "" : t("This server has no config file to write; the form is read-only.") + " "}
+        {t("Values marked “running” differ in the running server: given on its command line (which overrides the file), or saved and waiting for a restart.")}
       </p>
       <div class="savebar">
         <button class="on" disabled={!dirty || hasErrors || !cfg?.writable} onClick={save}>
-          Save
+          {t("Save")}
         </button>
         <button disabled={!dirty} onClick={() => void load()}>
-          Revert
+          {t("Revert")}
         </button>
-        {hasErrors && <span class="warn">Fix the marked fields first.</span>}
+        {hasErrors && <span class="warn">{t("Fix the marked fields first.")}</span>}
         {!hasErrors && typeof check === "string" && <span class="warn">{check}</span>}
         {!hasErrors && check && typeof check !== "string" && <ChangeNote c={check} />}
         {saved && (
           <>
-            <span class="ok">Saved.</span>
+            <span class="ok">{t("Saved.")}</span>
             <ChangeNote c={saved} />
-            {saved.restart.length > 0 && <button onClick={onRestart}>Restart now</button>}
+            {saved.restart.length > 0 && <button onClick={onRestart}>{t("Restart now")}</button>}
           </>
         )}
         {fail && <span class="warn">{fail}</span>}
@@ -270,7 +270,7 @@ export function ConfigPage({ onRestart }: { onRestart(): void }) {
 
 function ChangeNote({ c }: { c: Changes }) {
   if (c.restart.length > 0) {
-    return <span class="warn">Needs a restart: {c.restart.join(", ")}.</span>;
+    return <span class="warn">{t("Needs a restart: {what}.", { what: c.restart.join(", ") })}</span>;
   }
-  return <span class="dim">{c.live ? "Applies at once." : "No change for the running server."}</span>;
+  return <span class="dim">{c.live ? t("Applies at once.") : t("No change for the running server.")}</span>;
 }

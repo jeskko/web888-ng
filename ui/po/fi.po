@@ -1,0 +1,3785 @@
+# Suomi translation of the web888d web UI (web888-ng, GPL-3.0-or-later).
+# See po/README.md.
+msgid ""
+msgstr ""
+"Project-Id-Version: web888d-ui\n"
+"Language: fi\n"
+"X-Language-Name: Suomi\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+"Plural-Forms: nplurals=2; plural=(n != 1);\n"
+
+#. names of the admin page's tabs
+#: src/admin/admin.tsx:16
+msgid "Status"
+msgstr "Tila"
+
+#: src/admin/admin.tsx:17 src/admin/admin.tsx:165
+msgid "Sessions"
+msgstr "Istunnot"
+
+#: src/admin/admin.tsx:18 src/admin/admin.tsx:865 src/ctl/config.tsx:133 src/ctl/config.tsx:138 src/ctl/mobile.tsx:317
+msgid "Configuration"
+msgstr "Asetukset"
+
+#: src/admin/admin.tsx:19 src/ctl/config.tsx:105
+msgid "Labels"
+msgstr "Nimiöt"
+
+#: src/admin/admin.tsx:20
+msgid "Info page"
+msgstr "Tietosivu"
+
+#: src/admin/admin.tsx:21
+msgid "Passwords"
+msgstr "Salasanat"
+
+#: src/admin/admin.tsx:22
+msgid "Update"
+msgstr "Päivitys"
+
+#: src/admin/admin.tsx:23
+msgid "Logs"
+msgstr "Lokit"
+
+#: src/admin/admin.tsx:63
+msgid "Restart web888d? Everyone is disconnected for a few seconds."
+msgstr "Käynnistetäänkö web888d uudelleen? Kaikkien yhteydet katkeavat muutamaksi sekunniksi."
+
+#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1484
+msgid "web888d admin"
+msgstr "web888d – ylläpito"
+
+#: src/admin/admin.tsx:86
+msgid "No admin password is set. On the unit's console run"
+msgstr "Ylläpidon salasanaa ei ole asetettu. Suorita laitteen konsolissa"
+
+#: src/admin/admin.tsx:89
+msgid "or put the password (one line, at least 8 characters) in {file} on the SD card and restart."
+msgstr "tai kirjoita salasana (yksi rivi, vähintään 8 merkkiä) SD-kortille tiedostoon {file} ja käynnistä uudelleen."
+
+#: src/admin/admin.tsx:109 src/admin/admin.tsx:897
+msgid "Admin password"
+msgstr "Ylläpidon salasana"
+
+#: src/admin/admin.tsx:116 src/ctl/controls.tsx:592 src/main.tsx:118
+msgid "Log in"
+msgstr "Kirjaudu"
+
+#: src/admin/admin.tsx:120
+msgid "Back to the receiver"
+msgstr "Takaisin vastaanottimeen"
+
+#: src/admin/admin.tsx:156 src/admin/admin.tsx:660 src/admin/admin.tsx:989 src/admin/admin.tsx:1475 src/admin/configform.tsx:221 src/ctl/info.tsx:142 src/ctl/licences.tsx:164 src/ctl/prop.tsx:222
+msgid "Loading…"
+msgstr "Ladataan…"
+
+#: src/admin/admin.tsx:163
+msgid "Radio"
+msgstr "Radio"
+
+#: src/admin/admin.tsx:167
+msgid "RX rate"
+msgstr "RX-nopeus"
+
+#: src/admin/admin.tsx:169
+msgid "{rate} k frames/s"
+msgstr "{rate} k kehystä/s"
+
+#: src/admin/admin.tsx:170
+msgid "(falling behind)"
+msgstr "(jää jälkeen)"
+
+#: src/admin/admin.tsx:172
+msgid "Frames lost"
+msgstr "Kadonneet kehykset"
+
+#. ring = the ring buffer between the hardware reader and the DSP; frame = one block of samples from the ADC
+#: src/admin/admin.tsx:174
+msgid "RX frames lost to ring overruns: the reader fell behind, a gap in every listener's audio"
+msgstr "Rengaspuskurin ylivuotoihin kadonneet RX-kehykset: lukija jäi jälkeen, katko jokaisen kuuntelijan äänessä"
+
+#: src/admin/admin.tsx:177 src/admin/admin.tsx:445
+msgid "ADC overloads"
+msgstr "ADC-ylikuormitukset"
+
+#. ADC = the analogue-to-digital converter; it overloads (clips) when the signal is too strong; a block = a chunk of samples read from it
+#: src/admin/admin.tsx:179
+msgid "RX blocks read while the ADC clipped: strong signals distort every listener's audio. The RF attenuator helps."
+msgstr "RX-lohkot, jotka luettiin ADC:n leikatessa: voimakkaat signaalit säröyttävät jokaisen kuuntelijan äänen. RF-vaimennin auttaa."
+
+#: src/admin/admin.tsx:180
+msgid "{n} block"
+msgid_plural "{n} blocks"
+msgstr[0] "{n} lohko"
+msgstr[1] "{n} lohkoa"
+
+#: src/admin/admin.tsx:181
+msgid "({rate}/s now)"
+msgstr "({rate}/s nyt)"
+
+#: src/admin/admin.tsx:183
+msgid "RF attenuator"
+msgstr "RF-vaimennin"
+
+#: src/admin/admin.tsx:189
+msgid "ADC"
+msgstr "ADC"
+
+#: src/admin/admin.tsx:195
+msgid "Clock"
+msgstr "Kello"
+
+#: src/admin/admin.tsx:196
+msgid "no GPS correction"
+msgstr "ei GPS-korjausta"
+
+#: src/admin/admin.tsx:198
+msgid "Restart web888d…"
+msgstr "Käynnistä web888d uudelleen…"
+
+#: src/admin/admin.tsx:203
+msgid "RX channels ({used}/{total} in use)"
+msgstr "RX-kanavat ({used}/{total} käytössä)"
+
+#: src/admin/admin.tsx:212
+msgctxt "RX channel"
+msgid "free"
+msgstr "vapaa"
+
+#: src/admin/admin.tsx:221
+msgid "Waiting"
+msgstr "Jonossa"
+
+#: src/admin/admin.tsx:231
+msgid "DSP workers"
+msgstr "DSP-työsäikeet"
+
+#. DSP worker = a thread that does the signal processing; jobs = work items it ran; busy = share of time working; shed = jobs skipped because it was overloaded; drops rx/wf = audio and waterfall blocks dropped (wf = waterfall)
+#: src/admin/admin.tsx:237
+msgid "jobs"
+msgstr "tehtävät"
+
+#. the share of time a DSP worker thread spends working (a column head)
+#: src/admin/admin.tsx:239
+msgctxt "DSP worker"
+msgid "busy"
+msgstr "käyttöaste"
+
+#: src/admin/admin.tsx:240
+msgid "shed"
+msgstr "ohitetut"
+
+#: src/admin/admin.tsx:241
+msgid "drops rx/wf"
+msgstr "pudotetut rx/vp"
+
+#: src/admin/admin.tsx:258
+msgid "Waterfall views"
+msgstr "Vesiputousnäkymät"
+
+#: src/admin/admin.tsx:260 src/admin/admin.tsx:480
+msgid "none"
+msgstr "ei yhtään"
+
+#. slot = a numbered waterfall channel of the receiver
+#: src/admin/admin.tsx:267
+msgid "slot {n}"
+msgstr "paikka {n}"
+
+#. time-shared = the waterfall is shared between several listeners, taking turns
+#: src/admin/admin.tsx:274
+msgid "{n} session, time-shared"
+msgid_plural "{n} sessions, time-shared"
+msgstr[0] "{n} istunto, aikajaettu"
+msgstr[1] "{n} istuntoa, aikajaettu"
+
+#: src/admin/admin.tsx:275
+msgid "{n} session"
+msgid_plural "{n} sessions"
+msgstr[0] "{n} istunto"
+msgstr[1] "{n} istuntoa"
+
+#: src/admin/admin.tsx:285
+msgid "CPU per thread"
+msgstr "CPU säikeittäin"
+
+#: src/admin/admin.tsx:289
+msgid "thread"
+msgstr "säie"
+
+#: src/admin/admin.tsx:290
+msgctxt "CPU use"
+msgid "now"
+msgstr "nyt"
+
+#: src/admin/admin.tsx:291
+msgctxt "CPU use"
+msgid "total"
+msgstr "yht."
+
+#: src/admin/admin.tsx:304
+msgid "% of one core since the last refresh, summed over threads of a name."
+msgstr "% yhdestä ytimestä edellisen päivityksen jälkeen, samannimisten säikeiden summa."
+
+#: src/admin/admin.tsx:335
+msgid "Weakens every signal before the ADC, for all listeners: against overloads from strong signals"
+msgstr "Vaimentaa kaikkia signaaleja ennen ADC:tä, kaikille kuuntelijoille: voimakkaiden signaalien aiheuttamia ylikuormituksia vastaan"
+
+#. "in" = the attenuator is switched in (active), a checkbox label
+#: src/admin/admin.tsx:337
+msgctxt "attenuator switched in"
+msgid "in"
+msgstr "päällä"
+
+#: src/admin/admin.tsx:353
+msgid "now {db} dB (set by an HPSDR client)"
+msgstr "nyt {db} dB (HPSDR-asiakkaan asettama)"
+
+#. dither = noise added in the ADC to linearise it; spurs/birdies = unwanted steady tones
+#: src/admin/admin.tsx:378
+msgid "The ADC's dither: spreads its own spurs (birdies) into the noise, at a little more noise"
+msgstr "ADC:n dither: levittää ADC:n omat harhasignaalit (birdiet) kohinaan, hieman kohinaa lisäten"
+
+#: src/admin/admin.tsx:379
+msgid "dither"
+msgstr "dither"
+
+#. PGA = the ADC's programmable gain amplifier; full scale = the input voltage at which the ADC clips; dBFS = decibels relative to the ADC's full scale
+#: src/admin/admin.tsx:382
+msgid "The ADC's PGA: 1.5 V full scale instead of 2.25 V, every signal ~3.5 dB higher (and overloads that much sooner); the dBFS levels move with it"
+msgstr "ADC:n PGA: täysi skaala 1,5 V eikä 2,25 V, jokainen signaali ~3,5 dB voimakkaampi (ja ylikuormitus yhtä paljon aiemmin); dBFS-tasot siirtyvät samalla"
+
+#: src/admin/admin.tsx:383
+msgid "PGA (+3.5 dB)"
+msgstr "PGA (+3,5 dB)"
+
+#. causes of an ADC overload; carrier = a steady unmodulated signal; impulse = a very short broadband pulse
+#: src/admin/admin.tsx:417
+msgid "a carrier"
+msgstr "kantoaalto"
+
+#: src/admin/admin.tsx:418
+msgid "several signals"
+msgstr "useita signaaleja"
+
+#: src/admin/admin.tsx:419
+msgid "broadband (an impulse)"
+msgstr "laajakaistainen (pulssi)"
+
+#: src/admin/admin.tsx:420
+msgid "no single cause"
+msgstr "ei yksittäistä syytä"
+
+#: src/admin/admin.tsx:421
+msgid "brief: a click or switching spike (too short to show in the band's power)"
+msgstr "lyhyt: napsahdus tai kytkentäpiikki (liian lyhyt näkyäkseen kaistan tehossa)"
+
+#: src/admin/admin.tsx:429
+msgid "carrier at {khz} kHz, {dbfs} dBFS"
+msgstr "kantoaalto {khz} kHz, {dbfs} dBFS"
+
+#. the percentage is the share of the overload's power at that frequency
+#: src/admin/admin.tsx:432
+msgid "carrier near {mhz}, {dbfs} dBFS ({share} %)"
+msgstr "kantoaalto lähellä {mhz}, {dbfs} dBFS ({share} %)"
+
+#: src/admin/admin.tsx:433
+msgid "several: {list}"
+msgstr "useita: {list}"
+
+#. broadband = the noise level rises across the whole band by this many dB
+#: src/admin/admin.tsx:435
+msgid "broadband, +{db} dB everywhere"
+msgstr "laajakaistainen, +{db} dB kaikkialla"
+
+#: src/admin/admin.tsx:436
+msgid "no single cause; strongest {mhz} ({share} %)"
+msgstr "ei yksittäistä syytä; voimakkain {mhz} ({share} %)"
+
+#: src/admin/admin.tsx:447
+msgid "None since web888d started."
+msgstr "Ei yhtään web888d:n käynnistymisen jälkeen."
+
+#: src/admin/admin.tsx:447
+msgid "The last {n} (UTC)."
+msgstr "Viimeiset {n} (UTC)."
+
+#: src/admin/admin.tsx:448
+msgid "Peak sample now: {level}."
+msgstr "Suurin näyte nyt: {level}."
+
+#: src/admin/admin.tsx:448
+msgid "unknown"
+msgstr "tuntematon"
+
+#. channelizer = the FPGA filter bank that splits the band into channels; the overload causes come from its spectrum
+#: src/admin/admin.tsx:450
+msgid "No channelizer: the causes aren't analysed."
+msgstr "Ei kanavoijaa: syitä ei analysoida."
+
+#: src/admin/admin.tsx:456
+msgid "When"
+msgstr "Aika"
+
+#: src/admin/admin.tsx:457
+msgid "Length"
+msgstr "Kesto"
+
+#. clocks = ADC sample clock cycles
+#: src/admin/admin.tsx:459
+msgid "ADC clocks with the overflow pin high"
+msgstr "ADC-kellojaksot, joiden ajan ylivuotonasta oli ylhäällä"
+
+#. clocks = ADC sample clock cycles
+#: src/admin/admin.tsx:459
+msgid "Clocks"
+msgstr "Jaksot"
+
+#: src/admin/admin.tsx:460
+msgid "Cause"
+msgstr "Syy"
+
+#. skimmer = a background decoder that listens to a band (FT8, WSPR...) and reports the spots it hears
+#: src/admin/admin.tsx:489 src/ctl/spots.tsx:16 src/map.ts:19
+msgid "Skimmers"
+msgstr "Taustadekooderit"
+
+#: src/admin/admin.tsx:491
+msgid "None configured ([[skimmer]] in the config)."
+msgstr "Ei määritetty ([[skimmer]] asetuksissa)."
+
+#. slot = one decoding period of the digital mode (15 s for FT8, 2 min for WSPR); spots = decoded stations reported
+#: src/admin/admin.tsx:497
+msgid "band"
+msgstr "kaista"
+
+#: src/admin/admin.tsx:498
+msgid "state"
+msgstr "tila"
+
+#: src/admin/admin.tsx:499
+msgid "spots/slot"
+msgstr "spotit/jakso"
+
+#: src/admin/admin.tsx:500
+msgid "CPU/slot"
+msgstr "CPU/jakso"
+
+#: src/admin/admin.tsx:501
+msgctxt "skimmer"
+msgid "last"
+msgstr "viimeksi"
+
+#. states of a skimmer; idle = outside its configured hours; waiting = no receiver channel free yet
+#: src/admin/admin.tsx:508
+msgctxt "skimmer state"
+msgid "off"
+msgstr "pois"
+
+#: src/admin/admin.tsx:510
+msgid "idle (hours {hours})"
+msgstr "tauolla (toiminta-aika {hours})"
+
+#: src/admin/admin.tsx:512
+msgctxt "skimmer state"
+msgid "running"
+msgstr "käynnissä"
+
+#: src/admin/admin.tsx:513
+msgctxt "skimmer state"
+msgid "waiting"
+msgstr "odottaa"
+
+#: src/admin/admin.tsx:523 src/admin/admin.tsx:1066
+msgid "{when} ago"
+msgstr "{when} sitten"
+
+#: src/admin/admin.tsx:532
+msgid "Behind: {dropped} slots dropped, {cut} cut short by the deadline."
+msgstr "Jäljessä: pudotettuja jaksoja {dropped}, määräajan takia katkaistuja {cut}."
+
+#: src/admin/admin.tsx:542
+msgid "Server"
+msgstr "Palvelin"
+
+#: src/admin/admin.tsx:545
+msgid "(not connected: {error})"
+msgstr "(ei yhteyttä: {error})"
+
+#: src/admin/admin.tsx:545
+msgid "(not connected)"
+msgstr "(ei yhteyttä)"
+
+#. GPS position fix: 3D, 2D or none
+#: src/admin/admin.tsx:548
+msgid "Fix"
+msgstr "Paikannus"
+
+#: src/admin/admin.tsx:551
+msgid "{fix}, last {when} ago"
+msgstr "{fix}, viimeksi {when} sitten"
+
+#. locator = Maidenhead grid locator, e.g. FN42aa
+#: src/admin/admin.tsx:555
+msgid "Locator"
+msgstr "Lokaattori"
+
+#: src/admin/admin.tsx:556
+msgid "none yet (using {locator})"
+msgstr "ei vielä (käytetään: {locator})"
+
+#: src/admin/admin.tsx:556
+msgid "no locator"
+msgstr "ei lokaattoria"
+
+#: src/admin/admin.tsx:564
+msgid "Not uploading: [station] needs a callsign and a locator."
+msgstr "Ei lähetetä: [station] tarvitsee kutsun ja lokaattorin."
+
+#: src/admin/admin.tsx:565
+msgid "Not uploading."
+msgstr "Ei lähetetä."
+
+#. "As": the callsign and locator the reports are sent under
+#: src/admin/admin.tsx:570
+msgctxt "reporting identity"
+msgid "As"
+msgstr "Tunnuksella"
+
+#: src/admin/admin.tsx:574 src/admin/admin.tsx:605
+msgid "Sent"
+msgstr "Lähetetty"
+
+#. a datagram = one UDP packet sent to PSKReporter, carrying several reports
+#: src/admin/admin.tsx:578
+msgid "{reports} reports in {datagrams} datagrams, last {when} ago"
+msgstr "raportit: {reports}, datagrammit: {datagrams}, viimeksi {when} sitten"
+
+#: src/admin/admin.tsx:579
+msgid "{reports} reports in {datagrams} datagrams"
+msgstr "raportit: {reports}, datagrammit: {datagrams}"
+
+#: src/admin/admin.tsx:581 src/admin/admin.tsx:611
+msgctxt "upload queue"
+msgid "Waiting"
+msgstr "Jonossa"
+
+#: src/admin/admin.tsx:583
+msgid "Not sent"
+msgstr "Lähettämättä"
+
+#. reasons for not sending a spot: already reported in the last hour; decoded with low confidence and not heard again; the radio is not live (a recording)
+#: src/admin/admin.tsx:586
+msgid "{recent} reported within the hour, {unconfirmed} uncertain and not heard again, {notlive} not live"
+msgstr "jo raportoitu tunnin sisällä: {recent}, epävarma eikä kuultu uudelleen: {unconfirmed}, ei suoraa vastaanottoa: {notlive}"
+
+#: src/admin/admin.tsx:594
+msgid "Error"
+msgstr "Virhe"
+
+#: src/admin/admin.tsx:602
+msgid "Not uploading ([report] wsprnet)."
+msgstr "Ei lähetetä ([report] wsprnet)."
+
+#: src/admin/admin.tsx:608
+msgid "{n} spot, last {when} ago"
+msgid_plural "{n} spots, last {when} ago"
+msgstr[0] "{n} spotti, viimeksi {when} sitten"
+msgstr[1] "{n} spottia, viimeksi {when} sitten"
+
+#: src/admin/admin.tsx:609
+msgid "{n} spot"
+msgid_plural "{n} spots"
+msgstr[0] "{n} spotti"
+msgstr[1] "{n} spottia"
+
+#: src/admin/admin.tsx:615
+msgid "Reply"
+msgstr "Vastaus"
+
+#: src/admin/admin.tsx:621
+msgid "Failed"
+msgstr "Epäonnistui"
+
+#: src/admin/admin.tsx:630
+msgid "This radio isn't live (a recording or a simulation): no spots are uploaded."
+msgstr "Tämä radio ei vastaanota suoraan (tallenne tai simulaatio): spotteja ei lähetetä."
+
+#: src/admin/admin.tsx:637
+msgid "channel {n}"
+msgstr "kanava {n}"
+
+#: src/admin/admin.tsx:637
+msgid "#{n} in queue"
+msgstr "jonossa #{n}"
+
+#: src/admin/admin.tsx:649
+msgid "Disconnect session {id} ({ip})?"
+msgstr "Katkaistaanko istunto {id} ({ip})?"
+
+#: src/admin/admin.tsx:655
+msgid "Ban {ip}? Its sessions end now and new ones are refused (Configuration: limits.blocked lifts it)."
+msgstr "Estetäänkö {ip}? Sen istunnot päättyvät heti ja uudet torjutaan (eston voi poistaa asetuksista: limits.blocked)."
+
+#: src/admin/admin.tsx:665
+msgid "No web sessions."
+msgstr "Ei verkkoistuntoja."
+
+#: src/admin/admin.tsx:671
+msgid "address"
+msgstr "osoite"
+
+#. class = the kind of session (listener, admin, ...)
+#: src/admin/admin.tsx:673
+msgctxt "session"
+msgid "class"
+msgstr "tyyppi"
+
+#. "for" = how long the session has lasted
+#: src/admin/admin.tsx:675
+msgctxt "session duration"
+msgid "for"
+msgstr "kesto"
+
+#: src/admin/admin.tsx:676
+msgid "frequency"
+msgstr "taajuus"
+
+#: src/admin/admin.tsx:677
+msgctxt "session"
+msgid "mode"
+msgstr "lähetelaji"
+
+#. receiver = which receiver channel the session uses, or its place in the queue
+#: src/admin/admin.tsx:679
+msgctxt "session"
+msgid "receiver"
+msgstr "vastaanotin"
+
+#. shared = whether the listener shares their frequency with the others
+#: src/admin/admin.tsx:681
+msgctxt "session"
+msgid "shared"
+msgstr "jaettu"
+
+#. drops a/wf = dropped audio and waterfall blocks
+#: src/admin/admin.tsx:683
+msgid "drops a/wf"
+msgstr "pudotetut ääni/vp"
+
+#: src/admin/admin.tsx:698
+msgid "{rx}, listening to #{n}"
+msgstr "{rx}, kuuntelee mukana: #{n}"
+
+#: src/admin/admin.tsx:701
+msgid "yes"
+msgstr "kyllä"
+
+#: src/admin/admin.tsx:701
+msgid "no"
+msgstr "ei"
+
+#: src/admin/admin.tsx:706
+msgid "Kick"
+msgstr "Katkaise"
+
+#: src/admin/admin.tsx:708
+msgid "End its sessions and refuse its address from now on"
+msgstr "Päätä sen istunnot ja torju osoite tästä lähtien"
+
+#: src/admin/admin.tsx:709
+msgid "Ban"
+msgstr "Estä"
+
+#: src/admin/admin.tsx:744
+msgid "Saved: {n} label from {file}."
+msgid_plural "Saved: {n} labels from {file}."
+msgstr[0] "Tallennettu: {n} nimiö tiedostosta {file}."
+msgstr[1] "Tallennettu: {n} nimiötä tiedostosta {file}."
+
+#: src/admin/admin.tsx:747
+msgid "{file}: {error}. The list was not changed."
+msgstr "{file}: {error}. Listaa ei muutettu."
+
+#: src/admin/admin.tsx:753
+msgid "The station's labels"
+msgstr "Aseman nimiöt"
+
+#. labels = the frequency labels (markers) on the receiver's scale
+#: src/admin/admin.tsx:755
+msgid "{n} label. Listeners see them in yellow (Labels: Station)."
+msgid_plural "{n} labels. Listeners see them in yellow (Labels: Station)."
+msgstr[0] "{n} nimiö. Kuuntelijat näkevät ne keltaisina (Nimiöt: Asema)."
+msgstr[1] "{n} nimiötä. Kuuntelijat näkevät ne keltaisina (Nimiöt: Asema)."
+
+#: src/admin/admin.tsx:758
+msgid "Download markers.csv"
+msgstr "Lataa markers.csv"
+
+#: src/admin/admin.tsx:762
+msgid "Upload a new list"
+msgstr "Lähetä uusi lista"
+
+#. the {..} placeholders are CSV column names, shown as code; keep them as they are
+#: src/admin/admin.tsx:768
+msgid "A CSV file, as a spreadsheet saves it (comma or semicolon). The first line names the columns: {khz} and {name} are needed; {mode} (usb, lsb, cw or am; default am), {note}, {category}, {emission}, {schedule} and {dial_khz} may follow. An upload replaces the whole list."
+msgstr "CSV-tiedosto sellaisena kuin taulukko-ohjelma sen tallentaa (pilkku tai puolipiste). Ensimmäinen rivi nimeää sarakkeet: {khz} ja {name} vaaditaan; {mode} (usb, lsb, cw tai am; oletus am), {note}, {category}, {emission}, {schedule} ja {dial_khz} voivat seurata. Lähetys korvaa koko listan."
+
+#: src/admin/admin.tsx:784
+msgid "Bundled lists"
+msgstr "Valmiit listat"
+
+#: src/admin/admin.tsx:788
+msgid "Broadcast (EiBi {season})"
+msgstr "Yleisradioasemat (EiBi {season})"
+
+#: src/admin/admin.tsx:792 src/markers.ts:63
+msgid "Utility"
+msgstr "Utility-asemat"
+
+#: src/admin/admin.tsx:796 src/markers.ts:64
+msgid "Amateur"
+msgstr "Radioamatöörit"
+
+#: src/admin/admin.tsx:802
+msgid "Listeners choose what they see. The band ribbon and the amateur frequencies follow IARU region {region} (Configuration: markers.region) until a listener picks another."
+msgstr "Kuuntelijat valitsevat, mitä näkevät. Kaistanauha ja radioamatööritaajuudet noudattavat IARU-aluetta {region} (Asetukset: markers.region), kunnes kuuntelija valitsee toisen."
+
+#: src/admin/admin.tsx:825
+msgid "Saved {file}."
+msgstr "Tallennettu: {file}."
+
+#: src/admin/admin.tsx:833
+msgid "Remove the photo?"
+msgstr "Poistetaanko kuva?"
+
+#: src/admin/admin.tsx:840
+msgid "Photo"
+msgstr "Kuva"
+
+#: src/admin/admin.tsx:841 src/ctl/info.tsx:63
+msgid "The receiver's photo"
+msgstr "Vastaanottimen kuva"
+
+#: src/admin/admin.tsx:844
+msgid "Replace it"
+msgstr "Vaihda kuva"
+
+#: src/admin/admin.tsx:844
+msgid "Upload one"
+msgstr "Lähetä kuva"
+
+#: src/admin/admin.tsx:849 src/admin/admin.tsx:934
+msgid "Remove"
+msgstr "Poista"
+
+#: src/admin/admin.tsx:854
+msgid "JPEG, PNG or WebP, at most 3 MB: the antenna, the station, the view. Kept beside the configuration file."
+msgstr "JPEG, PNG tai WebP, enintään 3 MB: antenni, asema, maisema. Säilytetään asetustiedoston vieressä."
+
+#: src/admin/admin.tsx:857
+msgid "What it says"
+msgstr "Sisältö"
+
+#: src/admin/admin.tsx:859
+msgid "Listeners open it with {info} on the receiver page. It shows the receiver's name and location (Configuration: kiwi.name, kiwi.location), the station's callsign, locator and antenna (station), your words (info.description, info.contact), the photo, and the limits they meet (limits)."
+msgstr "Kuuntelijat avaavat sen vastaanotinsivulta painikkeella {info}. Siinä näkyvät vastaanottimen nimi ja sijainti (Asetukset: kiwi.name, kiwi.location), aseman kutsu, lokaattori ja antenni (station), omat tekstisi (info.description, info.contact), kuva sekä kuuntelijoita koskevat rajoitukset (limits)."
+
+#: src/admin/admin.tsx:861 src/ctl/info.tsx:158
+msgid "Info"
+msgstr "Tiedot"
+
+#: src/admin/admin.tsx:865
+msgid "See it as listeners do"
+msgstr "Näytä niin kuin kuuntelijat sen näkevät"
+
+#: src/admin/admin.tsx:901
+msgid "Admin password changed; other admin logins have ended."
+msgstr "Ylläpidon salasana vaihdettu; muut ylläpitokirjautumiset on päätetty."
+
+#: src/admin/admin.tsx:904
+msgid "New password"
+msgstr "Uusi salasana"
+
+#: src/admin/admin.tsx:905
+msgid "Again"
+msgstr "Uudelleen"
+
+#: src/admin/admin.tsx:907 src/admin/admin.tsx:930
+msgid "Change"
+msgstr "Vaihda"
+
+#: src/admin/admin.tsx:910
+msgid "At least 8 characters."
+msgstr "Vähintään 8 merkkiä."
+
+#: src/admin/admin.tsx:911
+msgid "The two differ."
+msgstr "Salasanat eroavat."
+
+#: src/admin/admin.tsx:916
+msgid "Listener password"
+msgstr "Kuuntelijan salasana"
+
+#: src/admin/admin.tsx:919
+msgid "Set: listeners need it (or the admin password) to use the receiver."
+msgstr "Asetettu: kuuntelijat tarvitsevat sen (tai ylläpidon salasanan) käyttääkseen vastaanotinta."
+
+#: src/admin/admin.tsx:920
+msgid "Not set: anyone who reaches the page can listen."
+msgstr "Ei asetettu: kuka tahansa sivulle pääsevä voi kuunnella."
+
+#: src/admin/admin.tsx:925
+msgid "Listener password set; listeners logged in with the old one must log in again."
+msgstr "Kuuntelijan salasana asetettu; vanhalla salasanalla kirjautuneiden kuuntelijoiden on kirjauduttava uudelleen."
+
+#: src/admin/admin.tsx:928
+msgid "New listener password"
+msgstr "Uusi kuuntelijan salasana"
+
+#: src/admin/admin.tsx:930
+msgctxt "password"
+msgid "Set"
+msgstr "Aseta"
+
+#: src/admin/admin.tsx:933
+msgid "Listener password removed: the receiver is open."
+msgstr "Kuuntelijan salasana poistettu: vastaanotin on avoin."
+
+#: src/admin/admin.tsx:994
+msgid "OS updates"
+msgstr "Käyttöjärjestelmän päivitykset"
+
+#: src/admin/admin.tsx:995
+msgid "Not available: {why}."
+msgstr "Ei käytettävissä: {why}."
+
+#. root slot = one of the two A/B system partitions; the update is written to the one not running
+#: src/admin/admin.tsx:1005
+msgid "Install web888-ng {version} into the other root slot? The receiver keeps running; a reboot then starts the new system."
+msgstr "Asennetaanko web888-ng {version} toiseen juuriosioon? Vastaanotin pysyy käynnissä; uudelleenkäynnistys ottaa sitten uuden järjestelmän käyttöön."
+
+#: src/admin/admin.tsx:1009
+msgid "Reboot the unit now? Everyone is disconnected; it is back in a minute or two."
+msgstr "Käynnistetäänkö laite uudelleen nyt? Kaikkien yhteydet katkeavat; laite palaa minuutin tai kahden kuluttua."
+
+#: src/admin/admin.tsx:1021
+msgid "Rebooting"
+msgstr "Käynnistyy uudelleen"
+
+#: src/admin/admin.tsx:1024
+msgid "The unit is restarting into web888-ng {version}. This page reloads when it is back."
+msgstr "Laite käynnistyy uudelleen versioon web888-ng {version}. Tämä sivu latautuu uudelleen, kun laite on taas käytettävissä."
+
+#: src/admin/admin.tsx:1025
+msgid "The unit is restarting. This page reloads when it is back."
+msgstr "Laite käynnistyy uudelleen. Tämä sivu latautuu uudelleen, kun laite on taas käytettävissä."
+
+#: src/admin/admin.tsx:1028
+msgid "If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes)."
+msgstr "Jos uusi järjestelmä ei käynnisty, laite palaa vanhaan itsestään kolmen yrityksen jälkeen (muutama minuutti)."
+
+#: src/admin/admin.tsx:1037
+msgctxt "operating system"
+msgid "OS"
+msgstr "Käyttöjärjestelmä"
+
+#: src/admin/admin.tsx:1039
+msgctxt "software version"
+msgid "Running"
+msgstr "Käytössä"
+
+#. slot = one of the two A/B system partitions (RAUC slots)
+#: src/admin/admin.tsx:1042
+msgid "web888-ng {version}, slot {slot}"
+msgstr "web888-ng {version}, osio {slot}"
+
+#: src/admin/admin.tsx:1044
+msgid "Newest release"
+msgstr "Uusin julkaisu"
+
+#: src/admin/admin.tsx:1053
+msgid "({date}, {size}, pre-release)"
+msgstr "({date}, {size}, esijulkaisu)"
+
+#: src/admin/admin.tsx:1054
+msgid "({date}, {size})"
+msgstr "({date}, {size})"
+
+#: src/admin/admin.tsx:1058
+msgid "none found"
+msgstr "ei löytynyt"
+
+#: src/admin/admin.tsx:1060
+msgid "not looked yet"
+msgstr "ei vielä tarkistettu"
+
+#. "Looked": when the server last checked GitHub for a new release
+#: src/admin/admin.tsx:1064
+msgid "Looked"
+msgstr "Tarkistettu"
+
+#: src/admin/admin.tsx:1066
+msgid "never"
+msgstr "ei koskaan"
+
+#: src/admin/admin.tsx:1067
+msgid "(by itself every {n} h)"
+msgstr "(automaattisesti {n} h välein)"
+
+#: src/admin/admin.tsx:1070
+msgid "Looking for releases failed: {error}"
+msgstr "Julkaisujen haku epäonnistui: {error}"
+
+#: src/admin/admin.tsx:1071
+msgid "Updates are off (Configuration: update.enabled)."
+msgstr "Päivitykset ovat pois käytöstä (Asetukset: update.enabled)."
+
+#: src/admin/admin.tsx:1074
+msgid "Looking…"
+msgstr "Haetaan…"
+
+#: src/admin/admin.tsx:1074
+msgid "Look for a release"
+msgstr "Hae julkaisua"
+
+#: src/admin/admin.tsx:1078 src/admin/admin.tsx:1109
+msgid "Install {version}"
+msgstr "Asenna {version}"
+
+#: src/admin/admin.tsx:1081
+msgid "Up to date."
+msgstr "Ajan tasalla."
+
+#: src/admin/admin.tsx:1085
+msgid "{link} (into the other slot, as an update would)."
+msgstr "{link} (toiseen osioon, kuten päivityskin)."
+
+#: src/admin/admin.tsx:1094
+msgid "Install {version} again"
+msgstr "Asenna {version} uudelleen"
+
+#: src/admin/admin.tsx:1102
+msgid "Release notes"
+msgstr "Julkaisutiedot"
+
+#: src/admin/admin.tsx:1116
+msgid "Streamed from the release and checked as it goes; the receiver keeps running."
+msgstr "Ladataan suoraan julkaisusta ja tarkistetaan samalla; vastaanotin pysyy käynnissä."
+
+#: src/admin/admin.tsx:1123
+msgid "Installed in {n} min. Reboot to start it."
+msgstr "Asennettu (kesto {n} min). Käynnistä uudelleen ottaaksesi sen käyttöön."
+
+#: src/admin/admin.tsx:1124
+msgid "Installed. Reboot to start it."
+msgstr "Asennettu. Käynnistä uudelleen ottaaksesi sen käyttöön."
+
+#: src/admin/admin.tsx:1128
+msgid "Reboot now"
+msgstr "Käynnistä uudelleen nyt"
+
+#: src/admin/admin.tsx:1131
+msgid "The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay."
+msgstr "Uusi järjestelmä käynnistetään ensin, kolmella yrityksellä; kun web888d on toiminut minuutin, se jää käyttöön. Asetukset säilyvät."
+
+#: src/admin/admin.tsx:1134
+msgid "Failed: {error}. The running system is unchanged."
+msgstr "Epäonnistui: {error}. Käynnissä oleva järjestelmä on ennallaan."
+
+#. root slot = one of the two A/B system partitions (RAUC slots); the update goes to the one not running
+#: src/admin/admin.tsx:1145
+msgid "Root slots"
+msgstr "Juuriosiot"
+
+#: src/admin/admin.tsx:1150
+msgid "Slot"
+msgstr "Osio"
+
+#: src/admin/admin.tsx:1151
+msgid "State"
+msgstr "Tila"
+
+#. Boot = the slot's boot status (good, bad, ...)
+#: src/admin/admin.tsx:1153
+msgctxt "slot"
+msgid "Boot"
+msgstr "Käynnistys"
+
+#: src/admin/admin.tsx:1154
+msgid "Version"
+msgstr "Versio"
+
+#: src/admin/admin.tsx:1155
+msgid "Installed (UTC)"
+msgstr "Asennettu (UTC)"
+
+#: src/admin/admin.tsx:1173
+msgid "An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN, u-boot.img) is not part of it: see Boot loader below."
+msgstr "Päivitys asennetaan osioon, joka ei ole käynnissä; vanha jää ennalleen, jotta siihen voi palata. Kortin käynnistyslatain (BOOT.BIN, u-boot.img) ei kuulu päivitykseen: katso Käynnistyslatain alempana."
+
+#: src/admin/admin.tsx:1192
+msgid "{file}: not a settings backup (JSON)"
+msgstr "{file}: ei asetusten varmuuskopio (JSON)"
+
+#: src/admin/admin.tsx:1195
+msgid "Restore the settings from {file}? The configuration, the passwords and the own labels are replaced by the file's."
+msgstr "Palautetaanko asetukset tiedostosta {file}? Asetukset, salasanat ja omat nimiöt korvataan tiedoston sisällöllä."
+
+#. the three parts are joined with "; " into one report
+#: src/admin/admin.tsx:1205
+msgid "Restored the settings saved by web888d {server} on {when} UTC"
+msgstr "Palautettu asetukset, jotka web888d {server} tallensi {when} UTC"
+
+#: src/admin/admin.tsx:1206
+msgid "{n} own label"
+msgid_plural "{n} own labels"
+msgstr[0] "{n} oma nimiö"
+msgstr[1] "{n} omaa nimiötä"
+
+#: src/admin/admin.tsx:1207
+msgid "restart web888d for: {what}"
+msgstr "vaatii web888d:n uudelleenkäynnistyksen: {what}"
+
+#: src/admin/admin.tsx:1210
+msgid "Not restored: {error}"
+msgstr "Ei palautettu: {error}"
+
+#: src/admin/admin.tsx:1218
+msgid "Backup"
+msgstr "Varmuuskopio"
+
+#: src/admin/admin.tsx:1221
+msgid "Download the settings"
+msgstr "Lataa asetukset"
+
+#: src/admin/admin.tsx:1225
+msgid "Restoring…"
+msgstr "Palautetaan…"
+
+#: src/admin/admin.tsx:1225
+msgid "Restore from a file"
+msgstr "Palauta tiedostosta"
+
+#: src/admin/admin.tsx:1240
+msgid "One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's own settings (network, tunnels, SSH key) are in web888.txt on the card, not here."
+msgstr "Yksi tiedosto, jossa ovat tämän sivun asetukset, salasanat (tiivisteinä: pidä tiedosto yksityisenä) ja omat nimiöt. Kortin omat asetukset (verkko, tunnelit, SSH-avain) ovat kortilla tiedostossa web888.txt, eivät täällä."
+
+#. boot loader = the first software the unit runs at power-up (SPL + U-Boot on the SD card)
+#: src/admin/admin.tsx:1276
+msgid ""
+"Write the boot loader to the card now?\n"
+"\n"
+"Unlike the system, the boot loader has no second copy to fall back to. If the unit loses power while it is written, or the new boot loader doesn't start, the unit won't boot until the card is fixed on a computer (rename boot.bin.old and u-boot.img.old back) or re-imaged. Download a settings backup first, and have a card reader at hand.\n"
+"\n"
+"The receiver keeps running; the new boot loader starts at the next reboot."
+msgstr ""
+"Kirjoitetaanko käynnistyslatain kortille nyt?\n"
+"\n"
+"Toisin kuin järjestelmällä, käynnistyslataimella ei ole toista kopiota, johon palata. Jos laitteesta katkeaa virta kirjoituksen aikana tai uusi käynnistyslatain ei käynnisty, laite ei käynnisty ennen kuin kortti korjataan tietokoneella (nimeä boot.bin.old ja u-boot.img.old takaisin) tai kirjoitetaan uudelleen levykuvasta. Lataa ensin asetusten varmuuskopio ja pidä kortinlukija käden ulottuvilla.\n"
+"\n"
+"Vastaanotin pysyy käynnissä; uusi käynnistyslatain otetaan käyttöön seuraavassa uudelleenkäynnistyksessä."
+
+#: src/admin/admin.tsx:1286
+msgid "done"
+msgstr "valmis"
+
+#: src/admin/admin.tsx:1297
+msgid "Boot loader"
+msgstr "Käynnistyslatain"
+
+#: src/admin/admin.tsx:1299
+msgid "Not updated from here: {reason}."
+msgstr "Ei päivitetä täältä: {reason}."
+
+#: src/admin/admin.tsx:1303
+msgid "On the card"
+msgstr "Kortilla"
+
+#: src/admin/admin.tsx:1307
+msgid "this system's (web888-ng {version})"
+msgstr "tämän järjestelmän oma (web888-ng {version})"
+
+#: src/admin/admin.tsx:1307
+msgid "this system's"
+msgstr "tämän järjestelmän oma"
+
+#: src/admin/admin.tsx:1310
+msgid "another one"
+msgstr "jokin muu"
+
+#. SPL = the first-stage boot loader (secondary program loader); the values are short hashes of the two files
+#: src/admin/admin.tsx:1314 src/admin/admin.tsx:1323
+msgid "SPL {spl}, U-Boot {uboot}"
+msgstr "SPL {spl}, U-Boot {uboot}"
+
+#: src/admin/admin.tsx:1319
+msgid "This system's"
+msgstr "Tämän järjestelmän oma"
+
+#: src/admin/admin.tsx:1330
+msgid "Kept"
+msgstr "Säilytetty"
+
+#: src/admin/admin.tsx:1331
+msgid "boot.bin.old, u-boot.img.old (the one before)"
+msgstr "boot.bin.old, u-boot.img.old (edellinen)"
+
+#: src/admin/admin.tsx:1337
+msgid "Not now: {reason}."
+msgstr "Ei nyt: {reason}."
+
+#: src/admin/admin.tsx:1340
+msgid "Writing…"
+msgstr "Kirjoitetaan…"
+
+#: src/admin/admin.tsx:1340
+msgid "Write it to the card…"
+msgstr "Kirjoita kortille…"
+
+#: src/admin/admin.tsx:1344
+msgid "Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to re-image the card if something unexpected happens."
+msgstr "Ei tarvita järjestelmän toimintaan: uudempi käynnistyslatain tulee joidenkin julkaisujen mukana (niiden julkaisutiedot kertovat miksi). Varaudu kirjoittamaan kortti uudelleen levykuvasta, jos jotain odottamatonta tapahtuu."
+
+#. log sources; "System (this boot)" = the system log since the unit last booted; Kernel = the operating system kernel's log
+#: src/admin/admin.tsx:1360
+msgid "System (this boot)"
+msgstr "Järjestelmä (tämä käynnistys)"
+
+#: src/admin/admin.tsx:1361
+msgid "Kernel"
+msgstr "Ydin"
+
+#: src/admin/admin.tsx:1424
+msgid "not on this system"
+msgstr "ei tässä järjestelmässä"
+
+#: src/admin/admin.tsx:1433
+msgid "{n} lines"
+msgstr "rivejä: {n}"
+
+#: src/admin/admin.tsx:1436
+msgid "Filter"
+msgstr "Suodata"
+
+#: src/admin/admin.tsx:1438
+msgid "Follow"
+msgstr "Seuraa"
+
+#: src/admin/admin.tsx:1441
+msgid "Download"
+msgstr "Lataa"
+
+#: src/admin/admin.tsx:1447
+msgid "No line matches the filter."
+msgstr "Mikään rivi ei vastaa suodatinta."
+
+#: src/admin/admin.tsx:1447
+msgid "No lines yet."
+msgstr "Ei vielä rivejä."
+
+#: src/admin/admin.tsx:1493
+msgid "Receiver"
+msgstr "Vastaanotin"
+
+#: src/admin/admin.tsx:1494
+msgid "Log out"
+msgstr "Kirjaudu ulos"
+
+#: src/admin/configform.tsx:33
+msgid "changed"
+msgstr "muutettu"
+
+#: src/admin/configform.tsx:66 src/admin/configform.tsx:111
+msgid "(none)"
+msgstr "(tyhjä)"
+
+#: src/admin/configform.tsx:226
+msgid "File: {path}."
+msgstr "Tiedosto: {path}."
+
+#: src/admin/configform.tsx:227
+msgid "This server has no config file to write; the form is read-only."
+msgstr "Tällä palvelimella ei ole asetustiedostoa, johon kirjoittaa; lomake on vain luku -tilassa."
+
+#: src/admin/configform.tsx:228
+msgid "Values marked “running” differ in the running server: given on its command line (which overrides the file), or saved and waiting for a restart."
+msgstr "Merkinnällä ”running” näytetyt arvot poikkeavat käynnissä olevan palvelimen arvoista: ne on annettu sen komentorivillä (joka ohittaa tiedoston) tai tallennettu ja odottavat uudelleenkäynnistystä."
+
+#: src/admin/configform.tsx:232 src/ctl/img.tsx:146
+msgid "Save"
+msgstr "Tallenna"
+
+#: src/admin/configform.tsx:235
+msgid "Revert"
+msgstr "Peru"
+
+#: src/admin/configform.tsx:237
+msgid "Fix the marked fields first."
+msgstr "Korjaa ensin merkityt kentät."
+
+#: src/admin/configform.tsx:242
+msgid "Saved."
+msgstr "Tallennettu."
+
+#: src/admin/configform.tsx:244
+msgid "Restart now"
+msgstr "Käynnistä uudelleen nyt"
+
+#: src/admin/configform.tsx:273
+msgid "Needs a restart: {what}."
+msgstr "Vaatii uudelleenkäynnistyksen: {what}."
+
+#: src/admin/configform.tsx:275
+msgid "Applies at once."
+msgstr "Tulee voimaan heti."
+
+#: src/admin/configform.tsx:275
+msgid "No change for the running server."
+msgstr "Ei muutosta käynnissä olevaan palvelimeen."
+
+#: src/admin/schema.ts:80
+msgid "a number is needed"
+msgstr "luku vaaditaan"
+
+#: src/admin/schema.ts:82
+msgid "not a number"
+msgstr "ei luku"
+
+#: src/admin/schema.ts:83
+msgid "a whole number is needed"
+msgstr "kokonaisluku vaaditaan"
+
+#: src/admin/schema.ts:95
+msgid "not a text field"
+msgstr "ei tekstikenttä"
+
+#: src/ctl/afspec.tsx:153
+msgid "Audio spectrum"
+msgstr "Äänispektri"
+
+#: src/ctl/afspec.tsx:155 src/ctl/map.tsx:613 src/ctl/mobile.tsx:229 src/ctl/spots.tsx:81
+msgid "Close"
+msgstr "Sulje"
+
+#. kS/s = thousand samples per second; passband = the range of audio frequencies the receiver lets through; IQ = complex baseband samples (both sides of the dial)
+#: src/ctl/afspec.tsx:162
+msgid "The audio as it arrives (before this page's volume), ~23 Hz a point at 12 kS/s; the passband shaded. In IQ, both sides of the dial."
+msgstr "Ääni sellaisena kuin se saapuu (ennen tämän sivun äänenvoimakkuutta), ~23 Hz pistettä kohti näytetaajuudella 12 kS/s; päästökaista varjostettuna. IQ-tilassa viritystaajuuden molemmat puolet."
+
+#: src/ctl/audiorec.tsx:12 src/ctl/iqrec.tsx:15
+msgid "1 min"
+msgstr "1 min"
+
+#: src/ctl/audiorec.tsx:13 src/ctl/iqrec.tsx:17
+msgid "5 min"
+msgstr "5 min"
+
+#: src/ctl/audiorec.tsx:14
+msgid "15 min"
+msgstr "15 min"
+
+#: src/ctl/audiorec.tsx:15
+msgid "1 h"
+msgstr "1 h"
+
+#: src/ctl/audiorec.tsx:39
+msgid ", {time} of silence left out"
+msgstr ", {time} hiljaisuutta jätetty pois"
+
+#: src/ctl/audiorec.tsx:42
+msgid "Recording the audio{skipped}: click to stop and save"
+msgstr "Äänitys käynnissä{skipped}: pysäytä ja tallenna napsauttamalla"
+
+#: src/ctl/audiorec.tsx:45 src/ctl/iqrec.tsx:51
+msgid "Stop without saving"
+msgstr "Pysäytä tallentamatta"
+
+#: src/ctl/audiorec.tsx:53
+msgid "Record the audio to a WAV file"
+msgstr "Äänitä ääni WAV-tiedostoon"
+
+#. Rec = short for Record (audio recording button)
+#: src/ctl/audiorec.tsx:55
+msgid "Rec"
+msgstr "Äänitä"
+
+#. AGC = automatic gain control; kS/s = thousand samples per second
+#: src/ctl/audiorec.tsx:61
+msgid "The audio as it comes from the receiver (its AGC, not this page's volume), 16-bit WAV at the audio rate, collected in this browser (~1.4 MB a minute at 12 kS/s). Changing the audio rate or to a stereo mode ends the recording."
+msgstr "Ääni sellaisena kuin se tulee vastaanottimelta (sen AGC, ei tämän sivun äänenvoimakkuus), 16-bittinen WAV äänen näytetaajuudella, kerätään tähän selaimeen (~1,4 MB minuutissa näytetaajuudella 12 kS/s). Äänen näytetaajuuden vaihto tai siirtyminen stereotilaan lopettaa äänityksen."
+
+#: src/ctl/audiorec.tsx:66
+msgid "Leave out the time the audio is silent (squelch closed): a long watch keeps only what was heard"
+msgstr "Jätä pois aika, jolloin ääni on hiljaa (kohinasalpa kiinni): pitkästä kuuntelusta jää vain se, mitä kuultiin"
+
+#: src/ctl/audiorec.tsx:67
+msgid "Skip silence (with squelch)"
+msgstr "Ohita hiljaisuus (kohinasalvalla)"
+
+#: src/ctl/audiorec.tsx:83 src/ctl/iqrec.tsx:92
+msgid "Last: {what}"
+msgstr "Viimeisin: {what}"
+
+#. names of waterfall colour palettes
+#: src/ctl/config.tsx:21
+msgid "Default"
+msgstr "Oletus"
+
+#: src/ctl/config.tsx:23
+msgid "Heat"
+msgstr "Lämpö"
+
+#: src/ctl/config.tsx:24
+msgid "Phosphor"
+msgstr "Fosfori"
+
+#: src/ctl/config.tsx:25
+msgid "Grey"
+msgstr "Harmaa"
+
+#: src/ctl/config.tsx:35
+msgid "Language"
+msgstr "Kieli"
+
+#: src/ctl/config.tsx:37
+msgid "Automatic (the browser's)"
+msgstr "Automaattinen (selaimen kieli)"
+
+#: src/ctl/config.tsx:45
+msgid "You"
+msgstr "Sinä"
+
+#: src/ctl/config.tsx:46
+msgid "Shown to the other listeners (at most {n} characters)"
+msgstr "Näytetään muille kuuntelijoille (enintään {n} merkkiä)"
+
+#: src/ctl/config.tsx:47
+msgid "Callsign or nickname"
+msgstr "Kutsu tai nimimerkki"
+
+#: src/ctl/config.tsx:52
+msgid "callsign"
+msgstr "kutsu"
+
+#: src/ctl/config.tsx:62
+msgid "Share my frequency"
+msgstr "Jaa taajuuteni"
+
+#: src/ctl/config.tsx:65
+msgid "others see it on their scale and may listen along while they wait for a receiver"
+msgstr "muut näkevät sen asteikollaan ja voivat kuunnella mukana odottaessaan vastaanotinta"
+
+#: src/ctl/config.tsx:65
+msgid "private: others see that you are here, not where"
+msgstr "yksityinen: muut näkevät, että olet täällä, mutta eivät missä"
+
+#: src/ctl/config.tsx:70 src/ctl/licences.tsx:154
+msgid "Data"
+msgstr "Tiedonsiirto"
+
+#: src/ctl/config.tsx:74
+msgid "Data saver"
+msgstr "Datansäästö"
+
+#: src/ctl/config.tsx:77
+msgid "half the waterfall lines a second and a bin for every two pixels (about a quarter of its data)"
+msgstr "puolet vesiputousriveistä sekunnissa ja yksi taajuuspiste kahta pikseliä kohti (noin neljännes datasta)"
+
+#: src/ctl/config.tsx:81 src/ctl/mobile.tsx:311
+msgid "Waterfall"
+msgstr "Vesiputous"
+
+#: src/ctl/config.tsx:83
+msgid "Colours"
+msgstr "Värit"
+
+#: src/ctl/config.tsx:98
+msgid "Time marks"
+msgstr "Aikamerkit"
+
+#: src/ctl/config.tsx:101
+msgid "UTC down the waterfall's left edge"
+msgstr "UTC-aika vesiputouksen vasempaan reunaan"
+
+#: src/ctl/config.tsx:115
+msgid "Your settings: language, name, sharing, data saver, waterfall colours, labels"
+msgstr "Omat asetuksesi: kieli, nimi, jakaminen, datansäästö, vesiputouksen värit, nimiöt"
+
+#: src/ctl/config.tsx:116
+msgid "Config"
+msgstr "Asetukset"
+
+#: src/ctl/config.tsx:135 src/ctl/info.tsx:139 src/ctl/prop.tsx:218
+msgid "Close (Escape)"
+msgstr "Sulje (Escape)"
+
+#: src/ctl/config.tsx:140
+msgid "Kept in this browser."
+msgstr "Säilytetään tässä selaimessa."
+
+#: src/ctl/controls.tsx:84
+msgid "kHz, or 7.074M"
+msgstr "kHz tai 7.074M"
+
+#: src/ctl/controls.tsx:103
+msgid "Wheel over a digit to step it, click to type"
+msgstr "Muuta numeroa rullaamalla sen päällä, kirjoita napsauttamalla"
+
+#: src/ctl/controls.tsx:133
+msgid "Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it"
+msgstr "Viritysaskel: painikkeet, nuolinäppäimet (Shift: ×10) ja Shift+rulla siirtävät taajuutta askeleen välein; vesiputouksen napsautus kohdistuu lähimpään askeleeseen"
+
+#: src/ctl/controls.tsx:138
+msgid "auto ({step})"
+msgstr "autom. ({step})"
+
+#: src/ctl/controls.tsx:148
+msgid "AM, envelope detector"
+msgstr "AM, verhokäyräilmaisin"
+
+#: src/ctl/controls.tsx:149
+msgid "Synchronous AM: locked to the carrier, both sidebands (less distortion in fading)"
+msgstr "Synkroninen AM: lukittu kantoaaltoon, molemmat sivunauhat (vähemmän säröä häipymissä)"
+
+#: src/ctl/controls.tsx:150
+msgid "Synchronous AM, lower sideband only (away from interference above)"
+msgstr "Synkroninen AM, vain alasivunauha (välttää yläpuoliset häiriöt)"
+
+#: src/ctl/controls.tsx:151
+msgid "Synchronous AM, upper sideband only (away from interference below)"
+msgstr "Synkroninen AM, vain yläsivunauha (välttää alapuoliset häiriöt)"
+
+#: src/ctl/controls.tsx:152
+msgid "Synchronous AM stereo: lower sideband left, upper right"
+msgstr "Synkroninen AM stereona: alasivunauha vasemmalla, yläsivunauha oikealla"
+
+#: src/ctl/controls.tsx:161
+msgid "{mode} (key {key})"
+msgstr "{mode} (näppäin {key})"
+
+#: src/ctl/controls.tsx:168
+msgid "{what}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn."
+msgstr "{what}. Napsauta uudelleen (tai näppäin a): vuorotellen AM, SAM, SAL, SAR, SAS."
+
+#: src/ctl/controls.tsx:175
+msgid "Narrow-band FM (VHF voice; key f)"
+msgstr "Kapeakaistainen FM (VHF-puhe; näppäin f)"
+
+#: src/ctl/controls.tsx:182
+msgid "I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i"
+msgstr "I/Q: itse kanava, I vasemmalla ja Q oikealla, viritystaajuuden ympäriltä (±5 kHz, ±10 kHz näytetaajuudella 24 kS/s): Äänitä-painikkeelle (I/Q-WAV SDR-ohjelmille) tai äänispektrille. Lähetetään PCM-muodossa. Näppäin i"
+
+#: src/ctl/controls.tsx:200
+msgid "Passband: {lo} to {hi} Hz around the dial"
+msgstr "Päästökaista: {lo} – {hi} Hz viritystaajuuden ympärillä"
+
+#: src/ctl/controls.tsx:207
+msgid "Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)"
+msgstr "Äänen näytetaajuus: 12 kS/s (päästökaista ±5 kHz asti) tai 24 kS/s (±10 kHz asti: AM-yleisradiolähetykset, NBFM, I/Q; kaksinkertainen datamäärä)"
+
+#: src/ctl/controls.tsx:219
+msgid "Opus: 24-48 kbit/s, for slow or metered connections. While a decoder reads the audio, μ-law instead (Opus would cost it weak signals)"
+msgstr "Opus: 24–48 kbit/s, hitaille tai käytön mukaan laskutetuille yhteyksille. Kun dekooderi lukee ääntä, käytetään μ-law-koodausta (Opus veisi siltä heikot signaalit)"
+
+#: src/ctl/controls.tsx:221
+msgid "μ-law: 96 kbit/s, as good as PCM for listening and for the decoders"
+msgstr "μ-law: 96 kbit/s, kuunteluun ja dekoodereille yhtä hyvä kuin PCM"
+
+#: src/ctl/controls.tsx:222
+msgid "PCM: 192 kbit/s, 16 bits, exactly as the receiver made it"
+msgstr "PCM: 192 kbit/s, 16 bittiä, täsmälleen sellaisena kuin vastaanotin sen tuotti"
+
+#: src/ctl/controls.tsx:236
+msgid "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
+msgstr "Opus on tauolla: I/Q tulee PCM-muodossa (Opus ja μ-law vääristäisivät I:n ja Q:n keskinäistä suhdetta)"
+
+#: src/ctl/controls.tsx:237
+msgid "Opus is paused: a decoder reads the audio (μ-law until it closes)"
+msgstr "Opus on tauolla: dekooderi lukee ääntä (μ-law, kunnes dekooderi suljetaan)"
+
+#: src/ctl/controls.tsx:238
+msgid "How the audio comes"
+msgstr "Äänen siirtotapa"
+
+#: src/ctl/controls.tsx:244
+msgid "{what}. {codec}"
+msgstr "{what}. {codec}"
+
+#: src/ctl/controls.tsx:263
+msgid "Automatic gain control (AM: follows the carrier)"
+msgstr "Automaattinen vahvistuksen säätö (AM: seuraa kantoaaltoa)"
+
+#: src/ctl/controls.tsx:267
+msgid "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay"
+msgstr "AGC:n palautuminen kantoaallon häivyttyä: nopea seuraa heti (kohina nousee jokaisessa häipymässä), keski ja hidas pitävät vahvistuksen nopeiden häipymien yli; oma: oma pitoaika ja palautumisnopeus"
+
+#: src/ctl/controls.tsx:267
+msgid "AGC recovery: fast, medium, slow, or custom (your own hang time and decay)"
+msgstr "AGC:n palautuminen: nopea, keski, hidas tai oma (oma pitoaika ja palautumisnopeus)"
+
+#: src/ctl/controls.tsx:277
+msgid "Hang: how long the gain is held after the signal drops"
+msgstr "Pitoaika: kuinka kauan vahvistus pidetään signaalin heikennyttyä"
+
+#. AGC hang = how long the gain is held after the signal drops
+#: src/ctl/controls.tsx:279
+msgctxt "AGC"
+msgid "hang"
+msgstr "pito"
+
+#: src/ctl/controls.tsx:290
+msgid "Decay: how fast the gain comes back after the hang (dB a second)"
+msgstr "Palautumisnopeus: kuinka nopeasti vahvistus palaa pitoajan jälkeen (dB sekunnissa)"
+
+#. AGC decay = how fast the gain comes back after the hang time
+#: src/ctl/controls.tsx:292
+msgctxt "AGC"
+msgid "decay"
+msgstr "palautuminen"
+
+#: src/ctl/controls.tsx:306
+msgid "Maximum AGC gain"
+msgstr "AGC:n suurin vahvistus"
+
+#: src/ctl/controls.tsx:306
+msgid "Fixed gain"
+msgstr "Kiinteä vahvistus"
+
+#. slider label: maximum gain of the AGC, or the fixed gain when AGC is off
+#: src/ctl/controls.tsx:308
+msgctxt "AGC"
+msgid "max"
+msgstr "maks."
+
+#. slider label: maximum gain of the AGC, or the fixed gain when AGC is off
+#: src/ctl/controls.tsx:308
+msgctxt "AGC"
+msgid "gain"
+msgstr "vahvistus"
+
+#: src/ctl/controls.tsx:322
+msgid "Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
+msgstr "Näennäisstereo (kuulokkeet): signaalit sijoitetaan sävelkorkeuden mukaan, matalat vasemmalle ja korkeat oikealle (SSB:ssä päästökaistan keskikohdan ympärille); LSB peilataan vastaamaan vesiputousta"
+
+#. button: pseudo-stereo, signals spread left and right by their pitch
+#: src/ctl/controls.tsx:325
+msgctxt "pseudo-stereo"
+msgid "Stereo"
+msgstr "Stereo"
+
+#: src/ctl/controls.tsx:328 src/ctl/mobile.tsx:205 src/ctl/mobile.tsx:206
+msgid "Mute"
+msgstr "Mykistä"
+
+#. Vol = Volume (short, on a button); Muted = the sound is muted
+#: src/ctl/controls.tsx:330
+msgid "Muted"
+msgstr "Mykkä"
+
+#. Vol = Volume (short, on a button); Muted = the sound is muted
+#: src/ctl/controls.tsx:330
+msgctxt "volume"
+msgid "Vol"
+msgstr "Ääni"
+
+#: src/ctl/controls.tsx:339
+msgid "Volume"
+msgstr "Äänenvoimakkuus"
+
+#: src/ctl/controls.tsx:361
+msgid "Noise blanker: removes short impulses (ignition, switching noise)"
+msgstr "Pulssihäiriöiden poisto: poistaa lyhyet pulssit (sytytys, kytkentähäiriöt)"
+
+#: src/ctl/controls.tsx:373
+msgid "Blanker sensitivity: impulses over {n} x the average"
+msgstr "Pulssihäiriöiden poiston herkkyys: pulssit, jotka ylittävät keskitason {n}-kertaisesti"
+
+#: src/ctl/controls.tsx:379
+msgid "Noise reduction: lowers steady background noise"
+msgstr "Kohinanvaimennus: vaimentaa tasaista taustakohinaa"
+
+#: src/ctl/controls.tsx:391
+msgid "Noise reduction strength {n} %"
+msgstr "Kohinanvaimennuksen voimakkuus {n} %"
+
+#: src/ctl/controls.tsx:397
+msgid "Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW"
+msgstr "Automaattinen notch-suodin (lovisuodin): poistaa jatkuvat kantoaallot ja vihellykset (heterodyynit), jättää puheen ja CW:n"
+
+#. Notch = automatic notch filter removing steady carriers and whistles
+#: src/ctl/controls.tsx:400
+msgctxt "filter"
+msgid "Notch"
+msgstr "Notch"
+
+#: src/ctl/controls.tsx:405
+msgid "Squelch: mute while the signal is below the threshold (marked on the S-meter)"
+msgstr "Kohinasalpa: mykistää äänen, kun signaali on kynnyksen alapuolella (merkitty S-mittariin)"
+
+#: src/ctl/controls.tsx:417 src/ctl/controls.tsx:691
+msgid "Squelch threshold"
+msgstr "Kohinasalvan kynnys"
+
+#: src/ctl/controls.tsx:441
+msgid "Zoom out (wheel)"
+msgstr "Loitonna (rulla)"
+
+#: src/ctl/controls.tsx:444
+msgid "Waterfall span"
+msgstr "Vesiputouksen näyttöleveys"
+
+#: src/ctl/controls.tsx:447
+msgid "Zoom in (wheel)"
+msgstr "Lähennä (rulla)"
+
+#: src/ctl/controls.tsx:450
+msgid "Centre the waterfall on the dial"
+msgstr "Keskitä vesiputous viritystaajuuteen"
+
+#. button: centre the waterfall on the dial frequency
+#: src/ctl/controls.tsx:452
+msgctxt "waterfall zoom"
+msgid "Centre"
+msgstr "Keskitä"
+
+#: src/ctl/controls.tsx:454
+msgid "Whole range"
+msgstr "Koko alue"
+
+#. button: zoom the waterfall out to the receiver's whole range
+#: src/ctl/controls.tsx:456
+msgctxt "waterfall zoom"
+msgid "Full"
+msgstr "Koko"
+
+#: src/ctl/controls.tsx:481
+msgid "Users and background decoders"
+msgstr "Käyttäjät ja taustadekooderit"
+
+#: src/ctl/controls.tsx:482
+msgid "Users {n}"
+msgstr "Käyttäjät {n}"
+
+#: src/ctl/controls.tsx:501
+msgid "user"
+msgstr "käyttäjä"
+
+#: src/ctl/controls.tsx:503
+msgid "mode"
+msgstr "lähetelaji"
+
+#: src/ctl/controls.tsx:508
+msgid "{name} (you)"
+msgstr "{name} (sinä)"
+
+#: src/ctl/controls.tsx:508 src/ctl/controls.tsx:524
+msgid "user {id}"
+msgstr "käyttäjä {id}"
+
+#: src/ctl/controls.tsx:512 src/ctl/controls.tsx:525
+msgid "private"
+msgstr "yksityinen"
+
+#: src/ctl/controls.tsx:522 src/ctl/controls.tsx:543
+msgid "Click to tune there"
+msgstr "Viritä sinne napsauttamalla"
+
+#: src/ctl/controls.tsx:522
+msgid "Click to listen along"
+msgstr "Kuuntele mukana napsauttamalla"
+
+#: src/ctl/controls.tsx:522
+msgid "Their frequency is private"
+msgstr "Taajuus on yksityinen"
+
+#: src/ctl/controls.tsx:522
+msgid "Waiting for a receiver"
+msgstr "Odottaa vastaanotinta"
+
+#: src/ctl/controls.tsx:528 src/ctl/controls.tsx:546
+msgid "waiting"
+msgstr "odottaa"
+
+#: src/ctl/controls.tsx:538
+msgid "background decoders"
+msgstr "taustadekooderit"
+
+#: src/ctl/controls.tsx:567
+msgid "Your receiver is ready."
+msgstr "Vastaanottimesi on valmis."
+
+#: src/ctl/controls.tsx:568
+msgid "Switch to it"
+msgstr "Vaihda siihen"
+
+#: src/ctl/controls.tsx:572
+msgid "Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue)."
+msgstr "Kuuntelet mukana: käyttäjä {id} (odotat omaa vastaanotinta, olet jonossa #{pos})."
+
+#: src/ctl/controls.tsx:573 src/ctl/timecode.tsx:54
+msgid "Stop"
+msgstr "Lopeta"
+
+#: src/ctl/controls.tsx:581
+msgid "Visitors without the password share one receiver, now in use: you are #{pos} in the queue, waterfall only until then."
+msgid_plural "Visitors without the password share {n} receivers, all in use: you are #{pos} in the queue, waterfall only until then."
+msgstr[0] "Vierailijat ilman salasanaa jakavat yhden vastaanottimen, joka on nyt käytössä: olet jonossa #{pos}, siihen asti vain vesiputous."
+msgstr[1] "Vierailijat ilman salasanaa jakavat {n} vastaanotinta, kaikki käytössä: olet jonossa #{pos}, siihen asti vain vesiputous."
+
+#: src/ctl/controls.tsx:587
+msgid "All receivers are in use: you are #{pos} in the queue, waterfall only until then."
+msgstr "Kaikki vastaanottimet ovat käytössä: olet jonossa #{pos}, siihen asti vain vesiputous."
+
+#: src/ctl/controls.tsx:588
+msgid "Click a green marker on the scale to listen along with another user."
+msgstr "Napsauttamalla asteikon vihreää merkkiä voit kuunnella mukana toisen käyttäjän kanssa."
+
+#: src/ctl/controls.tsx:610
+msgid "Waterfall colour range (dBFS)"
+msgstr "Vesiputouksen värialue (dBFS)"
+
+#. button: choose the waterfall colour range automatically
+#: src/ctl/controls.tsx:613
+msgctxt "colour range"
+msgid "Auto"
+msgstr "Autom."
+
+#. waterfall colour range slider: floor = the level shown as the darkest colour
+#: src/ctl/controls.tsx:617
+msgctxt "colour range"
+msgid "floor"
+msgstr "alaraja"
+
+#. waterfall colour range slider: top = the level shown as the brightest colour
+#: src/ctl/controls.tsx:628
+msgctxt "colour range"
+msgid "top"
+msgstr "yläraja"
+
+#: src/ctl/controls.tsx:649
+msgid "Peak hold: the highest level each frequency reached (pink), on the spectrum"
+msgstr "Huippuarvon pito: kunkin taajuuden suurin saavutettu taso (vaaleanpunainen) spektrissä"
+
+#. Peak = peak hold: the spectrum keeps the highest level each frequency reached
+#: src/ctl/controls.tsx:651
+msgctxt "spectrum"
+msgid "Peak"
+msgstr "Huippu"
+
+#: src/ctl/controls.tsx:654
+msgid "Clear the peaks"
+msgstr "Tyhjennä huiput"
+
+#: src/ctl/controls.tsx:658
+msgid "Save the spectrum and waterfall as a PNG image (with time marks and the frequency)"
+msgstr "Tallenna spektri ja vesiputous PNG-kuvana (aikamerkkien ja taajuuden kanssa)"
+
+#: src/ctl/controls.tsx:661
+msgid "Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)"
+msgstr "Äänispektri: äänen spektri ja vesiputous paneelissa (IQ-tilassa viritystaajuuden molemmat puolet)"
+
+#: src/ctl/controls.tsx:673
+msgid "RF attenuator in: every signal is {db} dB weaker (set by the receiver's owner, against overloads)"
+msgstr "RF-vaimennin päällä: jokainen signaali on {db} dB heikompi (vastaanottimen omistajan asettama ylikuormituksia vastaan)"
+
+#: src/ctl/controls.tsx:688 src/ctl/mobile.tsx:94
+msgid "Channel power before AGC (dBFS)"
+msgstr "Kanavan teho ennen AGC:tä (dBFS)"
+
+#: src/ctl/controls.tsx:694
+msgid "ADC overload"
+msgstr "ADC-ylikuormitus"
+
+#. OVL = overload: the ADC input is too strong
+#: src/ctl/controls.tsx:696 src/ctl/mobile.tsx:90
+msgid "OVL"
+msgstr "OVL"
+
+#: src/ctl/controls.tsx:706
+msgid "connecting"
+msgstr "yhdistetään"
+
+#: src/ctl/controls.tsx:707
+msgid "open"
+msgstr "auki"
+
+#: src/ctl/controls.tsx:708
+msgid "closed"
+msgstr "suljettu"
+
+#: src/ctl/controls.tsx:709
+msgid "busy"
+msgstr "varattu"
+
+#: src/ctl/controls.tsx:710
+msgid "ended"
+msgstr "päättynyt"
+
+#. rtt = round-trip time to the receiver, in milliseconds
+#: src/ctl/controls.tsx:736
+msgid "rtt {v} ms"
+msgstr "rtt {v} ms"
+
+#: src/ctl/controls.tsx:740
+msgid "How the audio comes, and its data rate"
+msgstr "Äänen siirtotapa ja sen datanopeus"
+
+#: src/ctl/controls.tsx:741
+msgid "{codec} {v} kbit/s"
+msgstr "{codec} {v} kbit/s"
+
+#: src/ctl/controls.tsx:745
+msgid "The waterfall's data rate"
+msgstr "Vesiputouksen datanopeus"
+
+#. wf = waterfall
+#: src/ctl/controls.tsx:747
+msgid "wf {v} kbit/s"
+msgstr "vp {v} kbit/s"
+
+#: src/ctl/controls.tsx:751
+msgid "Audio buffer, underruns, playback trim"
+msgstr "Äänipuskuri, alivuodot, toistonopeuden hienosäätö"
+
+#. buf = audio buffer; underruns = the buffer ran empty and the sound broke up; ppm = parts per million (playback speed trim)
+#: src/ctl/controls.tsx:753
+msgid "buf {fill} ms · {under} underruns · {trim} ppm"
+msgstr "puskuri {fill} ms · alivuodot {under} · {trim} ppm"
+
+#: src/ctl/controls.tsx:761
+msgid "Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay."
+msgstr "Pelkän HTTP:n kautta selain sallii äänen vain sivun omassa säikeessä, ja puskurointia on enemmän. Sama sivu HTTPS:n kautta (laitteen oma varmenne: selain kysyy kerran) soi pienemmällä viiveellä."
+
+#: src/ctl/controls.tsx:762
+msgid "http audio (+delay):"
+msgstr "http-ääni (+viive):"
+
+#: src/ctl/controls.tsx:767
+msgid "Frames dropped (audio / waterfall), audio gaps"
+msgstr "Pudotetut kehykset (ääni / vesiputous), katkot äänessä"
+
+#: src/ctl/controls.tsx:768
+msgid "drops {audio}/{wf} · gaps {gaps}"
+msgstr "pudotetut {audio}/{wf} · katkot {gaps}"
+
+#: src/ctl/controls.tsx:775
+msgid "hardware falling behind"
+msgstr "laitteisto jää jälkeen"
+
+#: src/ctl/controls.tsx:778
+msgid "clock {v} ppm"
+msgstr "kello {v} ppm"
+
+#: src/ctl/controls.tsx:782
+msgid "The receiver's CPU load (all cores) and temperature"
+msgstr "Vastaanottimen suoritinkuorma (kaikki ytimet) ja lämpötila"
+
+#: src/ctl/controls.tsx:783
+msgid "cpu {v} %"
+msgstr "cpu {v} %"
+
+#: src/ctl/controls.tsx:797
+msgid "You listen as a visitor: {n} of the receivers are open without the password. Log in for any."
+msgstr "Kuuntelet vierailijana: {n} vastaanottimista on avoinna ilman salasanaa. Kirjaudu sisään käyttääksesi mitä tahansa."
+
+#: src/ctl/controls.tsx:799
+msgid "visitor: log in"
+msgstr "vierailija: kirjaudu"
+
+#: src/ctl/controls.tsx:812
+msgid "About this receiver: where it is, its antenna, its limits, privacy, licences"
+msgstr "Tietoja vastaanottimesta: sijainti, antenni, rajoitukset, yksityisyys, lisenssit"
+
+#: src/ctl/controls.tsx:814
+msgid "info"
+msgstr "tiedot"
+
+#: src/ctl/controls.tsx:823
+msgid "Keys and mouse (key ?)"
+msgstr "Näppäimet ja hiiri (näppäin ?)"
+
+#: src/ctl/controls.tsx:825
+msgid "keys"
+msgstr "näppäimet"
+
+#: src/ctl/controls.tsx:827
+msgid "admin"
+msgstr "ylläpito"
+
+#: src/ctl/cw.tsx:18
+msgid "Decode CW (Morse) from this receiver's audio, in this browser: every keyed signal in the passband"
+msgstr "Dekoodaa CW:tä (sähkötystä) tämän vastaanottimen äänestä tässä selaimessa: jokainen päästökaistan sähkötyssignaali"
+
+#. Wide = skim a 40 kHz slice of spectrum (a channelizer bin of the receiver's filter bank) instead of the narrow audio passband
+#: src/ctl/cw.tsx:40 src/ctl/rtty.tsx:57
+msgid "Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband"
+msgstr "Dekoodaa 40 kHz viritystaajuuden ympäriltä (kanavoijan kanava suoraan vastaanottimelta, ~1 Mbit/s) äänen päästökaistan sijaan"
+
+#. Wide = skim a 40 kHz slice of spectrum (a channelizer bin) instead of the narrow audio passband
+#: src/ctl/cw.tsx:43 src/ctl/rtty.tsx:60
+msgid "Wide"
+msgstr "Laaja"
+
+#. Neural = a neural-network Morse decoder, as opposed to the classical (signal-processing) one
+#: src/ctl/cw.tsx:47
+msgid "Text from the neural decoder (trained on synthetic CW; reads weaker and rougher signals) instead of the classical one"
+msgstr "Teksti neuroverkkodekooderilta (opetettu synteettisellä CW:llä; lukee heikompia ja karheampia signaaleja) perinteisen dekooderin sijaan"
+
+#: src/ctl/cw.tsx:48
+msgid "Neural"
+msgstr "Neuro"
+
+#: src/ctl/cw.tsx:50 src/ctl/psk.tsx:34 src/ctl/rtty.tsx:63
+msgid "Clear the text"
+msgstr "Tyhjennä teksti"
+
+#: src/ctl/cw.tsx:51 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:52
+msgid "Clear"
+msgstr "Tyhjennä"
+
+#: src/ctl/cw.tsx:53 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66
+msgid "Stop decoding"
+msgstr "Lopeta dekoodaus"
+
+#: src/ctl/cw.tsx:60 src/ctl/rtty.tsx:73
+msgid "Skimming {lo}–{hi} kHz"
+msgstr "Dekoodataan {lo}–{hi} kHz"
+
+#: src/ctl/cw.tsx:60 src/ctl/rtty.tsx:73
+msgid "Waiting for the wide IQ…"
+msgstr "Odotetaan laajaa IQ-dataa…"
+
+#: src/ctl/cw.tsx:62
+msgid "CW is decoded in CW, USB and LSB."
+msgstr "CW:tä dekoodataan CW-, USB- ja LSB-tilassa."
+
+#: src/ctl/cw.tsx:66
+msgid "Nothing yet: every keyed signal in the passband is found and decoded (9–45 WPM); text shows a few seconds behind the audio, once it has settled. A wide passband (USB) decodes several stations at once."
+msgstr "Ei vielä mitään: jokainen päästökaistan sähkötyssignaali etsitään ja dekoodataan (9–45 WPM); teksti näkyy muutaman sekunnin äänen jäljessä, kun se on vakiintunut. Leveä päästökaista (USB) dekoodaa useita asemia kerralla."
+
+#: src/ctl/cw.tsx:75
+msgid "Text"
+msgstr "Teksti"
+
+#: src/ctl/cw.tsx:80
+msgid "{hz} Hz audio; click: CW mode on this signal"
+msgstr "{hz} Hz äänessä; napsauta: CW-tila tälle signaalille"
+
+#. hint = one-line description of each browser decoder; mode names (FT8, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
+#: src/ctl/decoders.tsx:19
+msgid "on the frequency you tune; nothing is reported anywhere"
+msgstr "virittämälläsi taajuudella; mitään ei raportoida minnekään"
+
+#: src/ctl/decoders.tsx:20
+msgid "every keyed signal in the passband (Morse)"
+msgstr "jokainen päästökaistan avainnettu signaali (sähkötys)"
+
+#: src/ctl/decoders.tsx:21
+msgid "FSK/RTTY, NAVTEX and DSC, every parameter found from the signal"
+msgstr "FSK/RTTY, NAVTEX ja DSC, kaikki parametrit tunnistetaan signaalista"
+
+#: src/ctl/decoders.tsx:22
+msgid "PSK31, PSK63 and PSK125: every BPSK signal in the passband"
+msgstr "PSK31, PSK63 ja PSK125: jokainen päästökaistan BPSK-signaali"
+
+#: src/ctl/decoders.tsx:23
+msgid "JS8Call: heartbeats, directed messages and chat, every submode (USB)"
+msgstr "JS8Call: heartbeatit, suunnatut viestit ja chat, kaikki alatilat (USB)"
+
+#: src/ctl/decoders.tsx:24
+msgid "aircraft HF data link: position reports and ACARS (USB)"
+msgstr "lentokoneiden HF-datalinkki: sijaintiraportit ja ACARS (USB)"
+
+#: src/ctl/decoders.tsx:25
+msgid "HF weather charts and SSTV pictures (USB)"
+msgstr "HF-sääkartat ja SSTV-kuvat (USB)"
+
+#: src/ctl/decoders.tsx:26 src/ctl/timecode.tsx:25
+msgid "Time"
+msgstr "Aika"
+
+#: src/ctl/decoders.tsx:26
+msgid "time-code stations: DCF77, MSF, WWVB, JJY, WWV/WWVH"
+msgstr "aikasignaaliasemat: DCF77, MSF, WWVB, JJY, WWV/WWVH"
+
+#: src/ctl/decoders.tsx:27
+msgid "Signal ID"
+msgstr "Signaalin tunnistus"
+
+#: src/ctl/decoders.tsx:27
+msgid "identify the signals in the passband"
+msgstr "tunnista päästökaistan signaalit"
+
+#: src/ctl/decoders.tsx:28
+msgid "WSJT-X's keyboard mode"
+msgstr "WSJT-X:n näppäimistötila"
+
+#: src/ctl/decoders.tsx:54
+msgid "Decoding in this browser: {list}"
+msgstr "Dekoodataan tässä selaimessa: {list}"
+
+#: src/ctl/decoders.tsx:54
+msgid "Decoders that run in this browser"
+msgstr "Tässä selaimessa toimivat dekooderit"
+
+#: src/ctl/decoders.tsx:56
+msgid "Decoders"
+msgstr "Dekooderit"
+
+#: src/ctl/digi.tsx:22
+msgid "Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)"
+msgstr "Dekoodaa FT8, FT4 tai WSPR virittämältäsi taajuudelta tässä selaimessa (mitään ei raportoida minnekään)"
+
+#: src/ctl/digi.tsx:33
+msgid "{mode} is decoded in USB."
+msgstr "{mode} dekoodataan USB-tilassa."
+
+#. a decode = one successfully decoded message; cut short = the decoder stopped early to keep up
+#: src/ctl/digi.tsx:39
+msgid "{time}: {n} decode in {ms} (cut short)"
+msgid_plural "{time}: {n} decodes in {ms} (cut short)"
+msgstr[0] "{time}: {n} dekoodaus ajassa {ms} (katkaistu)"
+msgstr[1] "{time}: {n} dekoodausta ajassa {ms} (katkaistu)"
+
+#: src/ctl/digi.tsx:40
+msgid "{time}: {n} decode in {ms}"
+msgid_plural "{time}: {n} decodes in {ms}"
+msgstr[0] "{time}: {n} dekoodaus ajassa {ms}"
+msgstr[1] "{time}: {n} dekoodausta ajassa {ms}"
+
+#: src/ctl/digi.tsx:43
+msgid "decoding…"
+msgstr "dekoodataan…"
+
+#: src/ctl/digi.tsx:44
+msgid "next slot {time}"
+msgstr "seuraava jakso {time}"
+
+#: src/ctl/digi.tsx:45
+msgid "waiting for audio"
+msgstr "odotetaan ääntä"
+
+#. slot = the fixed 15 s (FT8), 7.5 s (FT4) or 2 min (WSPR) time period in which one transmission is sent and decoded
+#: src/ctl/digi.tsx:48
+msgid "Slots on the receiver's clock"
+msgstr "Jaksot vastaanottimen kellon mukaan"
+
+#. slot = the fixed 15 s (FT8), 7.5 s (FT4) or 2 min (WSPR) time period in which one transmission is sent and decoded
+#: src/ctl/digi.tsx:48
+msgid "Slots on this computer's clock (the receiver's isn't known yet)"
+msgstr "Jaksot tämän tietokoneen kellon mukaan (vastaanottimen kelloa ei vielä tiedetä)"
+
+#: src/ctl/digi.tsx:50
+msgid "local clock"
+msgstr "paikallinen kello"
+
+#: src/ctl/digi.tsx:68 src/ctl/spots.tsx:94
+msgid "Mode"
+msgstr "Lähetelaji"
+
+#: src/ctl/digi.tsx:73
+msgid "Common {mode} dial frequencies (USB)"
+msgstr "Tavalliset {mode}-taajuudet (USB)"
+
+#: src/ctl/digi.tsx:75 src/ctl/jtty.tsx:37
+msgid "Dial…"
+msgstr "Taajuus…"
+
+#. Deep = a slower, deeper decoder search that finds a few more weak messages
+#: src/ctl/digi.tsx:84
+msgid "A deeper search: a few more decodes for two to four times the CPU"
+msgstr "Syvempi haku: muutama dekoodaus lisää, kahdesta neljään kertaa enemmän suoritinaikaa"
+
+#: src/ctl/digi.tsx:85
+msgid "Deep"
+msgstr "Syvä"
+
+#: src/ctl/digi.tsx:87 src/ctl/spots.tsx:79
+msgid "Call or text"
+msgstr "Kutsu tai teksti"
+
+#: src/ctl/digi.tsx:89 src/ctl/hfdl.tsx:64
+msgid "Clear the list"
+msgstr "Tyhjennä lista"
+
+#: src/ctl/digi.tsx:102
+msgid "No decodes match."
+msgstr "Mikään dekoodaus ei vastaa hakua."
+
+#: src/ctl/digi.tsx:105
+msgid "Decodes show after each 2-minute slot, from the first one heard whole."
+msgstr "Dekoodaukset näkyvät jokaisen 2 minuutin jakson jälkeen, alkaen ensimmäisestä kokonaan kuullusta."
+
+#: src/ctl/digi.tsx:106
+msgid "Decodes show after each 2-minute slot, from the first one heard whole. Pick a {mode} dial frequency above, or tune to one in USB."
+msgstr "Dekoodaukset näkyvät jokaisen 2 minuutin jakson jälkeen, alkaen ensimmäisestä kokonaan kuullusta. Valitse {mode}-taajuus yltä tai viritä sellaiselle USB-tilassa."
+
+#: src/ctl/digi.tsx:108
+msgid "Decodes show after each {period} s slot, from the first one heard whole."
+msgstr "Dekoodaukset näkyvät jokaisen jakson ({period} s) jälkeen, alkaen ensimmäisestä kokonaan kuullusta."
+
+#: src/ctl/digi.tsx:109
+msgid "Decodes show after each {period} s slot, from the first one heard whole. Pick a {mode} dial frequency above, or tune to one in USB."
+msgstr "Dekoodaukset näkyvät jokaisen jakson ({period} s) jälkeen, alkaen ensimmäisestä kokonaan kuullusta. Valitse {mode}-taajuus yltä tai viritä sellaiselle USB-tilassa."
+
+#. Drift = how far the WSPR signal's frequency drifted during the transmission, Hz per minute
+#: src/ctl/digi.tsx:121
+msgid "Drift"
+msgstr "Ryömintä"
+
+#: src/ctl/digi.tsx:122 src/ctl/jtty.tsx:61 src/ctl/spots.tsx:95
+msgid "Message"
+msgstr "Viesti"
+
+#. kinds of HFDL message parts (the worker names them; ACARS stays as is): squitter = ground station announcement burst; logon/logoff = aircraft registering with / leaving a ground station; frequencies = list of channels the aircraft is told to use; system table = the ground stations' broadcast list of stations and channels; bad = part whose checksum failed
+#: src/ctl/hfdl.tsx:14
+msgid "squitter"
+msgstr "squitter"
+
+#: src/ctl/hfdl.tsx:15
+msgid "position"
+msgstr "sijainti"
+
+#: src/ctl/hfdl.tsx:16
+msgid "frequencies"
+msgstr "taajuudet"
+
+#: src/ctl/hfdl.tsx:17
+msgid "logon"
+msgstr "kirjautuminen"
+
+#: src/ctl/hfdl.tsx:18
+msgid "logon confirm"
+msgstr "kirjautumisen vahvistus"
+
+#: src/ctl/hfdl.tsx:19
+msgid "logoff"
+msgstr "uloskirjautuminen"
+
+#: src/ctl/hfdl.tsx:20
+msgid "logon denied"
+msgstr "kirjautuminen evätty"
+
+#: src/ctl/hfdl.tsx:21
+msgid "system table"
+msgstr "järjestelmätaulukko"
+
+#: src/ctl/hfdl.tsx:22
+msgid "data"
+msgstr "data"
+
+#: src/ctl/hfdl.tsx:23
+msgid "bad"
+msgstr "virheellinen"
+
+#: src/ctl/hfdl.tsx:24
+msgid "other"
+msgstr "muu"
+
+#. squitter = the periodic broadcast burst a HFDL ground station (gs) sends to announce itself
+#: src/ctl/hfdl.tsx:31
+msgid "{gs} squitter"
+msgstr "{gs} squitter"
+
+#: src/ctl/hfdl.tsx:32
+msgid "{gs} → aircraft"
+msgstr "{gs} → lentokone"
+
+#: src/ctl/hfdl.tsx:32
+msgid "aircraft → {gs}"
+msgstr "lentokone → {gs}"
+
+#: src/ctl/hfdl.tsx:51
+msgid "HFDL channels (USB, the dial on the listed frequency) and the ground stations using them"
+msgstr "HFDL-kanavat (USB, viritystaajuus listatulla taajuudella) ja niitä käyttävät maa-asemat"
+
+#: src/ctl/hfdl.tsx:53
+msgid "Channel…"
+msgstr "Kanava…"
+
+#: src/ctl/hfdl.tsx:61
+msgid "Bursts decoded / heard since tuning here"
+msgstr "Dekoodatut / kuullut purskeet tänne virittämisen jälkeen"
+
+#: src/ctl/hfdl.tsx:73
+msgid "HFDL is decoded in USB."
+msgstr "HFDL dekoodataan USB-tilassa."
+
+#. squitter = periodic announcement burst of a ground station; logon = an aircraft registering with a ground station; ACARS = aircraft messaging protocol (name kept)
+#: src/ctl/hfdl.tsx:77
+msgid "Nothing yet: tune USB to an HFDL channel (the list above). Each ground station sends a squitter every 32 s; aircraft logons, position reports and ACARS messages come as they are sent. Only bursts whose checksums pass are listed."
+msgstr "Ei vielä mitään: viritä USB-tilassa HFDL-kanavalle (yllä oleva lista). Jokainen maa-asema lähettää squitterin 32 s välein; lentokoneiden kirjautumiset, sijaintiraportit ja ACARS-viestit tulevat sitä mukaa kuin niitä lähetetään. Listassa ovat vain purskeet, joiden tarkistussummat täsmäävät."
+
+#: src/ctl/hfdl.tsx:86
+msgid "Rate, slot (single or double) and SNR in the symbol rate's bandwidth"
+msgstr "Nopeus, aikaväli (yksi- tai kaksinkertainen) ja SNR symbolinopeuden kaistanleveydellä"
+
+#: src/ctl/hfdl.tsx:91
+msgid "(its parts didn't decode)"
+msgstr "(sen osat eivät dekoodautuneet)"
+
+#: src/ctl/hfdl.tsx:95
+msgid "The aircraft's ID on this ground station"
+msgstr "Lentokoneen tunnus tällä maa-asemalla"
+
+#: src/ctl/img.tsx:16
+msgid "Decode HF fax (weather charts) and SSTV pictures from this receiver's audio (USB), in this browser"
+msgstr "Dekoodaa HF-faksia (sääkarttoja) ja SSTV-kuvia tämän vastaanottimen äänestä (USB) tässä selaimessa"
+
+#. IOC = index of cooperation (fax drum width/line pitch ratio); slant = image skew from the sampling-rate error, in ppm; start tone = the tone that begins a fax chart; VIS code = the digital header that names the SSTV mode
+#: src/ctl/img.tsx:74
+msgid "Fax: IOC {ioc}, {lines} lines, slant {slant} ppm"
+msgstr "Faksi: IOC {ioc}, rivejä {lines}, vinous {slant} ppm"
+
+#: src/ctl/img.tsx:76
+msgid "Fax: start tone (IOC {ioc})"
+msgstr "Faksi: aloitusääni (IOC {ioc})"
+
+#: src/ctl/img.tsx:77
+msgid "Fax: waiting for a start tone"
+msgstr "Faksi: odotetaan aloitusääntä"
+
+#: src/ctl/img.tsx:78
+msgid "SSTV: {mode}, {lines} lines"
+msgstr "SSTV: {mode}, rivejä {lines}"
+
+#: src/ctl/img.tsx:78
+msgid "SSTV: waiting for a VIS code"
+msgstr "SSTV: odotetaan VIS-koodia"
+
+#: src/ctl/img.tsx:89
+msgid "Fax stations (the dial 1.9 kHz below) and SSTV calling frequencies, USB"
+msgstr "Faksiasemat (viritystaajuus 1,9 kHz alempana) ja SSTV-kutsutaajuudet, USB"
+
+#: src/ctl/img.tsx:92 src/ctl/rtty.tsx:45
+msgid "Station…"
+msgstr "Asema…"
+
+#: src/ctl/img.tsx:107
+msgid "Fax and SSTV are decoded in USB."
+msgstr "Faksi ja SSTV dekoodataan USB-tilassa."
+
+#: src/ctl/img.tsx:114
+msgid "Start a fax image now (no start tone heard), or end the one being received"
+msgstr "Aloita faksikuva nyt (aloitusääntä ei kuultu) tai lopeta vastaanotettava kuva"
+
+#: src/ctl/img.tsx:115
+msgid "Fax stop"
+msgstr "Lopeta faksi"
+
+#: src/ctl/img.tsx:115
+msgid "Fax start"
+msgstr "Aloita faksi"
+
+#. slant = image skew (lines lean) from a sample-rate error between sender and receiver
+#: src/ctl/img.tsx:118
+msgid "Fax slant: lines lean left"
+msgstr "Faksin vinous: rivit kallistuvat vasemmalle"
+
+#: src/ctl/img.tsx:121
+msgid "Fax slant: lines lean right"
+msgstr "Faksin vinous: rivit kallistuvat oikealle"
+
+#: src/ctl/img.tsx:124
+msgid "Fax: move the image left"
+msgstr "Faksi: siirrä kuvaa vasemmalle"
+
+#: src/ctl/img.tsx:127
+msgid "Fax: move the image right"
+msgstr "Faksi: siirrä kuvaa oikealle"
+
+#: src/ctl/img.tsx:130
+msgid "Manual fax slant (ppm) and shift"
+msgstr "Faksin vinouden (ppm) ja siirron käsisäätö"
+
+#: src/ctl/img.tsx:134
+msgid "End the SSTV image"
+msgstr "Lopeta SSTV-kuva"
+
+#: src/ctl/img.tsx:135
+msgid "SSTV stop"
+msgstr "Lopeta SSTV"
+
+#: src/ctl/img.tsx:143
+msgid "receiving"
+msgstr "vastaanotetaan"
+
+#: src/ctl/img.tsx:145
+msgid "Download as PNG"
+msgstr "Lataa PNG-kuvana"
+
+#: src/ctl/img.tsx:149
+msgid "Back to the picture being received"
+msgstr "Takaisin vastaanotettavaan kuvaan"
+
+#: src/ctl/img.tsx:150
+msgid "Live"
+msgstr "Suora"
+
+#. fax station = a weather-chart radiofax transmitter; VIS code = the digital header that names the SSTV mode and starts a picture; Martin, Scottie, Robot, PD are SSTV mode families (names kept)
+#: src/ctl/img.tsx:159
+msgid "Nothing yet: tune a fax station (its start tone begins a chart; or start one by hand) or an SSTV frequency (a picture begins with its VIS code: Martin, Scottie, Robot, PD)."
+msgstr "Ei vielä mitään: viritä faksiasemalle (sen aloitusääni aloittaa kartan; tai aloita käsin) tai SSTV-taajuudelle (kuva alkaa VIS-koodilla: Martin, Scottie, Robot, PD)."
+
+#. h = hours, min = minutes (units)
+#: src/ctl/info.tsx:39 src/ctl/map.tsx:598
+msgid "{n} h"
+msgstr "{n} h"
+
+#. h = hours, min = minutes (units)
+#: src/ctl/info.tsx:39 src/ctl/map.tsx:598
+msgid "{n} min"
+msgstr "{n} min"
+
+#: src/ctl/info.tsx:45
+msgid "{n} receivers, {open} of them open without the password."
+msgstr "Vastaanottimia {n}, niistä {open} avoinna ilman salasanaa."
+
+#: src/ctl/info.tsx:47
+msgid "{n} receivers, with the password."
+msgstr "Vastaanottimia {n}, salasanalla."
+
+#: src/ctl/info.tsx:48
+msgid "{n} receivers."
+msgstr "Vastaanottimia {n}."
+
+#: src/ctl/info.tsx:50
+msgid "At most {n} session at a time from one address."
+msgid_plural "At most {n} sessions at a time from one address."
+msgstr[0] "Enintään {n} istunto kerrallaan samasta osoitteesta."
+msgstr[1] "Enintään {n} istuntoa kerrallaan samasta osoitteesta."
+
+#: src/ctl/info.tsx:51
+msgid "A session lasts at most {time}."
+msgstr "Istunto kestää enintään {time}."
+
+#: src/ctl/info.tsx:52
+msgid "A session without activity ends after {time}."
+msgstr "Istunto päättyy, kun toimintaa ei ole ollut {time}."
+
+#: src/ctl/info.tsx:53
+msgid "{time} of listening a day from one address (the day changes at 00:00 UTC)."
+msgstr "Kuunteluaikaa {time} päivässä samasta osoitteesta (päivä vaihtuu klo 00.00 UTC)."
+
+#: src/ctl/info.tsx:61
+msgid "web888d receiver"
+msgstr "web888d-vastaanotin"
+
+#: src/ctl/info.tsx:67 src/ctl/spots.tsx:95 src/markers.ts:65
+msgid "Station"
+msgstr "Asema"
+
+#: src/ctl/info.tsx:73
+msgid "Antenna"
+msgstr "Antenni"
+
+#: src/ctl/info.tsx:79
+msgid "Contact"
+msgstr "Yhteystiedot"
+
+#: src/ctl/info.tsx:92
+msgid "For listeners"
+msgstr "Kuuntelijoille"
+
+#: src/ctl/info.tsx:100
+msgid "Privacy"
+msgstr "Yksityisyys"
+
+#: src/ctl/info.tsx:113
+msgid "{server}: open-source receiver software (web888-ng)."
+msgstr "{server}: avoimen lähdekoodin vastaanotinohjelmisto (web888-ng)."
+
+#: src/ctl/info.tsx:130
+msgid "The info page didn't load ({msg})."
+msgstr "Tietosivu ei latautunut ({msg})."
+
+#: src/ctl/info.tsx:137
+msgid "About this receiver"
+msgstr "Tietoja vastaanottimesta"
+
+#: src/ctl/info.tsx:145
+msgid "← About this receiver"
+msgstr "← Tietoja vastaanottimesta"
+
+#: src/ctl/info.tsx:145 src/ctl/licences.tsx:135
+msgid "Licences and credits"
+msgstr "Lisenssit ja tekijät"
+
+#: src/ctl/info.tsx:157
+msgid "About this receiver: where it is, its antenna, its limits"
+msgstr "Tietoja vastaanottimesta: sijainti, antenni, rajoitukset"
+
+#: src/ctl/iqrec.tsx:13
+msgid "10 s"
+msgstr "10 s"
+
+#: src/ctl/iqrec.tsx:14
+msgid "30 s"
+msgstr "30 s"
+
+#: src/ctl/iqrec.tsx:16
+msgid "2 min"
+msgstr "2 min"
+
+#: src/ctl/iqrec.tsx:21
+msgid "raw 16-bit I/Q, no header (GNU Radio, numpy)"
+msgstr "raaka 16-bittinen I/Q, ei otsaketta (GNU Radio, numpy)"
+
+#: src/ctl/iqrec.tsx:22
+msgid "stereo 16-bit WAV, I left and Q right (SDR programs)"
+msgstr "stereo, 16-bittinen WAV, I vasemmalla ja Q oikealla (SDR-ohjelmat)"
+
+#: src/ctl/iqrec.tsx:44
+msgid " of {lo}-{hi} kHz"
+msgstr " alueelta {lo}–{hi} kHz"
+
+#: src/ctl/iqrec.tsx:45
+msgid ", {s} s lost"
+msgstr ", {s} s menetetty"
+
+#: src/ctl/iqrec.tsx:48
+msgid "Recording the IQ{where}{lost}: click to stop and save"
+msgstr "IQ-tallennus käynnissä{where}{lost}: pysäytä ja tallenna napsauttamalla"
+
+#: src/ctl/iqrec.tsx:59
+msgid "Record the IQ around the dial (60 kHz) to a file"
+msgstr "Tallenna IQ-data viritystaajuuden ympäriltä (60 kHz) tiedostoon"
+
+#. Rec = short for Record; IQ = complex baseband samples (in-phase and quadrature)
+#: src/ctl/iqrec.tsx:61
+msgid "Rec IQ"
+msgstr "Tallenna IQ"
+
+#. channelizer bin = one 60 kHz slice of the spectrum that the receiver's channelizer produces; IQ = complex baseband samples
+#: src/ctl/iqrec.tsx:67
+msgid "The channelizer bin around the dial: 60 kHz of IQ (clean within ±21 kHz of its centre), 16-bit, collected in this browser and saved as a file (~0.25 MB a second). The bin stays put while recording."
+msgstr "Kanavoijan kanava viritystaajuuden ympäriltä: 60 kHz IQ-dataa (puhdas ±21 kHz:n sisällä keskikohdasta), 16-bittinen, kerätään tähän selaimeen ja tallennetaan tiedostoksi (~0,25 MB sekunnissa). Kanava pysyy paikallaan tallennuksen ajan."
+
+#: src/ctl/js8.tsx:43
+msgid "JS8Call's usual frequencies (USB)"
+msgstr "JS8Callin tavalliset taajuudet (USB)"
+
+#: src/ctl/js8.tsx:45 src/ctl/psk.tsx:27
+msgid "Band…"
+msgstr "Kaista…"
+
+#. a period = one receive time slot of a JS8 submode (6 to 30 s); frames = decoded JS8 transmissions
+#: src/ctl/js8.tsx:54
+msgid "Frames decoded, in {periods} periods of the four submodes; {pending} waiting"
+msgstr "Dekoodatut kehykset; neljän alatilan jaksoja {periods}, odottamassa {pending}"
+
+#. a period = one receive time slot of a JS8 submode (6 to 30 s); frames = decoded JS8 transmissions
+#: src/ctl/js8.tsx:56
+msgid "Frames decoded, in {periods} periods of the four submodes"
+msgstr "Dekoodatut kehykset; neljän alatilan jaksoja {periods}"
+
+#: src/ctl/js8.tsx:61
+msgid "Clear the messages"
+msgstr "Tyhjennä viestit"
+
+#: src/ctl/js8.tsx:70
+msgid "JS8 is decoded in USB."
+msgstr "JS8 dekoodataan USB-tilassa."
+
+#: src/ctl/js8.tsx:71
+msgid "Using this computer's clock: JS8 needs it within a second or so of UTC."
+msgstr "Käytetään tämän tietokoneen kelloa: JS8 vaatii sen olevan noin sekunnin tarkkuudella UTC-ajassa."
+
+#: src/ctl/js8.tsx:74
+msgid "Heard:"
+msgstr "Kuultu:"
+
+#: src/ctl/js8.tsx:83
+msgid "Nothing yet: JS8's Normal, Fast, Turbo and Slow periods are each decoded as they end, every signal in the passband. Messages of several frames are joined per frequency."
+msgstr "Ei vielä mitään: JS8:n Normal-, Fast-, Turbo- ja Slow-jaksot dekoodataan kukin niiden päättyessä, jokainen päästökaistan signaali. Useamman kehyksen viestit yhdistetään taajuuskohtaisesti."
+
+#: src/ctl/jtty.tsx:19
+msgid "Decode JTTY (WSJT-X's keyboard mode) from this receiver's audio, in this browser"
+msgstr "Dekoodaa JTTY:tä (WSJT-X:n näppäimistötila) tämän vastaanottimen äänestä tässä selaimessa"
+
+#: src/ctl/jtty.tsx:35
+msgid "Common JTTY dial frequencies (USB)"
+msgstr "Tavalliset JTTY-taajuudet (USB)"
+
+#: src/ctl/jtty.tsx:52
+msgid "JTTY is decoded in USB."
+msgstr "JTTY dekoodataan USB-tilassa."
+
+#: src/ctl/jtty.tsx:54
+msgid "Nothing yet: messages show when they end. Signals 200–3000 Hz above the dial; JTTY has no time slots."
+msgstr "Ei vielä mitään: viestit näkyvät niiden päätyttyä. Signaalit 200–3000 Hz viritystaajuuden yläpuolella; JTTY:ssä ei ole aikajaksoja."
+
+#: src/ctl/jtty.tsx:69
+msgid "{hz} Hz audio, {n} frame"
+msgid_plural "{hz} Hz audio, {n} frames"
+msgstr[0] "{hz} Hz äänessä, {n} kehys"
+msgstr[1] "{hz} Hz äänessä, {n} kehystä"
+
+#: src/ctl/keys.tsx:12
+msgid "Step the dial (shift: ×10)"
+msgstr "Siirrä viritystaajuutta askel kerrallaan (Shift: ×10)"
+
+#. SAM, SAL, SAR, SAS = synchronous AM detector (both sidebands, lower, upper, stereo)
+#: src/ctl/keys.tsx:15
+msgid "AM, then SAM, SAL, SAR, SAS in turn"
+msgstr "AM, sitten vuorotellen SAM, SAL, SAR, SAS"
+
+#. I/Q = the complex baseband samples of the channel, I (in-phase) on the left audio channel and Q (quadrature) on the right
+#: src/ctl/keys.tsx:18
+msgid "I/Q (the channel, I left and Q right)"
+msgstr "I/Q (kanava, I vasemmalla ja Q oikealla)"
+
+#. VFO = variable frequency oscillator, one of two tuning memories (A and B) of the radio
+#: src/ctl/keys.tsx:20
+msgid "Swap VFO A and B"
+msgstr "Vaihda VFO A ja B keskenään"
+
+#: src/ctl/keys.tsx:21
+msgid "Frequency memories"
+msgstr "Muistipaikat"
+
+#: src/ctl/keys.tsx:22
+msgid "This help"
+msgstr "Tämä ohje"
+
+#: src/ctl/keys.tsx:26
+msgid "Click"
+msgstr "Napsautus"
+
+#: src/ctl/keys.tsx:26
+msgid "Tune there (to the step's grid)"
+msgstr "Viritä sinne (lähimpään askeleeseen)"
+
+#: src/ctl/keys.tsx:27
+msgid "Drag, sideways swipe"
+msgstr "Veto, pyyhkäisy sivuttain"
+
+#: src/ctl/keys.tsx:27
+msgid "Pan the waterfall"
+msgstr "Panoroi vesiputousta"
+
+#: src/ctl/keys.tsx:28
+msgid "Wheel, pinch"
+msgstr "Rulla, nipistys"
+
+#: src/ctl/keys.tsx:28
+msgid "Zoom around the pointer"
+msgstr "Zoomaa osoittimen kohdalla"
+
+#: src/ctl/keys.tsx:29
+msgid "Shift+wheel"
+msgstr "Shift+rulla"
+
+#: src/ctl/keys.tsx:29
+msgid "Step the dial"
+msgstr "Siirrä viritystaajuutta askel kerrallaan"
+
+#: src/ctl/keys.tsx:30
+msgid "Wheel over a digit"
+msgstr "Rulla numeron päällä"
+
+#: src/ctl/keys.tsx:30
+msgid "Step that digit; click the dial to type a frequency (7074, 7.074M)"
+msgstr "Muuta sitä numeroa; kirjoita taajuus napsauttamalla viritystaajuutta (7074, 7.074M)"
+
+#: src/ctl/keys.tsx:31
+msgid "Click a marker, spot or label"
+msgstr "Napsautus merkkiin, spottiin tai nimiöön"
+
+#: src/ctl/keys.tsx:31
+msgid "Tune to it, or listen along with that user"
+msgstr "Viritä siihen tai kuuntele mukana sen käyttäjän kanssa"
+
+#: src/ctl/keys.tsx:64 src/ctl/keys.tsx:66
+msgid "Keys"
+msgstr "Näppäimet"
+
+#: src/ctl/keys.tsx:70
+msgid "Mouse and touch"
+msgstr "Hiiri ja kosketus"
+
+#: src/ctl/keys.tsx:74
+msgid "Any key or a click closes this."
+msgstr "Mikä tahansa näppäin tai napsautus sulkee tämän."
+
+#: src/ctl/labels.tsx:23
+msgid "Band plan and service bands between the spectrum and the scale"
+msgstr "Bandijako ja muiden radioliikenteiden taajuusalueet spektrin ja asteikon välissä"
+
+#: src/ctl/labels.tsx:24
+msgid "Band ribbon"
+msgstr "Kaistanauha"
+
+#: src/ctl/labels.tsx:26
+msgid "IARU region of the band plan and the amateur frequencies"
+msgstr "Bandijaon ja radioamatööritaajuuksien IARU-alue"
+
+#: src/ctl/labels.tsx:27 src/ctl/prop.tsx:169
+msgid "Region"
+msgstr "Alue"
+
+#: src/ctl/labels.tsx:30
+msgid "receiver's"
+msgstr "vastaanottimen"
+
+#: src/ctl/labels.tsx:38
+msgid "Labels show at {n} MHz wide or narrower. Click one to tune."
+msgstr "Nimiöt näkyvät, kun näkymä on enintään {n} MHz leveä. Nimiötä napsauttamalla viritetään sen taajuudelle."
+
+#: src/ctl/licences.tsx:34
+msgid "The KiwiSDR protocol and its behaviour, ported from the Web-888 server (RaspSDR/server, KiwiSDR-derived; LGPL-2.0-or-later and GPL), © 2014-2023 John Seamons ZL4VO/KF6VO."
+msgstr "KiwiSDR-protokolla ja sen toiminta, siirretty Web-888-palvelimesta (RaspSDR/server, KiwiSDR-pohjainen; LGPL-2.0-or-later ja GPL), © 2014–2023 John Seamons ZL4VO/KF6VO."
+
+#: src/ctl/licences.tsx:40
+msgid "Code tables and the decoder's first structure from {lib} (MIT, © 2018 Kārlis Goba); the protocol by Franke, Somerville and Taylor (QEX 2020)."
+msgstr "Koodaustaulukot ja dekooderin alkuperäinen rakenne kirjastosta {lib} (MIT, © 2018 Kārlis Goba); protokolla: Franke, Somerville ja Taylor (QEX 2020)."
+
+#: src/ctl/licences.tsx:44
+msgid "Ported from wsprd (GPL-3.0-or-later, © 2001-2018 Joe Taylor K1JT, 2014-2018 Steven Franke K9AN), with Phil Karn KA9Q's Fano decoder."
+msgstr "Siirretty wsprd:stä (GPL-3.0-or-later, © 2001–2018 Joe Taylor K1JT, 2014–2018 Steven Franke K9AN), mukana Phil Karn KA9Q:n Fano-dekooderi."
+
+#: src/ctl/licences.tsx:47
+msgid "Ported from {lib} (MIT, © 2026 Jouni OH3CUF); the mode is the WSJT-X developers' work."
+msgstr "Siirretty kirjastosta {lib} (MIT, © 2026 Jouni OH3CUF); lähetelaji on WSJT-X-kehittäjien työtä."
+
+#: src/ctl/licences.tsx:49
+msgid "Written with JS8Call (GPL-3.0) as the reference."
+msgstr "Kirjoitettu käyttäen JS8Callia (GPL-3.0) referenssinä."
+
+#: src/ctl/licences.tsx:50
+msgid "Ground stations as dumphfdl's system table lists them."
+msgstr "Maa-asemat dumphfdl:n järjestelmätaulukon mukaan."
+
+#: src/ctl/licences.tsx:53
+msgid "{lib} (BSD-3-Clause), a Rust implementation of Opus following libopus (© Xiph.Org, Skype, Jean-Marc Valin and others)."
+msgstr "{lib} (BSD-3-Clause), Opuksen Rust-toteutus libopusin mukaisesti (© Xiph.Org, Skype, Jean-Marc Valin ym.)."
+
+#: src/ctl/licences.tsx:58
+msgid "Propagation"
+msgstr "Kelit"
+
+#: src/ctl/licences.tsx:59
+msgid "{lib} (Apache-2.0, © 2026 Jonathan McSweet), a translation of VOACAP (Voice of America; NTIA/ITS, a US Government work; maintained by Greg Hand; voacapl by J.A. Watson, CC0). NTIA/ITS makes no warranty as to its accuracy and does not endorse its use."
+msgstr "{lib} (Apache-2.0, © 2026 Jonathan McSweet), VOACAPin uudelleentoteutus (Voice of America; NTIA/ITS, Yhdysvaltain hallituksen työ; ylläpitäjä Greg Hand; voacapl: J.A. Watson, CC0). NTIA/ITS ei takaa sen tarkkuutta eikä suosittele sen käyttöä."
+
+#: src/ctl/licences.tsx:69
+msgid "Ionospheric maps"
+msgstr "Ionosfäärikartat"
+
+#: src/ctl/licences.tsx:70
+msgid "VOACAP's coefficients: NTIA/ITS work, and CCIR Reports 322 (atmospheric noise) and 340 (foF2, M(3000)F2), which ITU-R Study Group 3 publishes for free use in its {sw}. Not covered by the GPL."
+msgstr "VOACAPin kertoimet: NTIA/ITS:n työtä sekä CCIR:n raportit 322 (ilmakehän kohina) ja 340 (foF2, M(3000)F2), jotka ITU-R:n tutkimusryhmä 3 julkaisee vapaasti käytettäviksi: {sw}. Eivät kuulu GPL:n piiriin."
+
+#: src/ctl/licences.tsx:72
+msgid "P.372 and P.533 software"
+msgstr "P.372- ja P.533-ohjelmistot"
+
+#: src/ctl/licences.tsx:76
+msgid "Shortwave schedules"
+msgstr "Lyhytaaltoaikataulut"
+
+#: src/ctl/licences.tsx:77
+msgid "{lib} by Eike Bierwirth, free to use and distribute."
+msgstr "{lib}, Eike Bierwirth; vapaasti käytettävissä ja levitettävissä."
+
+#: src/ctl/licences.tsx:80 src/ctl/map.tsx:41
+msgid "Map"
+msgstr "Kartta"
+
+#: src/ctl/licences.tsx:81
+msgid "{lib} (public domain), via world-atlas."
+msgstr "{lib} (public domain), world-atlasin kautta."
+
+#: src/ctl/licences.tsx:84
+msgid "Space weather"
+msgstr "Avaruussää"
+
+#: src/ctl/licences.tsx:85
+msgid "Sunspot predictions and the K index from {lib} (when the owner lets the receiver fetch them)."
+msgstr "Auringonpilkkuennusteet ja K-indeksi lähteestä {lib} (kun omistaja sallii vastaanottimen hakea ne)."
+
+#: src/ctl/licences.tsx:88 src/ctl/spots.tsx:17 src/map.ts:21 src/markers.ts:66
+msgid "DX spots"
+msgstr "DX-spotit"
+
+#: src/ctl/licences.tsx:89
+msgid "From {lib} (DX clusters, POTA, SOTA and others), when enabled."
+msgstr "Lähteestä {lib} (DX-klusterit, POTA, SOTA ym.), kun käytössä."
+
+#: src/ctl/licences.tsx:91
+msgid "Band plans, stations"
+msgstr "Bandijaot, asemat"
+
+#: src/ctl/licences.tsx:91
+msgid "Our own compilation from the IARU's, the ITU's and the operators' publications."
+msgstr "Oma kokoelmamme IARU:n, ITU:n ja asemien ylläpitäjien julkaisuista."
+
+#: src/ctl/licences.tsx:131
+msgid "The library list didn't load ({msg})."
+msgstr "Kirjastoluettelo ei latautunut ({msg})."
+
+#: src/ctl/licences.tsx:137
+msgid "{server}: free software under the {gpl}. Sources: {web}, {hw}, {os}. Not affiliated with the Web-888 / RX-888 vendor."
+msgstr "{server}: vapaa ohjelmisto, lisenssinä {gpl}. Lähdekoodit: {web}, {hw}, {os}. Ei yhteyttä Web-888- / RX-888-laitteen myyjään."
+
+#: src/ctl/licences.tsx:139
+msgid "GNU GPL, version 3 or later"
+msgstr "GNU GPL, versio 3 tai uudempi"
+
+#: src/ctl/licences.tsx:140
+msgid "the server and web UI"
+msgstr "palvelin ja verkkokäyttöliittymä"
+
+#: src/ctl/licences.tsx:141
+msgid "the FPGA design and driver"
+msgstr "FPGA-suunnittelu ja ajuri"
+
+#: src/ctl/licences.tsx:142
+msgid "the OS image"
+msgstr "käyttöjärjestelmäkuva"
+
+#. AI = artificial intelligence
+#: src/ctl/licences.tsx:146
+msgid "AI"
+msgstr "Tekoäly"
+
+#: src/ctl/licences.tsx:148
+msgid "The CW decoder and the signal identifier use small neural networks, trained by this project on synthetic signals; they run in your browser, and what they say can be wrong. Much of web888-ng's code and documentation was written with an AI coding assistant (Anthropic's Claude) at the project author's direction."
+msgstr "CW-dekooderi ja signaalin tunnistus käyttävät pieniä neuroverkkoja, jotka tämä projekti on opettanut synteettisillä signaaleilla; ne toimivat selaimessasi, ja niiden tulkinnat voivat olla vääriä. Suuri osa web888-ng:n koodista ja dokumentaatiosta on kirjoitettu tekoälyavustajalla (Anthropicin Claude) projektin tekijän ohjauksessa."
+
+#: src/ctl/licences.tsx:152
+msgid "Code it builds on"
+msgstr "Koodi, jonka varaan se rakentuu"
+
+#: src/ctl/licences.tsx:156
+msgid "Libraries"
+msgstr "Kirjastot"
+
+#: src/ctl/licences.tsx:159
+msgid "In the server (Rust crates)"
+msgstr "Palvelimessa (Rust-paketit eli cratet)"
+
+#: src/ctl/licences.tsx:160
+msgid "In this page"
+msgstr "Tällä sivulla"
+
+#: src/ctl/licences.tsx:161
+msgid "Each under its own licence, as listed; their texts are in their sources."
+msgstr "Kukin omalla lisenssillään, kuten listattu; lisenssitekstit ovat niiden lähdekoodissa."
+
+#: src/ctl/map.tsx:40
+msgid "Map of the stations heard"
+msgstr "Kuultujen asemien kartta"
+
+#: src/ctl/map.tsx:204
+msgid "{km} km, {deg}° from the spotter"
+msgstr "{km} km, {deg}° spottaajasta"
+
+#: src/ctl/map.tsx:204
+msgid "{km} km, {deg}° from here"
+msgstr "{km} km, {deg}° täältä"
+
+#: src/ctl/map.tsx:257
+msgid "The world map didn't load: {msg}"
+msgstr "Maailmankartta ei latautunut: {msg}"
+
+#: src/ctl/map.tsx:579
+msgid "Projection"
+msgstr "Projektio"
+
+#. the map projection: azimuthal equidistant, centred on the receiver (great circles from it are straight lines)
+#: src/ctl/map.tsx:581
+msgid "Great circle"
+msgstr "Isoympyrä"
+
+#: src/ctl/map.tsx:582
+msgid "Globe"
+msgstr "Maapallo"
+
+#: src/ctl/map.tsx:583
+msgid "Mercator"
+msgstr "Mercator"
+
+#: src/ctl/map.tsx:590 src/ctl/mobile.tsx:281
+msgid "Band"
+msgstr "Kaista"
+
+#: src/ctl/map.tsx:591 src/ctl/spots.tsx:77
+msgid "All bands"
+msgstr "Kaikki kaistat"
+
+#: src/ctl/map.tsx:596
+msgid "Show the stations heard within this time"
+msgstr "Näytä tänä aikana kuullut asemat"
+
+#: src/ctl/map.tsx:601
+msgid "Great circle lines from where each station was heard"
+msgstr "Isoympyräviivat sieltä, missä kukin asema kuultiin"
+
+#: src/ctl/map.tsx:602
+msgid "Lines"
+msgstr "Viivat"
+
+#: src/ctl/map.tsx:604
+msgid "Night and twilight now"
+msgstr "Yö ja hämärä nyt"
+
+#: src/ctl/map.tsx:605
+msgid "Greyline"
+msgstr "Greyline"
+
+#: src/ctl/map.tsx:607
+msgid "Stations shown"
+msgstr "Näytetyt asemat"
+
+#: src/ctl/map.tsx:610
+msgid "Centre on this receiver"
+msgstr "Keskitä tähän vastaanottimeen"
+
+#: src/ctl/map.tsx:632
+msgid "Tap it again to tune there."
+msgstr "Viritä sinne napauttamalla uudelleen."
+
+#: src/ctl/map.tsx:636
+msgid "This receiver's locator isn't set (admin: station): no lines from it."
+msgstr "Tämän vastaanottimen lokaattoria ei ole asetettu (ylläpito: station): ei viivoja siitä."
+
+#. VFO = variable frequency oscillator, one of two tuning memories (A and B) of the radio
+#: src/ctl/memories.tsx:36
+msgid "VFO {me} now. Swap to VFO {them}: {tuning} (key v)"
+msgstr "Nyt VFO {me}. Vaihda: VFO {them}, {tuning} (näppäin v)"
+
+#: src/ctl/memories.tsx:37
+msgid "VFO {me}. Swap to VFO {them} (a copy of this one the first time; key v)"
+msgstr "VFO {me}. Vaihda: VFO {them} (ensimmäisellä kerralla kopio tästä; näppäin v)"
+
+#: src/ctl/memories.tsx:42
+msgid "VFO {them} to this frequency, mode and passband"
+msgstr "Aseta VFO {them}: tämä taajuus, lähetelaji ja päästökaista"
+
+#: src/ctl/memories.tsx:75
+msgid "Stored {tuning}"
+msgstr "Tallennettu: {tuning}"
+
+#: src/ctl/memories.tsx:80
+msgid "name (optional)"
+msgstr "nimi (valinnainen)"
+
+#: src/ctl/memories.tsx:88
+msgid "Store {tuning} with its passband (replaces one at the same frequency and mode)"
+msgstr "Tallenna: {tuning} päästökaistoineen (korvaa saman taajuuden ja lähetelajin muistipaikan)"
+
+#: src/ctl/memories.tsx:89
+msgid "Store"
+msgstr "Tallenna"
+
+#: src/ctl/memories.tsx:97
+msgid "Tune to {tuning}, passband {lo}..{hi} Hz"
+msgstr "Viritä: {tuning}, päästökaista {lo} – {hi} Hz"
+
+#: src/ctl/memories.tsx:104
+msgid "Forget this memory"
+msgstr "Unohda tämä muistipaikka"
+
+#: src/ctl/memories.tsx:119
+msgid "No memories yet. They are kept in this browser; export them to keep them elsewhere."
+msgstr "Ei vielä muistipaikkoja. Ne säilytetään tässä selaimessa; vie ne tiedostoon säilyttääksesi ne muualla."
+
+#: src/ctl/memories.tsx:122
+msgid "Save the memories as a file"
+msgstr "Tallenna muistipaikat tiedostoon"
+
+#: src/ctl/memories.tsx:123
+msgid "Export"
+msgstr "Vie"
+
+#: src/ctl/memories.tsx:125
+msgid "Add the memories of an exported file"
+msgstr "Lisää muistipaikat viedystä tiedostosta"
+
+#: src/ctl/memories.tsx:126
+msgid "Import"
+msgstr "Tuo"
+
+#: src/ctl/memories.tsx:138
+msgid "Imported {n} memory"
+msgid_plural "Imported {n} memories"
+msgstr[0] "Tuotu {n} muistipaikka"
+msgstr[1] "Tuotu {n} muistipaikkaa"
+
+#: src/ctl/memories.tsx:140
+msgid "That file isn't a memories file"
+msgstr "Tiedosto ei ole muistipaikkatiedosto"
+
+#: src/ctl/memories.tsx:170
+msgid "Frequency memories (key m)"
+msgstr "Muistipaikat (näppäin m)"
+
+#. Mem = short for Memories, stored frequencies
+#: src/ctl/memories.tsx:172
+msgid "Mem"
+msgstr "Muisti"
+
+#: src/ctl/mobile.tsx:76
+msgid "Enter a frequency"
+msgstr "Syötä taajuus"
+
+#: src/ctl/mobile.tsx:151
+msgid "Wheel resolution"
+msgstr "Viritysrullan tarkkuus"
+
+#. the dial step per click of the VFO wheel, shown small above its value
+#: src/ctl/mobile.tsx:153
+msgctxt "wheel"
+msgid "step"
+msgstr "askel"
+
+#: src/ctl/mobile.tsx:189
+msgid "Down one step"
+msgstr "Askel alas"
+
+#: src/ctl/mobile.tsx:192
+msgid "Up one step"
+msgstr "Askel ylös"
+
+#: src/ctl/mobile.tsx:195
+msgid "Passband"
+msgstr "Päästökaista"
+
+#: src/ctl/mobile.tsx:199
+msgid "Bands"
+msgstr "Kaistat"
+
+#: src/ctl/mobile.tsx:205 src/ctl/mobile.tsx:206
+msgid "Unmute"
+msgstr "Poista mykistys"
+
+#: src/ctl/mobile.tsx:211 src/ctl/mobile.tsx:211 src/main.tsx:152
+msgid "Start audio"
+msgstr "Käynnistä ääni"
+
+#: src/ctl/mobile.tsx:215 src/ctl/mobile.tsx:302
+msgid "More"
+msgstr "Lisää"
+
+#: src/ctl/mobile.tsx:256
+msgid "Frequency"
+msgstr "Taajuus"
+
+#: src/ctl/mobile.tsx:259
+msgid "now"
+msgstr "nyt"
+
+#: src/ctl/mobile.tsx:303
+msgid "Audio"
+msgstr "Ääni"
+
+#. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
+#: src/ctl/mobile.tsx:309 src/sigid.ts:35
+msgid "Noise"
+msgstr "Kohina"
+
+#: src/ctl/mobile.tsx:315
+msgid "Memories"
+msgstr "Muistipaikat"
+
+#: src/ctl/mobile.tsx:319
+msgid "Users"
+msgstr "Käyttäjät"
+
+#: src/ctl/prop.tsx:30
+msgid "{band}: tune to {khz} kHz"
+msgstr "{band}: viritä taajuudelle {khz} kHz"
+
+#. MUF = maximum usable frequency
+#: src/ctl/prop.tsx:53
+msgid "Maximum usable frequency now (MHz)"
+msgstr "Suurin käyttökelpoinen taajuus nyt (MHz)"
+
+#: src/ctl/prop.tsx:60
+msgid "The whole day for this region"
+msgstr "Koko päivä tälle alueelle"
+
+#: src/ctl/prop.tsx:114
+msgid "Maximum usable frequency (MHz)"
+msgstr "Suurin käyttökelpoinen taajuus (MHz)"
+
+#: src/ctl/prop.tsx:116
+msgid "{hour} UTC: MUF {mhz} MHz"
+msgstr "{hour} UTC: MUF {mhz} MHz"
+
+#: src/ctl/prop.tsx:143
+msgid "The owner has turned the forecast off."
+msgstr "Omistaja on poistanut ennusteen käytöstä."
+
+#: src/ctl/prop.tsx:145
+msgid "The forecast is being made…"
+msgstr "Ennustetta lasketaan…"
+
+#: src/ctl/prop.tsx:154
+msgid "Planetary K index at {time} UTC (NOAA); the highest in 24 hours {max}"
+msgstr "Planetaarinen K-indeksi klo {time} UTC (NOAA); 24 tunnin suurin {max}"
+
+#: src/ctl/prop.tsx:164
+msgid "Signals that need {snr} dB SNR in 1 Hz"
+msgstr "Signaalit, joiden vaatima SNR on {snr} dB 1 Hz:n kaistalla"
+
+#: src/ctl/prop.tsx:170
+msgid "All regions, now ({hour} UTC)"
+msgstr "Kaikki alueet, nyt ({hour} UTC)"
+
+#: src/ctl/prop.tsx:173
+msgid "{region}, the day"
+msgstr "{region}, koko päivä"
+
+#: src/ctl/prop.tsx:180
+msgid "Share of days a signal gets through:"
+msgstr "Osuus päivistä, joina signaali menee läpi:"
+
+#: src/ctl/prop.tsx:183
+msgid "From each region to this receiver ({locator})."
+msgstr "Kultakin alueelta tähän vastaanottimeen ({locator})."
+
+#: src/ctl/prop.tsx:204
+msgid "The forecast didn't load ({msg})."
+msgstr "Ennuste ei latautunut ({msg})."
+
+#: src/ctl/prop.tsx:216 src/ctl/prop.tsx:221
+msgid "HF propagation"
+msgstr "HF-kelit"
+
+#: src/ctl/prop.tsx:232
+msgid "HF propagation: which bands are open to where, this hour and through the day"
+msgstr "HF-kelit: mitkä kaistat ovat auki minnekin, tällä tunnilla ja päivän mittaan"
+
+#: src/ctl/prop.tsx:233
+msgid "Prop"
+msgstr "Kelit"
+
+#: src/ctl/psk.tsx:25
+msgid "The usual PSK31 frequencies (USB)"
+msgstr "Tavalliset PSK31-taajuudet (USB)"
+
+#: src/ctl/psk.tsx:43
+msgid "PSK is decoded in USB, LSB and CW."
+msgstr "PSK dekoodataan USB-, LSB- ja CW-tilassa."
+
+#: src/ctl/psk.tsx:45
+msgid "Nothing yet: every PSK31, PSK63 and PSK125 signal in the passband is found (its carrier and rate from the signal) and decoded. A wide passband (USB, 3 kHz) reads several at once."
+msgstr "Ei vielä mitään: jokainen päästökaistan PSK31-, PSK63- ja PSK125-signaali etsitään (kantoaalto ja nopeus signaalista) ja dekoodataan. Leveä päästökaista (USB, 3 kHz) lukee useita kerralla."
+
+#. phase changes = the BPSK symbols (carrier phase flips between 0 and 180 degrees)
+#: src/ctl/psk.tsx:52
+msgid "How cleanly its phase changes read: 100 % clean, ~64 % noise"
+msgstr "Kuinka puhtaasti vaihemuutokset luetaan: 100 % puhdas, ~64 % kohinaa"
+
+#: src/ctl/psk.tsx:54
+msgid "quiet"
+msgstr "hiljaa"
+
+#: src/ctl/psk.tsx:61
+msgid "Read weakly: a phase change near 90°, it may have been another character"
+msgstr "Heikosti luettu: vaihemuutos lähellä 90°, merkki on voinut olla toinen"
+
+#. FSK = frequency-shift keying (two tones); rate = baud; shift = tone spacing, Hz; framing = start, data, parity and stop bits of each character
+#: src/ctl/rtty.tsx:26
+msgid "Decode FSK/RTTY (and NAVTEX) from this receiver's audio, in this browser: rate, shift, framing and character set found from the signal"
+msgstr "Dekoodaa FSK/RTTY:tä (ja NAVTEXia) tämän vastaanottimen äänestä tässä selaimessa: nopeus, siirto, kehystys ja merkistö tunnistetaan signaalista"
+
+#: src/ctl/rtty.tsx:43
+msgid "Stations to tune to (USB, the signal at 1 kHz)"
+msgstr "Viritettäviä asemia (USB, signaali 1 kHz:n kohdalla)"
+
+#: src/ctl/rtty.tsx:75
+msgid "RTTY is decoded in USB, LSB and CW."
+msgstr "RTTY dekoodataan USB-, LSB- ja CW-tilassa."
+
+#. rate = baud (symbol rate); shift = frequency shift between the two tones; polarity = which tone is mark; character set = ITA2, ASCII etc.
+#: src/ctl/rtty.tsx:80
+msgid "Nothing yet: every two-tone FSK signal in the passband is found, its rate, shift, framing (data bits, parity, stop bits), polarity and character set worked out, and decoded. A signal needs a few seconds before it locks."
+msgstr "Ei vielä mitään: jokainen päästökaistan kaksitaajuuksinen FSK-signaali etsitään, sen nopeus, siirto, kehystys (databitit, pariteetti, stop-bitit), polariteetti ja merkistö selvitetään, ja se dekoodataan. Signaali tarvitsee muutaman sekunnin lukittuakseen."
+
+#: src/ctl/rtty.tsx:90
+msgid "{pct} % framing errors"
+msgstr "{pct} % kehysvirheitä"
+
+#: src/ctl/rtty.tsx:93
+msgid "identified, not decoded"
+msgstr "tunnistettu, ei dekoodattu"
+
+#: src/ctl/rtty.tsx:111
+msgid "Read weakly: a bit near the threshold, it may have been another character"
+msgstr "Heikosti luettu: bitti lähellä kynnystä, merkki on voinut olla toinen"
+
+#: src/ctl/safe.tsx:29
+msgid "Leave safe mode? The unit reboots and starts the radio again."
+msgstr "Poistutaanko vikasietotilasta? Laite käynnistyy uudelleen ja käynnistää radion taas."
+
+#: src/ctl/safe.tsx:52
+msgid "Safe mode:"
+msgstr "Vikasietotila:"
+
+#: src/ctl/safe.tsx:52
+msgid "the radio is off"
+msgstr "radio on pois päältä"
+
+#: src/ctl/safe.tsx:55
+msgid "Rebooting…"
+msgstr "Käynnistyy uudelleen…"
+
+#: src/ctl/safe.tsx:57
+msgid "Leave safe mode"
+msgstr "Poistu vikasietotilasta"
+
+#: src/ctl/safe.tsx:59
+msgid "Admin page"
+msgstr "Ylläpitosivu"
+
+#: src/ctl/sigid.tsx:18
+msgid "Identify the signals in the passband (CW, RTTY, FT8, SSTV, fax, voice, data modems…), in this browser"
+msgstr "Tunnista päästökaistan signaalit (CW, RTTY, FT8, SSTV, faksi, puhe, datamodeemit…) tässä selaimessa"
+
+#: src/ctl/sigid.tsx:31
+msgid "{hz} Hz audio, {width} Hz wide; {classes}"
+msgstr "{hz} Hz äänessä, {width} Hz leveä; {classes}"
+
+#: src/ctl/sigid.tsx:49
+msgid "Tune to it"
+msgstr "Viritä siihen"
+
+#: src/ctl/sigid.tsx:49
+msgid "Open the {mode} decoder"
+msgstr "Avaa {mode}-dekooderi"
+
+#: src/ctl/sigid.tsx:50
+msgid "Tune"
+msgstr "Viritä"
+
+#: src/ctl/sigid.tsx:50
+msgid "Decode"
+msgstr "Dekoodaa"
+
+#: src/ctl/sigid.tsx:66
+msgid "Signals"
+msgstr "Signaalit"
+
+#: src/ctl/sigid.tsx:68
+msgid "Stop identifying"
+msgstr "Lopeta tunnistus"
+
+#: src/ctl/sigid.tsx:74
+msgid "Signals are identified in CW, USB and LSB."
+msgstr "Signaalit tunnistetaan CW-, USB- ja LSB-tilassa."
+
+#: src/ctl/sigid.tsx:76
+msgid "Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once."
+msgstr "Ei vielä mitään: jokainen päästökaistan signaali etsitään ja tunnistetaan vuorollaan äänen viimeisten 4 sekunnin perusteella, yksi 2 s välein. Leveä päästökaista (USB, 3 kHz) näyttää useita kerralla."
+
+#: src/ctl/sigid.tsx:83
+msgid "Looks like"
+msgstr "Arvio"
+
+#: src/ctl/sigid.tsx:94
+msgid "Trained on synthetic signals; a guess, not a decode."
+msgstr "Opetettu synteettisillä signaaleilla; arvaus, ei dekoodaus."
+
+#: src/ctl/spots.tsx:18
+msgid "Both"
+msgstr "Molemmat"
+
+#: src/ctl/spots.tsx:24
+msgid "Decodes of this receiver's skimmers and live DX spots"
+msgstr "Tämän vastaanottimen taustadekooderien dekoodaukset ja reaaliaikaiset DX-spotit"
+
+#: src/ctl/spots.tsx:24
+msgid "Decodes of this receiver's skimmers"
+msgstr "Tämän vastaanottimen taustadekooderien dekoodaukset"
+
+#: src/ctl/spots.tsx:24
+msgid "Live DX spots"
+msgstr "Reaaliaikaiset DX-spotit"
+
+#: src/ctl/spots.tsx:28
+msgid "Spots"
+msgstr "Spotit"
+
+#. DT = time offset of the decode from the slot start, in seconds
+#: src/ctl/spots.tsx:39
+msgid "{band} {mode}, DT {dt} s: click to tune"
+msgstr "{band} {mode}, DT {dt} s: viritä napsauttamalla"
+
+#: src/ctl/spots.tsx:41
+msgid "{band} {mode} DX spot by {de}: click to tune"
+msgstr "{band} {mode} DX-spotti, spottaaja {de}: viritä napsauttamalla"
+
+#: src/ctl/spots.tsx:42
+msgid "{band} {mode} DX spot: click to tune"
+msgstr "{band} {mode} DX-spotti: viritä napsauttamalla"
+
+#: src/ctl/spots.tsx:61
+msgid "No spots match."
+msgstr "Ei osuvia spotteja."
+
+#: src/ctl/spots.tsx:63
+msgid "No spots yet: the skimmers decode every 15 s."
+msgstr "Ei vielä spotteja: taustadekooderit dekoodaavat 15 s välein."
+
+#: src/ctl/spots.tsx:65
+msgid "No DX spots in this receiver's range yet."
+msgstr "Ei vielä DX-spotteja tämän vastaanottimen taajuusalueella."
+
+#: src/ctl/spots.tsx:66
+msgid "No spots yet."
+msgstr "Ei vielä spotteja."
+
+#: src/ctl/spots.tsx:71
+msgid "Which spots the list shows"
+msgstr "Mitkä spotit listassa näytetään"
+
+#: src/ctl/spots.tsx:78
+msgid "All modes"
+msgstr "Kaikki lähetelajit"
+
+#: src/ctl/timecode.tsx:26
+msgid "The station to read (Auto: whichever the tuning hears)"
+msgstr "Luettava asema (Autom.: se, joka kuuluu viritetyllä taajuudella)"
+
+#: src/ctl/timecode.tsx:27
+msgid "Auto"
+msgstr "Autom."
+
+#: src/ctl/timecode.tsx:38
+msgid "Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
+msgstr "Viritä asemalle (USB, kantoaalto 1 kHz:n kohdalla; WWV AM-tilassa)"
+
+#: src/ctl/timecode.tsx:41
+msgid "Tune…"
+msgstr "Viritä…"
+
+#: src/ctl/timecode.tsx:51
+msgid "Clear the minutes"
+msgstr "Tyhjennä minuutit"
+
+#. time code = the station's slowly keyed time signal; carrier = its unmodulated radio signal; keying = the depth of its on/off or high/low modulation
+#: src/ctl/timecode.tsx:67
+msgid "{name} on {carrier}: its 100 Hz time code"
+msgstr "{name}, {carrier}: sen 100 Hz:n aikakoodi"
+
+#: src/ctl/timecode.tsx:68
+msgid "{name} on {carrier}: the carrier at {hz} Hz"
+msgstr "{name}, {carrier}: kantoaalto kohdassa {hz} Hz"
+
+#: src/ctl/timecode.tsx:69
+msgid "keying {db} dB (weak: a narrow passband and slow AGC help)"
+msgstr "avainnus {db} dB (heikko: kapea päästökaista ja hidas AGC auttavat)"
+
+#: src/ctl/timecode.tsx:69
+msgid "keying {db} dB"
+msgstr "avainnus {db} dB"
+
+#. marker = the position-marker second of the time code; hole = WWV's silent second (no tick); MSF bits A and B = the two data bits sent each second
+#: src/ctl/timecode.tsx:74
+msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)"
+msgstr "Tämän minuutin sekunnit luettuina (himmeä: epävarma; M merkki, H WWV:n aukko, ? lukematon; MSF: 0–3 = bitit A + 2B)"
+
+#: src/ctl/timecode.tsx:87
+msgid "No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more."
+msgstr "Minuuttia ei ole vielä luettu: sekuntien ajoitus vie ~10 s, koko minuutti (sen merkistä alkaen) enintään kaksi lisää."
+
+#: src/ctl/timecode.tsx:95
+msgid "Its checks passed, and its time agrees with an earlier minute's"
+msgstr "Tarkistukset menivät läpi, ja aika täsmää aiemman minuutin kanssa"
+
+#: src/ctl/timecode.tsx:95
+msgid "Its checks passed (not yet agreed by another minute)"
+msgstr "Tarkistukset menivät läpi (toinen minuutti ei ole vielä vahvistanut)"
+
+#: src/ctl/timecode.tsx:95
+msgid "A check failed: a bit read wrong"
+msgstr "Tarkistus epäonnistui: bitti luettiin väärin"
+
+#: src/ctl/timecode.tsx:98
+msgid "When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error"
+msgstr "Milloin tämä minuutti alkoi palvelimen kellon mukaan, vähennettynä sen ilmoittamalla ajalla: matka asemalta, vastaanotin ja palvelimen kellovirhe"
+
+#: src/fmt.ts:78
+msgid "auto"
+msgstr "autom."
+
+#: src/main.tsx:108
+msgid "Log in with the receiver's password for any of its receivers."
+msgstr "Kirjaudu vastaanottimen salasanalla käyttääksesi mitä tahansa sen vastaanottimista."
+
+#: src/main.tsx:108
+msgid "This receiver is private."
+msgstr "Tämä vastaanotin on yksityinen."
+
+#: src/main.tsx:111
+msgid "Password"
+msgstr "Salasana"
+
+#: src/main.tsx:118
+msgid "Listen"
+msgstr "Kuuntele"
+
+#: src/main.tsx:122
+msgid "Stay a visitor"
+msgstr "Jatka vierailijana"
+
+#: src/main.tsx:135
+msgid "Session ended: {reason}."
+msgstr "Istunto päättyi: {reason}."
+
+#: src/main.tsx:136
+msgid "Reconnect"
+msgstr "Yhdistä uudelleen"
+
+#: src/main.tsx:143
+msgid "The receiver is in use."
+msgstr "Vastaanotin on käytössä."
+
+#: src/main.tsx:144
+msgid "Try again"
+msgstr "Yritä uudelleen"
+
+#: src/map.ts:19
+msgid "This receiver's FT8/FT4/WSPR skimmers: senders with a known locator"
+msgstr "Tämän vastaanottimen FT8/FT4/WSPR-taustadekooderit: lähettäjät, joiden lokaattori tunnetaan"
+
+#: src/map.ts:20
+msgid "Browser"
+msgstr "Selain"
+
+#: src/map.ts:20
+msgid "What this browser decoded: FT8/FT4/WSPR and JS8 senders with a known locator, HFDL aircraft positions and ground stations"
+msgstr "Mitä tämä selain dekoodasi: FT8/FT4/WSPR- ja JS8-lähettäjät, joiden lokaattori tunnetaan, HFDL-lentokoneiden sijainnit ja maa-asemat"
+
+#: src/map.ts:21
+msgid "Live DX cluster spots (Spothole), from the spotter to the station"
+msgstr "Reaaliaikaiset DX-klusterin spotit (Spothole), spottaajalta asemaan"
+
+#: src/map.ts:268
+msgid "ground station"
+msgstr "maa-asema"
+
+#: src/map.ts:272
+msgid "aircraft {n}"
+msgstr "lentokone {n}"
+
+#: src/map.ts:276
+msgid "aircraft"
+msgstr "lentokone"
+
+#. kinds of frequency labels on the spectrum: Broadcast = shortwave broadcasters, Utility = non-broadcast services (time signals, maritime, aero), Amateur = amateur radio, Station = the receiver's own list, DX spots = long-distance amateur contacts reported by the DX cluster
+#: src/markers.ts:62
+msgid "Broadcast"
+msgstr "Yleisradioasemat"
+
+#. kinds of frequency labels on the spectrum: Broadcast = shortwave broadcasters, Utility = non-broadcast services (time signals, maritime, aero), Amateur = amateur radio, Station = the receiver's own list, DX spots = long-distance amateur contacts reported by the DX cluster
+#: src/markers.ts:62
+msgid "Shortwave broadcasts on the air now (EiBi schedules)"
+msgstr "Lyhytaaltolähetykset nyt ilmassa (EiBi-aikataulut)"
+
+#: src/markers.ts:63
+msgid "Time signals, maritime, aero, weather fax, beacons"
+msgstr "Aikasignaalit, meri- ja lentoliikenne, sääfaksi, majakat"
+
+#: src/markers.ts:64
+msgid "Digital-mode dials and calling frequencies of the IARU region"
+msgstr "IARU-alueen digitaalilähetelajien taajuudet ja kutsutaajuudet"
+
+#: src/markers.ts:65
+msgid "This receiver's own list (from its admin)"
+msgstr "Tämän vastaanottimen oma lista (ylläpidolta)"
+
+#: src/markers.ts:66
+msgid "Live DX cluster spots (from Spothole), the latest of each station"
+msgstr "Reaaliaikaiset DX-klusterin spotit (Spothole), kunkin aseman uusin"
+
+#: src/markers.ts:148
+msgid "{name} ({service}) {lo}-{hi} kHz: {note}"
+msgstr "{name} ({service}) {lo}–{hi} kHz: {note}"
+
+#: src/markers.ts:149
+msgid "{name} ({service}) {lo}-{hi} kHz"
+msgstr "{name} ({service}) {lo}–{hi} kHz"
+
+#: src/markers.ts:164
+msgid "{name} {lo}-{hi} kHz: {use}, {note}"
+msgstr "{name} {lo}–{hi} kHz: {use}, {note}"
+
+#: src/markers.ts:165
+msgid "{name} {lo}-{hi} kHz: {use}"
+msgstr "{name} {lo}–{hi} kHz: {use}"
+
+#: src/markers.ts:176
+msgid "narrow-band digital"
+msgstr "kapeakaistainen digi"
+
+#: src/markers.ts:177
+msgid "all modes"
+msgstr "kaikki lähetelajit"
+
+#: src/markers.ts:178
+msgid "beacons"
+msgstr "majakat"
+
+#: src/markers.ts:179
+msgid "satellite"
+msgstr "satelliitti"
+
+#: src/markers.ts:189
+msgid "{schedule} UTC"
+msgstr "{schedule} UTC"
+
+#: src/markers.ts:191
+msgid "{info}: click to tune"
+msgstr "{info}: viritä napsauttamalla"
+
+#: src/net.ts:78
+msgid "session ended"
+msgstr "istunto päättyi"
+
+#: src/net.ts:87
+msgid "reconnecting in {s} s"
+msgstr "yhdistetään uudelleen {s} s kuluttua"
+
+#: src/privacy.ts:23
+msgid "The receiver's owner can see the addresses of current sessions."
+msgstr "Vastaanottimen omistaja näkee nykyisten istuntojen osoitteet."
+
+#: src/privacy.ts:26
+msgid "Your IP address is used while you are connected, to run your session and to limit the sessions from one address."
+msgstr "IP-osoitettasi käytetään yhteyden aikana istuntosi ylläpitämiseen ja samasta osoitteesta tulevien istuntojen rajoittamiseen."
+
+#: src/privacy.ts:27
+msgid "Your IP address is used while you are connected, to run your session."
+msgstr "IP-osoitettasi käytetään yhteyden aikana istuntosi ylläpitämiseen."
+
+#: src/privacy.ts:31
+msgid "Your listening minutes are counted per address until the day changes (00:00 UTC), to apply the daily limit."
+msgstr "Kuunteluminuuttisi lasketaan osoitekohtaisesti päivän vaihtumiseen asti (00.00 UTC) päivärajoituksen soveltamiseksi."
+
+#: src/privacy.ts:32
+msgid "The owner has blocked some addresses; those are kept in the receiver's settings until removed."
+msgstr "Omistaja on estänyt joitakin osoitteita; ne säilytetään vastaanottimen asetuksissa, kunnes ne poistetaan."
+
+#: src/privacy.ts:34
+msgid "Failed logins are counted per address for a short while, to slow down password guessing. Logging in sets a cookie that keeps you logged in for 12 hours."
+msgstr "Epäonnistuneet kirjautumiset lasketaan osoitekohtaisesti hetken ajan salasanojen arvailun hidastamiseksi. Kirjautuminen asettaa evästeen, joka pitää sinut kirjautuneena 12 tuntia."
+
+#: src/privacy.ts:35
+msgid "A name or callsign you enter is shown to the other listeners. Your settings and frequency memories stay in your browser."
+msgstr "Syöttämäsi nimi tai kutsu näytetään muille kuuntelijoille. Asetuksesi ja muistipaikkasi pysyvät selaimessasi."
+
+#: src/privacy.ts:37
+msgid "Apart from blocked addresses, none of this is written to disk: when the receiver restarts, it is gone. There are no analytics, no tracking and no advertising."
+msgstr "Estettyjä osoitteita lukuun ottamatta mitään tästä ei kirjoiteta levylle: kun vastaanotin käynnistyy uudelleen, tiedot katoavat. Analytiikkaa, seurantaa tai mainontaa ei ole."
+
+#: src/privacy.ts:38
+msgid "None of this is written to disk: when the receiver restarts, it is gone. There are no analytics, no tracking and no advertising."
+msgstr "Mitään tästä ei kirjoiteta levylle: kun vastaanotin käynnistyy uudelleen, tiedot katoavat. Analytiikkaa, seurantaa tai mainontaa ei ole."
+
+#: src/privacy.ts:40
+msgid "The receiver is reached through a proxy server, which may keep logs of its own."
+msgstr "Vastaanottimeen yhdistetään välityspalvelimen kautta, joka voi pitää omia lokejaan."
+
+#: src/privacy.ts:43
+msgid "The receiver talks to no outside services."
+msgstr "Vastaanotin ei ole yhteydessä ulkopuolisiin palveluihin."
+
+#: src/privacy.ts:44
+msgid "The receiver talks to these services, none of which is told anything about you: {list}."
+msgstr "Vastaanotin on yhteydessä näihin palveluihin, joille ei kerrota sinusta mitään: {list}."
+
+#: src/privacy.ts:46
+msgid "Questions about your data go to the owner: {contact}."
+msgstr "Tietojasi koskevat kysymykset omistajalle: {contact}."
+
+#: src/privacy.ts:46
+msgid "Questions about your data go to the receiver's owner."
+msgstr "Tietojasi koskevat kysymykset vastaanottimen omistajalle."
+
+#: src/privacy.ts:51
+msgid "Some of what can be heard here is not meant for the public: aircraft, ships, utility and private stations. In Finland and many other countries you may listen, but you must not pass on or make use of what such messages say."
+msgstr "Osa täällä kuultavasta ei ole tarkoitettu yleisölle: lentokoneet, laivat, utility- ja yksityisasemat. Suomessa ja monessa muussa maassa saat kuunnella, mutta tällaisten viestien sisältöä ei saa välittää eteenpäin eikä käyttää hyväksi."
+
+#: src/prop.ts:58
+msgid "January"
+msgstr "tammikuu"
+
+#: src/prop.ts:59
+msgid "February"
+msgstr "helmikuu"
+
+#: src/prop.ts:60
+msgid "March"
+msgstr "maaliskuu"
+
+#: src/prop.ts:61
+msgid "April"
+msgstr "huhtikuu"
+
+#: src/prop.ts:62
+msgid "May"
+msgstr "toukokuu"
+
+#: src/prop.ts:63
+msgid "June"
+msgstr "kesäkuu"
+
+#: src/prop.ts:64
+msgid "July"
+msgstr "heinäkuu"
+
+#: src/prop.ts:65
+msgid "August"
+msgstr "elokuu"
+
+#: src/prop.ts:66
+msgid "September"
+msgstr "syyskuu"
+
+#: src/prop.ts:67
+msgid "October"
+msgstr "lokakuu"
+
+#: src/prop.ts:68
+msgid "November"
+msgstr "marraskuu"
+
+#: src/prop.ts:69
+msgid "December"
+msgstr "joulukuu"
+
+#: src/prop.ts:93
+msgid "{day} {month} {year}"
+msgstr "{day}. {month}ta {year}"
+
+#: src/prop.ts:93
+msgid "{month} {year}"
+msgstr "{month} {year}"
+
+#: src/prop.ts:94
+msgid "set by the owner"
+msgstr "omistajan asettama"
+
+#: src/prop.ts:94
+msgid "NOAA's prediction"
+msgstr "NOAA:n ennuste"
+
+#: src/prop.ts:94
+msgid "built-in table"
+msgstr "sisäänrakennettu taulukko"
+
+#. SSN = sunspot number, the solar activity the forecast assumes
+#: src/prop.ts:96
+msgid "{when}, sunspot number {ssn} ({src})"
+msgstr "{when}, auringonpilkkuluku {ssn} ({src})"
+
+#: src/prop.ts:101
+msgid "VOACAP adjusted to the day (hfcast Truecast)"
+msgstr "VOACAP päivän mukaan säädettynä (hfcast Truecast)"
+
+#: src/prop.ts:101
+msgid "VOACAP, the month's median"
+msgstr "VOACAP, kuukauden mediaani"
+
+#. the receiving site's noise level (VOACAP's man-made noise at 3 MHz): remote, rural, residential, noisy
+#: src/prop.ts:105
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a remote receiver."
+msgstr "{model}; lähetysteho {power} W, yksinkertaiset (isotrooppiset) antennit molemmissa päissä, syrjäseudun vastaanotin."
+
+#: src/prop.ts:106
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a rural receiver."
+msgstr "{model}; lähetysteho {power} W, yksinkertaiset (isotrooppiset) antennit molemmissa päissä, maaseudun vastaanotin."
+
+#: src/prop.ts:107
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a residential receiver."
+msgstr "{model}; lähetysteho {power} W, yksinkertaiset (isotrooppiset) antennit molemmissa päissä, asuinalueen vastaanotin."
+
+#: src/prop.ts:108
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a noisy (industrial) receiver."
+msgstr "{model}; lähetysteho {power} W, yksinkertaiset (isotrooppiset) antennit molemmissa päissä, häiriöinen (teollisuusalueen) vastaanotin."
+
+#. Kp = planetary geomagnetic index (0-9)
+#: src/prop.ts:115
+msgid "Geomagnetic storm: Kp reached {kp} in the last 24 hours. The forecast is too optimistic, especially on long and polar paths."
+msgstr "Geomagneettinen myrsky: Kp kävi 24 tunnin aikana arvossa {kp}. Ennuste on liian optimistinen, erityisesti pitkillä ja napa-alueiden yhteysväleillä."
+
+#. reliability = VOACAP circuit reliability, % of days the path works; here the forecast has no figure for that hour
+#: src/prop.ts:128
+msgid "{path}, {band}, {hour} UTC: no reliability figure for {mode}"
+msgstr "{path}, {band}, {hour} UTC: ei luotettavuuslukua: {mode}"
+
+#: src/prop.ts:129
+msgid "{path}, {band}, {hour} UTC: no reliability figure for {mode}; SNR {snr} dB in 1 Hz"
+msgstr "{path}, {band}, {hour} UTC: ei luotettavuuslukua: {mode}; SNR {snr} dB 1 Hz:n kaistalla"
+
+#. SNR = signal-to-noise ratio, in a 1 Hz bandwidth
+#: src/prop.ts:134
+msgid "{path}, {band}, {hour} UTC: {mode} gets through on {pct} % of days"
+msgstr "{path}, {band}, {hour} UTC: {mode} menee läpi {pct} % päivistä"
+
+#: src/prop.ts:135
+msgid "{path}, {band}, {hour} UTC: {mode} gets through on {pct} % of days, SNR {snr} dB in 1 Hz"
+msgstr "{path}, {band}, {hour} UTC: {mode} menee läpi {pct} % päivistä, SNR {snr} dB 1 Hz:n kaistalla"
+
+#. mark = the FSK tone for a 1 bit; upper/lower = in frequency, relative to the space tone
+#: src/rtty.ts:100
+msgid "mark upper"
+msgstr "mark ylempänä"
+
+#. mark = the FSK tone for a 1 bit; upper/lower = in frequency, relative to the space tone
+#: src/rtty.ts:100
+msgid "mark lower"
+msgstr "mark alempana"
+
+#. MSB first = most significant bit sent first; USOS = unshift on space (ITA2 teleprinter case-shift convention)
+#: src/rtty.ts:104
+msgid "{charset} MSB first"
+msgstr "{charset} MSB ensin"
+
+#: src/rtty.ts:105
+msgid "{charset}, no USOS"
+msgstr "{charset}, ei USOS"
+
+#. NAVTEX message subject classes (the B2 character of the message header)
+#: src/rtty.ts:172 src/rtty.ts:182
+msgid "navigational warning"
+msgstr "navigointivaroitus"
+
+#: src/rtty.ts:173
+msgid "meteorological warning"
+msgstr "meteorologinen varoitus"
+
+#: src/rtty.ts:174
+msgid "ice report"
+msgstr "jäätiedote"
+
+#: src/rtty.ts:175
+msgid "search and rescue"
+msgstr "etsintä ja pelastus"
+
+#: src/rtty.ts:176
+msgid "weather forecast"
+msgstr "sääennuste"
+
+#: src/rtty.ts:177
+msgid "pilot service"
+msgstr "luotsipalvelu"
+
+#: src/rtty.ts:181
+msgid "other navaid"
+msgstr "muut navigointilaitteet"
+
+#: src/rtty.ts:183
+msgid "test"
+msgstr "testi"
+
+#: src/rtty.ts:184 src/rtty.ts:185 src/rtty.ts:186 src/rtty.ts:187
+msgid "special service"
+msgstr "erityispalvelu"
+
+#: src/rtty.ts:188
+msgid "no message on hand"
+msgstr "ei viestejä"
+
+#. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
+#: src/sigid.ts:35
+msgid "nothing recognisable at this frequency"
+msgstr "ei mitään tunnistettavaa tällä taajuudella"
+
+#: src/sigid.ts:36
+msgid "an unmodulated carrier"
+msgstr "moduloimaton kantoaalto"
+
+#: src/sigid.ts:37
+msgid "Morse"
+msgstr "Sähkötys"
+
+#: src/sigid.ts:38
+msgid "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)"
+msgstr "kaksitaajuuksinen FSK: RTTY, SITOR-B/NAVTEX, ASCII (RTTY-paneeli selvittää baudinopeuden, siirron ja koodin)"
+
+#: src/sigid.ts:39
+msgid "BPSK 31-125 Bd: PSK31, PSK63, PSK125"
+msgstr "BPSK 31–125 Bd: PSK31, PSK63, PSK125"
+
+#: src/sigid.ts:40
+msgid "FT8"
+msgstr "FT8"
+
+#: src/sigid.ts:41
+msgid "FT4"
+msgstr "FT4"
+
+#: src/sigid.ts:42
+msgid "WSPR beacons"
+msgstr "WSPR-majakat"
+
+#: src/sigid.ts:43
+msgid "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)"
+msgstr "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (ei dekoodata täällä)"
+
+#: src/sigid.ts:44
+msgid "2400 Bd PSK modem, 106.7 ms frames (not decoded here)"
+msgstr "2400 Bd PSK-modeemi, 106,7 ms:n kehykset (ei dekoodata täällä)"
+
+#: src/sigid.ts:45
+msgid "MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)"
+msgstr "MIL-STD-188-110A serial tone -modeemi, 2400 Bd PSK (ei dekoodata täällä)"
+
+#: src/sigid.ts:46
+msgid "slow-scan television"
+msgstr "hidaspyyhkäisytelevisio"
+
+#: src/sigid.ts:47
+msgid "HF fax"
+msgstr "HF-faksi"
+
+#: src/sigid.ts:47
+msgid "weather fax (radiofax)"
+msgstr "sääfaksi (radiofaksi)"
+
+#: src/sigid.ts:48
+msgid "SSB voice"
+msgstr "SSB-puhe"
+
+#: src/sigid.ts:48
+msgid "single-sideband speech"
+msgstr "yksisivunauhapuhe"
+
+#: src/sigid.ts:49
+msgid "AM broadcast or voice"
+msgstr "AM-yleisradioasema tai puhe"
+
+#: src/sigid.ts:50
+msgid "Interference"
+msgstr "Häiriö"
+
+#: src/sigid.ts:50
+msgid "local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands"
+msgstr "paikallinen häiriö: kantoaallot kohinaisine helmoineen, kantoaaltoparit ja -kammat, vaeltavat kohinakaistat"
+
+#: src/sigid.ts:51
+msgid "Radar"
+msgstr "Tutka"
+
+#: src/sigid.ts:51
+msgid "over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second"
+msgstr "horisontin taakse näkevä tutka tai ionosondi: pyyhkäisyjä tai pulsseja, jotka toistuvat 5–60 kertaa sekunnissa"
+
+#: src/sigid.ts:52
+msgid "aircraft data link, 1800 Bd PSK bursts"
+msgstr "lentokoneiden datalinkki, 1800 Bd PSK-purskeet"
+
+#: src/state.ts:164
+msgid "password needed"
+msgstr "salasana vaaditaan"
+
+#: src/state.ts:188
+msgid "login failed ({status})"
+msgstr "kirjautuminen epäonnistui ({status})"
+
+#: src/state.ts:712 src/state.ts:2142
+msgid "nothing was received"
+msgstr "mitään ei vastaanotettu"
+
+#: src/state.ts:722
+msgid ", {s} s lost (zeros)"
+msgstr ", {s} s menetetty (nollia)"
+
+#: src/state.ts:723
+msgid "{name} ({s} s{lost})"
+msgstr "{name} ({s} s{lost})"
+
+#: src/state.ts:2142
+msgid "only silence was heard"
+msgstr "kuului vain hiljaisuutta"
+
+#: src/state.ts:2152
+msgid ", {s} s of silence left out"
+msgstr ", {s} s hiljaisuutta jätetty pois"
+
+#: src/state.ts:2153
+msgid "; ended when the audio format changed"
+msgstr "; päättyi äänimuodon vaihtuessa"
+
+#: src/state.ts:2154
+msgid "{name} ({s} s{skipped}{ended})"
+msgstr "{name} ({s} s{skipped}{ended})"
+
+#. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
+#: src/timecode.ts:25
+msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
+msgstr "Mainflingen, Saksa: kantoaaltoa vaimennetaan 0,1 s (0) tai 0,2 s (1) joka sekunti, ei sekunnilla 59; CET/CEST"
+
+#: src/timecode.ts:26
+msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
+msgstr "Anthorn, Iso-Britannia: kantoaalto pois 0,1 s, sitten bitit A ja B; 0,5 s minuutin vaihtuessa; GMT/BST"
+
+#: src/timecode.ts:27
+msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
+msgstr "Fort Collins, USA: kantoaaltoa vaimennetaan 0,2 s (0), 0,5 s (1), 0,8 s (merkki); UTC"
+
+#: src/timecode.ts:28
+msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
+msgstr "Japani: kantoaalto päällä 0,8 s (0), 0,5 s (1), 0,2 s (merkki); JST"
+
+#: src/timecode.ts:29
+msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC"
+msgstr "Fort Collins ja Havaiji: 100 Hz:n apukantoaalto 0,17 s (0), 0,47 s (1), 0,77 s (merkki), kuuluu AM-tilassa; UTC"
+
+#: src/timecode.ts:71
+msgid "no station {name}"
+msgstr "ei asemaa {name}"
+
+#. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
+#: src/timecode.ts:75
+msgid "{name}: tune AM to {mhz} MHz"
+msgstr "{name}: viritä AM-tilassa taajuudelle {mhz} MHz"
+
+#: src/timecode.ts:76
+msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
+msgstr "{name}: viritä sen kantoaalto ({khz} kHz) päästökaistalle USB-, LSB- tai CW-tilassa"
+
+#: src/timecode.ts:79
+msgid "No time station in the passband: pick one to tune to."
+msgstr "Päästökaistalla ei ole aikasignaaliasemaa: valitse viritettävä asema."
+
+#: src/view/pane.tsx:65
+msgid "Waterfall unavailable: {why}"
+msgstr "Vesiputous ei käytettävissä: {why}"
+
+#: src/view/pane.tsx:429
+msgid "{mode} skimmer, dial {khz} kHz{waiting}: click to tune there"
+msgstr "{mode}-taustadekooderi, viritystaajuus {khz} kHz{waiting}: viritä sinne napsauttamalla"
+
+#: src/view/pane.tsx:432
+msgid " (waiting for a channel)"
+msgstr " (odottaa kanavaa)"
+
+#: src/view/pane.tsx:435
+msgid "{khz} kHz {mode}"
+msgstr "{khz} kHz {mode}"
+
+#: src/view/pane.tsx:435
+msgid "click to tune there"
+msgstr "viritä sinne napsauttamalla"
+
+#: src/view/pane.tsx:435
+msgid "click to listen along"
+msgstr "kuuntele mukana napsauttamalla"
+
+#~ msgid "{path}, {band}, {hour} UTC: {mode} gets through on – of days"
+#~ msgstr "{path}, {band}, {hour} UTC: {mode} menee läpi – päivistä"
+
+#~ msgid "{path}, {band}, {hour} UTC: {mode} gets through on – of days, SNR {snr} dB in 1 Hz"
+#~ msgstr "{path}, {band}, {hour} UTC: {mode} menee läpi – päivistä, SNR {snr} dB 1 Hz:n kaistalla"
+
+#~ msgid "Heard in the last"
+#~ msgstr "Kuultu viimeisen ajan sisällä"

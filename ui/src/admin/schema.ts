@@ -2,6 +2,7 @@
 // Reading the config's JSON Schema (as schemars writes it) for the form:
 // which editor a field gets, and parsing its text back.
 
+import { t } from "../i18n.ts";
 import type { Json } from "./api.ts";
 
 export interface Schema {
@@ -42,8 +43,8 @@ function types(s: Schema): string[] {
 
 /** The editor for (resolved) schema `s`. */
 export function kindOf(s: Schema): Kind {
-  const t = types(s);
-  const nullable = t.includes("null");
+  const ty = types(s);
+  const nullable = ty.includes("null");
   if (s.properties) return { kind: "object", fields: Object.entries(s.properties) };
   const consts = s.oneOf?.every((o) => typeof o.const === "string");
   if (s.oneOf && consts) {
@@ -56,7 +57,7 @@ export function kindOf(s: Schema): Kind {
       nullable: nullable || s.enum.includes(null),
     };
   }
-  const base = t.filter((x) => x !== "null");
+  const base = ty.filter((x) => x !== "null");
   if (base.length === 1) {
     if (base[0] === "boolean") return { kind: "bool" };
     if (base[0] === "integer" || base[0] === "number") return { kind: "number", integer: base[0] === "integer", nullable };
@@ -73,25 +74,25 @@ export function show(v: Json | undefined): string {
 
 /** Parse an input's text for `k`; an error message instead of a value. */
 export function parse(k: Kind, text: string): { value: Json } | { error: string } {
-  const t = text.trim();
+  const trimmed = text.trim();
   switch (k.kind) {
     case "number": {
-      if (t === "") return k.nullable ? { value: null } : { error: "a number is needed" };
-      const x = Number(t);
-      if (!Number.isFinite(x)) return { error: "not a number" };
-      if (k.integer && (!Number.isInteger(x) || x < 0)) return { error: "a whole number is needed" };
+      if (trimmed === "") return k.nullable ? { value: null } : { error: t("a number is needed") };
+      const x = Number(trimmed);
+      if (!Number.isFinite(x)) return { error: t("not a number") };
+      if (k.integer && (!Number.isInteger(x) || x < 0)) return { error: t("a whole number is needed") };
       return { value: x };
     }
     case "text":
-      return t === "" && k.nullable ? { value: null } : { value: text };
+      return trimmed === "" && k.nullable ? { value: null } : { value: text };
     case "json":
       try {
-        return { value: JSON.parse(t) as Json };
+        return { value: JSON.parse(trimmed) as Json };
       } catch (e) {
         return { error: (e as Error).message };
       }
     default:
-      return { error: "not a text field" };
+      return { error: t("not a text field") };
   }
 }
 

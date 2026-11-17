@@ -1,0 +1,3971 @@
+# The web888d web UI's messages (web888-ng, GPL-3.0-or-later).
+# Made by `node scripts/i18n.mjs extract` from ui/src: don't edit, see
+# po/README.md.
+msgid ""
+msgstr ""
+"Project-Id-Version: web888d-ui\n"
+"MIME-Version: 1.0\n"
+"Content-Type: text/plain; charset=UTF-8\n"
+"Content-Transfer-Encoding: 8bit\n"
+
+#. names of the admin page's tabs
+#: src/admin/admin.tsx:16
+msgid "Status"
+msgstr ""
+
+#: src/admin/admin.tsx:17 src/admin/admin.tsx:165
+msgid "Sessions"
+msgstr ""
+
+#: src/admin/admin.tsx:18 src/admin/admin.tsx:865 src/ctl/config.tsx:133 src/ctl/config.tsx:138 src/ctl/mobile.tsx:317
+msgid "Configuration"
+msgstr ""
+
+#: src/admin/admin.tsx:19 src/ctl/config.tsx:105
+msgid "Labels"
+msgstr ""
+
+#: src/admin/admin.tsx:20
+msgid "Info page"
+msgstr ""
+
+#: src/admin/admin.tsx:21
+msgid "Passwords"
+msgstr ""
+
+#: src/admin/admin.tsx:22
+msgid "Update"
+msgstr ""
+
+#: src/admin/admin.tsx:23
+msgid "Logs"
+msgstr ""
+
+#: src/admin/admin.tsx:63
+msgid "Restart web888d? Everyone is disconnected for a few seconds."
+msgstr ""
+
+#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1484
+msgid "web888d admin"
+msgstr ""
+
+#: src/admin/admin.tsx:86
+msgid "No admin password is set. On the unit's console run"
+msgstr ""
+
+#: src/admin/admin.tsx:89
+#, placeholders
+msgid "or put the password (one line, at least 8 characters) in {file} on the SD card and restart."
+msgstr ""
+
+#: src/admin/admin.tsx:109 src/admin/admin.tsx:897
+msgid "Admin password"
+msgstr ""
+
+#: src/admin/admin.tsx:116 src/ctl/controls.tsx:592 src/main.tsx:118
+msgid "Log in"
+msgstr ""
+
+#: src/admin/admin.tsx:120
+msgid "Back to the receiver"
+msgstr ""
+
+#: src/admin/admin.tsx:156 src/admin/admin.tsx:660 src/admin/admin.tsx:989 src/admin/admin.tsx:1475 src/admin/configform.tsx:221 src/ctl/info.tsx:142 src/ctl/licences.tsx:164 src/ctl/prop.tsx:222
+msgid "Loading…"
+msgstr ""
+
+#: src/admin/admin.tsx:163
+msgid "Radio"
+msgstr ""
+
+#: src/admin/admin.tsx:167
+msgid "RX rate"
+msgstr ""
+
+#: src/admin/admin.tsx:169
+#, placeholders
+msgid "{rate} k frames/s"
+msgstr ""
+
+#: src/admin/admin.tsx:170
+msgid "(falling behind)"
+msgstr ""
+
+#: src/admin/admin.tsx:172
+msgid "Frames lost"
+msgstr ""
+
+#. ring = the ring buffer between the hardware reader and the DSP; frame = one block of samples from the ADC
+#: src/admin/admin.tsx:174
+msgid "RX frames lost to ring overruns: the reader fell behind, a gap in every listener's audio"
+msgstr ""
+
+#: src/admin/admin.tsx:177 src/admin/admin.tsx:445
+msgid "ADC overloads"
+msgstr ""
+
+#. ADC = the analogue-to-digital converter; it overloads (clips) when the signal is too strong; a block = a chunk of samples read from it
+#: src/admin/admin.tsx:179
+msgid "RX blocks read while the ADC clipped: strong signals distort every listener's audio. The RF attenuator helps."
+msgstr ""
+
+#: src/admin/admin.tsx:180
+#, placeholders
+msgid "{n} block"
+msgid_plural "{n} blocks"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:181
+#, placeholders
+msgid "({rate}/s now)"
+msgstr ""
+
+#: src/admin/admin.tsx:183
+msgid "RF attenuator"
+msgstr ""
+
+#: src/admin/admin.tsx:189
+msgid "ADC"
+msgstr ""
+
+#: src/admin/admin.tsx:195
+msgid "Clock"
+msgstr ""
+
+#: src/admin/admin.tsx:196
+msgid "no GPS correction"
+msgstr ""
+
+#: src/admin/admin.tsx:198
+msgid "Restart web888d…"
+msgstr ""
+
+#: src/admin/admin.tsx:203
+#, placeholders
+msgid "RX channels ({used}/{total} in use)"
+msgstr ""
+
+#: src/admin/admin.tsx:212
+msgctxt "RX channel"
+msgid "free"
+msgstr ""
+
+#: src/admin/admin.tsx:221
+msgid "Waiting"
+msgstr ""
+
+#: src/admin/admin.tsx:231
+msgid "DSP workers"
+msgstr ""
+
+#. DSP worker = a thread that does the signal processing; jobs = work items it ran; busy = share of time working; shed = jobs skipped because it was overloaded; drops rx/wf = audio and waterfall blocks dropped (wf = waterfall)
+#: src/admin/admin.tsx:237
+msgid "jobs"
+msgstr ""
+
+#. the share of time a DSP worker thread spends working (a column head)
+#: src/admin/admin.tsx:239
+msgctxt "DSP worker"
+msgid "busy"
+msgstr ""
+
+#: src/admin/admin.tsx:240
+msgid "shed"
+msgstr ""
+
+#: src/admin/admin.tsx:241
+msgid "drops rx/wf"
+msgstr ""
+
+#: src/admin/admin.tsx:258
+msgid "Waterfall views"
+msgstr ""
+
+#: src/admin/admin.tsx:260 src/admin/admin.tsx:480
+msgid "none"
+msgstr ""
+
+#. slot = a numbered waterfall channel of the receiver
+#: src/admin/admin.tsx:267
+#, placeholders
+msgid "slot {n}"
+msgstr ""
+
+#. time-shared = the waterfall is shared between several listeners, taking turns
+#: src/admin/admin.tsx:274
+#, placeholders
+msgid "{n} session, time-shared"
+msgid_plural "{n} sessions, time-shared"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:275
+#, placeholders
+msgid "{n} session"
+msgid_plural "{n} sessions"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:285
+msgid "CPU per thread"
+msgstr ""
+
+#: src/admin/admin.tsx:289
+msgid "thread"
+msgstr ""
+
+#: src/admin/admin.tsx:290
+msgctxt "CPU use"
+msgid "now"
+msgstr ""
+
+#: src/admin/admin.tsx:291
+msgctxt "CPU use"
+msgid "total"
+msgstr ""
+
+#: src/admin/admin.tsx:304
+msgid "% of one core since the last refresh, summed over threads of a name."
+msgstr ""
+
+#: src/admin/admin.tsx:335
+msgid "Weakens every signal before the ADC, for all listeners: against overloads from strong signals"
+msgstr ""
+
+#. "in" = the attenuator is switched in (active), a checkbox label
+#: src/admin/admin.tsx:337
+msgctxt "attenuator switched in"
+msgid "in"
+msgstr ""
+
+#: src/admin/admin.tsx:353
+#, placeholders
+msgid "now {db} dB (set by an HPSDR client)"
+msgstr ""
+
+#. dither = noise added in the ADC to linearise it; spurs/birdies = unwanted steady tones
+#: src/admin/admin.tsx:378
+msgid "The ADC's dither: spreads its own spurs (birdies) into the noise, at a little more noise"
+msgstr ""
+
+#: src/admin/admin.tsx:379
+msgid "dither"
+msgstr ""
+
+#. PGA = the ADC's programmable gain amplifier; full scale = the input voltage at which the ADC clips; dBFS = decibels relative to the ADC's full scale
+#: src/admin/admin.tsx:382
+msgid "The ADC's PGA: 1.5 V full scale instead of 2.25 V, every signal ~3.5 dB higher (and overloads that much sooner); the dBFS levels move with it"
+msgstr ""
+
+#: src/admin/admin.tsx:383
+msgid "PGA (+3.5 dB)"
+msgstr ""
+
+#. causes of an ADC overload; carrier = a steady unmodulated signal; impulse = a very short broadband pulse
+#: src/admin/admin.tsx:417
+msgid "a carrier"
+msgstr ""
+
+#: src/admin/admin.tsx:418
+msgid "several signals"
+msgstr ""
+
+#: src/admin/admin.tsx:419
+msgid "broadband (an impulse)"
+msgstr ""
+
+#: src/admin/admin.tsx:420
+msgid "no single cause"
+msgstr ""
+
+#: src/admin/admin.tsx:421
+msgid "brief: a click or switching spike (too short to show in the band's power)"
+msgstr ""
+
+#: src/admin/admin.tsx:429
+#, placeholders
+msgid "carrier at {khz} kHz, {dbfs} dBFS"
+msgstr ""
+
+#. the percentage is the share of the overload's power at that frequency
+#: src/admin/admin.tsx:432
+#, placeholders
+msgid "carrier near {mhz}, {dbfs} dBFS ({share} %)"
+msgstr ""
+
+#: src/admin/admin.tsx:433
+#, placeholders
+msgid "several: {list}"
+msgstr ""
+
+#. broadband = the noise level rises across the whole band by this many dB
+#: src/admin/admin.tsx:435
+#, placeholders
+msgid "broadband, +{db} dB everywhere"
+msgstr ""
+
+#: src/admin/admin.tsx:436
+#, placeholders
+msgid "no single cause; strongest {mhz} ({share} %)"
+msgstr ""
+
+#: src/admin/admin.tsx:447
+msgid "None since web888d started."
+msgstr ""
+
+#: src/admin/admin.tsx:447
+#, placeholders
+msgid "The last {n} (UTC)."
+msgstr ""
+
+#: src/admin/admin.tsx:448
+#, placeholders
+msgid "Peak sample now: {level}."
+msgstr ""
+
+#: src/admin/admin.tsx:448
+msgid "unknown"
+msgstr ""
+
+#. channelizer = the FPGA filter bank that splits the band into channels; the overload causes come from its spectrum
+#: src/admin/admin.tsx:450
+msgid "No channelizer: the causes aren't analysed."
+msgstr ""
+
+#: src/admin/admin.tsx:456
+msgid "When"
+msgstr ""
+
+#: src/admin/admin.tsx:457
+msgid "Length"
+msgstr ""
+
+#. clocks = ADC sample clock cycles
+#: src/admin/admin.tsx:459
+msgid "ADC clocks with the overflow pin high"
+msgstr ""
+
+#. clocks = ADC sample clock cycles
+#: src/admin/admin.tsx:459
+msgid "Clocks"
+msgstr ""
+
+#: src/admin/admin.tsx:460
+msgid "Cause"
+msgstr ""
+
+#. skimmer = a background decoder that listens to a band (FT8, WSPR...) and reports the spots it hears
+#: src/admin/admin.tsx:489 src/ctl/spots.tsx:16 src/map.ts:19
+msgid "Skimmers"
+msgstr ""
+
+#: src/admin/admin.tsx:491
+msgid "None configured ([[skimmer]] in the config)."
+msgstr ""
+
+#. slot = one decoding period of the digital mode (15 s for FT8, 2 min for WSPR); spots = decoded stations reported
+#: src/admin/admin.tsx:497
+msgid "band"
+msgstr ""
+
+#: src/admin/admin.tsx:498
+msgid "state"
+msgstr ""
+
+#: src/admin/admin.tsx:499
+msgid "spots/slot"
+msgstr ""
+
+#: src/admin/admin.tsx:500
+msgid "CPU/slot"
+msgstr ""
+
+#: src/admin/admin.tsx:501
+msgctxt "skimmer"
+msgid "last"
+msgstr ""
+
+#. states of a skimmer; idle = outside its configured hours; waiting = no receiver channel free yet
+#: src/admin/admin.tsx:508
+msgctxt "skimmer state"
+msgid "off"
+msgstr ""
+
+#: src/admin/admin.tsx:510
+#, placeholders
+msgid "idle (hours {hours})"
+msgstr ""
+
+#: src/admin/admin.tsx:512
+msgctxt "skimmer state"
+msgid "running"
+msgstr ""
+
+#: src/admin/admin.tsx:513
+msgctxt "skimmer state"
+msgid "waiting"
+msgstr ""
+
+#: src/admin/admin.tsx:523 src/admin/admin.tsx:1066
+#, placeholders
+msgid "{when} ago"
+msgstr ""
+
+#: src/admin/admin.tsx:532
+#, placeholders
+msgid "Behind: {dropped} slots dropped, {cut} cut short by the deadline."
+msgstr ""
+
+#: src/admin/admin.tsx:542
+msgid "Server"
+msgstr ""
+
+#: src/admin/admin.tsx:545
+#, placeholders
+msgid "(not connected: {error})"
+msgstr ""
+
+#: src/admin/admin.tsx:545
+msgid "(not connected)"
+msgstr ""
+
+#. GPS position fix: 3D, 2D or none
+#: src/admin/admin.tsx:548
+msgid "Fix"
+msgstr ""
+
+#: src/admin/admin.tsx:551
+#, placeholders
+msgid "{fix}, last {when} ago"
+msgstr ""
+
+#. locator = Maidenhead grid locator, e.g. FN42aa
+#: src/admin/admin.tsx:555
+msgid "Locator"
+msgstr ""
+
+#: src/admin/admin.tsx:556
+#, placeholders
+msgid "none yet (using {locator})"
+msgstr ""
+
+#: src/admin/admin.tsx:556
+msgid "no locator"
+msgstr ""
+
+#: src/admin/admin.tsx:564
+msgid "Not uploading: [station] needs a callsign and a locator."
+msgstr ""
+
+#: src/admin/admin.tsx:565
+msgid "Not uploading."
+msgstr ""
+
+#. "As": the callsign and locator the reports are sent under
+#: src/admin/admin.tsx:570
+msgctxt "reporting identity"
+msgid "As"
+msgstr ""
+
+#: src/admin/admin.tsx:574 src/admin/admin.tsx:605
+msgid "Sent"
+msgstr ""
+
+#. a datagram = one UDP packet sent to PSKReporter, carrying several reports
+#: src/admin/admin.tsx:578
+#, placeholders
+msgid "{reports} reports in {datagrams} datagrams, last {when} ago"
+msgstr ""
+
+#: src/admin/admin.tsx:579
+#, placeholders
+msgid "{reports} reports in {datagrams} datagrams"
+msgstr ""
+
+#: src/admin/admin.tsx:581 src/admin/admin.tsx:611
+msgctxt "upload queue"
+msgid "Waiting"
+msgstr ""
+
+#: src/admin/admin.tsx:583
+msgid "Not sent"
+msgstr ""
+
+#. reasons for not sending a spot: already reported in the last hour; decoded with low confidence and not heard again; the radio is not live (a recording)
+#: src/admin/admin.tsx:586
+#, placeholders
+msgid "{recent} reported within the hour, {unconfirmed} uncertain and not heard again, {notlive} not live"
+msgstr ""
+
+#: src/admin/admin.tsx:594
+msgid "Error"
+msgstr ""
+
+#: src/admin/admin.tsx:602
+msgid "Not uploading ([report] wsprnet)."
+msgstr ""
+
+#: src/admin/admin.tsx:608
+#, placeholders
+msgid "{n} spot, last {when} ago"
+msgid_plural "{n} spots, last {when} ago"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:609
+#, placeholders
+msgid "{n} spot"
+msgid_plural "{n} spots"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:615
+msgid "Reply"
+msgstr ""
+
+#: src/admin/admin.tsx:621
+msgid "Failed"
+msgstr ""
+
+#: src/admin/admin.tsx:630
+msgid "This radio isn't live (a recording or a simulation): no spots are uploaded."
+msgstr ""
+
+#: src/admin/admin.tsx:637
+#, placeholders
+msgid "channel {n}"
+msgstr ""
+
+#: src/admin/admin.tsx:637
+#, placeholders
+msgid "#{n} in queue"
+msgstr ""
+
+#: src/admin/admin.tsx:649
+#, placeholders
+msgid "Disconnect session {id} ({ip})?"
+msgstr ""
+
+#: src/admin/admin.tsx:655
+#, placeholders
+msgid "Ban {ip}? Its sessions end now and new ones are refused (Configuration: limits.blocked lifts it)."
+msgstr ""
+
+#: src/admin/admin.tsx:665
+msgid "No web sessions."
+msgstr ""
+
+#: src/admin/admin.tsx:671
+msgid "address"
+msgstr ""
+
+#. class = the kind of session (listener, admin, ...)
+#: src/admin/admin.tsx:673
+msgctxt "session"
+msgid "class"
+msgstr ""
+
+#. "for" = how long the session has lasted
+#: src/admin/admin.tsx:675
+msgctxt "session duration"
+msgid "for"
+msgstr ""
+
+#: src/admin/admin.tsx:676
+msgid "frequency"
+msgstr ""
+
+#: src/admin/admin.tsx:677
+msgctxt "session"
+msgid "mode"
+msgstr ""
+
+#. receiver = which receiver channel the session uses, or its place in the queue
+#: src/admin/admin.tsx:679
+msgctxt "session"
+msgid "receiver"
+msgstr ""
+
+#. shared = whether the listener shares their frequency with the others
+#: src/admin/admin.tsx:681
+msgctxt "session"
+msgid "shared"
+msgstr ""
+
+#. drops a/wf = dropped audio and waterfall blocks
+#: src/admin/admin.tsx:683
+msgid "drops a/wf"
+msgstr ""
+
+#: src/admin/admin.tsx:698
+#, placeholders
+msgid "{rx}, listening to #{n}"
+msgstr ""
+
+#: src/admin/admin.tsx:701
+msgid "yes"
+msgstr ""
+
+#: src/admin/admin.tsx:701
+msgid "no"
+msgstr ""
+
+#: src/admin/admin.tsx:706
+msgid "Kick"
+msgstr ""
+
+#: src/admin/admin.tsx:708
+msgid "End its sessions and refuse its address from now on"
+msgstr ""
+
+#: src/admin/admin.tsx:709
+msgid "Ban"
+msgstr ""
+
+#: src/admin/admin.tsx:744
+#, placeholders
+msgid "Saved: {n} label from {file}."
+msgid_plural "Saved: {n} labels from {file}."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:747
+#, placeholders
+msgid "{file}: {error}. The list was not changed."
+msgstr ""
+
+#: src/admin/admin.tsx:753
+msgid "The station's labels"
+msgstr ""
+
+#. labels = the frequency labels (markers) on the receiver's scale
+#: src/admin/admin.tsx:755
+#, placeholders
+msgid "{n} label. Listeners see them in yellow (Labels: Station)."
+msgid_plural "{n} labels. Listeners see them in yellow (Labels: Station)."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:758
+msgid "Download markers.csv"
+msgstr ""
+
+#: src/admin/admin.tsx:762
+msgid "Upload a new list"
+msgstr ""
+
+#. the {..} placeholders are CSV column names, shown as code; keep them as they are
+#: src/admin/admin.tsx:768
+#, placeholders
+msgid "A CSV file, as a spreadsheet saves it (comma or semicolon). The first line names the columns: {khz} and {name} are needed; {mode} (usb, lsb, cw or am; default am), {note}, {category}, {emission}, {schedule} and {dial_khz} may follow. An upload replaces the whole list."
+msgstr ""
+
+#: src/admin/admin.tsx:784
+msgid "Bundled lists"
+msgstr ""
+
+#: src/admin/admin.tsx:788
+#, placeholders
+msgid "Broadcast (EiBi {season})"
+msgstr ""
+
+#: src/admin/admin.tsx:792 src/markers.ts:63
+msgid "Utility"
+msgstr ""
+
+#: src/admin/admin.tsx:796 src/markers.ts:64
+msgid "Amateur"
+msgstr ""
+
+#: src/admin/admin.tsx:802
+#, placeholders
+msgid "Listeners choose what they see. The band ribbon and the amateur frequencies follow IARU region {region} (Configuration: markers.region) until a listener picks another."
+msgstr ""
+
+#: src/admin/admin.tsx:825
+#, placeholders
+msgid "Saved {file}."
+msgstr ""
+
+#: src/admin/admin.tsx:833
+msgid "Remove the photo?"
+msgstr ""
+
+#: src/admin/admin.tsx:840
+msgid "Photo"
+msgstr ""
+
+#: src/admin/admin.tsx:841 src/ctl/info.tsx:63
+msgid "The receiver's photo"
+msgstr ""
+
+#: src/admin/admin.tsx:844
+msgid "Replace it"
+msgstr ""
+
+#: src/admin/admin.tsx:844
+msgid "Upload one"
+msgstr ""
+
+#: src/admin/admin.tsx:849 src/admin/admin.tsx:934
+msgid "Remove"
+msgstr ""
+
+#: src/admin/admin.tsx:854
+msgid "JPEG, PNG or WebP, at most 3 MB: the antenna, the station, the view. Kept beside the configuration file."
+msgstr ""
+
+#: src/admin/admin.tsx:857
+msgid "What it says"
+msgstr ""
+
+#: src/admin/admin.tsx:859
+#, placeholders
+msgid "Listeners open it with {info} on the receiver page. It shows the receiver's name and location (Configuration: kiwi.name, kiwi.location), the station's callsign, locator and antenna (station), your words (info.description, info.contact), the photo, and the limits they meet (limits)."
+msgstr ""
+
+#: src/admin/admin.tsx:861 src/ctl/info.tsx:158
+msgid "Info"
+msgstr ""
+
+#: src/admin/admin.tsx:865
+msgid "See it as listeners do"
+msgstr ""
+
+#: src/admin/admin.tsx:901
+msgid "Admin password changed; other admin logins have ended."
+msgstr ""
+
+#: src/admin/admin.tsx:904
+msgid "New password"
+msgstr ""
+
+#: src/admin/admin.tsx:905
+msgid "Again"
+msgstr ""
+
+#: src/admin/admin.tsx:907 src/admin/admin.tsx:930
+msgid "Change"
+msgstr ""
+
+#: src/admin/admin.tsx:910
+msgid "At least 8 characters."
+msgstr ""
+
+#: src/admin/admin.tsx:911
+msgid "The two differ."
+msgstr ""
+
+#: src/admin/admin.tsx:916
+msgid "Listener password"
+msgstr ""
+
+#: src/admin/admin.tsx:919
+msgid "Set: listeners need it (or the admin password) to use the receiver."
+msgstr ""
+
+#: src/admin/admin.tsx:920
+msgid "Not set: anyone who reaches the page can listen."
+msgstr ""
+
+#: src/admin/admin.tsx:925
+msgid "Listener password set; listeners logged in with the old one must log in again."
+msgstr ""
+
+#: src/admin/admin.tsx:928
+msgid "New listener password"
+msgstr ""
+
+#: src/admin/admin.tsx:930
+msgctxt "password"
+msgid "Set"
+msgstr ""
+
+#: src/admin/admin.tsx:933
+msgid "Listener password removed: the receiver is open."
+msgstr ""
+
+#: src/admin/admin.tsx:994
+msgid "OS updates"
+msgstr ""
+
+#: src/admin/admin.tsx:995
+#, placeholders
+msgid "Not available: {why}."
+msgstr ""
+
+#. root slot = one of the two A/B system partitions; the update is written to the one not running
+#: src/admin/admin.tsx:1005
+#, placeholders
+msgid "Install web888-ng {version} into the other root slot? The receiver keeps running; a reboot then starts the new system."
+msgstr ""
+
+#: src/admin/admin.tsx:1009
+msgid "Reboot the unit now? Everyone is disconnected; it is back in a minute or two."
+msgstr ""
+
+#: src/admin/admin.tsx:1021
+msgid "Rebooting"
+msgstr ""
+
+#: src/admin/admin.tsx:1024
+#, placeholders
+msgid "The unit is restarting into web888-ng {version}. This page reloads when it is back."
+msgstr ""
+
+#: src/admin/admin.tsx:1025
+msgid "The unit is restarting. This page reloads when it is back."
+msgstr ""
+
+#: src/admin/admin.tsx:1028
+msgid "If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes)."
+msgstr ""
+
+#: src/admin/admin.tsx:1037
+msgctxt "operating system"
+msgid "OS"
+msgstr ""
+
+#: src/admin/admin.tsx:1039
+msgctxt "software version"
+msgid "Running"
+msgstr ""
+
+#. slot = one of the two A/B system partitions (RAUC slots)
+#: src/admin/admin.tsx:1042
+#, placeholders
+msgid "web888-ng {version}, slot {slot}"
+msgstr ""
+
+#: src/admin/admin.tsx:1044
+msgid "Newest release"
+msgstr ""
+
+#: src/admin/admin.tsx:1053
+#, placeholders
+msgid "({date}, {size}, pre-release)"
+msgstr ""
+
+#: src/admin/admin.tsx:1054
+#, placeholders
+msgid "({date}, {size})"
+msgstr ""
+
+#: src/admin/admin.tsx:1058
+msgid "none found"
+msgstr ""
+
+#: src/admin/admin.tsx:1060
+msgid "not looked yet"
+msgstr ""
+
+#. "Looked": when the server last checked GitHub for a new release
+#: src/admin/admin.tsx:1064
+msgid "Looked"
+msgstr ""
+
+#: src/admin/admin.tsx:1066
+msgid "never"
+msgstr ""
+
+#: src/admin/admin.tsx:1067
+#, placeholders
+msgid "(by itself every {n} h)"
+msgstr ""
+
+#: src/admin/admin.tsx:1070
+#, placeholders
+msgid "Looking for releases failed: {error}"
+msgstr ""
+
+#: src/admin/admin.tsx:1071
+msgid "Updates are off (Configuration: update.enabled)."
+msgstr ""
+
+#: src/admin/admin.tsx:1074
+msgid "Looking…"
+msgstr ""
+
+#: src/admin/admin.tsx:1074
+msgid "Look for a release"
+msgstr ""
+
+#: src/admin/admin.tsx:1078 src/admin/admin.tsx:1109
+#, placeholders
+msgid "Install {version}"
+msgstr ""
+
+#: src/admin/admin.tsx:1081
+msgid "Up to date."
+msgstr ""
+
+#: src/admin/admin.tsx:1085
+#, placeholders
+msgid "{link} (into the other slot, as an update would)."
+msgstr ""
+
+#: src/admin/admin.tsx:1094
+#, placeholders
+msgid "Install {version} again"
+msgstr ""
+
+#: src/admin/admin.tsx:1102
+msgid "Release notes"
+msgstr ""
+
+#: src/admin/admin.tsx:1116
+msgid "Streamed from the release and checked as it goes; the receiver keeps running."
+msgstr ""
+
+#: src/admin/admin.tsx:1123
+#, placeholders
+msgid "Installed in {n} min. Reboot to start it."
+msgstr ""
+
+#: src/admin/admin.tsx:1124
+msgid "Installed. Reboot to start it."
+msgstr ""
+
+#: src/admin/admin.tsx:1128
+msgid "Reboot now"
+msgstr ""
+
+#: src/admin/admin.tsx:1131
+msgid "The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay."
+msgstr ""
+
+#: src/admin/admin.tsx:1134
+#, placeholders
+msgid "Failed: {error}. The running system is unchanged."
+msgstr ""
+
+#. root slot = one of the two A/B system partitions (RAUC slots); the update goes to the one not running
+#: src/admin/admin.tsx:1145
+msgid "Root slots"
+msgstr ""
+
+#: src/admin/admin.tsx:1150
+msgid "Slot"
+msgstr ""
+
+#: src/admin/admin.tsx:1151
+msgid "State"
+msgstr ""
+
+#. Boot = the slot's boot status (good, bad, ...)
+#: src/admin/admin.tsx:1153
+msgctxt "slot"
+msgid "Boot"
+msgstr ""
+
+#: src/admin/admin.tsx:1154
+msgid "Version"
+msgstr ""
+
+#: src/admin/admin.tsx:1155
+msgid "Installed (UTC)"
+msgstr ""
+
+#: src/admin/admin.tsx:1173
+msgid "An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN, u-boot.img) is not part of it: see Boot loader below."
+msgstr ""
+
+#: src/admin/admin.tsx:1192
+#, placeholders
+msgid "{file}: not a settings backup (JSON)"
+msgstr ""
+
+#: src/admin/admin.tsx:1195
+#, placeholders
+msgid "Restore the settings from {file}? The configuration, the passwords and the own labels are replaced by the file's."
+msgstr ""
+
+#. the three parts are joined with "; " into one report
+#: src/admin/admin.tsx:1205
+#, placeholders
+msgid "Restored the settings saved by web888d {server} on {when} UTC"
+msgstr ""
+
+#: src/admin/admin.tsx:1206
+#, placeholders
+msgid "{n} own label"
+msgid_plural "{n} own labels"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:1207
+#, placeholders
+msgid "restart web888d for: {what}"
+msgstr ""
+
+#: src/admin/admin.tsx:1210
+#, placeholders
+msgid "Not restored: {error}"
+msgstr ""
+
+#: src/admin/admin.tsx:1218
+msgid "Backup"
+msgstr ""
+
+#: src/admin/admin.tsx:1221
+msgid "Download the settings"
+msgstr ""
+
+#: src/admin/admin.tsx:1225
+msgid "Restoring…"
+msgstr ""
+
+#: src/admin/admin.tsx:1225
+msgid "Restore from a file"
+msgstr ""
+
+#: src/admin/admin.tsx:1240
+msgid "One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's own settings (network, tunnels, SSH key) are in web888.txt on the card, not here."
+msgstr ""
+
+#. boot loader = the first software the unit runs at power-up (SPL + U-Boot on the SD card)
+#: src/admin/admin.tsx:1276
+msgid ""
+"Write the boot loader to the card now?\n"
+"\n"
+"Unlike the system, the boot loader has no second copy to fall back to. If the unit loses power while it is written, or the new boot loader doesn't start, the unit won't boot until the card is fixed on a computer (rename boot.bin.old and u-boot.img.old back) or re-imaged. Download a settings backup first, and have a card reader at hand.\n"
+"\n"
+"The receiver keeps running; the new boot loader starts at the next reboot."
+msgstr ""
+
+#: src/admin/admin.tsx:1286
+msgid "done"
+msgstr ""
+
+#: src/admin/admin.tsx:1297
+msgid "Boot loader"
+msgstr ""
+
+#: src/admin/admin.tsx:1299
+#, placeholders
+msgid "Not updated from here: {reason}."
+msgstr ""
+
+#: src/admin/admin.tsx:1303
+msgid "On the card"
+msgstr ""
+
+#: src/admin/admin.tsx:1307
+#, placeholders
+msgid "this system's (web888-ng {version})"
+msgstr ""
+
+#: src/admin/admin.tsx:1307
+msgid "this system's"
+msgstr ""
+
+#: src/admin/admin.tsx:1310
+msgid "another one"
+msgstr ""
+
+#. SPL = the first-stage boot loader (secondary program loader); the values are short hashes of the two files
+#: src/admin/admin.tsx:1314 src/admin/admin.tsx:1323
+#, placeholders
+msgid "SPL {spl}, U-Boot {uboot}"
+msgstr ""
+
+#: src/admin/admin.tsx:1319
+msgid "This system's"
+msgstr ""
+
+#: src/admin/admin.tsx:1330
+msgid "Kept"
+msgstr ""
+
+#: src/admin/admin.tsx:1331
+msgid "boot.bin.old, u-boot.img.old (the one before)"
+msgstr ""
+
+#: src/admin/admin.tsx:1337
+#, placeholders
+msgid "Not now: {reason}."
+msgstr ""
+
+#: src/admin/admin.tsx:1340
+msgid "Writing…"
+msgstr ""
+
+#: src/admin/admin.tsx:1340
+msgid "Write it to the card…"
+msgstr ""
+
+#: src/admin/admin.tsx:1344
+msgid "Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to re-image the card if something unexpected happens."
+msgstr ""
+
+#. log sources; "System (this boot)" = the system log since the unit last booted; Kernel = the operating system kernel's log
+#: src/admin/admin.tsx:1360
+msgid "System (this boot)"
+msgstr ""
+
+#: src/admin/admin.tsx:1361
+msgid "Kernel"
+msgstr ""
+
+#: src/admin/admin.tsx:1424
+msgid "not on this system"
+msgstr ""
+
+#: src/admin/admin.tsx:1433
+#, placeholders
+msgid "{n} lines"
+msgstr ""
+
+#: src/admin/admin.tsx:1436
+msgid "Filter"
+msgstr ""
+
+#: src/admin/admin.tsx:1438
+msgid "Follow"
+msgstr ""
+
+#: src/admin/admin.tsx:1441
+msgid "Download"
+msgstr ""
+
+#: src/admin/admin.tsx:1447
+msgid "No line matches the filter."
+msgstr ""
+
+#: src/admin/admin.tsx:1447
+msgid "No lines yet."
+msgstr ""
+
+#: src/admin/admin.tsx:1493
+msgid "Receiver"
+msgstr ""
+
+#: src/admin/admin.tsx:1494
+msgid "Log out"
+msgstr ""
+
+#: src/admin/configform.tsx:33
+msgid "changed"
+msgstr ""
+
+#: src/admin/configform.tsx:66 src/admin/configform.tsx:111
+msgid "(none)"
+msgstr ""
+
+#: src/admin/configform.tsx:226
+#, placeholders
+msgid "File: {path}."
+msgstr ""
+
+#: src/admin/configform.tsx:227
+msgid "This server has no config file to write; the form is read-only."
+msgstr ""
+
+#: src/admin/configform.tsx:228
+msgid "Values marked “running” differ in the running server: given on its command line (which overrides the file), or saved and waiting for a restart."
+msgstr ""
+
+#: src/admin/configform.tsx:232 src/ctl/img.tsx:146
+msgid "Save"
+msgstr ""
+
+#: src/admin/configform.tsx:235
+msgid "Revert"
+msgstr ""
+
+#: src/admin/configform.tsx:237
+msgid "Fix the marked fields first."
+msgstr ""
+
+#: src/admin/configform.tsx:242
+msgid "Saved."
+msgstr ""
+
+#: src/admin/configform.tsx:244
+msgid "Restart now"
+msgstr ""
+
+#: src/admin/configform.tsx:273
+#, placeholders
+msgid "Needs a restart: {what}."
+msgstr ""
+
+#: src/admin/configform.tsx:275
+msgid "Applies at once."
+msgstr ""
+
+#: src/admin/configform.tsx:275
+msgid "No change for the running server."
+msgstr ""
+
+#: src/admin/schema.ts:80
+msgid "a number is needed"
+msgstr ""
+
+#: src/admin/schema.ts:82
+msgid "not a number"
+msgstr ""
+
+#: src/admin/schema.ts:83
+msgid "a whole number is needed"
+msgstr ""
+
+#: src/admin/schema.ts:95
+msgid "not a text field"
+msgstr ""
+
+#: src/ctl/afspec.tsx:153
+msgid "Audio spectrum"
+msgstr ""
+
+#: src/ctl/afspec.tsx:155 src/ctl/map.tsx:613 src/ctl/mobile.tsx:229 src/ctl/spots.tsx:81
+msgid "Close"
+msgstr ""
+
+#. kS/s = thousand samples per second; passband = the range of audio frequencies the receiver lets through; IQ = complex baseband samples (both sides of the dial)
+#: src/ctl/afspec.tsx:162
+msgid "The audio as it arrives (before this page's volume), ~23 Hz a point at 12 kS/s; the passband shaded. In IQ, both sides of the dial."
+msgstr ""
+
+#: src/ctl/audiorec.tsx:12 src/ctl/iqrec.tsx:15
+msgid "1 min"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:13 src/ctl/iqrec.tsx:17
+msgid "5 min"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:14
+msgid "15 min"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:15
+msgid "1 h"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:39
+#, placeholders
+msgid ", {time} of silence left out"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:42
+#, placeholders
+msgid "Recording the audio{skipped}: click to stop and save"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:45 src/ctl/iqrec.tsx:51
+msgid "Stop without saving"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:53
+msgid "Record the audio to a WAV file"
+msgstr ""
+
+#. Rec = short for Record (audio recording button)
+#: src/ctl/audiorec.tsx:55
+msgid "Rec"
+msgstr ""
+
+#. AGC = automatic gain control; kS/s = thousand samples per second
+#: src/ctl/audiorec.tsx:61
+msgid "The audio as it comes from the receiver (its AGC, not this page's volume), 16-bit WAV at the audio rate, collected in this browser (~1.4 MB a minute at 12 kS/s). Changing the audio rate or to a stereo mode ends the recording."
+msgstr ""
+
+#: src/ctl/audiorec.tsx:66
+msgid "Leave out the time the audio is silent (squelch closed): a long watch keeps only what was heard"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:67
+msgid "Skip silence (with squelch)"
+msgstr ""
+
+#: src/ctl/audiorec.tsx:83 src/ctl/iqrec.tsx:92
+#, placeholders
+msgid "Last: {what}"
+msgstr ""
+
+#. names of waterfall colour palettes
+#: src/ctl/config.tsx:21
+msgid "Default"
+msgstr ""
+
+#: src/ctl/config.tsx:23
+msgid "Heat"
+msgstr ""
+
+#: src/ctl/config.tsx:24
+msgid "Phosphor"
+msgstr ""
+
+#: src/ctl/config.tsx:25
+msgid "Grey"
+msgstr ""
+
+#: src/ctl/config.tsx:35
+msgid "Language"
+msgstr ""
+
+#: src/ctl/config.tsx:37
+msgid "Automatic (the browser's)"
+msgstr ""
+
+#: src/ctl/config.tsx:45
+msgid "You"
+msgstr ""
+
+#: src/ctl/config.tsx:46
+#, placeholders
+msgid "Shown to the other listeners (at most {n} characters)"
+msgstr ""
+
+#: src/ctl/config.tsx:47
+msgid "Callsign or nickname"
+msgstr ""
+
+#: src/ctl/config.tsx:52
+msgid "callsign"
+msgstr ""
+
+#: src/ctl/config.tsx:62
+msgid "Share my frequency"
+msgstr ""
+
+#: src/ctl/config.tsx:65
+msgid "others see it on their scale and may listen along while they wait for a receiver"
+msgstr ""
+
+#: src/ctl/config.tsx:65
+msgid "private: others see that you are here, not where"
+msgstr ""
+
+#: src/ctl/config.tsx:70 src/ctl/licences.tsx:154
+msgid "Data"
+msgstr ""
+
+#: src/ctl/config.tsx:74
+msgid "Data saver"
+msgstr ""
+
+#: src/ctl/config.tsx:77
+msgid "half the waterfall lines a second and a bin for every two pixels (about a quarter of its data)"
+msgstr ""
+
+#: src/ctl/config.tsx:81 src/ctl/mobile.tsx:311
+msgid "Waterfall"
+msgstr ""
+
+#: src/ctl/config.tsx:83
+msgid "Colours"
+msgstr ""
+
+#: src/ctl/config.tsx:98
+msgid "Time marks"
+msgstr ""
+
+#: src/ctl/config.tsx:101
+msgid "UTC down the waterfall's left edge"
+msgstr ""
+
+#: src/ctl/config.tsx:115
+msgid "Your settings: language, name, sharing, data saver, waterfall colours, labels"
+msgstr ""
+
+#: src/ctl/config.tsx:116
+msgid "Config"
+msgstr ""
+
+#: src/ctl/config.tsx:135 src/ctl/info.tsx:139 src/ctl/prop.tsx:218
+msgid "Close (Escape)"
+msgstr ""
+
+#: src/ctl/config.tsx:140
+msgid "Kept in this browser."
+msgstr ""
+
+#: src/ctl/controls.tsx:84
+msgid "kHz, or 7.074M"
+msgstr ""
+
+#: src/ctl/controls.tsx:103
+msgid "Wheel over a digit to step it, click to type"
+msgstr ""
+
+#: src/ctl/controls.tsx:133
+msgid "Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it"
+msgstr ""
+
+#: src/ctl/controls.tsx:138
+#, placeholders
+msgid "auto ({step})"
+msgstr ""
+
+#: src/ctl/controls.tsx:148
+msgid "AM, envelope detector"
+msgstr ""
+
+#: src/ctl/controls.tsx:149
+msgid "Synchronous AM: locked to the carrier, both sidebands (less distortion in fading)"
+msgstr ""
+
+#: src/ctl/controls.tsx:150
+msgid "Synchronous AM, lower sideband only (away from interference above)"
+msgstr ""
+
+#: src/ctl/controls.tsx:151
+msgid "Synchronous AM, upper sideband only (away from interference below)"
+msgstr ""
+
+#: src/ctl/controls.tsx:152
+msgid "Synchronous AM stereo: lower sideband left, upper right"
+msgstr ""
+
+#: src/ctl/controls.tsx:161
+#, placeholders
+msgid "{mode} (key {key})"
+msgstr ""
+
+#: src/ctl/controls.tsx:168
+#, placeholders
+msgid "{what}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn."
+msgstr ""
+
+#: src/ctl/controls.tsx:175
+msgid "Narrow-band FM (VHF voice; key f)"
+msgstr ""
+
+#: src/ctl/controls.tsx:182
+msgid "I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i"
+msgstr ""
+
+#: src/ctl/controls.tsx:200
+#, placeholders
+msgid "Passband: {lo} to {hi} Hz around the dial"
+msgstr ""
+
+#: src/ctl/controls.tsx:207
+msgid "Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)"
+msgstr ""
+
+#: src/ctl/controls.tsx:219
+msgid "Opus: 24-48 kbit/s, for slow or metered connections. While a decoder reads the audio, μ-law instead (Opus would cost it weak signals)"
+msgstr ""
+
+#: src/ctl/controls.tsx:221
+msgid "μ-law: 96 kbit/s, as good as PCM for listening and for the decoders"
+msgstr ""
+
+#: src/ctl/controls.tsx:222
+msgid "PCM: 192 kbit/s, 16 bits, exactly as the receiver made it"
+msgstr ""
+
+#: src/ctl/controls.tsx:236
+msgid "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
+msgstr ""
+
+#: src/ctl/controls.tsx:237
+msgid "Opus is paused: a decoder reads the audio (μ-law until it closes)"
+msgstr ""
+
+#: src/ctl/controls.tsx:238
+msgid "How the audio comes"
+msgstr ""
+
+#: src/ctl/controls.tsx:244
+#, placeholders
+msgid "{what}. {codec}"
+msgstr ""
+
+#: src/ctl/controls.tsx:263
+msgid "Automatic gain control (AM: follows the carrier)"
+msgstr ""
+
+#: src/ctl/controls.tsx:267
+msgid "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay"
+msgstr ""
+
+#: src/ctl/controls.tsx:267
+msgid "AGC recovery: fast, medium, slow, or custom (your own hang time and decay)"
+msgstr ""
+
+#: src/ctl/controls.tsx:277
+msgid "Hang: how long the gain is held after the signal drops"
+msgstr ""
+
+#. AGC hang = how long the gain is held after the signal drops
+#: src/ctl/controls.tsx:279
+msgctxt "AGC"
+msgid "hang"
+msgstr ""
+
+#: src/ctl/controls.tsx:290
+msgid "Decay: how fast the gain comes back after the hang (dB a second)"
+msgstr ""
+
+#. AGC decay = how fast the gain comes back after the hang time
+#: src/ctl/controls.tsx:292
+msgctxt "AGC"
+msgid "decay"
+msgstr ""
+
+#: src/ctl/controls.tsx:306
+msgid "Maximum AGC gain"
+msgstr ""
+
+#: src/ctl/controls.tsx:306
+msgid "Fixed gain"
+msgstr ""
+
+#. slider label: maximum gain of the AGC, or the fixed gain when AGC is off
+#: src/ctl/controls.tsx:308
+msgctxt "AGC"
+msgid "max"
+msgstr ""
+
+#. slider label: maximum gain of the AGC, or the fixed gain when AGC is off
+#: src/ctl/controls.tsx:308
+msgctxt "AGC"
+msgid "gain"
+msgstr ""
+
+#: src/ctl/controls.tsx:322
+msgid "Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
+msgstr ""
+
+#. button: pseudo-stereo, signals spread left and right by their pitch
+#: src/ctl/controls.tsx:325
+msgctxt "pseudo-stereo"
+msgid "Stereo"
+msgstr ""
+
+#: src/ctl/controls.tsx:328 src/ctl/mobile.tsx:205 src/ctl/mobile.tsx:206
+msgid "Mute"
+msgstr ""
+
+#. Vol = Volume (short, on a button); Muted = the sound is muted
+#: src/ctl/controls.tsx:330
+msgid "Muted"
+msgstr ""
+
+#. Vol = Volume (short, on a button); Muted = the sound is muted
+#: src/ctl/controls.tsx:330
+msgctxt "volume"
+msgid "Vol"
+msgstr ""
+
+#: src/ctl/controls.tsx:339
+msgid "Volume"
+msgstr ""
+
+#: src/ctl/controls.tsx:361
+msgid "Noise blanker: removes short impulses (ignition, switching noise)"
+msgstr ""
+
+#: src/ctl/controls.tsx:373
+#, placeholders
+msgid "Blanker sensitivity: impulses over {n} x the average"
+msgstr ""
+
+#: src/ctl/controls.tsx:379
+msgid "Noise reduction: lowers steady background noise"
+msgstr ""
+
+#: src/ctl/controls.tsx:391
+#, placeholders
+msgid "Noise reduction strength {n} %"
+msgstr ""
+
+#: src/ctl/controls.tsx:397
+msgid "Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW"
+msgstr ""
+
+#. Notch = automatic notch filter removing steady carriers and whistles
+#: src/ctl/controls.tsx:400
+msgctxt "filter"
+msgid "Notch"
+msgstr ""
+
+#: src/ctl/controls.tsx:405
+msgid "Squelch: mute while the signal is below the threshold (marked on the S-meter)"
+msgstr ""
+
+#: src/ctl/controls.tsx:417 src/ctl/controls.tsx:691
+msgid "Squelch threshold"
+msgstr ""
+
+#: src/ctl/controls.tsx:441
+msgid "Zoom out (wheel)"
+msgstr ""
+
+#: src/ctl/controls.tsx:444
+msgid "Waterfall span"
+msgstr ""
+
+#: src/ctl/controls.tsx:447
+msgid "Zoom in (wheel)"
+msgstr ""
+
+#: src/ctl/controls.tsx:450
+msgid "Centre the waterfall on the dial"
+msgstr ""
+
+#. button: centre the waterfall on the dial frequency
+#: src/ctl/controls.tsx:452
+msgctxt "waterfall zoom"
+msgid "Centre"
+msgstr ""
+
+#: src/ctl/controls.tsx:454
+msgid "Whole range"
+msgstr ""
+
+#. button: zoom the waterfall out to the receiver's whole range
+#: src/ctl/controls.tsx:456
+msgctxt "waterfall zoom"
+msgid "Full"
+msgstr ""
+
+#: src/ctl/controls.tsx:481
+msgid "Users and background decoders"
+msgstr ""
+
+#: src/ctl/controls.tsx:482
+#, placeholders
+msgid "Users {n}"
+msgstr ""
+
+#: src/ctl/controls.tsx:501
+msgid "user"
+msgstr ""
+
+#: src/ctl/controls.tsx:503
+msgid "mode"
+msgstr ""
+
+#: src/ctl/controls.tsx:508
+#, placeholders
+msgid "{name} (you)"
+msgstr ""
+
+#: src/ctl/controls.tsx:508 src/ctl/controls.tsx:524
+#, placeholders
+msgid "user {id}"
+msgstr ""
+
+#: src/ctl/controls.tsx:512 src/ctl/controls.tsx:525
+msgid "private"
+msgstr ""
+
+#: src/ctl/controls.tsx:522 src/ctl/controls.tsx:543
+msgid "Click to tune there"
+msgstr ""
+
+#: src/ctl/controls.tsx:522
+msgid "Click to listen along"
+msgstr ""
+
+#: src/ctl/controls.tsx:522
+msgid "Their frequency is private"
+msgstr ""
+
+#: src/ctl/controls.tsx:522
+msgid "Waiting for a receiver"
+msgstr ""
+
+#: src/ctl/controls.tsx:528 src/ctl/controls.tsx:546
+msgid "waiting"
+msgstr ""
+
+#: src/ctl/controls.tsx:538
+msgid "background decoders"
+msgstr ""
+
+#: src/ctl/controls.tsx:567
+msgid "Your receiver is ready."
+msgstr ""
+
+#: src/ctl/controls.tsx:568
+msgid "Switch to it"
+msgstr ""
+
+#: src/ctl/controls.tsx:572
+#, placeholders
+msgid "Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue)."
+msgstr ""
+
+#: src/ctl/controls.tsx:573 src/ctl/timecode.tsx:54
+msgid "Stop"
+msgstr ""
+
+#: src/ctl/controls.tsx:581
+#, placeholders
+msgid "Visitors without the password share one receiver, now in use: you are #{pos} in the queue, waterfall only until then."
+msgid_plural "Visitors without the password share {n} receivers, all in use: you are #{pos} in the queue, waterfall only until then."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ctl/controls.tsx:587
+#, placeholders
+msgid "All receivers are in use: you are #{pos} in the queue, waterfall only until then."
+msgstr ""
+
+#: src/ctl/controls.tsx:588
+msgid "Click a green marker on the scale to listen along with another user."
+msgstr ""
+
+#: src/ctl/controls.tsx:610
+msgid "Waterfall colour range (dBFS)"
+msgstr ""
+
+#. button: choose the waterfall colour range automatically
+#: src/ctl/controls.tsx:613
+msgctxt "colour range"
+msgid "Auto"
+msgstr ""
+
+#. waterfall colour range slider: floor = the level shown as the darkest colour
+#: src/ctl/controls.tsx:617
+msgctxt "colour range"
+msgid "floor"
+msgstr ""
+
+#. waterfall colour range slider: top = the level shown as the brightest colour
+#: src/ctl/controls.tsx:628
+msgctxt "colour range"
+msgid "top"
+msgstr ""
+
+#: src/ctl/controls.tsx:649
+msgid "Peak hold: the highest level each frequency reached (pink), on the spectrum"
+msgstr ""
+
+#. Peak = peak hold: the spectrum keeps the highest level each frequency reached
+#: src/ctl/controls.tsx:651
+msgctxt "spectrum"
+msgid "Peak"
+msgstr ""
+
+#: src/ctl/controls.tsx:654
+msgid "Clear the peaks"
+msgstr ""
+
+#: src/ctl/controls.tsx:658
+msgid "Save the spectrum and waterfall as a PNG image (with time marks and the frequency)"
+msgstr ""
+
+#: src/ctl/controls.tsx:661
+msgid "Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)"
+msgstr ""
+
+#: src/ctl/controls.tsx:673
+#, placeholders
+msgid "RF attenuator in: every signal is {db} dB weaker (set by the receiver's owner, against overloads)"
+msgstr ""
+
+#: src/ctl/controls.tsx:688 src/ctl/mobile.tsx:94
+msgid "Channel power before AGC (dBFS)"
+msgstr ""
+
+#: src/ctl/controls.tsx:694
+msgid "ADC overload"
+msgstr ""
+
+#. OVL = overload: the ADC input is too strong
+#: src/ctl/controls.tsx:696 src/ctl/mobile.tsx:90
+msgid "OVL"
+msgstr ""
+
+#: src/ctl/controls.tsx:706
+msgid "connecting"
+msgstr ""
+
+#: src/ctl/controls.tsx:707
+msgid "open"
+msgstr ""
+
+#: src/ctl/controls.tsx:708
+msgid "closed"
+msgstr ""
+
+#: src/ctl/controls.tsx:709
+msgid "busy"
+msgstr ""
+
+#: src/ctl/controls.tsx:710
+msgid "ended"
+msgstr ""
+
+#. rtt = round-trip time to the receiver, in milliseconds
+#: src/ctl/controls.tsx:736
+#, placeholders
+msgid "rtt {v} ms"
+msgstr ""
+
+#: src/ctl/controls.tsx:740
+msgid "How the audio comes, and its data rate"
+msgstr ""
+
+#: src/ctl/controls.tsx:741
+#, placeholders
+msgid "{codec} {v} kbit/s"
+msgstr ""
+
+#: src/ctl/controls.tsx:745
+msgid "The waterfall's data rate"
+msgstr ""
+
+#. wf = waterfall
+#: src/ctl/controls.tsx:747
+#, placeholders
+msgid "wf {v} kbit/s"
+msgstr ""
+
+#: src/ctl/controls.tsx:751
+msgid "Audio buffer, underruns, playback trim"
+msgstr ""
+
+#. buf = audio buffer; underruns = the buffer ran empty and the sound broke up; ppm = parts per million (playback speed trim)
+#: src/ctl/controls.tsx:753
+#, placeholders
+msgid "buf {fill} ms · {under} underruns · {trim} ppm"
+msgstr ""
+
+#: src/ctl/controls.tsx:761
+msgid "Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay."
+msgstr ""
+
+#: src/ctl/controls.tsx:762
+msgid "http audio (+delay):"
+msgstr ""
+
+#: src/ctl/controls.tsx:767
+msgid "Frames dropped (audio / waterfall), audio gaps"
+msgstr ""
+
+#: src/ctl/controls.tsx:768
+#, placeholders
+msgid "drops {audio}/{wf} · gaps {gaps}"
+msgstr ""
+
+#: src/ctl/controls.tsx:775
+msgid "hardware falling behind"
+msgstr ""
+
+#: src/ctl/controls.tsx:778
+#, placeholders
+msgid "clock {v} ppm"
+msgstr ""
+
+#: src/ctl/controls.tsx:782
+msgid "The receiver's CPU load (all cores) and temperature"
+msgstr ""
+
+#: src/ctl/controls.tsx:783
+#, placeholders
+msgid "cpu {v} %"
+msgstr ""
+
+#: src/ctl/controls.tsx:797
+#, placeholders
+msgid "You listen as a visitor: {n} of the receivers are open without the password. Log in for any."
+msgstr ""
+
+#: src/ctl/controls.tsx:799
+msgid "visitor: log in"
+msgstr ""
+
+#: src/ctl/controls.tsx:812
+msgid "About this receiver: where it is, its antenna, its limits, privacy, licences"
+msgstr ""
+
+#: src/ctl/controls.tsx:814
+msgid "info"
+msgstr ""
+
+#: src/ctl/controls.tsx:823
+msgid "Keys and mouse (key ?)"
+msgstr ""
+
+#: src/ctl/controls.tsx:825
+msgid "keys"
+msgstr ""
+
+#: src/ctl/controls.tsx:827
+msgid "admin"
+msgstr ""
+
+#: src/ctl/cw.tsx:18
+msgid "Decode CW (Morse) from this receiver's audio, in this browser: every keyed signal in the passband"
+msgstr ""
+
+#. Wide = skim a 40 kHz slice of spectrum (a channelizer bin of the receiver's filter bank) instead of the narrow audio passband
+#: src/ctl/cw.tsx:40 src/ctl/rtty.tsx:57
+msgid "Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband"
+msgstr ""
+
+#. Wide = skim a 40 kHz slice of spectrum (a channelizer bin) instead of the narrow audio passband
+#: src/ctl/cw.tsx:43 src/ctl/rtty.tsx:60
+msgid "Wide"
+msgstr ""
+
+#. Neural = a neural-network Morse decoder, as opposed to the classical (signal-processing) one
+#: src/ctl/cw.tsx:47
+msgid "Text from the neural decoder (trained on synthetic CW; reads weaker and rougher signals) instead of the classical one"
+msgstr ""
+
+#: src/ctl/cw.tsx:48
+msgid "Neural"
+msgstr ""
+
+#: src/ctl/cw.tsx:50 src/ctl/psk.tsx:34 src/ctl/rtty.tsx:63
+msgid "Clear the text"
+msgstr ""
+
+#: src/ctl/cw.tsx:51 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:52
+msgid "Clear"
+msgstr ""
+
+#: src/ctl/cw.tsx:53 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66
+msgid "Stop decoding"
+msgstr ""
+
+#: src/ctl/cw.tsx:60 src/ctl/rtty.tsx:73
+#, placeholders
+msgid "Skimming {lo}–{hi} kHz"
+msgstr ""
+
+#: src/ctl/cw.tsx:60 src/ctl/rtty.tsx:73
+msgid "Waiting for the wide IQ…"
+msgstr ""
+
+#: src/ctl/cw.tsx:62
+msgid "CW is decoded in CW, USB and LSB."
+msgstr ""
+
+#: src/ctl/cw.tsx:66
+msgid "Nothing yet: every keyed signal in the passband is found and decoded (9–45 WPM); text shows a few seconds behind the audio, once it has settled. A wide passband (USB) decodes several stations at once."
+msgstr ""
+
+#: src/ctl/cw.tsx:75
+msgid "Text"
+msgstr ""
+
+#: src/ctl/cw.tsx:80
+#, placeholders
+msgid "{hz} Hz audio; click: CW mode on this signal"
+msgstr ""
+
+#. hint = one-line description of each browser decoder; mode names (FT8, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
+#: src/ctl/decoders.tsx:19
+msgid "on the frequency you tune; nothing is reported anywhere"
+msgstr ""
+
+#: src/ctl/decoders.tsx:20
+msgid "every keyed signal in the passband (Morse)"
+msgstr ""
+
+#: src/ctl/decoders.tsx:21
+msgid "FSK/RTTY, NAVTEX and DSC, every parameter found from the signal"
+msgstr ""
+
+#: src/ctl/decoders.tsx:22
+msgid "PSK31, PSK63 and PSK125: every BPSK signal in the passband"
+msgstr ""
+
+#: src/ctl/decoders.tsx:23
+msgid "JS8Call: heartbeats, directed messages and chat, every submode (USB)"
+msgstr ""
+
+#: src/ctl/decoders.tsx:24
+msgid "aircraft HF data link: position reports and ACARS (USB)"
+msgstr ""
+
+#: src/ctl/decoders.tsx:25
+msgid "HF weather charts and SSTV pictures (USB)"
+msgstr ""
+
+#: src/ctl/decoders.tsx:26 src/ctl/timecode.tsx:25
+msgid "Time"
+msgstr ""
+
+#: src/ctl/decoders.tsx:26
+msgid "time-code stations: DCF77, MSF, WWVB, JJY, WWV/WWVH"
+msgstr ""
+
+#: src/ctl/decoders.tsx:27
+msgid "Signal ID"
+msgstr ""
+
+#: src/ctl/decoders.tsx:27
+msgid "identify the signals in the passband"
+msgstr ""
+
+#: src/ctl/decoders.tsx:28
+msgid "WSJT-X's keyboard mode"
+msgstr ""
+
+#: src/ctl/decoders.tsx:54
+#, placeholders
+msgid "Decoding in this browser: {list}"
+msgstr ""
+
+#: src/ctl/decoders.tsx:54
+msgid "Decoders that run in this browser"
+msgstr ""
+
+#: src/ctl/decoders.tsx:56
+msgid "Decoders"
+msgstr ""
+
+#: src/ctl/digi.tsx:22
+msgid "Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)"
+msgstr ""
+
+#: src/ctl/digi.tsx:33
+#, placeholders
+msgid "{mode} is decoded in USB."
+msgstr ""
+
+#. a decode = one successfully decoded message; cut short = the decoder stopped early to keep up
+#: src/ctl/digi.tsx:39
+#, placeholders
+msgid "{time}: {n} decode in {ms} (cut short)"
+msgid_plural "{time}: {n} decodes in {ms} (cut short)"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ctl/digi.tsx:40
+#, placeholders
+msgid "{time}: {n} decode in {ms}"
+msgid_plural "{time}: {n} decodes in {ms}"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ctl/digi.tsx:43
+msgid "decoding…"
+msgstr ""
+
+#: src/ctl/digi.tsx:44
+#, placeholders
+msgid "next slot {time}"
+msgstr ""
+
+#: src/ctl/digi.tsx:45
+msgid "waiting for audio"
+msgstr ""
+
+#. slot = the fixed 15 s (FT8), 7.5 s (FT4) or 2 min (WSPR) time period in which one transmission is sent and decoded
+#: src/ctl/digi.tsx:48
+msgid "Slots on the receiver's clock"
+msgstr ""
+
+#. slot = the fixed 15 s (FT8), 7.5 s (FT4) or 2 min (WSPR) time period in which one transmission is sent and decoded
+#: src/ctl/digi.tsx:48
+msgid "Slots on this computer's clock (the receiver's isn't known yet)"
+msgstr ""
+
+#: src/ctl/digi.tsx:50
+msgid "local clock"
+msgstr ""
+
+#: src/ctl/digi.tsx:68 src/ctl/spots.tsx:94
+msgid "Mode"
+msgstr ""
+
+#: src/ctl/digi.tsx:73
+#, placeholders
+msgid "Common {mode} dial frequencies (USB)"
+msgstr ""
+
+#: src/ctl/digi.tsx:75 src/ctl/jtty.tsx:37
+msgid "Dial…"
+msgstr ""
+
+#. Deep = a slower, deeper decoder search that finds a few more weak messages
+#: src/ctl/digi.tsx:84
+msgid "A deeper search: a few more decodes for two to four times the CPU"
+msgstr ""
+
+#: src/ctl/digi.tsx:85
+msgid "Deep"
+msgstr ""
+
+#: src/ctl/digi.tsx:87 src/ctl/spots.tsx:79
+msgid "Call or text"
+msgstr ""
+
+#: src/ctl/digi.tsx:89 src/ctl/hfdl.tsx:64
+msgid "Clear the list"
+msgstr ""
+
+#: src/ctl/digi.tsx:102
+msgid "No decodes match."
+msgstr ""
+
+#: src/ctl/digi.tsx:105
+msgid "Decodes show after each 2-minute slot, from the first one heard whole."
+msgstr ""
+
+#: src/ctl/digi.tsx:106
+#, placeholders
+msgid "Decodes show after each 2-minute slot, from the first one heard whole. Pick a {mode} dial frequency above, or tune to one in USB."
+msgstr ""
+
+#: src/ctl/digi.tsx:108
+#, placeholders
+msgid "Decodes show after each {period} s slot, from the first one heard whole."
+msgstr ""
+
+#: src/ctl/digi.tsx:109
+#, placeholders
+msgid "Decodes show after each {period} s slot, from the first one heard whole. Pick a {mode} dial frequency above, or tune to one in USB."
+msgstr ""
+
+#. Drift = how far the WSPR signal's frequency drifted during the transmission, Hz per minute
+#: src/ctl/digi.tsx:121
+msgid "Drift"
+msgstr ""
+
+#: src/ctl/digi.tsx:122 src/ctl/jtty.tsx:61 src/ctl/spots.tsx:95
+msgid "Message"
+msgstr ""
+
+#. kinds of HFDL message parts (the worker names them; ACARS stays as is): squitter = ground station announcement burst; logon/logoff = aircraft registering with / leaving a ground station; frequencies = list of channels the aircraft is told to use; system table = the ground stations' broadcast list of stations and channels; bad = part whose checksum failed
+#: src/ctl/hfdl.tsx:14
+msgid "squitter"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:15
+msgid "position"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:16
+msgid "frequencies"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:17
+msgid "logon"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:18
+msgid "logon confirm"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:19
+msgid "logoff"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:20
+msgid "logon denied"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:21
+msgid "system table"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:22
+msgid "data"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:23
+msgid "bad"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:24
+msgid "other"
+msgstr ""
+
+#. squitter = the periodic broadcast burst a HFDL ground station (gs) sends to announce itself
+#: src/ctl/hfdl.tsx:31
+#, placeholders
+msgid "{gs} squitter"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:32
+#, placeholders
+msgid "{gs} → aircraft"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:32
+#, placeholders
+msgid "aircraft → {gs}"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:51
+msgid "HFDL channels (USB, the dial on the listed frequency) and the ground stations using them"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:53
+msgid "Channel…"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:61
+msgid "Bursts decoded / heard since tuning here"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:73
+msgid "HFDL is decoded in USB."
+msgstr ""
+
+#. squitter = periodic announcement burst of a ground station; logon = an aircraft registering with a ground station; ACARS = aircraft messaging protocol (name kept)
+#: src/ctl/hfdl.tsx:77
+msgid "Nothing yet: tune USB to an HFDL channel (the list above). Each ground station sends a squitter every 32 s; aircraft logons, position reports and ACARS messages come as they are sent. Only bursts whose checksums pass are listed."
+msgstr ""
+
+#: src/ctl/hfdl.tsx:86
+msgid "Rate, slot (single or double) and SNR in the symbol rate's bandwidth"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:91
+msgid "(its parts didn't decode)"
+msgstr ""
+
+#: src/ctl/hfdl.tsx:95
+msgid "The aircraft's ID on this ground station"
+msgstr ""
+
+#: src/ctl/img.tsx:16
+msgid "Decode HF fax (weather charts) and SSTV pictures from this receiver's audio (USB), in this browser"
+msgstr ""
+
+#. IOC = index of cooperation (fax drum width/line pitch ratio); slant = image skew from the sampling-rate error, in ppm; start tone = the tone that begins a fax chart; VIS code = the digital header that names the SSTV mode
+#: src/ctl/img.tsx:74
+#, placeholders
+msgid "Fax: IOC {ioc}, {lines} lines, slant {slant} ppm"
+msgstr ""
+
+#: src/ctl/img.tsx:76
+#, placeholders
+msgid "Fax: start tone (IOC {ioc})"
+msgstr ""
+
+#: src/ctl/img.tsx:77
+msgid "Fax: waiting for a start tone"
+msgstr ""
+
+#: src/ctl/img.tsx:78
+#, placeholders
+msgid "SSTV: {mode}, {lines} lines"
+msgstr ""
+
+#: src/ctl/img.tsx:78
+msgid "SSTV: waiting for a VIS code"
+msgstr ""
+
+#: src/ctl/img.tsx:89
+msgid "Fax stations (the dial 1.9 kHz below) and SSTV calling frequencies, USB"
+msgstr ""
+
+#: src/ctl/img.tsx:92 src/ctl/rtty.tsx:45
+msgid "Station…"
+msgstr ""
+
+#: src/ctl/img.tsx:107
+msgid "Fax and SSTV are decoded in USB."
+msgstr ""
+
+#: src/ctl/img.tsx:114
+msgid "Start a fax image now (no start tone heard), or end the one being received"
+msgstr ""
+
+#: src/ctl/img.tsx:115
+msgid "Fax stop"
+msgstr ""
+
+#: src/ctl/img.tsx:115
+msgid "Fax start"
+msgstr ""
+
+#. slant = image skew (lines lean) from a sample-rate error between sender and receiver
+#: src/ctl/img.tsx:118
+msgid "Fax slant: lines lean left"
+msgstr ""
+
+#: src/ctl/img.tsx:121
+msgid "Fax slant: lines lean right"
+msgstr ""
+
+#: src/ctl/img.tsx:124
+msgid "Fax: move the image left"
+msgstr ""
+
+#: src/ctl/img.tsx:127
+msgid "Fax: move the image right"
+msgstr ""
+
+#: src/ctl/img.tsx:130
+msgid "Manual fax slant (ppm) and shift"
+msgstr ""
+
+#: src/ctl/img.tsx:134
+msgid "End the SSTV image"
+msgstr ""
+
+#: src/ctl/img.tsx:135
+msgid "SSTV stop"
+msgstr ""
+
+#: src/ctl/img.tsx:143
+msgid "receiving"
+msgstr ""
+
+#: src/ctl/img.tsx:145
+msgid "Download as PNG"
+msgstr ""
+
+#: src/ctl/img.tsx:149
+msgid "Back to the picture being received"
+msgstr ""
+
+#: src/ctl/img.tsx:150
+msgid "Live"
+msgstr ""
+
+#. fax station = a weather-chart radiofax transmitter; VIS code = the digital header that names the SSTV mode and starts a picture; Martin, Scottie, Robot, PD are SSTV mode families (names kept)
+#: src/ctl/img.tsx:159
+msgid "Nothing yet: tune a fax station (its start tone begins a chart; or start one by hand) or an SSTV frequency (a picture begins with its VIS code: Martin, Scottie, Robot, PD)."
+msgstr ""
+
+#. h = hours, min = minutes (units)
+#: src/ctl/info.tsx:39 src/ctl/map.tsx:598
+#, placeholders
+msgid "{n} h"
+msgstr ""
+
+#. h = hours, min = minutes (units)
+#: src/ctl/info.tsx:39 src/ctl/map.tsx:598
+#, placeholders
+msgid "{n} min"
+msgstr ""
+
+#: src/ctl/info.tsx:45
+#, placeholders
+msgid "{n} receivers, {open} of them open without the password."
+msgstr ""
+
+#: src/ctl/info.tsx:47
+#, placeholders
+msgid "{n} receivers, with the password."
+msgstr ""
+
+#: src/ctl/info.tsx:48
+#, placeholders
+msgid "{n} receivers."
+msgstr ""
+
+#: src/ctl/info.tsx:50
+#, placeholders
+msgid "At most {n} session at a time from one address."
+msgid_plural "At most {n} sessions at a time from one address."
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ctl/info.tsx:51
+#, placeholders
+msgid "A session lasts at most {time}."
+msgstr ""
+
+#: src/ctl/info.tsx:52
+#, placeholders
+msgid "A session without activity ends after {time}."
+msgstr ""
+
+#: src/ctl/info.tsx:53
+#, placeholders
+msgid "{time} of listening a day from one address (the day changes at 00:00 UTC)."
+msgstr ""
+
+#: src/ctl/info.tsx:61
+msgid "web888d receiver"
+msgstr ""
+
+#: src/ctl/info.tsx:67 src/ctl/spots.tsx:95 src/markers.ts:65
+msgid "Station"
+msgstr ""
+
+#: src/ctl/info.tsx:73
+msgid "Antenna"
+msgstr ""
+
+#: src/ctl/info.tsx:79
+msgid "Contact"
+msgstr ""
+
+#: src/ctl/info.tsx:92
+msgid "For listeners"
+msgstr ""
+
+#: src/ctl/info.tsx:100
+msgid "Privacy"
+msgstr ""
+
+#: src/ctl/info.tsx:113
+#, placeholders
+msgid "{server}: open-source receiver software (web888-ng)."
+msgstr ""
+
+#: src/ctl/info.tsx:130
+#, placeholders
+msgid "The info page didn't load ({msg})."
+msgstr ""
+
+#: src/ctl/info.tsx:137
+msgid "About this receiver"
+msgstr ""
+
+#: src/ctl/info.tsx:145
+msgid "← About this receiver"
+msgstr ""
+
+#: src/ctl/info.tsx:145 src/ctl/licences.tsx:135
+msgid "Licences and credits"
+msgstr ""
+
+#: src/ctl/info.tsx:157
+msgid "About this receiver: where it is, its antenna, its limits"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:13
+msgid "10 s"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:14
+msgid "30 s"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:16
+msgid "2 min"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:21
+msgid "raw 16-bit I/Q, no header (GNU Radio, numpy)"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:22
+msgid "stereo 16-bit WAV, I left and Q right (SDR programs)"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:44
+#, placeholders
+msgid " of {lo}-{hi} kHz"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:45
+#, placeholders
+msgid ", {s} s lost"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:48
+#, placeholders
+msgid "Recording the IQ{where}{lost}: click to stop and save"
+msgstr ""
+
+#: src/ctl/iqrec.tsx:59
+msgid "Record the IQ around the dial (60 kHz) to a file"
+msgstr ""
+
+#. Rec = short for Record; IQ = complex baseband samples (in-phase and quadrature)
+#: src/ctl/iqrec.tsx:61
+msgid "Rec IQ"
+msgstr ""
+
+#. channelizer bin = one 60 kHz slice of the spectrum that the receiver's channelizer produces; IQ = complex baseband samples
+#: src/ctl/iqrec.tsx:67
+msgid "The channelizer bin around the dial: 60 kHz of IQ (clean within ±21 kHz of its centre), 16-bit, collected in this browser and saved as a file (~0.25 MB a second). The bin stays put while recording."
+msgstr ""
+
+#: src/ctl/js8.tsx:43
+msgid "JS8Call's usual frequencies (USB)"
+msgstr ""
+
+#: src/ctl/js8.tsx:45 src/ctl/psk.tsx:27
+msgid "Band…"
+msgstr ""
+
+#. a period = one receive time slot of a JS8 submode (6 to 30 s); frames = decoded JS8 transmissions
+#: src/ctl/js8.tsx:54
+#, placeholders
+msgid "Frames decoded, in {periods} periods of the four submodes; {pending} waiting"
+msgstr ""
+
+#. a period = one receive time slot of a JS8 submode (6 to 30 s); frames = decoded JS8 transmissions
+#: src/ctl/js8.tsx:56
+#, placeholders
+msgid "Frames decoded, in {periods} periods of the four submodes"
+msgstr ""
+
+#: src/ctl/js8.tsx:61
+msgid "Clear the messages"
+msgstr ""
+
+#: src/ctl/js8.tsx:70
+msgid "JS8 is decoded in USB."
+msgstr ""
+
+#: src/ctl/js8.tsx:71
+msgid "Using this computer's clock: JS8 needs it within a second or so of UTC."
+msgstr ""
+
+#: src/ctl/js8.tsx:74
+msgid "Heard:"
+msgstr ""
+
+#: src/ctl/js8.tsx:83
+msgid "Nothing yet: JS8's Normal, Fast, Turbo and Slow periods are each decoded as they end, every signal in the passband. Messages of several frames are joined per frequency."
+msgstr ""
+
+#: src/ctl/jtty.tsx:19
+msgid "Decode JTTY (WSJT-X's keyboard mode) from this receiver's audio, in this browser"
+msgstr ""
+
+#: src/ctl/jtty.tsx:35
+msgid "Common JTTY dial frequencies (USB)"
+msgstr ""
+
+#: src/ctl/jtty.tsx:52
+msgid "JTTY is decoded in USB."
+msgstr ""
+
+#: src/ctl/jtty.tsx:54
+msgid "Nothing yet: messages show when they end. Signals 200–3000 Hz above the dial; JTTY has no time slots."
+msgstr ""
+
+#: src/ctl/jtty.tsx:69
+#, placeholders
+msgid "{hz} Hz audio, {n} frame"
+msgid_plural "{hz} Hz audio, {n} frames"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ctl/keys.tsx:12
+msgid "Step the dial (shift: ×10)"
+msgstr ""
+
+#. SAM, SAL, SAR, SAS = synchronous AM detector (both sidebands, lower, upper, stereo)
+#: src/ctl/keys.tsx:15
+msgid "AM, then SAM, SAL, SAR, SAS in turn"
+msgstr ""
+
+#. I/Q = the complex baseband samples of the channel, I (in-phase) on the left audio channel and Q (quadrature) on the right
+#: src/ctl/keys.tsx:18
+msgid "I/Q (the channel, I left and Q right)"
+msgstr ""
+
+#. VFO = variable frequency oscillator, one of two tuning memories (A and B) of the radio
+#: src/ctl/keys.tsx:20
+msgid "Swap VFO A and B"
+msgstr ""
+
+#: src/ctl/keys.tsx:21
+msgid "Frequency memories"
+msgstr ""
+
+#: src/ctl/keys.tsx:22
+msgid "This help"
+msgstr ""
+
+#: src/ctl/keys.tsx:26
+msgid "Click"
+msgstr ""
+
+#: src/ctl/keys.tsx:26
+msgid "Tune there (to the step's grid)"
+msgstr ""
+
+#: src/ctl/keys.tsx:27
+msgid "Drag, sideways swipe"
+msgstr ""
+
+#: src/ctl/keys.tsx:27
+msgid "Pan the waterfall"
+msgstr ""
+
+#: src/ctl/keys.tsx:28
+msgid "Wheel, pinch"
+msgstr ""
+
+#: src/ctl/keys.tsx:28
+msgid "Zoom around the pointer"
+msgstr ""
+
+#: src/ctl/keys.tsx:29
+msgid "Shift+wheel"
+msgstr ""
+
+#: src/ctl/keys.tsx:29
+msgid "Step the dial"
+msgstr ""
+
+#: src/ctl/keys.tsx:30
+msgid "Wheel over a digit"
+msgstr ""
+
+#: src/ctl/keys.tsx:30
+msgid "Step that digit; click the dial to type a frequency (7074, 7.074M)"
+msgstr ""
+
+#: src/ctl/keys.tsx:31
+msgid "Click a marker, spot or label"
+msgstr ""
+
+#: src/ctl/keys.tsx:31
+msgid "Tune to it, or listen along with that user"
+msgstr ""
+
+#: src/ctl/keys.tsx:64 src/ctl/keys.tsx:66
+msgid "Keys"
+msgstr ""
+
+#: src/ctl/keys.tsx:70
+msgid "Mouse and touch"
+msgstr ""
+
+#: src/ctl/keys.tsx:74
+msgid "Any key or a click closes this."
+msgstr ""
+
+#: src/ctl/labels.tsx:23
+msgid "Band plan and service bands between the spectrum and the scale"
+msgstr ""
+
+#: src/ctl/labels.tsx:24
+msgid "Band ribbon"
+msgstr ""
+
+#: src/ctl/labels.tsx:26
+msgid "IARU region of the band plan and the amateur frequencies"
+msgstr ""
+
+#: src/ctl/labels.tsx:27 src/ctl/prop.tsx:169
+msgid "Region"
+msgstr ""
+
+#: src/ctl/labels.tsx:30
+msgid "receiver's"
+msgstr ""
+
+#: src/ctl/labels.tsx:38
+#, placeholders
+msgid "Labels show at {n} MHz wide or narrower. Click one to tune."
+msgstr ""
+
+#: src/ctl/licences.tsx:34
+msgid "The KiwiSDR protocol and its behaviour, ported from the Web-888 server (RaspSDR/server, KiwiSDR-derived; LGPL-2.0-or-later and GPL), © 2014-2023 John Seamons ZL4VO/KF6VO."
+msgstr ""
+
+#: src/ctl/licences.tsx:40
+#, placeholders
+msgid "Code tables and the decoder's first structure from {lib} (MIT, © 2018 Kārlis Goba); the protocol by Franke, Somerville and Taylor (QEX 2020)."
+msgstr ""
+
+#: src/ctl/licences.tsx:44
+msgid "Ported from wsprd (GPL-3.0-or-later, © 2001-2018 Joe Taylor K1JT, 2014-2018 Steven Franke K9AN), with Phil Karn KA9Q's Fano decoder."
+msgstr ""
+
+#: src/ctl/licences.tsx:47
+#, placeholders
+msgid "Ported from {lib} (MIT, © 2026 Jouni OH3CUF); the mode is the WSJT-X developers' work."
+msgstr ""
+
+#: src/ctl/licences.tsx:49
+msgid "Written with JS8Call (GPL-3.0) as the reference."
+msgstr ""
+
+#: src/ctl/licences.tsx:50
+msgid "Ground stations as dumphfdl's system table lists them."
+msgstr ""
+
+#: src/ctl/licences.tsx:53
+#, placeholders
+msgid "{lib} (BSD-3-Clause), a Rust implementation of Opus following libopus (© Xiph.Org, Skype, Jean-Marc Valin and others)."
+msgstr ""
+
+#: src/ctl/licences.tsx:58
+msgid "Propagation"
+msgstr ""
+
+#: src/ctl/licences.tsx:59
+#, placeholders
+msgid "{lib} (Apache-2.0, © 2026 Jonathan McSweet), a translation of VOACAP (Voice of America; NTIA/ITS, a US Government work; maintained by Greg Hand; voacapl by J.A. Watson, CC0). NTIA/ITS makes no warranty as to its accuracy and does not endorse its use."
+msgstr ""
+
+#: src/ctl/licences.tsx:69
+msgid "Ionospheric maps"
+msgstr ""
+
+#: src/ctl/licences.tsx:70
+#, placeholders
+msgid "VOACAP's coefficients: NTIA/ITS work, and CCIR Reports 322 (atmospheric noise) and 340 (foF2, M(3000)F2), which ITU-R Study Group 3 publishes for free use in its {sw}. Not covered by the GPL."
+msgstr ""
+
+#: src/ctl/licences.tsx:72
+msgid "P.372 and P.533 software"
+msgstr ""
+
+#: src/ctl/licences.tsx:76
+msgid "Shortwave schedules"
+msgstr ""
+
+#: src/ctl/licences.tsx:77
+#, placeholders
+msgid "{lib} by Eike Bierwirth, free to use and distribute."
+msgstr ""
+
+#: src/ctl/licences.tsx:80 src/ctl/map.tsx:41
+msgid "Map"
+msgstr ""
+
+#: src/ctl/licences.tsx:81
+#, placeholders
+msgid "{lib} (public domain), via world-atlas."
+msgstr ""
+
+#: src/ctl/licences.tsx:84
+msgid "Space weather"
+msgstr ""
+
+#: src/ctl/licences.tsx:85
+#, placeholders
+msgid "Sunspot predictions and the K index from {lib} (when the owner lets the receiver fetch them)."
+msgstr ""
+
+#: src/ctl/licences.tsx:88 src/ctl/spots.tsx:17 src/map.ts:21 src/markers.ts:66
+msgid "DX spots"
+msgstr ""
+
+#: src/ctl/licences.tsx:89
+#, placeholders
+msgid "From {lib} (DX clusters, POTA, SOTA and others), when enabled."
+msgstr ""
+
+#: src/ctl/licences.tsx:91
+msgid "Band plans, stations"
+msgstr ""
+
+#: src/ctl/licences.tsx:91
+msgid "Our own compilation from the IARU's, the ITU's and the operators' publications."
+msgstr ""
+
+#: src/ctl/licences.tsx:131
+#, placeholders
+msgid "The library list didn't load ({msg})."
+msgstr ""
+
+#: src/ctl/licences.tsx:137
+#, placeholders
+msgid "{server}: free software under the {gpl}. Sources: {web}, {hw}, {os}. Not affiliated with the Web-888 / RX-888 vendor."
+msgstr ""
+
+#: src/ctl/licences.tsx:139
+msgid "GNU GPL, version 3 or later"
+msgstr ""
+
+#: src/ctl/licences.tsx:140
+msgid "the server and web UI"
+msgstr ""
+
+#: src/ctl/licences.tsx:141
+msgid "the FPGA design and driver"
+msgstr ""
+
+#: src/ctl/licences.tsx:142
+msgid "the OS image"
+msgstr ""
+
+#. AI = artificial intelligence
+#: src/ctl/licences.tsx:146
+msgid "AI"
+msgstr ""
+
+#: src/ctl/licences.tsx:148
+msgid "The CW decoder and the signal identifier use small neural networks, trained by this project on synthetic signals; they run in your browser, and what they say can be wrong. Much of web888-ng's code and documentation was written with an AI coding assistant (Anthropic's Claude) at the project author's direction."
+msgstr ""
+
+#: src/ctl/licences.tsx:152
+msgid "Code it builds on"
+msgstr ""
+
+#: src/ctl/licences.tsx:156
+msgid "Libraries"
+msgstr ""
+
+#: src/ctl/licences.tsx:159
+msgid "In the server (Rust crates)"
+msgstr ""
+
+#: src/ctl/licences.tsx:160
+msgid "In this page"
+msgstr ""
+
+#: src/ctl/licences.tsx:161
+msgid "Each under its own licence, as listed; their texts are in their sources."
+msgstr ""
+
+#: src/ctl/map.tsx:40
+msgid "Map of the stations heard"
+msgstr ""
+
+#: src/ctl/map.tsx:204
+#, placeholders
+msgid "{km} km, {deg}° from the spotter"
+msgstr ""
+
+#: src/ctl/map.tsx:204
+#, placeholders
+msgid "{km} km, {deg}° from here"
+msgstr ""
+
+#: src/ctl/map.tsx:257
+#, placeholders
+msgid "The world map didn't load: {msg}"
+msgstr ""
+
+#: src/ctl/map.tsx:579
+msgid "Projection"
+msgstr ""
+
+#. the map projection: azimuthal equidistant, centred on the receiver (great circles from it are straight lines)
+#: src/ctl/map.tsx:581
+msgid "Great circle"
+msgstr ""
+
+#: src/ctl/map.tsx:582
+msgid "Globe"
+msgstr ""
+
+#: src/ctl/map.tsx:583
+msgid "Mercator"
+msgstr ""
+
+#: src/ctl/map.tsx:590 src/ctl/mobile.tsx:281
+msgid "Band"
+msgstr ""
+
+#: src/ctl/map.tsx:591 src/ctl/spots.tsx:77
+msgid "All bands"
+msgstr ""
+
+#: src/ctl/map.tsx:596
+msgid "Show the stations heard within this time"
+msgstr ""
+
+#: src/ctl/map.tsx:601
+msgid "Great circle lines from where each station was heard"
+msgstr ""
+
+#: src/ctl/map.tsx:602
+msgid "Lines"
+msgstr ""
+
+#: src/ctl/map.tsx:604
+msgid "Night and twilight now"
+msgstr ""
+
+#: src/ctl/map.tsx:605
+msgid "Greyline"
+msgstr ""
+
+#: src/ctl/map.tsx:607
+msgid "Stations shown"
+msgstr ""
+
+#: src/ctl/map.tsx:610
+msgid "Centre on this receiver"
+msgstr ""
+
+#: src/ctl/map.tsx:632
+msgid "Tap it again to tune there."
+msgstr ""
+
+#: src/ctl/map.tsx:636
+msgid "This receiver's locator isn't set (admin: station): no lines from it."
+msgstr ""
+
+#. VFO = variable frequency oscillator, one of two tuning memories (A and B) of the radio
+#: src/ctl/memories.tsx:36
+#, placeholders
+msgid "VFO {me} now. Swap to VFO {them}: {tuning} (key v)"
+msgstr ""
+
+#: src/ctl/memories.tsx:37
+#, placeholders
+msgid "VFO {me}. Swap to VFO {them} (a copy of this one the first time; key v)"
+msgstr ""
+
+#: src/ctl/memories.tsx:42
+#, placeholders
+msgid "VFO {them} to this frequency, mode and passband"
+msgstr ""
+
+#: src/ctl/memories.tsx:75
+#, placeholders
+msgid "Stored {tuning}"
+msgstr ""
+
+#: src/ctl/memories.tsx:80
+msgid "name (optional)"
+msgstr ""
+
+#: src/ctl/memories.tsx:88
+#, placeholders
+msgid "Store {tuning} with its passband (replaces one at the same frequency and mode)"
+msgstr ""
+
+#: src/ctl/memories.tsx:89
+msgid "Store"
+msgstr ""
+
+#: src/ctl/memories.tsx:97
+#, placeholders
+msgid "Tune to {tuning}, passband {lo}..{hi} Hz"
+msgstr ""
+
+#: src/ctl/memories.tsx:104
+msgid "Forget this memory"
+msgstr ""
+
+#: src/ctl/memories.tsx:119
+msgid "No memories yet. They are kept in this browser; export them to keep them elsewhere."
+msgstr ""
+
+#: src/ctl/memories.tsx:122
+msgid "Save the memories as a file"
+msgstr ""
+
+#: src/ctl/memories.tsx:123
+msgid "Export"
+msgstr ""
+
+#: src/ctl/memories.tsx:125
+msgid "Add the memories of an exported file"
+msgstr ""
+
+#: src/ctl/memories.tsx:126
+msgid "Import"
+msgstr ""
+
+#: src/ctl/memories.tsx:138
+#, placeholders
+msgid "Imported {n} memory"
+msgid_plural "Imported {n} memories"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/ctl/memories.tsx:140
+msgid "That file isn't a memories file"
+msgstr ""
+
+#: src/ctl/memories.tsx:170
+msgid "Frequency memories (key m)"
+msgstr ""
+
+#. Mem = short for Memories, stored frequencies
+#: src/ctl/memories.tsx:172
+msgid "Mem"
+msgstr ""
+
+#: src/ctl/mobile.tsx:76
+msgid "Enter a frequency"
+msgstr ""
+
+#: src/ctl/mobile.tsx:151
+msgid "Wheel resolution"
+msgstr ""
+
+#. the dial step per click of the VFO wheel, shown small above its value
+#: src/ctl/mobile.tsx:153
+msgctxt "wheel"
+msgid "step"
+msgstr ""
+
+#: src/ctl/mobile.tsx:189
+msgid "Down one step"
+msgstr ""
+
+#: src/ctl/mobile.tsx:192
+msgid "Up one step"
+msgstr ""
+
+#: src/ctl/mobile.tsx:195
+msgid "Passband"
+msgstr ""
+
+#: src/ctl/mobile.tsx:199
+msgid "Bands"
+msgstr ""
+
+#: src/ctl/mobile.tsx:205 src/ctl/mobile.tsx:206
+msgid "Unmute"
+msgstr ""
+
+#: src/ctl/mobile.tsx:211 src/ctl/mobile.tsx:211 src/main.tsx:152
+msgid "Start audio"
+msgstr ""
+
+#: src/ctl/mobile.tsx:215 src/ctl/mobile.tsx:302
+msgid "More"
+msgstr ""
+
+#: src/ctl/mobile.tsx:256
+msgid "Frequency"
+msgstr ""
+
+#: src/ctl/mobile.tsx:259
+msgid "now"
+msgstr ""
+
+#: src/ctl/mobile.tsx:303
+msgid "Audio"
+msgstr ""
+
+#. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
+#: src/ctl/mobile.tsx:309 src/sigid.ts:35
+msgid "Noise"
+msgstr ""
+
+#: src/ctl/mobile.tsx:315
+msgid "Memories"
+msgstr ""
+
+#: src/ctl/mobile.tsx:319
+msgid "Users"
+msgstr ""
+
+#: src/ctl/prop.tsx:30
+#, placeholders
+msgid "{band}: tune to {khz} kHz"
+msgstr ""
+
+#. MUF = maximum usable frequency
+#: src/ctl/prop.tsx:53
+msgid "Maximum usable frequency now (MHz)"
+msgstr ""
+
+#: src/ctl/prop.tsx:60
+msgid "The whole day for this region"
+msgstr ""
+
+#: src/ctl/prop.tsx:114
+msgid "Maximum usable frequency (MHz)"
+msgstr ""
+
+#: src/ctl/prop.tsx:116
+#, placeholders
+msgid "{hour} UTC: MUF {mhz} MHz"
+msgstr ""
+
+#: src/ctl/prop.tsx:143
+msgid "The owner has turned the forecast off."
+msgstr ""
+
+#: src/ctl/prop.tsx:145
+msgid "The forecast is being made…"
+msgstr ""
+
+#: src/ctl/prop.tsx:154
+#, placeholders
+msgid "Planetary K index at {time} UTC (NOAA); the highest in 24 hours {max}"
+msgstr ""
+
+#: src/ctl/prop.tsx:164
+#, placeholders
+msgid "Signals that need {snr} dB SNR in 1 Hz"
+msgstr ""
+
+#: src/ctl/prop.tsx:170
+#, placeholders
+msgid "All regions, now ({hour} UTC)"
+msgstr ""
+
+#: src/ctl/prop.tsx:173
+#, placeholders
+msgid "{region}, the day"
+msgstr ""
+
+#: src/ctl/prop.tsx:180
+msgid "Share of days a signal gets through:"
+msgstr ""
+
+#: src/ctl/prop.tsx:183
+#, placeholders
+msgid "From each region to this receiver ({locator})."
+msgstr ""
+
+#: src/ctl/prop.tsx:204
+#, placeholders
+msgid "The forecast didn't load ({msg})."
+msgstr ""
+
+#: src/ctl/prop.tsx:216 src/ctl/prop.tsx:221
+msgid "HF propagation"
+msgstr ""
+
+#: src/ctl/prop.tsx:232
+msgid "HF propagation: which bands are open to where, this hour and through the day"
+msgstr ""
+
+#: src/ctl/prop.tsx:233
+msgid "Prop"
+msgstr ""
+
+#: src/ctl/psk.tsx:25
+msgid "The usual PSK31 frequencies (USB)"
+msgstr ""
+
+#: src/ctl/psk.tsx:43
+msgid "PSK is decoded in USB, LSB and CW."
+msgstr ""
+
+#: src/ctl/psk.tsx:45
+msgid "Nothing yet: every PSK31, PSK63 and PSK125 signal in the passband is found (its carrier and rate from the signal) and decoded. A wide passband (USB, 3 kHz) reads several at once."
+msgstr ""
+
+#. phase changes = the BPSK symbols (carrier phase flips between 0 and 180 degrees)
+#: src/ctl/psk.tsx:52
+msgid "How cleanly its phase changes read: 100 % clean, ~64 % noise"
+msgstr ""
+
+#: src/ctl/psk.tsx:54
+msgid "quiet"
+msgstr ""
+
+#: src/ctl/psk.tsx:61
+msgid "Read weakly: a phase change near 90°, it may have been another character"
+msgstr ""
+
+#. FSK = frequency-shift keying (two tones); rate = baud; shift = tone spacing, Hz; framing = start, data, parity and stop bits of each character
+#: src/ctl/rtty.tsx:26
+msgid "Decode FSK/RTTY (and NAVTEX) from this receiver's audio, in this browser: rate, shift, framing and character set found from the signal"
+msgstr ""
+
+#: src/ctl/rtty.tsx:43
+msgid "Stations to tune to (USB, the signal at 1 kHz)"
+msgstr ""
+
+#: src/ctl/rtty.tsx:75
+msgid "RTTY is decoded in USB, LSB and CW."
+msgstr ""
+
+#. rate = baud (symbol rate); shift = frequency shift between the two tones; polarity = which tone is mark; character set = ITA2, ASCII etc.
+#: src/ctl/rtty.tsx:80
+msgid "Nothing yet: every two-tone FSK signal in the passband is found, its rate, shift, framing (data bits, parity, stop bits), polarity and character set worked out, and decoded. A signal needs a few seconds before it locks."
+msgstr ""
+
+#: src/ctl/rtty.tsx:90
+#, placeholders
+msgid "{pct} % framing errors"
+msgstr ""
+
+#: src/ctl/rtty.tsx:93
+msgid "identified, not decoded"
+msgstr ""
+
+#: src/ctl/rtty.tsx:111
+msgid "Read weakly: a bit near the threshold, it may have been another character"
+msgstr ""
+
+#: src/ctl/safe.tsx:29
+msgid "Leave safe mode? The unit reboots and starts the radio again."
+msgstr ""
+
+#: src/ctl/safe.tsx:52
+msgid "Safe mode:"
+msgstr ""
+
+#: src/ctl/safe.tsx:52
+msgid "the radio is off"
+msgstr ""
+
+#: src/ctl/safe.tsx:55
+msgid "Rebooting…"
+msgstr ""
+
+#: src/ctl/safe.tsx:57
+msgid "Leave safe mode"
+msgstr ""
+
+#: src/ctl/safe.tsx:59
+msgid "Admin page"
+msgstr ""
+
+#: src/ctl/sigid.tsx:18
+msgid "Identify the signals in the passband (CW, RTTY, FT8, SSTV, fax, voice, data modems…), in this browser"
+msgstr ""
+
+#: src/ctl/sigid.tsx:31
+#, placeholders
+msgid "{hz} Hz audio, {width} Hz wide; {classes}"
+msgstr ""
+
+#: src/ctl/sigid.tsx:49
+msgid "Tune to it"
+msgstr ""
+
+#: src/ctl/sigid.tsx:49
+#, placeholders
+msgid "Open the {mode} decoder"
+msgstr ""
+
+#: src/ctl/sigid.tsx:50
+msgid "Tune"
+msgstr ""
+
+#: src/ctl/sigid.tsx:50
+msgid "Decode"
+msgstr ""
+
+#: src/ctl/sigid.tsx:66
+msgid "Signals"
+msgstr ""
+
+#: src/ctl/sigid.tsx:68
+msgid "Stop identifying"
+msgstr ""
+
+#: src/ctl/sigid.tsx:74
+msgid "Signals are identified in CW, USB and LSB."
+msgstr ""
+
+#: src/ctl/sigid.tsx:76
+msgid "Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once."
+msgstr ""
+
+#: src/ctl/sigid.tsx:83
+msgid "Looks like"
+msgstr ""
+
+#: src/ctl/sigid.tsx:94
+msgid "Trained on synthetic signals; a guess, not a decode."
+msgstr ""
+
+#: src/ctl/spots.tsx:18
+msgid "Both"
+msgstr ""
+
+#: src/ctl/spots.tsx:24
+msgid "Decodes of this receiver's skimmers and live DX spots"
+msgstr ""
+
+#: src/ctl/spots.tsx:24
+msgid "Decodes of this receiver's skimmers"
+msgstr ""
+
+#: src/ctl/spots.tsx:24
+msgid "Live DX spots"
+msgstr ""
+
+#: src/ctl/spots.tsx:28
+msgid "Spots"
+msgstr ""
+
+#. DT = time offset of the decode from the slot start, in seconds
+#: src/ctl/spots.tsx:39
+#, placeholders
+msgid "{band} {mode}, DT {dt} s: click to tune"
+msgstr ""
+
+#: src/ctl/spots.tsx:41
+#, placeholders
+msgid "{band} {mode} DX spot by {de}: click to tune"
+msgstr ""
+
+#: src/ctl/spots.tsx:42
+#, placeholders
+msgid "{band} {mode} DX spot: click to tune"
+msgstr ""
+
+#: src/ctl/spots.tsx:61
+msgid "No spots match."
+msgstr ""
+
+#: src/ctl/spots.tsx:63
+msgid "No spots yet: the skimmers decode every 15 s."
+msgstr ""
+
+#: src/ctl/spots.tsx:65
+msgid "No DX spots in this receiver's range yet."
+msgstr ""
+
+#: src/ctl/spots.tsx:66
+msgid "No spots yet."
+msgstr ""
+
+#: src/ctl/spots.tsx:71
+msgid "Which spots the list shows"
+msgstr ""
+
+#: src/ctl/spots.tsx:78
+msgid "All modes"
+msgstr ""
+
+#: src/ctl/timecode.tsx:26
+msgid "The station to read (Auto: whichever the tuning hears)"
+msgstr ""
+
+#: src/ctl/timecode.tsx:27
+msgid "Auto"
+msgstr ""
+
+#: src/ctl/timecode.tsx:38
+msgid "Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
+msgstr ""
+
+#: src/ctl/timecode.tsx:41
+msgid "Tune…"
+msgstr ""
+
+#: src/ctl/timecode.tsx:51
+msgid "Clear the minutes"
+msgstr ""
+
+#. time code = the station's slowly keyed time signal; carrier = its unmodulated radio signal; keying = the depth of its on/off or high/low modulation
+#: src/ctl/timecode.tsx:67
+#, placeholders
+msgid "{name} on {carrier}: its 100 Hz time code"
+msgstr ""
+
+#: src/ctl/timecode.tsx:68
+#, placeholders
+msgid "{name} on {carrier}: the carrier at {hz} Hz"
+msgstr ""
+
+#: src/ctl/timecode.tsx:69
+#, placeholders
+msgid "keying {db} dB (weak: a narrow passband and slow AGC help)"
+msgstr ""
+
+#: src/ctl/timecode.tsx:69
+#, placeholders
+msgid "keying {db} dB"
+msgstr ""
+
+#. marker = the position-marker second of the time code; hole = WWV's silent second (no tick); MSF bits A and B = the two data bits sent each second
+#: src/ctl/timecode.tsx:74
+msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)"
+msgstr ""
+
+#: src/ctl/timecode.tsx:87
+msgid "No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more."
+msgstr ""
+
+#: src/ctl/timecode.tsx:95
+msgid "Its checks passed, and its time agrees with an earlier minute's"
+msgstr ""
+
+#: src/ctl/timecode.tsx:95
+msgid "Its checks passed (not yet agreed by another minute)"
+msgstr ""
+
+#: src/ctl/timecode.tsx:95
+msgid "A check failed: a bit read wrong"
+msgstr ""
+
+#: src/ctl/timecode.tsx:98
+msgid "When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error"
+msgstr ""
+
+#: src/fmt.ts:78
+msgid "auto"
+msgstr ""
+
+#: src/main.tsx:108
+msgid "Log in with the receiver's password for any of its receivers."
+msgstr ""
+
+#: src/main.tsx:108
+msgid "This receiver is private."
+msgstr ""
+
+#: src/main.tsx:111
+msgid "Password"
+msgstr ""
+
+#: src/main.tsx:118
+msgid "Listen"
+msgstr ""
+
+#: src/main.tsx:122
+msgid "Stay a visitor"
+msgstr ""
+
+#: src/main.tsx:135
+#, placeholders
+msgid "Session ended: {reason}."
+msgstr ""
+
+#: src/main.tsx:136
+msgid "Reconnect"
+msgstr ""
+
+#: src/main.tsx:143
+msgid "The receiver is in use."
+msgstr ""
+
+#: src/main.tsx:144
+msgid "Try again"
+msgstr ""
+
+#: src/map.ts:19
+msgid "This receiver's FT8/FT4/WSPR skimmers: senders with a known locator"
+msgstr ""
+
+#: src/map.ts:20
+msgid "Browser"
+msgstr ""
+
+#: src/map.ts:20
+msgid "What this browser decoded: FT8/FT4/WSPR and JS8 senders with a known locator, HFDL aircraft positions and ground stations"
+msgstr ""
+
+#: src/map.ts:21
+msgid "Live DX cluster spots (Spothole), from the spotter to the station"
+msgstr ""
+
+#: src/map.ts:268
+msgid "ground station"
+msgstr ""
+
+#: src/map.ts:272
+#, placeholders
+msgid "aircraft {n}"
+msgstr ""
+
+#: src/map.ts:276
+msgid "aircraft"
+msgstr ""
+
+#. kinds of frequency labels on the spectrum: Broadcast = shortwave broadcasters, Utility = non-broadcast services (time signals, maritime, aero), Amateur = amateur radio, Station = the receiver's own list, DX spots = long-distance amateur contacts reported by the DX cluster
+#: src/markers.ts:62
+msgid "Broadcast"
+msgstr ""
+
+#. kinds of frequency labels on the spectrum: Broadcast = shortwave broadcasters, Utility = non-broadcast services (time signals, maritime, aero), Amateur = amateur radio, Station = the receiver's own list, DX spots = long-distance amateur contacts reported by the DX cluster
+#: src/markers.ts:62
+msgid "Shortwave broadcasts on the air now (EiBi schedules)"
+msgstr ""
+
+#: src/markers.ts:63
+msgid "Time signals, maritime, aero, weather fax, beacons"
+msgstr ""
+
+#: src/markers.ts:64
+msgid "Digital-mode dials and calling frequencies of the IARU region"
+msgstr ""
+
+#: src/markers.ts:65
+msgid "This receiver's own list (from its admin)"
+msgstr ""
+
+#: src/markers.ts:66
+msgid "Live DX cluster spots (from Spothole), the latest of each station"
+msgstr ""
+
+#: src/markers.ts:148
+#, placeholders
+msgid "{name} ({service}) {lo}-{hi} kHz: {note}"
+msgstr ""
+
+#: src/markers.ts:149
+#, placeholders
+msgid "{name} ({service}) {lo}-{hi} kHz"
+msgstr ""
+
+#: src/markers.ts:164
+#, placeholders
+msgid "{name} {lo}-{hi} kHz: {use}, {note}"
+msgstr ""
+
+#: src/markers.ts:165
+#, placeholders
+msgid "{name} {lo}-{hi} kHz: {use}"
+msgstr ""
+
+#: src/markers.ts:176
+msgid "narrow-band digital"
+msgstr ""
+
+#: src/markers.ts:177
+msgid "all modes"
+msgstr ""
+
+#: src/markers.ts:178
+msgid "beacons"
+msgstr ""
+
+#: src/markers.ts:179
+msgid "satellite"
+msgstr ""
+
+#: src/markers.ts:189
+#, placeholders
+msgid "{schedule} UTC"
+msgstr ""
+
+#: src/markers.ts:191
+#, placeholders
+msgid "{info}: click to tune"
+msgstr ""
+
+#: src/net.ts:78
+msgid "session ended"
+msgstr ""
+
+#: src/net.ts:87
+#, placeholders
+msgid "reconnecting in {s} s"
+msgstr ""
+
+#: src/privacy.ts:23
+msgid "The receiver's owner can see the addresses of current sessions."
+msgstr ""
+
+#: src/privacy.ts:26
+msgid "Your IP address is used while you are connected, to run your session and to limit the sessions from one address."
+msgstr ""
+
+#: src/privacy.ts:27
+msgid "Your IP address is used while you are connected, to run your session."
+msgstr ""
+
+#: src/privacy.ts:31
+msgid "Your listening minutes are counted per address until the day changes (00:00 UTC), to apply the daily limit."
+msgstr ""
+
+#: src/privacy.ts:32
+msgid "The owner has blocked some addresses; those are kept in the receiver's settings until removed."
+msgstr ""
+
+#: src/privacy.ts:34
+msgid "Failed logins are counted per address for a short while, to slow down password guessing. Logging in sets a cookie that keeps you logged in for 12 hours."
+msgstr ""
+
+#: src/privacy.ts:35
+msgid "A name or callsign you enter is shown to the other listeners. Your settings and frequency memories stay in your browser."
+msgstr ""
+
+#: src/privacy.ts:37
+msgid "Apart from blocked addresses, none of this is written to disk: when the receiver restarts, it is gone. There are no analytics, no tracking and no advertising."
+msgstr ""
+
+#: src/privacy.ts:38
+msgid "None of this is written to disk: when the receiver restarts, it is gone. There are no analytics, no tracking and no advertising."
+msgstr ""
+
+#: src/privacy.ts:40
+msgid "The receiver is reached through a proxy server, which may keep logs of its own."
+msgstr ""
+
+#: src/privacy.ts:43
+msgid "The receiver talks to no outside services."
+msgstr ""
+
+#: src/privacy.ts:44
+#, placeholders
+msgid "The receiver talks to these services, none of which is told anything about you: {list}."
+msgstr ""
+
+#: src/privacy.ts:46
+#, placeholders
+msgid "Questions about your data go to the owner: {contact}."
+msgstr ""
+
+#: src/privacy.ts:46
+msgid "Questions about your data go to the receiver's owner."
+msgstr ""
+
+#: src/privacy.ts:51
+msgid "Some of what can be heard here is not meant for the public: aircraft, ships, utility and private stations. In Finland and many other countries you may listen, but you must not pass on or make use of what such messages say."
+msgstr ""
+
+#: src/prop.ts:58
+msgid "January"
+msgstr ""
+
+#: src/prop.ts:59
+msgid "February"
+msgstr ""
+
+#: src/prop.ts:60
+msgid "March"
+msgstr ""
+
+#: src/prop.ts:61
+msgid "April"
+msgstr ""
+
+#: src/prop.ts:62
+msgid "May"
+msgstr ""
+
+#: src/prop.ts:63
+msgid "June"
+msgstr ""
+
+#: src/prop.ts:64
+msgid "July"
+msgstr ""
+
+#: src/prop.ts:65
+msgid "August"
+msgstr ""
+
+#: src/prop.ts:66
+msgid "September"
+msgstr ""
+
+#: src/prop.ts:67
+msgid "October"
+msgstr ""
+
+#: src/prop.ts:68
+msgid "November"
+msgstr ""
+
+#: src/prop.ts:69
+msgid "December"
+msgstr ""
+
+#: src/prop.ts:93
+#, placeholders
+msgid "{day} {month} {year}"
+msgstr ""
+
+#: src/prop.ts:93
+#, placeholders
+msgid "{month} {year}"
+msgstr ""
+
+#: src/prop.ts:94
+msgid "set by the owner"
+msgstr ""
+
+#: src/prop.ts:94
+msgid "NOAA's prediction"
+msgstr ""
+
+#: src/prop.ts:94
+msgid "built-in table"
+msgstr ""
+
+#. SSN = sunspot number, the solar activity the forecast assumes
+#: src/prop.ts:96
+#, placeholders
+msgid "{when}, sunspot number {ssn} ({src})"
+msgstr ""
+
+#: src/prop.ts:101
+msgid "VOACAP adjusted to the day (hfcast Truecast)"
+msgstr ""
+
+#: src/prop.ts:101
+msgid "VOACAP, the month's median"
+msgstr ""
+
+#. the receiving site's noise level (VOACAP's man-made noise at 3 MHz): remote, rural, residential, noisy
+#: src/prop.ts:105
+#, placeholders
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a remote receiver."
+msgstr ""
+
+#: src/prop.ts:106
+#, placeholders
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a rural receiver."
+msgstr ""
+
+#: src/prop.ts:107
+#, placeholders
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a residential receiver."
+msgstr ""
+
+#: src/prop.ts:108
+#, placeholders
+msgid "{model}; {power} W with simple (isotropic) antennas at both ends, a noisy (industrial) receiver."
+msgstr ""
+
+#. Kp = planetary geomagnetic index (0-9)
+#: src/prop.ts:115
+#, placeholders
+msgid "Geomagnetic storm: Kp reached {kp} in the last 24 hours. The forecast is too optimistic, especially on long and polar paths."
+msgstr ""
+
+#. reliability = VOACAP circuit reliability, % of days the path works; here the forecast has no figure for that hour
+#: src/prop.ts:128
+#, placeholders
+msgid "{path}, {band}, {hour} UTC: no reliability figure for {mode}"
+msgstr ""
+
+#: src/prop.ts:129
+#, placeholders
+msgid "{path}, {band}, {hour} UTC: no reliability figure for {mode}; SNR {snr} dB in 1 Hz"
+msgstr ""
+
+#. SNR = signal-to-noise ratio, in a 1 Hz bandwidth
+#: src/prop.ts:134
+#, placeholders
+msgid "{path}, {band}, {hour} UTC: {mode} gets through on {pct} % of days"
+msgstr ""
+
+#: src/prop.ts:135
+#, placeholders
+msgid "{path}, {band}, {hour} UTC: {mode} gets through on {pct} % of days, SNR {snr} dB in 1 Hz"
+msgstr ""
+
+#. mark = the FSK tone for a 1 bit; upper/lower = in frequency, relative to the space tone
+#: src/rtty.ts:100
+msgid "mark upper"
+msgstr ""
+
+#. mark = the FSK tone for a 1 bit; upper/lower = in frequency, relative to the space tone
+#: src/rtty.ts:100
+msgid "mark lower"
+msgstr ""
+
+#. MSB first = most significant bit sent first; USOS = unshift on space (ITA2 teleprinter case-shift convention)
+#: src/rtty.ts:104
+#, placeholders
+msgid "{charset} MSB first"
+msgstr ""
+
+#: src/rtty.ts:105
+#, placeholders
+msgid "{charset}, no USOS"
+msgstr ""
+
+#. NAVTEX message subject classes (the B2 character of the message header)
+#: src/rtty.ts:172 src/rtty.ts:182
+msgid "navigational warning"
+msgstr ""
+
+#: src/rtty.ts:173
+msgid "meteorological warning"
+msgstr ""
+
+#: src/rtty.ts:174
+msgid "ice report"
+msgstr ""
+
+#: src/rtty.ts:175
+msgid "search and rescue"
+msgstr ""
+
+#: src/rtty.ts:176
+msgid "weather forecast"
+msgstr ""
+
+#: src/rtty.ts:177
+msgid "pilot service"
+msgstr ""
+
+#: src/rtty.ts:181
+msgid "other navaid"
+msgstr ""
+
+#: src/rtty.ts:183
+msgid "test"
+msgstr ""
+
+#: src/rtty.ts:184 src/rtty.ts:185 src/rtty.ts:186 src/rtty.ts:187
+msgid "special service"
+msgstr ""
+
+#: src/rtty.ts:188
+msgid "no message on hand"
+msgstr ""
+
+#. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
+#: src/sigid.ts:35
+msgid "nothing recognisable at this frequency"
+msgstr ""
+
+#: src/sigid.ts:36
+msgid "an unmodulated carrier"
+msgstr ""
+
+#: src/sigid.ts:37
+msgid "Morse"
+msgstr ""
+
+#: src/sigid.ts:38
+msgid "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)"
+msgstr ""
+
+#: src/sigid.ts:39
+msgid "BPSK 31-125 Bd: PSK31, PSK63, PSK125"
+msgstr ""
+
+#: src/sigid.ts:40
+msgid "FT8"
+msgstr ""
+
+#: src/sigid.ts:41
+msgid "FT4"
+msgstr ""
+
+#: src/sigid.ts:42
+msgid "WSPR beacons"
+msgstr ""
+
+#: src/sigid.ts:43
+msgid "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)"
+msgstr ""
+
+#: src/sigid.ts:44
+msgid "2400 Bd PSK modem, 106.7 ms frames (not decoded here)"
+msgstr ""
+
+#: src/sigid.ts:45
+msgid "MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)"
+msgstr ""
+
+#: src/sigid.ts:46
+msgid "slow-scan television"
+msgstr ""
+
+#: src/sigid.ts:47
+msgid "HF fax"
+msgstr ""
+
+#: src/sigid.ts:47
+msgid "weather fax (radiofax)"
+msgstr ""
+
+#: src/sigid.ts:48
+msgid "SSB voice"
+msgstr ""
+
+#: src/sigid.ts:48
+msgid "single-sideband speech"
+msgstr ""
+
+#: src/sigid.ts:49
+msgid "AM broadcast or voice"
+msgstr ""
+
+#: src/sigid.ts:50
+msgid "Interference"
+msgstr ""
+
+#: src/sigid.ts:50
+msgid "local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands"
+msgstr ""
+
+#: src/sigid.ts:51
+msgid "Radar"
+msgstr ""
+
+#: src/sigid.ts:51
+msgid "over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second"
+msgstr ""
+
+#: src/sigid.ts:52
+msgid "aircraft data link, 1800 Bd PSK bursts"
+msgstr ""
+
+#: src/state.ts:164
+msgid "password needed"
+msgstr ""
+
+#: src/state.ts:188
+#, placeholders
+msgid "login failed ({status})"
+msgstr ""
+
+#: src/state.ts:712 src/state.ts:2142
+msgid "nothing was received"
+msgstr ""
+
+#: src/state.ts:722
+#, placeholders
+msgid ", {s} s lost (zeros)"
+msgstr ""
+
+#: src/state.ts:723
+#, placeholders
+msgid "{name} ({s} s{lost})"
+msgstr ""
+
+#: src/state.ts:2142
+msgid "only silence was heard"
+msgstr ""
+
+#: src/state.ts:2152
+#, placeholders
+msgid ", {s} s of silence left out"
+msgstr ""
+
+#: src/state.ts:2153
+msgid "; ended when the audio format changed"
+msgstr ""
+
+#: src/state.ts:2154
+#, placeholders
+msgid "{name} ({s} s{skipped}{ended})"
+msgstr ""
+
+#. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
+#: src/timecode.ts:25
+msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
+msgstr ""
+
+#: src/timecode.ts:26
+msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
+msgstr ""
+
+#: src/timecode.ts:27
+msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
+msgstr ""
+
+#: src/timecode.ts:28
+msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
+msgstr ""
+
+#: src/timecode.ts:29
+msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC"
+msgstr ""
+
+#: src/timecode.ts:71
+#, placeholders
+msgid "no station {name}"
+msgstr ""
+
+#. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
+#: src/timecode.ts:75
+#, placeholders
+msgid "{name}: tune AM to {mhz} MHz"
+msgstr ""
+
+#: src/timecode.ts:76
+#, placeholders
+msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
+msgstr ""
+
+#: src/timecode.ts:79
+msgid "No time station in the passband: pick one to tune to."
+msgstr ""
+
+#: src/view/pane.tsx:65
+#, placeholders
+msgid "Waterfall unavailable: {why}"
+msgstr ""
+
+#: src/view/pane.tsx:429
+#, placeholders
+msgid "{mode} skimmer, dial {khz} kHz{waiting}: click to tune there"
+msgstr ""
+
+#: src/view/pane.tsx:432
+msgid " (waiting for a channel)"
+msgstr ""
+
+#: src/view/pane.tsx:435
+#, placeholders
+msgid "{khz} kHz {mode}"
+msgstr ""
+
+#: src/view/pane.tsx:435
+msgid "click to tune there"
+msgstr ""
+
+#: src/view/pane.tsx:435
+msgid "click to listen along"
+msgstr ""

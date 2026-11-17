@@ -4,6 +4,7 @@
 
 import { useSignal } from "@preact/signals";
 import { useEffect, useRef } from "preact/hooks";
+import { N_, t, tc, tn, tx } from "../i18n.ts";
 import { setFloor, setTop } from "../view/range.ts";
 import { helpOpen } from "./keys.tsx";
 import { infoOpen } from "./info.tsx";
@@ -80,7 +81,7 @@ export function FreqDisplay() {
       <input
         class="freq freq-input"
         autoFocus
-        placeholder="kHz, or 7.074M"
+        placeholder={t("kHz, or 7.074M")}
         onKeyDown={(e) => {
           const el = e.currentTarget;
           if (e.key === "Enter") {
@@ -99,7 +100,7 @@ export function FreqDisplay() {
   const intDigits = text.replace(/\..*/, "").replace(/ /g, "").length;
   let place = 10 ** (intDigits + 2);
   return (
-    <div class="freq" title="Wheel over a digit to step it, click to type" onClick={() => (editing.value = true)}>
+    <div class="freq" title={t("Wheel over a digit to step it, click to type")} onClick={() => (editing.value = true)}>
       {[...text].map((ch, i) => {
         if (ch === " " || ch === ".") return <span key={i} class="sep">{ch === "." ? "." : " "}</span>;
         const p = place;
@@ -129,12 +130,12 @@ export function StepCtl() {
   if (!s) return null;
   const step = stepOf(s.mode);
   return (
-    <div class="group" title="Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it">
+    <div class="group" title={t("Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it")}>
       <button onClick={() => tune(stepTo(s.hz, step, -1))}>◀</button>
       <select value={tuneStep.value} onChange={(e) => setTuneStep(Number(e.currentTarget.value))}>
         {STEPS.map((v) => (
           <option key={v} value={v}>
-            {v === 0 ? `auto (${stepLabel(stepFor(s.mode))})` : stepLabel(v)}
+            {v === 0 ? t("auto ({step})", { step: stepLabel(stepFor(s.mode)) }) : stepLabel(v)}
           </option>
         ))}
       </select>
@@ -144,11 +145,11 @@ export function StepCtl() {
 }
 
 const AM_TITLES: Record<string, string> = {
-  am: "AM, envelope detector",
-  sam: "Synchronous AM: locked to the carrier, both sidebands (less distortion in fading)",
-  sal: "Synchronous AM, lower sideband only (away from interference above)",
-  sar: "Synchronous AM, upper sideband only (away from interference below)",
-  sas: "Synchronous AM stereo: lower sideband left, upper right",
+  am: N_("AM, envelope detector"),
+  sam: N_("Synchronous AM: locked to the carrier, both sidebands (less distortion in fading)"),
+  sal: N_("Synchronous AM, lower sideband only (away from interference above)"),
+  sar: N_("Synchronous AM, upper sideband only (away from interference below)"),
+  sas: N_("Synchronous AM stereo: lower sideband left, upper right"),
 };
 
 export function ModeBar() {
@@ -157,28 +158,28 @@ export function ModeBar() {
   return (
     <div class="group">
       {(["usb", "lsb", "cw"] as Mode[]).map((m) => (
-        <button key={m} class={s?.mode === m ? "on" : ""} onClick={() => setMode(m)} title={`${m.toUpperCase()} (key ${m[0]})`}>
+        <button key={m} class={s?.mode === m ? "on" : ""} onClick={() => setMode(m)} title={t("{mode} (key {key})", { mode: m.toUpperCase(), key: m[0] })}>
           {m.toUpperCase()}
         </button>
       ))}
       <button
         class={am ? "on am" : "am"}
         onClick={cycleAm}
-        title={`${AM_TITLES[am ?? "am"]}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn.`}
+        title={t("{what}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn.", { what: t(AM_TITLES[am ?? "am"]) })}
       >
         {(am ?? "am").toUpperCase()}
       </button>
       <button
         class={s?.mode === "nbfm" ? "on" : ""}
         onClick={() => setMode("nbfm")}
-        title="Narrow-band FM (VHF voice; key f)"
+        title={t("Narrow-band FM (VHF voice; key f)")}
       >
         FM
       </button>
       <button
         class={s?.mode === "iq" ? "on" : ""}
         onClick={() => setMode("iq")}
-        title="I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i"
+        title={t("I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i")}
       >
         IQ
       </button>
@@ -196,14 +197,14 @@ export function Bandwidth() {
       <Drop
         cls="drop-bw"
         label={cur?.label ?? `${((s.hi - s.lo) / 1000).toFixed(1)}k`}
-        title={`Passband: ${s.lo} to ${s.hi} Hz around the dial`}
+        title={t("Passband: {lo} to {hi} Hz around the dial", { lo: s.lo, hi: s.hi })}
         items={presets.map((b) => ({ key: b.label, label: b.label, on: b === cur, pick: () => setPassband(b.lo, b.hi) }))}
       />
       <CodecCtl drop />
       {audioRates.value.includes(24000) && (
         <Drop
           label={`${s.audio_rate / 1000} kS/s`}
-          title="Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)"
+          title={t("Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)")}
           items={[12000, 24000].map((r) => ({ key: String(r), label: `${r / 1000} kS/s`, on: s.audio_rate === r, pick: () => setAudio({ audio_rate: r }) }))}
         />
       )}
@@ -215,10 +216,10 @@ const CODECS: { pref: CodecPref; label: string; title: string }[] = [
   {
     pref: "auto",
     label: "Opus",
-    title: "Opus: 24-48 kbit/s, for slow or metered connections. While a decoder reads the audio, μ-law instead (Opus would cost it weak signals)",
+    title: N_("Opus: 24-48 kbit/s, for slow or metered connections. While a decoder reads the audio, μ-law instead (Opus would cost it weak signals)"),
   },
-  { pref: "mulaw", label: "μ-law", title: "μ-law: 96 kbit/s, as good as PCM for listening and for the decoders" },
-  { pref: "pcm16", label: "PCM", title: "PCM: 192 kbit/s, 16 bits, exactly as the receiver made it" },
+  { pref: "mulaw", label: "μ-law", title: N_("μ-law: 96 kbit/s, as good as PCM for listening and for the decoders") },
+  { pref: "pcm16", label: "PCM", title: N_("PCM: 192 kbit/s, 16 bits, exactly as the receiver made it") },
 ];
 
 /** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM
@@ -232,19 +233,19 @@ export function CodecCtl({ drop = false }: { drop?: boolean }) {
   const title =
     pref === "auto" && now !== "opus"
       ? now === "pcm16"
-        ? "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
-        : "Opus is paused: a decoder reads the audio (μ-law until it closes)"
-      : "How the audio comes";
+        ? t("Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)")
+        : t("Opus is paused: a decoder reads the audio (μ-law until it closes)")
+      : t("How the audio comes");
   const label = (c: (typeof CODECS)[number]) => (c.pref === "auto" && pref === "auto" && now !== "opus" ? `Opus (${now === "pcm16" ? "PCM" : "μ-law"})` : c.label);
   const cur = shown.find((c) => c.pref === pref) ?? shown[0];
   return (
     <>
       {drop ? (
-        <Drop cls="drop-codec" label={label(cur)} title={`${title}. ${cur.title}`} items={shown.map((c) => ({ key: c.pref, label: label(c), title: c.title, on: pref === c.pref, pick: () => setCodecPref(c.pref) }))} />
+        <Drop cls="drop-codec" label={label(cur)} title={t("{what}. {codec}", { what: title, codec: t(cur.title) })} items={shown.map((c) => ({ key: c.pref, label: label(c), title: t(c.title), on: pref === c.pref, pick: () => setCodecPref(c.pref) }))} />
       ) : (
         <span class="seg" title={title}>
           {shown.map((c) => (
-            <button key={c.pref} class={pref === c.pref ? "on" : ""} title={c.title} onClick={() => setCodecPref(c.pref)}>
+            <button key={c.pref} class={pref === c.pref ? "on" : ""} title={t(c.title)} onClick={() => setCodecPref(c.pref)}>
               {label(c)}
             </button>
           ))}
@@ -259,11 +260,11 @@ export function AudioCtl() {
   if (!s) return null;
   return (
     <div class="group">
-      <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title="Automatic gain control (AM: follows the carrier)">
+      <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title={t("Automatic gain control (AM: follows the carrier)")}>
         AGC
       </button>
       {s.agc && (
-        <span class="seg" title={isAm(s.mode) ? "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay" : "AGC recovery: fast, medium, slow, or custom (your own hang time and decay)"}>
+        <span class="seg" title={isAm(s.mode) ? t("AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay") : t("AGC recovery: fast, medium, slow, or custom (your own hang time and decay)")}>
           {(["fast", "medium", "slow", ...(s.agc_hang_ms !== undefined ? ["custom"] : [])] as AgcSpeed[]).map((v) => (
             <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
               {v[0].toUpperCase()}
@@ -273,8 +274,9 @@ export function AudioCtl() {
       )}
       {s.agc && s.agc_speed === "custom" && s.agc_hang_ms !== undefined && s.agc_decay_db_s !== undefined && (
         <>
-          <label title="Hang: how long the gain is held after the signal drops">
-            hang
+          <label title={t("Hang: how long the gain is held after the signal drops")}>
+            {/* i18n: AGC hang = how long the gain is held after the signal drops */}
+            {tc("AGC", "hang")}
             <input
               type="range"
               min={0}
@@ -285,8 +287,9 @@ export function AudioCtl() {
             />
             <span class="num">{(s.agc_hang_ms / 1000).toFixed(2)} s</span>
           </label>
-          <label title="Decay: how fast the gain comes back after the hang (dB a second)">
-            decay
+          <label title={t("Decay: how fast the gain comes back after the hang (dB a second)")}>
+            {/* i18n: AGC decay = how fast the gain comes back after the hang time */}
+            {tc("AGC", "decay")}
             <input
               type="range"
               min={0}
@@ -300,8 +303,9 @@ export function AudioCtl() {
           </label>
         </>
       )}
-      <label title={s.agc ? "Maximum AGC gain" : "Fixed gain"}>
-        {s.agc ? "max" : "gain"}
+      <label title={s.agc ? t("Maximum AGC gain") : t("Fixed gain")}>
+        {/* i18n: slider label: maximum gain of the AGC, or the fixed gain when AGC is off */}
+        {s.agc ? tc("AGC", "max") : tc("AGC", "gain")}
         <input
           type="range"
           min={0}
@@ -315,13 +319,15 @@ export function AudioCtl() {
         <button
           class={stereo.value ? "on" : ""}
           onClick={() => setStereo(!stereo.value)}
-          title="Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
+          title={t("Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall")}
         >
-          Stereo
+          {/* i18n: button: pseudo-stereo, signals spread left and right by their pitch */}
+          {tc("pseudo-stereo", "Stereo")}
         </button>
       )}
-      <button class={muted.value ? "on" : ""} onClick={() => setVolume(volume.value, !muted.value)} title="Mute">
-        {muted.value ? "Muted" : "Vol"}
+      <button class={muted.value ? "on" : ""} onClick={() => setVolume(volume.value, !muted.value)} title={t("Mute")}>
+        {/* i18n: Vol = Volume (short, on a button); Muted = the sound is muted */}
+        {muted.value ? t("Muted") : tc("volume", "Vol")}
       </button>
       <input
         type="range"
@@ -330,7 +336,7 @@ export function AudioCtl() {
         step={0.01}
         value={volume.value}
         onInput={(e) => setVolume(Number(e.currentTarget.value), false)}
-        title="Volume"
+        title={t("Volume")}
       />
     </div>
   );
@@ -352,7 +358,7 @@ export function DspCtl() {
       <button
         class={s.nb > 0 ? "on" : ""}
         onClick={() => setAudio({ nb: s.nb > 0 ? 0 : nbLevel.v })}
-        title="Noise blanker: removes short impulses (ignition, switching noise)"
+        title={t("Noise blanker: removes short impulses (ignition, switching noise)")}
       >
         NB
       </button>
@@ -364,13 +370,13 @@ export function DspCtl() {
           step={0.5}
           value={33 - s.nb}
           onInput={(e) => setAudio({ nb: 33 - Number(e.currentTarget.value) })}
-          title={`Blanker sensitivity: impulses over ${s.nb.toFixed(1)} x the average`}
+          title={t("Blanker sensitivity: impulses over {n} x the average", { n: s.nb.toFixed(1) })}
         />
       )}
       <button
         class={s.nr > 0 ? "on" : ""}
         onClick={() => setAudio({ nr: s.nr > 0 ? 0 : nrLevel.v })}
-        title="Noise reduction: lowers steady background noise"
+        title={t("Noise reduction: lowers steady background noise")}
       >
         NR
       </button>
@@ -382,20 +388,21 @@ export function DspCtl() {
           step={0.05}
           value={s.nr}
           onInput={(e) => setAudio({ nr: Number(e.currentTarget.value) })}
-          title={`Noise reduction strength ${(s.nr * 100).toFixed(0)} %`}
+          title={t("Noise reduction strength {n} %", { n: (s.nr * 100).toFixed(0) })}
         />
       )}
       <button
         class={s.notch ? "on" : ""}
         onClick={() => setAudio({ notch: !s.notch })}
-        title="Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW"
+        title={t("Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW")}
       >
-        Notch
+        {/* i18n: Notch = automatic notch filter removing steady carriers and whistles */}
+        {tc("filter", "Notch")}
       </button>
       <button
         class={s.squelch ? "on" : ""}
         onClick={() => setAudio({ squelch: !s.squelch })}
-        title="Squelch: mute while the signal is below the threshold (marked on the S-meter)"
+        title={t("Squelch: mute while the signal is below the threshold (marked on the S-meter)")}
       >
         SQL
       </button>
@@ -407,7 +414,7 @@ export function DspCtl() {
             max={-20}
             value={s.squelch_db}
             onInput={(e) => setAudio({ squelch_db: Number(e.currentTarget.value) })}
-            title="Squelch threshold"
+            title={t("Squelch threshold")}
           />
           <span class="num">{s.squelch_db.toFixed(0)} dB</span>
         </>
@@ -431,20 +438,22 @@ export function ZoomCtl() {
   const span = wfSpan(r.adc_hz, s.wf.decim);
   return (
     <div class="group">
-      <button onClick={() => zoom(s.wf.decim / 2)} disabled={s.wf.decim <= r.wf_decim_min} title="Zoom out (wheel)">
+      <button onClick={() => zoom(s.wf.decim / 2)} disabled={s.wf.decim <= r.wf_decim_min} title={t("Zoom out (wheel)")}>
         −
       </button>
-      <span class="num" title="Waterfall span">
+      <span class="num" title={t("Waterfall span")}>
         {span >= 1e6 ? `${(span / 1e6).toFixed(2)} MHz` : `${(span / 1e3).toFixed(1)} kHz`}
       </span>
-      <button onClick={() => zoom(s.wf.decim * 2)} disabled={s.wf.decim >= r.wf_decim_max} title="Zoom in (wheel)">
+      <button onClick={() => zoom(s.wf.decim * 2)} disabled={s.wf.decim >= r.wf_decim_max} title={t("Zoom in (wheel)")}>
         +
       </button>
-      <button onClick={() => setView({ ...s.wf, center_hz: s.hz })} title="Centre the waterfall on the dial">
-        Centre
+      <button onClick={() => setView({ ...s.wf, center_hz: s.hz })} title={t("Centre the waterfall on the dial")}>
+        {/* i18n: button: centre the waterfall on the dial frequency */}
+        {tc("waterfall zoom", "Centre")}
       </button>
-      <button onClick={full} title="Whole range">
-        Full
+      <button onClick={full} title={t("Whole range")}>
+        {/* i18n: button: zoom the waterfall out to the receiver's whole range */}
+        {tc("waterfall zoom", "Full")}
       </button>
     </div>
   );
@@ -469,8 +478,8 @@ export function UsersCtl() {
   const others = users.value;
   return (
     <div class="group users-ctl" ref={box}>
-      <button class={open ? "on" : ""} onClick={() => (usersOpen.value = !open)} title="Users and background decoders">
-        Users {others.length + 1}
+      <button class={open ? "on" : ""} onClick={() => (usersOpen.value = !open)} title={t("Users and background decoders")}>
+        {t("Users {n}", { n: others.length + 1 })}
       </button>
       {open && <UserList />}
     </div>
@@ -489,18 +498,18 @@ function UserList() {
       <table>
         <thead>
           <tr>
-            <th>user</th>
+            <th>{t("user")}</th>
             <th class="r">kHz</th>
-            <th>mode</th>
+            <th>{t("mode")}</th>
           </tr>
         </thead>
         <tbody>
           <tr class="me">
-            <td>{myName.value || `user ${sessionId.value ?? "?"}`} (you)</td>
+            <td>{t("{name} (you)", { name: myName.value || t("user {id}", { id: sessionId.value ?? "?" }) })}</td>
             <td class="r">{formatKhz(s.hz)}</td>
             <td>
               {s.mode.toUpperCase()}
-              {!s.share && <span class="dim"> · private</span>}
+              {!s.share && <span class="dim"> · {t("private")}</span>}
             </td>
           </tr>
           {users.value.map((u) => {
@@ -510,13 +519,13 @@ function UserList() {
                 key={u.id}
                 class={f ? "pick" : "dim"}
                 onClick={f ? pick(() => pickUser(u)) : undefined}
-                title={f ? `Click to ${own ? "tune there" : "listen along"}` : u.hz === undefined ? "Their frequency is private" : "Waiting for a receiver"}
+                title={f ? (own ? t("Click to tune there") : t("Click to listen along")) : u.hz === undefined ? t("Their frequency is private") : t("Waiting for a receiver")}
               >
-                <td>{u.name || `user ${u.id}`}</td>
-                <td class="r">{u.hz === undefined ? "private" : formatKhz(u.hz)}</td>
+                <td>{u.name || t("user {id}", { id: u.id })}</td>
+                <td class="r">{u.hz === undefined ? t("private") : formatKhz(u.hz)}</td>
                 <td>
                   {u.mode?.toUpperCase() ?? ""}
-                  {!u.rx && " · waiting"}
+                  {!u.rx && ` · ${t("waiting")}`}
                 </td>
               </tr>
             );
@@ -526,15 +535,15 @@ function UserList() {
           <>
             <thead>
               <tr>
-                <th colSpan={3}>background decoders</th>
+                <th colSpan={3}>{t("background decoders")}</th>
               </tr>
             </thead>
             <tbody>
               {skimmers.value.map((k) => (
-                <tr key={`${k.mode}${k.dial}`} class={k.on ? "pick" : "pick dim"} onClick={pick(() => pickSkimmer(k))} title="Click to tune there">
+                <tr key={`${k.mode}${k.dial}`} class={k.on ? "pick" : "pick dim"} onClick={pick(() => pickSkimmer(k))} title={t("Click to tune there")}>
                   <td>{k.mode}</td>
                   <td class="r">{formatKhz(k.dial)}</td>
-                  <td>USB{!k.on && " · waiting"}</td>
+                  <td>USB{!k.on && ` · ${t("waiting")}`}</td>
                 </tr>
               ))}
             </tbody>
@@ -555,15 +564,13 @@ export function LeaseBanner() {
   if (s?.listen != null) {
     body = l?.granted ? (
       <>
-        <span>Your receiver is ready.</span>
-        <button onClick={() => listenTo(null)}>Switch to it</button>
+        <span>{t("Your receiver is ready.")}</span>
+        <button onClick={() => listenTo(null)}>{t("Switch to it")}</button>
       </>
     ) : (
       <>
-        <span>
-          Listening along with user {s.listen} (waiting for a receiver of your own, #{l?.position ?? "?"} in the queue).
-        </span>
-        <button onClick={() => listenTo(null)}>Stop</button>
+        <span>{t("Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue).", { id: s.listen, pos: l?.position ?? "?" })}</span>
+        <button onClick={() => listenTo(null)}>{t("Stop")}</button>
       </>
     );
   } else if (l && !l.granted) {
@@ -571,13 +578,18 @@ export function LeaseBanner() {
     body = (
       <span>
         {g > 0
-          ? `Visitors without the password share ${g === 1 ? "one receiver, now in use" : `${g} receivers, all in use`}: you are #${l.position} in the queue, waterfall only until then.`
-          : `All receivers are in use: you are #${l.position} in the queue, waterfall only until then.`}
-        {users.value.some(followable) && " Click a green marker on the scale to listen along with another user."}
+          ? tn(
+              "Visitors without the password share one receiver, now in use: you are #{pos} in the queue, waterfall only until then.",
+              "Visitors without the password share {n} receivers, all in use: you are #{pos} in the queue, waterfall only until then.",
+              g,
+              { pos: l.position },
+            )
+          : t("All receivers are in use: you are #{pos} in the queue, waterfall only until then.", { pos: l.position })}
+        {users.value.some(followable) && ` ${t("Click a green marker on the scale to listen along with another user.")}`}
         {g > 0 && (
           <>
             {" "}
-            <button onClick={guestLogin}>Log in</button>
+            <button onClick={guestLogin}>{t("Log in")}</button>
           </>
         )}
       </span>
@@ -595,12 +607,14 @@ export function LeaseBanner() {
 export function ContrastCtl() {
   const r = range.value;
   return (
-    <div class="group" title="Waterfall colour range (dBFS)">
+    <div class="group" title={t("Waterfall colour range (dBFS)")}>
       <button class={r.auto ? "on" : ""} onClick={() => (range.value = { ...r, auto: !r.auto })}>
-        Auto
+        {/* i18n: button: choose the waterfall colour range automatically */}
+        {tc("colour range", "Auto")}
       </button>
       <label>
-        floor
+        {/* i18n: waterfall colour range slider: floor = the level shown as the darkest colour */}
+        {tc("colour range", "floor")}
         <input
           type="range"
           min={-170}
@@ -610,7 +624,8 @@ export function ContrastCtl() {
         />
       </label>
       <label>
-        top
+        {/* i18n: waterfall colour range slider: top = the level shown as the brightest colour */}
+        {tc("colour range", "top")}
         <input
           type="range"
           min={-150}
@@ -631,18 +646,19 @@ export function ContrastCtl() {
 export function LookCtl() {
   return (
     <div class="group look">
-      <button class={peakHold.value ? "on" : ""} onClick={() => setPeakHold(!peakHold.value)} title="Peak hold: the highest level each frequency reached (pink), on the spectrum">
-        Peak
+      <button class={peakHold.value ? "on" : ""} onClick={() => setPeakHold(!peakHold.value)} title={t("Peak hold: the highest level each frequency reached (pink), on the spectrum")}>
+        {/* i18n: Peak = peak hold: the spectrum keeps the highest level each frequency reached */}
+        {tc("spectrum", "Peak")}
       </button>
       {peakHold.value && (
-        <button onClick={() => paneHooks.clearPeak?.()} title="Clear the peaks">
+        <button onClick={() => paneHooks.clearPeak?.()} title={t("Clear the peaks")}>
           ↺
         </button>
       )}
-      <button onClick={() => paneHooks.saveImage?.()} title="Save the spectrum and waterfall as a PNG image (with time marks and the frequency)">
+      <button onClick={() => paneHooks.saveImage?.()} title={t("Save the spectrum and waterfall as a PNG image (with time marks and the frequency)")}>
         PNG
       </button>
-      <button class={afOn.value ? "on" : ""} onClick={() => setAf(!afOn.value)} title="Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)">
+      <button class={afOn.value ? "on" : ""} onClick={() => setAf(!afOn.value)} title={t("Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)")}>
         AF
       </button>
     </div>
@@ -654,7 +670,7 @@ export function AttLamp() {
   const db = status.value?.rf_atten_db;
   if (!db) return null;
   return (
-    <span class="lamp att" title={`RF attenuator in: every signal is ${db} dB weaker (set by the receiver's owner, against overloads)`}>
+    <span class="lamp att" title={t("RF attenuator in: every signal is {db} dB weaker (set by the receiver's owner, against overloads)", { db })}>
       ATT {db}
     </span>
   );
@@ -665,18 +681,19 @@ export function SMeter() {
   const lo = -140;
   const hi = -20;
   const pos = (db: number) => Math.min(1, Math.max(0, (db - lo) / (hi - lo)));
-  const t = pos(p);
+  const lvl = pos(p);
   const over = performance.now() - overloadAt.value < 1000;
   const s = st.value;
   return (
-    <div class="smeter" title="Channel power before AGC (dBFS)">
+    <div class="smeter" title={t("Channel power before AGC (dBFS)")}>
       <div class="bar">
-        <div class="fill" style={{ width: `${(t * 100).toFixed(1)}%` }} />
-        {s?.squelch && <div class="sql" style={{ left: `${(pos(s.squelch_db) * 100).toFixed(1)}%` }} title="Squelch threshold" />}
+        <div class="fill" style={{ width: `${(lvl * 100).toFixed(1)}%` }} />
+        {s?.squelch && <div class="sql" style={{ left: `${(pos(s.squelch_db) * 100).toFixed(1)}%` }} title={t("Squelch threshold")} />}
       </div>
       <span class="num">{p > -199 ? `${p.toFixed(1)} dBFS` : "—"}</span>
-      <span class={over ? "lamp lit" : "lamp"} title="ADC overload">
-        OVL
+      <span class={over ? "lamp lit" : "lamp"} title={t("ADC overload")}>
+        {/* i18n: OVL = overload: the ADC input is too strong */}
+        {t("OVL")}
       </span>
       <AttLamp />
     </div>
@@ -685,6 +702,14 @@ export function SMeter() {
 
 /** A number in the status bar, in a slot `w` characters wide (right
  * aligned unless `left`, tabular digits): the bar doesn't shift as values change. */
+const CONN_TEXT: Record<string, string> = {
+  connecting: N_("connecting"),
+  open: N_("open"),
+  closed: N_("closed"),
+  busy: N_("busy"),
+  ended: N_("ended"),
+};
+
 const N = ({ v, w, left }: { v: string | number; w: number; left?: boolean }) => (
   <span class="sn" style={{ minWidth: `${w}ch`, textAlign: left ? "left" : undefined }}>
     {v}
@@ -698,7 +723,7 @@ export function StatusBar() {
   const r = radio.value;
   return (
     <div class="status">
-      <span class={`conn ${c}`}>{c}</span>
+      <span class={`conn ${c}`}>{t(CONN_TEXT[c])}</span>
       {connNote.value && <span>{connNote.value}</span>}
       {r && (
         <span>
@@ -707,44 +732,55 @@ export function StatusBar() {
       )}
       {latencyMs.value !== null && (
         <span>
-          rtt <N v={latencyMs.value.toFixed(0)} w={4} /> ms
+          {/* i18n: rtt = round-trip time to the receiver, in milliseconds */}
+          {tx("rtt {v} ms", { v: <N v={latencyMs.value.toFixed(0)} w={4} /> })}
         </span>
       )}
       {audioKbps.value !== null && st.value && (
-        <span title="How the audio comes, and its data rate">
-          {st.value.codec ?? "pcm16"} <N v={audioKbps.value.toFixed(0)} w={3} /> kbit/s
+        <span title={t("How the audio comes, and its data rate")}>
+          {tx("{codec} {v} kbit/s", { codec: st.value.codec ?? "pcm16", v: <N v={audioKbps.value.toFixed(0)} w={3} /> })}
         </span>
       )}
       {wfKbps.value !== null && (
-        <span title="The waterfall's data rate">
-          wf <N v={wfKbps.value.toFixed(0)} w={3} /> kbit/s
+        <span title={t("The waterfall's data rate")}>
+          {/* i18n: wf = waterfall */}
+          {tx("wf {v} kbit/s", { v: <N v={wfKbps.value.toFixed(0)} w={3} /> })}
         </span>
       )}
       {audioOn.value && a && (
-        <span title="Audio buffer, underruns, playback trim">
-          buf <N v={a.fillMs.toFixed(0)} w={4} /> ms · <N v={a.underruns} w={3} /> underruns · <N v={((a.trim - 1) * 1e6).toFixed(0)} w={5} /> ppm
+        <span title={t("Audio buffer, underruns, playback trim")}>
+          {/* i18n: buf = audio buffer; underruns = the buffer ran empty and the sound broke up; ppm = parts per million (playback speed trim) */}
+          {tx("buf {fill} ms · {under} underruns · {trim} ppm", {
+            fill: <N v={a.fillMs.toFixed(0)} w={4} />,
+            under: <N v={a.underruns} w={3} />,
+            trim: <N v={((a.trim - 1) * 1e6).toFixed(0)} w={5} />,
+          })}
         </span>
       )}
       {audioOn.value && player.fallback && (
-        <span title="Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay.">
-          http audio (+delay):{" "}
+        <span title={t("Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay.")}>
+          {t("http audio (+delay):")}{" "}
           <a href={`https://${location.host}${location.pathname}${location.search}${location.hash}`}>https</a>
         </span>
       )}
       {s && (
-        <span title="Frames dropped (audio / waterfall), audio gaps">
-          drops <N v={s.audio_drops} w={3} />/<N v={s.wf_drops} w={3} left /> · gaps <N v={audioGaps.value} w={3} />
+        <span title={t("Frames dropped (audio / waterfall), audio gaps")}>
+          {tx("drops {audio}/{wf} · gaps {gaps}", {
+            audio: <N v={s.audio_drops} w={3} />,
+            wf: <N v={s.wf_drops} w={3} left />,
+            gaps: <N v={audioGaps.value} w={3} />,
+          })}
         </span>
       )}
-      {s && !s.hw_rate_ok && <span class="warn">hardware falling behind</span>}
+      {s && !s.hw_rate_ok && <span class="warn">{t("hardware falling behind")}</span>}
       {s && s.clock_ppm !== 0 && (
         <span>
-          clock <N v={s.clock_ppm.toFixed(3)} w={6} /> ppm
+          {tx("clock {v} ppm", { v: <N v={s.clock_ppm.toFixed(3)} w={6} /> })}
         </span>
       )}
       {s && (s.cpu !== undefined || s.temp_c !== undefined) && (
-        <span title="The receiver's CPU load (all cores) and temperature">
-          {s.cpu !== undefined && <span class={s.cpu >= 90 ? "warn" : ""}>cpu <N v={s.cpu.toFixed(0)} w={3} /> %</span>}
+        <span title={t("The receiver's CPU load (all cores) and temperature")}>
+          {s.cpu !== undefined && <span class={s.cpu >= 90 ? "warn" : ""}>{tx("cpu {v} %", { v: <N v={s.cpu.toFixed(0)} w={3} /> })}</span>}
           {s.cpu !== undefined && s.temp_c !== undefined && " · "}
           {s.temp_c !== undefined && <span class={s.temp_c >= 85 ? "warn" : ""}><N v={s.temp_c.toFixed(0)} w={3} /> °C</span>}
         </span>
@@ -758,9 +794,9 @@ export function StatusBar() {
                 e.preventDefault();
                 guestLogin();
               }}
-              title={`You listen as a visitor: ${guestOpen.value} of the receivers are open without the password. Log in for any.`}
+              title={t("You listen as a visitor: {n} of the receivers are open without the password. Log in for any.", { n: guestOpen.value })}
             >
-              visitor: log in
+              {t("visitor: log in")}
             </a>
             {" · "}
           </>
@@ -773,9 +809,9 @@ export function StatusBar() {
             e.preventDefault();
             infoOpen.value = !infoOpen.value;
           }}
-          title="About this receiver: where it is, its antenna, its limits, privacy, licences"
+          title={t("About this receiver: where it is, its antenna, its limits, privacy, licences")}
         >
-          info
+          {t("info")}
         </a>{" "}
         ·{" "}
         <a
@@ -784,11 +820,11 @@ export function StatusBar() {
             e.preventDefault();
             helpOpen.value = true;
           }}
-          title="Keys and mouse (key ?)"
+          title={t("Keys and mouse (key ?)")}
         >
-          keys
+          {t("keys")}
         </a>{" "}
-        · <a href="#/admin">admin</a>
+        · <a href="#/admin">{t("admin")}</a>
       </span>
     </div>
   );

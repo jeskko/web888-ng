@@ -5,6 +5,7 @@
 // the world-atlas package). Mercator, or azimuthal equidistant centred
 // anywhere (drag to turn the globe under it); the greyline on top.
 
+import { t } from "../i18n.ts";
 import { useSignal } from "@preact/signals";
 import {
   geoAzimuthalEquidistant,
@@ -36,8 +37,8 @@ export function MapCtl() {
   const open = mapOpen.value;
   return (
     <div class="group">
-      <button class={open ? "on" : ""} onClick={() => showMap(!open)} title="Map of the stations heard">
-        Map
+      <button class={open ? "on" : ""} onClick={() => showMap(!open)} title={t("Map of the stations heard")}>
+        {t("Map")}
       </button>
     </div>
   );
@@ -196,11 +197,11 @@ function Tooltip({ p, rx }: { p: MapPoint; rx: LatLon | null }) {
     <>
       <b>{p.call}</b> {where}
       <br />
-      {p.band} {p.mode !== p.band && p.mode} {formatKhz(p.hz)} kHz{p.snr !== undefined ? ` · ${p.snr} dB` : ""} · {utcTime(p.t)}
+      {p.band} {p.mode !== p.band && (p.kind ? t(p.mode) : p.mode)} {formatKhz(p.hz)} kHz{p.snr !== undefined ? ` · ${p.snr} dB` : ""} · {utcTime(p.t)}
       {km !== null && (
         <>
           <br />
-          {km} km, {deg}° {p.layer === "dx" ? "from the spotter" : "from here"}
+          {p.layer === "dx" ? t("{km} km, {deg}° from the spotter", { km, deg: deg! }) : t("{km} km, {deg}° from here", { km, deg: deg! })}
         </>
       )}
       <br />
@@ -253,7 +254,7 @@ export function MapPanel() {
     if (!open) return;
     loadWorlds()
       .then((w) => (world.value = w))
-      .catch((e: unknown) => (err.value = `The world map didn't load: ${String(e)}`));
+      .catch((e: unknown) => (err.value = t("The world map didn't load: {msg}", { msg: String(e) })));
     const id = window.setInterval(() => (now.value = Date.now() / 1000), 30_000);
     return () => window.clearInterval(id);
   }, [open]);
@@ -273,12 +274,12 @@ export function MapPanel() {
   const js8 = js8Msgs.value;
   const hfdl = hfdlMsgs.value;
   const gss = hfdlStations.value;
-  const t = now.value;
+  const tick = now.value;
   const rxKey = rx?.join(",");
   const all = useMemo(() => {
     const out: MapPoint[] = [];
     if (!open) return out;
-    const oldest = t - o.age * 60;
+    const oldest = tick - o.age * 60;
     // the book learns from everything heard, whatever is shown
     // uncertain decodes count once their call is heard again
     const heard = heardTimes(sp, rows);
@@ -289,7 +290,7 @@ export function MapPanel() {
     ];
     for (const [id, list] of lists) if (o.layers.includes(id)) out.push(...list);
     return out;
-  }, [open, sp, rows, dxs, js8, hfdl, gss, t, o, rxKey]);
+  }, [open, sp, rows, dxs, js8, hfdl, gss, tick, o, rxKey]);
   const bands = useMemo(() => bandsOf(all), [all]);
   const points = useMemo(() => (o.band ? all.filter((p) => p.band === o.band) : all.slice()).sort((a, b) => a.t - b.t), [all, o.band]);
 
@@ -429,7 +430,7 @@ export function MapPanel() {
           let tw = widths.current.get(p.call);
           if (tw === undefined) widths.current.set(p.call, (tw = g.measureText(p.call).width));
           const r: [number, number, number, number] = [x + 5, y - 6, x + 5 + tw, y + 6];
-          if (taken.some((t) => r[0] < t[2] && r[2] > t[0] && r[1] < t[3] && r[3] > t[1])) continue;
+          if (taken.some((q) => r[0] < q[2] && r[2] > q[0] && r[1] < q[3] && r[3] > q[1])) continue;
           taken.push(r);
           g.fillText(p.call, x + 5, y + 4);
         }
@@ -454,7 +455,7 @@ export function MapPanel() {
       c.dataset.drawMs = (performance.now() - t0).toFixed(1);
     });
     return () => cancelAnimationFrame(frame);
-  }, [open, points, view.value, world.value, moving.value, size.value, o, t, rxKey]);
+  }, [open, points, view.value, world.value, moving.value, size.value, o, tick, rxKey]);
 
   // redraw on resize
   useEffect(() => {
@@ -575,40 +576,41 @@ export function MapPanel() {
   return (
     <aside class="map">
       <div class="spots-bar">
-        <select value={o.proj} onChange={(e) => setMapOpts({ proj: (e.target as HTMLSelectElement).value as MapOpts["proj"] })} title="Projection">
-          <option value="azim">Great circle</option>
-          <option value="globe">Globe</option>
-          <option value="merc">Mercator</option>
+        <select value={o.proj} onChange={(e) => setMapOpts({ proj: (e.target as HTMLSelectElement).value as MapOpts["proj"] })} title={t("Projection")}>
+          {/* i18n: the map projection: azimuthal equidistant, centred on the receiver (great circles from it are straight lines) */}
+          <option value="azim">{t("Great circle")}</option>
+          <option value="globe">{t("Globe")}</option>
+          <option value="merc">{t("Mercator")}</option>
         </select>
         {LAYERS.map((l) => (
-          <label key={l.id} title={l.title}>
-            <input type="checkbox" checked={o.layers.includes(l.id)} onChange={() => toggle(l.id)} /> {l.name}
+          <label key={l.id} title={t(l.title)}>
+            <input type="checkbox" checked={o.layers.includes(l.id)} onChange={() => toggle(l.id)} /> {t(l.name)}
           </label>
         ))}
-        <select value={o.band} onChange={(e) => setMapOpts({ band: (e.target as HTMLSelectElement).value })} title="Band">
-          <option value="">All bands</option>
+        <select value={o.band} onChange={(e) => setMapOpts({ band: (e.target as HTMLSelectElement).value })} title={t("Band")}>
+          <option value="">{t("All bands")}</option>
           {(o.band && !bands.includes(o.band) ? [o.band, ...bands] : bands).map((b) => (
             <option value={b}>{b}</option>
           ))}
         </select>
-        <select value={o.age} onChange={(e) => setMapOpts({ age: Number((e.target as HTMLSelectElement).value) })} title="Heard in the last">
+        <select value={o.age} onChange={(e) => setMapOpts({ age: Number((e.target as HTMLSelectElement).value) })} title={t("Show the stations heard within this time")}>
           {AGES.map((a) => (
-            <option value={a}>{a < 60 ? `${a} min` : `${a / 60} h`}</option>
+            <option value={a}>{a < 60 ? t("{n} min", { n: a }) : t("{n} h", { n: a / 60 })}</option>
           ))}
         </select>
-        <label title="Great circle lines from where each station was heard">
-          <input type="checkbox" checked={o.lines} onChange={(e) => setMapOpts({ lines: e.currentTarget.checked })} /> Lines
+        <label title={t("Great circle lines from where each station was heard")}>
+          <input type="checkbox" checked={o.lines} onChange={(e) => setMapOpts({ lines: e.currentTarget.checked })} /> {t("Lines")}
         </label>
-        <label title="Night and twilight now">
-          <input type="checkbox" checked={o.greyline} onChange={(e) => setMapOpts({ greyline: e.currentTarget.checked })} /> Greyline
+        <label title={t("Night and twilight now")}>
+          <input type="checkbox" checked={o.greyline} onChange={(e) => setMapOpts({ greyline: e.currentTarget.checked })} /> {t("Greyline")}
         </label>
-        <span class="dim num" title="Stations shown">
+        <span class="dim num" title={t("Stations shown")}>
           {points.length}
         </span>
-        <button onClick={home} title="Centre on this receiver">
+        <button onClick={home} title={t("Centre on this receiver")}>
           ⌖
         </button>
-        <button class="close" onClick={() => showMap(false)} title="Close">
+        <button class="close" onClick={() => showMap(false)} title={t("Close")}>
           ✕
         </button>
       </div>
@@ -627,11 +629,11 @@ export function MapPanel() {
         {hv && (
           <div class="map-tip" style={tipPlace(hv.x, hv.y, canvas.current)}>
             <Tooltip p={hv.p} rx={rx} />
-            {picked.value === hv.p && (hv.p.spot || hv.p.tune) && <div class="dim">Tap it again to tune there.</div>}
+            {picked.value === hv.p && (hv.p.spot || hv.p.tune) && <div class="dim">{t("Tap it again to tune there.")}</div>}
           </div>
         )}
         {err.value && <p class="warn map-note">{err.value}</p>}
-        {info && !rx && <p class="dim map-note">This receiver's locator isn't set (admin: station): no lines from it.</p>}
+        {info && !rx && <p class="dim map-note">{t("This receiver's locator isn't set (admin: station): no lines from it.")}</p>}
       </div>
     </aside>
   );

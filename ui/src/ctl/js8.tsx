@@ -5,6 +5,7 @@
 // stations heard.
 
 import { formatKhz } from "../fmt.ts";
+import { t } from "../i18n.ts";
 import { heard, JS8_DIALS, type Js8Msg } from "../js8.ts";
 import { clearJs8, js8Error, js8Msgs, js8On, js8Status, pickJs8, setJs8, st } from "../state.ts";
 
@@ -39,32 +40,38 @@ export function Js8Panel() {
     <aside class="spots js8">
       <div class="spots-bar">
         <strong>JS8</strong>
-        <select value="" onChange={(e) => pickJs8(Number((e.target as HTMLSelectElement).value))} title="JS8Call's usual frequencies (USB)">
+        <select value="" onChange={(e) => pickJs8(Number((e.target as HTMLSelectElement).value))} title={t("JS8Call's usual frequencies (USB)")}>
           <option value="" disabled>
-            Band…
+            {t("Band…")}
           </option>
           {JS8_DIALS.map((x) => (
             <option value={String(x.hz)}>{x.name}</option>
           ))}
         </select>
-        <span class="dim num" title={`Frames decoded, in ${status.periods} periods of the four submodes${status.pending ? `; ${status.pending} waiting` : ""}`}>
+        <span class="dim num" title={
+            status.pending
+              ? // i18n: a period = one receive time slot of a JS8 submode (6 to 30 s); frames = decoded JS8 transmissions
+                t("Frames decoded, in {periods} periods of the four submodes; {pending} waiting", { periods: status.periods, pending: status.pending })
+              : // i18n: a period = one receive time slot of a JS8 submode (6 to 30 s); frames = decoded JS8 transmissions
+                t("Frames decoded, in {periods} periods of the four submodes", { periods: status.periods })
+          }>
           {status.frames}
           {status.pending > 0 ? "…" : ""}
         </span>
-        <button onClick={clearJs8} title="Clear the messages">
-          Clear
+        <button onClick={clearJs8} title={t("Clear the messages")}>
+          {t("Clear")}
         </button>
-        <button class="close" onClick={() => setJs8(false)} title="Stop decoding">
+        <button class="close" onClick={() => setJs8(false)} title={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
         {js8Error.value && <p class="warn">{js8Error.value}</p>}
-        {s && s.mode !== "usb" && <p class="dim">JS8 is decoded in USB.</p>}
-        {!status.clock && <p class="dim">Using this computer's clock: JS8 needs it within a second or so of UTC.</p>}
+        {s && s.mode !== "usb" && <p class="dim">{t("JS8 is decoded in USB.")}</p>}
+        {!status.clock && <p class="dim">{t("Using this computer's clock: JS8 needs it within a second or so of UTC.")}</p>}
         {stations.length > 0 && (
           <p class="js8-heard">
-            <span class="dim">Heard: </span>
+            <span class="dim">{t("Heard:")} </span>
             {stations.map((h) => (
               <span class="num" title={`${hhmmss(h.utc)}, ${h.snr} dB`}>
                 {h.call}{" "}
@@ -73,7 +80,7 @@ export function Js8Panel() {
           </p>
         )}
         {msgs.length === 0 ? (
-          <p class="dim">Nothing yet: JS8's Normal, Fast, Turbo and Slow periods are each decoded as they end, every signal in the passband. Messages of several frames are joined per frequency.</p>
+          <p class="dim">{t("Nothing yet: JS8's Normal, Fast, Turbo and Slow periods are each decoded as they end, every signal in the passband. Messages of several frames are joined per frequency.")}</p>
         ) : (
           msgs.map((m) => <Line m={m} />)
         )}

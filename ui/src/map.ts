@@ -3,6 +3,7 @@
 // skimmers' spots, this browser's own decodes and the live DX spots, each
 // with the receiving end for its line, and the bands' colours.
 
+import { N_, t } from "./i18n.ts";
 import { bandOf } from "./bands.ts";
 import type { DigiRow } from "./digi.ts";
 import { shortName, type HfdlMsg, type HfdlStation } from "./hfdl.ts";
@@ -13,10 +14,11 @@ import type { Tune } from "./markers.ts";
 
 export type Layer = "skimmer" | "browser" | "dx";
 
+/** name and title are N_ marks: translate with t() where shown. */
 export const LAYERS: { id: Layer; name: string; title: string }[] = [
-  { id: "skimmer", name: "Skimmers", title: "This receiver's FT8/FT4/WSPR skimmers: senders with a known locator" },
-  { id: "browser", name: "Browser", title: "What this browser decoded: FT8/FT4/WSPR and JS8 senders with a known locator, HFDL aircraft positions and ground stations" },
-  { id: "dx", name: "DX spots", title: "Live DX cluster spots (Spothole), from the spotter to the station" },
+  { id: "skimmer", name: N_("Skimmers"), title: N_("This receiver's FT8/FT4/WSPR skimmers: senders with a known locator") },
+  { id: "browser", name: N_("Browser"), title: N_("What this browser decoded: FT8/FT4/WSPR and JS8 senders with a known locator, HFDL aircraft positions and ground stations") },
+  { id: "dx", name: N_("DX spots"), title: N_("Live DX cluster spots (Spothole), from the spotter to the station") },
 ];
 
 /** A station on the map. */
@@ -263,15 +265,15 @@ export function hfdlPoints(msgs: HfdlMsg[], stations: HfdlStation[], rx: LatLon 
     const base = { layer: "browser" as const, from: rx, band: "HFDL", t: m.utc, hz: m.rf, snr: m.snr, tune: { hz: m.rf, mode: "usb" as const } };
     if (m.dir !== "down" && m.gs !== null) {
       const s = stations.find((x) => x.id === m.gs);
-      if (s) out.push({ ...base, kind: "ground", call: shortName(s.name), pos: [s.lat, s.lon], mode: "ground station", text: s.name });
+      if (s) out.push({ ...base, kind: "ground", call: shortName(s.name), pos: [s.lat, s.lon], mode: N_("ground station"), text: s.name });
     }
     for (const it of m.items) {
       if (it.lat === null || it.lon === null || Math.abs(it.lat) > 90 || Math.abs(it.lon) > 180) continue;
-      const call = it.flight || it.reg || it.icao || (it.ac !== null ? `aircraft ${it.ac}` : "");
+      const call = it.flight || it.reg || it.icao || (it.ac !== null ? t("aircraft {n}", { n: it.ac }) : "");
       if (!call) continue;
-      const t = reportTime(it.text, m.utc);
-      if (t < oldest) continue;
-      out.push({ ...base, kind: "aircraft", call, pos: [it.lat, it.lon], mode: "aircraft", t, text: it.text });
+      const at = reportTime(it.text, m.utc);
+      if (at < oldest) continue;
+      out.push({ ...base, kind: "aircraft", call, pos: [it.lat, it.lon], mode: N_("aircraft"), t: at, text: it.text });
     }
   }
   return latestEach(out);

@@ -5,6 +5,7 @@
 // unit-tested).
 
 import { formatKhz } from "./fmt.ts";
+import { N_, t } from "./i18n.ts";
 
 export type Tune = "usb" | "lsb" | "cw" | "am" | "nbfm";
 
@@ -55,13 +56,14 @@ export interface BandPlan {
   services: ServiceBand[];
 }
 
+// i18n: kinds of frequency labels on the spectrum: Broadcast = shortwave broadcasters, Utility = non-broadcast services (time signals, maritime, aero), Amateur = amateur radio, Station = the receiver's own list, DX spots = long-distance amateur contacts reported by the DX cluster
 /** The label sources, in the order the Labels control lists them. */
 export const LABEL_SOURCES: { id: string; name: string; title: string }[] = [
-  { id: "eibi", name: "Broadcast", title: "Shortwave broadcasts on the air now (EiBi schedules)" },
-  { id: "utility", name: "Utility", title: "Time signals, maritime, aero, weather fax, beacons" },
-  { id: "amateur", name: "Amateur", title: "Digital-mode dials and calling frequencies of the IARU region" },
-  { id: "own", name: "Station", title: "This receiver's own list (from its admin)" },
-  { id: "dx", name: "DX spots", title: "Live DX cluster spots (from Spothole), the latest of each station" },
+  { id: "eibi", name: N_("Broadcast"), title: N_("Shortwave broadcasts on the air now (EiBi schedules)") },
+  { id: "utility", name: N_("Utility"), title: N_("Time signals, maritime, aero, weather fax, beacons") },
+  { id: "amateur", name: N_("Amateur"), title: N_("Digital-mode dials and calling frequencies of the IARU region") },
+  { id: "own", name: N_("Station"), title: N_("This receiver's own list (from its admin)") },
+  { id: "dx", name: N_("DX spots"), title: N_("Live DX cluster spots (from Spothole), the latest of each station") },
 ];
 
 /** Labels are asked for only when the view is at most this wide (Hz):
@@ -142,7 +144,9 @@ export function ribbon(plan: BandPlan, lo: number, hi: number): RibbonPiece[] {
         hi: s.hi,
         colour: sub ? SUB_COLOUR : (SERVICE_COLOURS[s.service] ?? SERVICE_COLOURS.other),
         label: sub ? "" : s.name,
-        title: `${s.name} (${s.service}) ${khz(s.lo)}-${khz(s.hi)} kHz${s.note ? `: ${s.note}` : ""}`,
+        title: s.note
+          ? t("{name} ({service}) {lo}-{hi} kHz: {note}", { name: s.name, service: s.service, lo: khz(s.lo), hi: khz(s.hi), note: s.note })
+          : t("{name} ({service}) {lo}-{hi} kHz", { name: s.name, service: s.service, lo: khz(s.lo), hi: khz(s.hi) }),
       });
     }
   }
@@ -156,7 +160,9 @@ export function ribbon(plan: BandPlan, lo: number, hi: number): RibbonPiece[] {
         hi: g.hi,
         colour: USE_COLOURS[g.use] ?? USE_COLOURS.other,
         label: i === 0 ? b.name : "",
-        title: `${b.name} ${khz(g.lo)}-${khz(g.hi)} kHz: ${useName(g.use)}${g.note ? `, ${g.note}` : ""}`,
+        title: g.note
+          ? t("{name} {lo}-{hi} kHz: {use}, {note}", { name: b.name, lo: khz(g.lo), hi: khz(g.hi), use: useName(g.use), note: g.note })
+          : t("{name} {lo}-{hi} kHz: {use}", { name: b.name, lo: khz(g.lo), hi: khz(g.hi), use: useName(g.use) }),
       });
     });
   }
@@ -165,18 +171,24 @@ export function ribbon(plan: BandPlan, lo: number, hi: number): RibbonPiece[] {
 
 /** A segment's use in words. */
 export function useName(use: string): string {
-  return (
-    { cw: "CW", digi: "narrow-band digital", all: "all modes", beacon: "beacons", sat: "satellite", fm: "FM" }[use] ?? use
-  );
+  const names: Record<string, string> = {
+    cw: "CW",
+    digi: t("narrow-band digital"),
+    all: t("all modes"),
+    beacon: t("beacons"),
+    sat: t("satellite"),
+    fm: "FM",
+  };
+  return names[use] ?? use;
 }
 
 /** A label's hover text: frequency, name, mode, schedule, note. */
 export function markerTitle(m: FreqMarker): string {
   const kind = m.emission && m.emission !== m.mode ? `${m.emission.toUpperCase()}, ` : "";
   const parts = [`${khz(m.hz)} kHz ${m.name} (${kind}${m.mode.toUpperCase()})`];
-  if (m.schedule) parts.push(`${m.schedule} UTC`);
+  if (m.schedule) parts.push(t("{schedule} UTC", { schedule: m.schedule }));
   if (m.note) parts.push(m.note);
-  return `${parts.join(" · ")}: click to tune`;
+  return t("{info}: click to tune", { info: parts.join(" · ") });
 }
 
 /** Where a click on the label tunes: the dial and the mode. */

@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Frequency formatting, entry and stepping (pure, unit-tested).
 
+import { t } from "./i18n.ts";
 import { isAm, type Mode } from "./proto.ts";
 
 /** "7 074.000" style: kHz with grouped thousands and 3 decimals (Hz). */
@@ -74,7 +75,7 @@ export function snap(hz: number, step: number): number {
 export const STEPS = [0, 1, 10, 50, 100, 500, 1000, 5000, 9000, 10000];
 
 export function stepLabel(step: number): string {
-  return step === 0 ? "auto" : step >= 1000 ? `${step / 1000}k` : `${step}`;
+  return step === 0 ? t("auto") : step >= 1000 ? `${step / 1000}k` : `${step}`;
 }
 
 /** The next multiple of `step` from `hz` in direction `dir` (+1 / -1):

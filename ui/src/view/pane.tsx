@@ -10,6 +10,7 @@
 
 import { useEffect, useRef } from "preact/hooks";
 import { formatKhz, snap, stepTo } from "../fmt.ts";
+import { t } from "../i18n.ts";
 import { wfSpan } from "../proto.ts";
 import { WheelSteps, wheelPx } from "../wheelzoom.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
@@ -61,7 +62,7 @@ export function Pane() {
     try {
       wf = new Waterfall(wc);
     } catch (e) {
-      errRef.current!.textContent = `Waterfall unavailable: ${e instanceof Error ? e.message : e}`;
+      errRef.current!.textContent = t("Waterfall unavailable: {why}", { why: e instanceof Error ? e.message : String(e) });
     }
     const spec = new Spectrum(sc);
     spec.peakOn = peakHold.value;
@@ -425,9 +426,13 @@ export function Pane() {
         const rp = k || m || p || l ? null : ribbonAt(e);
         const own = lease.value?.granted;
         sc.title = k
-          ? `${k.mode} skimmer, dial ${formatKhz(k.dial)} kHz${k.on ? "" : " (waiting for a channel)"}: click to tune there`
+          ? t("{mode} skimmer, dial {khz} kHz{waiting}: click to tune there", {
+              mode: k.mode,
+              khz: formatKhz(k.dial),
+              waiting: k.on ? "" : t(" (waiting for a channel)"),
+            })
           : m
-            ? `${m.name ? `${m.name}: ` : ""}${formatKhz(m.hz)} kHz ${m.mode.toUpperCase()}: click to ${own ? "tune there" : "listen along"}`
+            ? `${m.name ? `${m.name}: ` : ""}${t("{khz} kHz {mode}", { khz: formatKhz(m.hz), mode: m.mode.toUpperCase() })}: ${own ? t("click to tune there") : t("click to listen along")}`
             : p
               ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
               : l

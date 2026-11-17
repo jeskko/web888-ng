@@ -7,6 +7,7 @@ import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../state.ts";
 import { Licences } from "./licences.tsx";
+import { N_, t, tn } from "../i18n.ts";
 import { privacyText, RECEPTION_NOTICE, type Privacy } from "../privacy.ts";
 
 export const infoOpen = signal(location.hash === "#info");
@@ -34,15 +35,22 @@ interface Info {
   };
 }
 
-const minutes = (m: number) => (m % 60 === 0 && m >= 60 ? `${m / 60} h` : `${m} min`);
+// i18n: h = hours, min = minutes (units)
+const minutes = (m: number) => (m % 60 === 0 && m >= 60 ? t("{n} h", { n: m / 60 }) : t("{n} min", { n: m }));
 
 /** The limits, in sentences (none: nothing to say). */
 export function rulesText(r: Info["rules"]): string[] {
-  const out = [`${r.receivers} receivers${r.password ? (r.open_receivers > 0 ? `, ${r.open_receivers} of them open without the password` : ", with the password") : ""}.`];
-  if (r.per_ip > 0) out.push(`At most ${r.per_ip} session${r.per_ip === 1 ? "" : "s"} at a time from one address.`);
-  if (r.session_minutes > 0) out.push(`A session lasts at most ${minutes(r.session_minutes)}.`);
-  if (r.idle_minutes > 0) out.push(`A session without activity ends after ${minutes(r.idle_minutes)}.`);
-  if (r.daily_minutes > 0) out.push(`${minutes(r.daily_minutes)} of listening a day from one address (the day changes at 00:00 UTC).`);
+  const first =
+    r.password && r.open_receivers > 0
+      ? t("{n} receivers, {open} of them open without the password.", { n: r.receivers, open: r.open_receivers })
+      : r.password
+        ? t("{n} receivers, with the password.", { n: r.receivers })
+        : t("{n} receivers.", { n: r.receivers });
+  const out = [first];
+  if (r.per_ip > 0) out.push(tn("At most {n} session at a time from one address.", "At most {n} sessions at a time from one address.", r.per_ip));
+  if (r.session_minutes > 0) out.push(t("A session lasts at most {time}.", { time: minutes(r.session_minutes) }));
+  if (r.idle_minutes > 0) out.push(t("A session without activity ends after {time}.", { time: minutes(r.idle_minutes) }));
+  if (r.daily_minutes > 0) out.push(t("{time} of listening a day from one address (the day changes at 00:00 UTC).", { time: minutes(r.daily_minutes) }));
   return out;
 }
 
@@ -50,25 +58,25 @@ function Body({ i }: { i: Info }) {
   const station = [i.callsign, i.locator].filter(Boolean).join(" · ");
   return (
     <>
-      <h3>{i.name || "web888d receiver"}</h3>
+      <h3>{i.name || t("web888d receiver")}</h3>
       {i.location && <p class="info-where">{i.location}</p>}
-      {i.photo && <img class="info-photo" src={api("api/info/photo")} alt="The receiver's photo" />}
+      {i.photo && <img class="info-photo" src={api("api/info/photo")} alt={t("The receiver's photo")} />}
       <dl class="info-facts">
         {station && (
           <>
-            <dt>Station</dt>
+            <dt>{t("Station")}</dt>
             <dd>{station}</dd>
           </>
         )}
         {i.antenna && (
           <>
-            <dt>Antenna</dt>
+            <dt>{t("Antenna")}</dt>
             <dd>{i.antenna}</dd>
           </>
         )}
         {i.contact && (
           <>
-            <dt>Contact</dt>
+            <dt>{t("Contact")}</dt>
             <dd>{i.contact}</dd>
           </>
         )}
@@ -81,17 +89,17 @@ function Body({ i }: { i: Info }) {
             {p.trim()}
           </p>
         ))}
-      <h4>For listeners</h4>
+      <h4>{t("For listeners")}</h4>
       <ul class="info-rules">
-        {rulesText(i.rules).map((t) => (
-          <li key={t}>{t}</li>
+        {rulesText(i.rules).map((x) => (
+          <li key={x}>{x}</li>
         ))}
-        {i.reception_notice && <li>{RECEPTION_NOTICE}</li>}
+        {i.reception_notice && <li>{t(RECEPTION_NOTICE)}</li>}
       </ul>
       <details class="info-privacy">
-        <summary>Privacy</summary>
-        {privacyText(i.privacy).map((t) => (
-          <p key={t}>{t}</p>
+        <summary>{t("Privacy")}</summary>
+        {privacyText(i.privacy).map((x) => (
+          <p key={x}>{x}</p>
         ))}
         {i.privacy.text
           .split(/\n\s*\n/)
@@ -102,7 +110,7 @@ function Body({ i }: { i: Info }) {
             </p>
           ))}
       </details>
-      <p class="dim">{i.server}: open-source receiver software (web888-ng).</p>
+      <p class="dim">{t("{server}: open-source receiver software (web888-ng).", { server: i.server })}</p>
     </>
   );
 }
@@ -119,22 +127,22 @@ export function InfoPanel() {
     fetch(api("api/info"))
       .then((r) => (r.ok ? (r.json() as Promise<Info>) : Promise.reject(new Error(`${r.status}`))))
       .then(setInfo)
-      .catch((e: Error) => setErr(`The info page didn't load (${e.message}).`));
+      .catch((e: Error) => setErr(t("The info page didn't load ({msg}).", { msg: e.message })));
     const key = (e: KeyboardEvent) => e.key === "Escape" && (infoOpen.value = false);
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
   }, [open]);
   if (!open) return null;
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label="About this receiver" onClick={(e) => e.target === e.currentTarget && (infoOpen.value = false)}>
+    <div class="overlay keyhelp" role="dialog" aria-label={t("About this receiver")} onClick={(e) => e.target === e.currentTarget && (infoOpen.value = false)}>
       <div class="keyhelp-box info-box">
-        <button class="info-x" onClick={() => (infoOpen.value = false)} title="Close (Escape)">
+        <button class="info-x" onClick={() => (infoOpen.value = false)} title={t("Close (Escape)")}>
           ✕
         </button>
-        {!info ? <p class="dim">{err || "Loading…"}</p> : lic ? <Licences server={info.server} /> : <Body i={info} />}
+        {!info ? <p class="dim">{err || t("Loading…")}</p> : lic ? <Licences server={info.server} /> : <Body i={info} />}
         {info && (
           <p class="info-foot">
-            <button onClick={() => setLic(!lic)}>{lic ? "← About this receiver" : "Licences and credits"}</button>
+            <button onClick={() => setLic(!lic)}>{lic ? t("← About this receiver") : t("Licences and credits")}</button>
           </p>
         )}
       </div>
@@ -146,8 +154,8 @@ export function InfoPanel() {
 export function InfoCtl() {
   return (
     <div class="group">
-      <button class={infoOpen.value ? "on" : ""} onClick={() => (infoOpen.value = !infoOpen.value)} title="About this receiver: where it is, its antenna, its limits">
-        Info
+      <button class={infoOpen.value ? "on" : ""} onClick={() => (infoOpen.value = !infoOpen.value)} title={t("About this receiver: where it is, its antenna, its limits")}>
+        {t("Info")}
       </button>
     </div>
   );

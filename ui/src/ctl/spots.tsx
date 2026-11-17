@@ -5,6 +5,7 @@
 
 import { useSignal } from "@preact/signals";
 import { formatKhz } from "../fmt.ts";
+import { N_, t } from "../i18n.ts";
 import { choices, filterRows, spotRows, utcTime, type SpotRow, type SpotSource } from "../spots.ts";
 import { dxAvail, mapDx, pickDxSpot, pickSpot, setSpotsSrc, showSpots, spots, spotsAvail, spotsOpen, spotsSrcNow } from "../state.ts";
 
@@ -12,19 +13,19 @@ import { dxAvail, mapDx, pickDxSpot, pickSpot, setSpotsSrc, showSpots, spots, sp
 const ROWS = 400;
 
 const SOURCE_NAMES: [SpotSource, string][] = [
-  ["skim", "Skimmers"],
-  ["dx", "DX spots"],
-  ["both", "Both"],
+  ["skim", N_("Skimmers")],
+  ["dx", N_("DX spots")],
+  ["both", N_("Both")],
 ];
 
 export function SpotsCtl() {
   if (!spotsAvail.value && !dxAvail.value) return null;
   const open = spotsOpen.value;
-  const what = spotsAvail.value ? (dxAvail.value ? "Decodes of this receiver's skimmers and live DX spots" : "Decodes of this receiver's skimmers") : "Live DX spots";
+  const what = spotsAvail.value ? (dxAvail.value ? t("Decodes of this receiver's skimmers and live DX spots") : t("Decodes of this receiver's skimmers")) : t("Live DX spots");
   return (
     <div class="group">
       <button class={open ? "on" : ""} onClick={() => showSpots(!open)} title={what}>
-        Spots
+        {t("Spots")}
       </button>
     </div>
   );
@@ -33,7 +34,12 @@ export function SpotsCtl() {
 const pick = (r: SpotRow) => (r.spot ? pickSpot(r.spot) : r.dx && pickDxSpot(r.dx));
 
 const rowTitle = (r: SpotRow) =>
-  r.spot ? `${r.band} ${r.mode}, DT ${r.spot.dt} s: click to tune` : `${r.band} ${r.mode} DX spot${r.dx?.de ? ` by ${r.dx.de}` : ""}: click to tune`;
+  r.spot
+    ? // i18n: DT = time offset of the decode from the slot start, in seconds
+      t("{band} {mode}, DT {dt} s: click to tune", { band: r.band, mode: r.mode, dt: r.spot.dt })
+    : r.dx?.de
+      ? t("{band} {mode} DX spot by {de}: click to tune", { band: r.band, mode: r.mode, de: r.dx.de })
+      : t("{band} {mode} DX spot: click to tune", { band: r.band, mode: r.mode });
 
 export function SpotPanel() {
   const band = useSignal("");
@@ -52,27 +58,27 @@ export function SpotPanel() {
     </select>
   );
   const empty = all.length
-    ? "No spots match."
+    ? t("No spots match.")
     : src === "skim"
-      ? "No spots yet: the skimmers decode every 15 s."
+      ? t("No spots yet: the skimmers decode every 15 s.")
       : src === "dx"
-        ? "No DX spots in this receiver's range yet."
-        : "No spots yet.";
+        ? t("No DX spots in this receiver's range yet.")
+        : t("No spots yet.");
   return (
     <aside class="spots">
       <div class="spots-bar">
         {spotsAvail.value && dxAvail.value && (
-          <select value={src} onChange={(e) => setSpotsSrc((e.target as HTMLSelectElement).value as SpotSource)} title="Which spots the list shows">
+          <select value={src} onChange={(e) => setSpotsSrc((e.target as HTMLSelectElement).value as SpotSource)} title={t("Which spots the list shows")}>
             {SOURCE_NAMES.map(([id, name]) => (
-              <option value={id}>{name}</option>
+              <option value={id}>{t(name)}</option>
             ))}
           </select>
         )}
-        {select(band, choices(all, "band"), "All bands")}
-        {select(mode, choices(all, "mode"), "All modes")}
-        <input type="text" placeholder="Call or text" value={text.value} onInput={(e) => (text.value = (e.target as HTMLInputElement).value)} />
+        {select(band, choices(all, "band"), t("All bands"))}
+        {select(mode, choices(all, "mode"), t("All modes"))}
+        <input type="text" placeholder={t("Call or text")} value={text.value} onInput={(e) => (text.value = (e.target as HTMLInputElement).value)} />
         <span class="dim num">{list.length}</span>
-        <button class="close" onClick={() => showSpots(false)} title="Close">
+        <button class="close" onClick={() => showSpots(false)} title={t("Close")}>
           ✕
         </button>
       </div>
@@ -85,8 +91,8 @@ export function SpotPanel() {
               <tr>
                 <th>UTC</th>
                 <th class="r">kHz</th>
-                <th class="r">{src === "dx" ? "Mode" : "dB"}</th>
-                <th>{src === "dx" ? "Station" : "Message"}</th>
+                <th class="r">{src === "dx" ? t("Mode") : "dB"}</th>
+                <th>{src === "dx" ? t("Station") : t("Message")}</th>
               </tr>
             </thead>
             <tbody>

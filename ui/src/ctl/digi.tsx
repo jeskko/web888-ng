@@ -8,6 +8,7 @@
 import { useSignal } from "@preact/signals";
 import { MODES, type DigiMode } from "../digi.ts";
 import { formatKhz } from "../fmt.ts";
+import { t, tn } from "../i18n.ts";
 import { utcTime } from "../spots.ts";
 import { clearDigi, digiDeep, digiError, digiMode, digiOn, digiRows, digiStatus, pickDigi, setDigi, setDigiDeep, setDigiMode, st } from "../state.ts";
 
@@ -18,7 +19,7 @@ export function DigiCtl() {
   const on = digiOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setDigi(!on)} title="Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)">
+      <button class={on ? "on" : ""} onClick={() => setDigi(!on)} title={t("Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)")}>
         FT8/FT4/WSPR
       </button>
     </div>
@@ -29,19 +30,24 @@ function StatusLine() {
   const d = digiStatus.value;
   const s = st.value;
   const mode = MODES[digiMode.value];
-  if (s && s.mode !== "usb") return <p class="dim">{mode.label} is decoded in USB.</p>;
+  if (s && s.mode !== "usb") return <p class="dim">{t("{mode} is decoded in USB.", { mode: mode.label })}</p>;
   const parts: string[] = [];
   if (d.last) {
     const ms = d.last.ms < 1000 ? `${Math.round(d.last.ms)} ms` : `${(d.last.ms / 1000).toFixed(1)} s`;
-    parts.push(`${utcTime(d.last.start)}: ${d.last.n} decode${d.last.n === 1 ? "" : "s"} in ${ms}${d.last.cut ? " (cut short)" : ""}`);
+    // i18n: a decode = one successfully decoded message; cut short = the decoder stopped early to keep up
+    const line = d.last.cut
+      ? tn("{time}: {n} decode in {ms} (cut short)", "{time}: {n} decodes in {ms} (cut short)", d.last.n, { time: utcTime(d.last.start), ms })
+      : tn("{time}: {n} decode in {ms}", "{time}: {n} decodes in {ms}", d.last.n, { time: utcTime(d.last.start), ms });
+    parts.push(line);
   }
-  if (d.pending > 0) parts.push("decoding…");
-  else if (d.next !== null) parts.push(`next slot ${utcTime(d.next)}`);
-  else parts.push("waiting for audio");
+  if (d.pending > 0) parts.push(t("decoding…"));
+  else if (d.next !== null) parts.push(t("next slot {time}", { time: utcTime(d.next) }));
+  else parts.push(t("waiting for audio"));
   return (
-    <p class="dim digi-status" title={d.clock ? "Slots on the receiver's clock" : "Slots on this computer's clock (the receiver's isn't known yet)"}>
+    <p class="dim digi-status" // i18n: slot = the fixed 15 s (FT8), 7.5 s (FT4) or 2 min (WSPR) time period in which one transmission is sent and decoded
+      title={d.clock ? t("Slots on the receiver's clock") : t("Slots on this computer's clock (the receiver's isn't known yet)")}>
       {parts.join(" · ")}
-      {!d.clock && " · local clock"}
+      {!d.clock && ` · ${t("local clock")}`}
     </p>
   );
 }
@@ -59,14 +65,14 @@ export function DigiPanel() {
   return (
     <aside class="spots digi">
       <div class="spots-bar">
-        <select value={mode} onChange={(e) => setDigiMode((e.target as HTMLSelectElement).value as DigiMode)} title="Mode">
+        <select value={mode} onChange={(e) => setDigiMode((e.target as HTMLSelectElement).value as DigiMode)} title={t("Mode")}>
           {(Object.keys(MODES) as DigiMode[]).map((k) => (
             <option value={k}>{MODES[k].label}</option>
           ))}
         </select>
-        <select value={dial ? String(dial.hz) : ""} onChange={(e) => pickDigi(Number((e.target as HTMLSelectElement).value))} title={`Common ${m.label} dial frequencies (USB)`}>
+        <select value={dial ? String(dial.hz) : ""} onChange={(e) => pickDigi(Number((e.target as HTMLSelectElement).value))} title={t("Common {mode} dial frequencies (USB)", { mode: m.label })}>
           <option value="" disabled>
-            Dial…
+            {t("Dial…")}
           </option>
           {m.dials.map((d) => (
             <option value={String(d.hz)}>
@@ -74,15 +80,16 @@ export function DigiPanel() {
             </option>
           ))}
         </select>
-        <label title="A deeper search: a few more decodes for two to four times the CPU">
-          <input type="checkbox" checked={digiDeep.value} onChange={(e) => setDigiDeep((e.target as HTMLInputElement).checked)} /> Deep
+        // i18n: Deep = a slower, deeper decoder search that finds a few more weak messages
+        <label title={t("A deeper search: a few more decodes for two to four times the CPU")}>
+          <input type="checkbox" checked={digiDeep.value} onChange={(e) => setDigiDeep((e.target as HTMLInputElement).checked)} /> {t("Deep")}
         </label>
-        <input type="text" placeholder="Call or text" value={text.value} onInput={(e) => (text.value = (e.target as HTMLInputElement).value)} />
+        <input type="text" placeholder={t("Call or text")} value={text.value} onInput={(e) => (text.value = (e.target as HTMLInputElement).value)} />
         <span class="dim num">{rows.length}</span>
-        <button onClick={clearDigi} title="Clear the list">
-          Clear
+        <button onClick={clearDigi} title={t("Clear the list")}>
+          {t("Clear")}
         </button>
-        <button class="close" onClick={() => setDigi(false)} title="Stop decoding">
+        <button class="close" onClick={() => setDigi(false)} title={t("Stop decoding")}>
           ✕
         </button>
       </div>
@@ -92,8 +99,14 @@ export function DigiPanel() {
         {rows.length === 0 ? (
           <p class="dim">
             {digiRows.value.length
-              ? "No decodes match."
-              : `Decodes show after each ${m.period === 120 ? "2-minute" : `${m.period} s`} slot, from the first one heard whole.${dial ? "" : ` Pick a ${m.label} dial frequency above, or tune to one in USB.`}`}
+              ? t("No decodes match.")
+              : m.period === 120
+                ? dial
+                  ? t("Decodes show after each 2-minute slot, from the first one heard whole.")
+                  : t("Decodes show after each 2-minute slot, from the first one heard whole. Pick a {mode} dial frequency above, or tune to one in USB.", { mode: m.label })
+                : dial
+                  ? t("Decodes show after each {period} s slot, from the first one heard whole.", { period: m.period })
+                  : t("Decodes show after each {period} s slot, from the first one heard whole. Pick a {mode} dial frequency above, or tune to one in USB.", { period: m.period, mode: m.label })}
           </p>
         ) : (
           <table>
@@ -101,10 +114,12 @@ export function DigiPanel() {
               <tr>
                 <th>UTC</th>
                 <th class="r">dB</th>
+                {/* i18n: DT = time offset of the signal from the slot start, seconds */}
                 <th class="r">DT</th>
                 <th class="r">kHz</th>
-                {wspr && <th class="r">Drift</th>}
-                <th>Message</th>
+                {/* i18n: Drift = how far the WSPR signal's frequency drifted during the transmission, Hz per minute */}
+                {wspr && <th class="r">{t("Drift")}</th>}
+                <th>{t("Message")}</th>
               </tr>
             </thead>
             <tbody>

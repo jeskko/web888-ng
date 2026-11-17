@@ -5,6 +5,7 @@
 // station's time, UTC, whether its checks passed and agreed with an
 // earlier minute, and when it was heard by the server's clock.
 
+import { t } from "../i18n.ts";
 import { TC_STATIONS, utcText } from "../timecode.ts";
 import { clearTc, pickTc, setTc, setTcWant, tcError, tcLevel, tcMinutes, tcNow, tcOn, tcSeconds, tcWant } from "../state.ts";
 
@@ -21,9 +22,9 @@ export function TcPanel() {
   return (
     <aside class="spots tc">
       <div class="spots-bar">
-        <strong>Time</strong>
-        <select value={tcWant.value} onChange={(e) => setTcWant((e.target as HTMLSelectElement).value)} title="The station to read (Auto: whichever the tuning hears)">
-          <option value="auto">Auto</option>
+        <strong>{t("Time")}</strong>
+        <select value={tcWant.value} onChange={(e) => setTcWant((e.target as HTMLSelectElement).value)} title={t("The station to read (Auto: whichever the tuning hears)")}>
+          <option value="auto">{t("Auto")}</option>
           {TC_STATIONS.map((x) => (
             <option value={x.name}>{x.name}</option>
           ))}
@@ -34,10 +35,10 @@ export function TcPanel() {
             const [n, c] = (e.target as HTMLSelectElement).value.split("|");
             pickTc(n, Number(c));
           }}
-          title="Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
+          title={t("Tune to a station (USB with its carrier at 1 kHz; AM on WWV)")}
         >
           <option value="" disabled>
-            Tune…
+            {t("Tune…")}
           </option>
           {TC_STATIONS.flatMap((x) =>
             x.carriers.map((c) => (
@@ -47,10 +48,10 @@ export function TcPanel() {
             )),
           )}
         </select>
-        <button onClick={clearTc} title="Clear the minutes">
-          Clear
+        <button onClick={clearTc} title={t("Clear the minutes")}>
+          {t("Clear")}
         </button>
-        <button class="close" onClick={() => setTc(false)} title="Stop">
+        <button class="close" onClick={() => setTc(false)} title={t("Stop")}>
           ✕
         </button>
       </div>
@@ -60,12 +61,17 @@ export function TcPanel() {
           plan.error && <p class="dim">{plan.error}</p>
         ) : (
           <>
-            <p class="dim" title={plan.station.about}>
-              {plan.station.name} on {carrierText(plan.carrier)}: {plan.station.am ? "its 100 Hz time code" : `the carrier at ${Math.round(plan.tone)} Hz`}
-              {lv !== null && ` · keying ${lv.toFixed(0)} dB`}
-              {lv !== null && lv < 6 && " (weak: a narrow passband and slow AGC help)"}
+            <p class="dim" title={t(plan.station.about)}>
+              {/* i18n: time code = the station's slowly keyed time signal; carrier = its unmodulated radio signal; keying = the depth of its on/off or high/low modulation */}
+              {plan.station.am
+                ? t("{name} on {carrier}: its 100 Hz time code", { name: plan.station.name, carrier: carrierText(plan.carrier) })
+                : t("{name} on {carrier}: the carrier at {hz} Hz", { name: plan.station.name, carrier: carrierText(plan.carrier), hz: Math.round(plan.tone) })}
+              {lv !== null && ` · ${lv < 6 ? t("keying {db} dB (weak: a narrow passband and slow AGC help)", { db: lv.toFixed(0) }) : t("keying {db} dB", { db: lv.toFixed(0) })}`}
             </p>
-            <pre class="tc-secs" title="This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)">
+            <pre
+              class="tc-secs"
+              // i18n: marker = the position-marker second of the time code; hole = WWV's silent second (no tick); MSF bits A and B = the two data bits sent each second
+              title={t("This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)")}>
               {Array.from({ length: Math.ceil(Math.max(secs.length, 1) / 10) }, (_, g) => (
                 <span>
                   {g > 0 ? " " : ""}
@@ -78,7 +84,7 @@ export function TcPanel() {
           </>
         )}
         {mins.length === 0 ? (
-          <p class="dim">No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more.</p>
+          <p class="dim">{t("No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more.")}</p>
         ) : (
           <table class="tc-min">
             <tbody>
@@ -86,10 +92,10 @@ export function TcPanel() {
                 <tr class={m.confirmed ? "" : "dim"}>
                   <td class="num">{m.local}</td>
                   <td class="num">{utcText(m.utc)} UTC</td>
-                  <td title={m.confirmed ? "Its checks passed, and its time agrees with an earlier minute's" : m.ok ? "Its checks passed (not yet agreed by another minute)" : "A check failed: a bit read wrong"}>
+                  <td title={m.confirmed ? t("Its checks passed, and its time agrees with an earlier minute's") : m.ok ? t("Its checks passed (not yet agreed by another minute)") : t("A check failed: a bit read wrong")}>
                     {m.confirmed ? "✓✓" : m.ok ? "✓" : "✗"}
                   </td>
-                  <td class="num" title="When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error">
+                  <td class="num" title={t("When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error")}>
                     {m.late === null ? "" : `${m.late >= 0 ? "+" : ""}${Math.round(m.late * 1000)} ms`}
                   </td>
                   <td class="dim">

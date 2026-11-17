@@ -4,6 +4,7 @@
 // passband with its speed, level and text as it settles.
 
 import { formatKhz } from "../fmt.ts";
+import { t } from "../i18n.ts";
 import { audioBand } from "../cw.ts";
 import { clearCw, cwError, cwNeural, cwOn, cwSignals, cwWide, pickCw, setCw, setCwNeural, setCwWide, st, WIDE_HALF, wideAvail, wideCentre } from "../state.ts";
 
@@ -14,7 +15,7 @@ export function CwCtl() {
   const on = cwOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setCw(!on)} title="Decode CW (Morse) from this receiver's audio, in this browser: every keyed signal in the passband">
+      <button class={on ? "on" : ""} onClick={() => setCw(!on)} title={t("Decode CW (Morse) from this receiver's audio, in this browser: every keyed signal in the passband")}>
         CW
       </button>
     </div>
@@ -32,30 +33,37 @@ export function CwPanel() {
         <strong>CW</strong>
         <span class="dim num">{sigs.filter((x) => x.active).length}</span>
         {wideAvail.value && (
-          <button class={cwWide.value ? "on" : ""} onClick={() => setCwWide(!cwWide.value)} title="Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband">
-            Wide
+          <button
+            class={cwWide.value ? "on" : ""}
+            onClick={() => setCwWide(!cwWide.value)}
+            // i18n: Wide = skim a 40 kHz slice of spectrum (a channelizer bin of the receiver's filter bank) instead of the narrow audio passband
+            title={t("Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband")}
+          >
+            {/* i18n: Wide = skim a 40 kHz slice of spectrum (a channelizer bin) instead of the narrow audio passband */}
+            {t("Wide")}
           </button>
         )}
-        <button class={cwNeural.value ? "on" : ""} onClick={() => setCwNeural(!cwNeural.value)} title="Text from the neural decoder (trained on synthetic CW; reads weaker and rougher signals) instead of the classical one">
-          Neural
+        {/* i18n: Neural = a neural-network Morse decoder, as opposed to the classical (signal-processing) one */}
+        <button class={cwNeural.value ? "on" : ""} onClick={() => setCwNeural(!cwNeural.value)} title={t("Text from the neural decoder (trained on synthetic CW; reads weaker and rougher signals) instead of the classical one")}>
+          {t("Neural")}
         </button>
-        <button onClick={clearCw} title="Clear the text">
-          Clear
+        <button onClick={clearCw} title={t("Clear the text")}>
+          {t("Clear")}
         </button>
-        <button class="close" onClick={() => setCw(false)} title="Stop decoding">
+        <button class="close" onClick={() => setCw(false)} title={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
         {cwError.value && <p class="warn">{cwError.value}</p>}
         {wideAvail.value && cwWide.value ? (
-          <p class="dim">{wideCentre.value ? `Skimming ${formatKhz(wideCentre.value - WIDE_HALF).slice(0, -2)}–${formatKhz(wideCentre.value + WIDE_HALF).slice(0, -2)} kHz` : "Waiting for the wide IQ…"}</p>
+          <p class="dim">{wideCentre.value ? t("Skimming {lo}–{hi} kHz", { lo: formatKhz(wideCentre.value - WIDE_HALF).slice(0, -2), hi: formatKhz(wideCentre.value + WIDE_HALF).slice(0, -2) }) : t("Waiting for the wide IQ…")}</p>
         ) : (
-          s && !band && <p class="dim">CW is decoded in CW, USB and LSB.</p>
+          s && !band && <p class="dim">{t("CW is decoded in CW, USB and LSB.")}</p>
         )}
         {sigs.length === 0 ? (
           <p class="dim">
-            Nothing yet: every keyed signal in the passband is found and decoded (9–45 WPM); text shows a few seconds behind the audio, once it has settled. A wide passband (USB) decodes several stations at once.
+            {t("Nothing yet: every keyed signal in the passband is found and decoded (9–45 WPM); text shows a few seconds behind the audio, once it has settled. A wide passband (USB) decodes several stations at once.")}
           </p>
         ) : (
           <table>
@@ -64,12 +72,12 @@ export function CwPanel() {
                 <th class="r">kHz</th>
                 <th class="r">WPM</th>
                 <th class="r">dB</th>
-                <th>Text</th>
+                <th>{t("Text")}</th>
               </tr>
             </thead>
             <tbody>
               {sigs.map((x) => (
-                <tr class={x.active ? "" : "dim"} onClick={() => pickCw(Math.round(x.rf))} title={`${Math.round(x.hz)} Hz audio; click: CW mode on this signal`}>
+                <tr class={x.active ? "" : "dim"} onClick={() => pickCw(Math.round(x.rf))} title={t("{hz} Hz audio; click: CW mode on this signal", { hz: Math.round(x.hz) })}>
                   <td class="r">{formatKhz(Math.round(x.rf)).slice(0, -2)}</td>
                   <td class="r num">{x.wpm > 0 ? x.wpm.toFixed(0) : "–"}</td>
                   <td class="r num">{x.snr > -90 ? x.snr.toFixed(0) : "–"}</td>

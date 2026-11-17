@@ -5,6 +5,7 @@
 // crate in WebAssembly) merged into one entry per signal.
 
 import type { Mode } from "./proto.ts";
+import { N_, t } from "./i18n.ts";
 
 /** Parameters as the worker reports them (tones in audio Hz). */
 export interface FskP {
@@ -95,11 +96,13 @@ export function describe(p: FskP, mode: Mode): string {
   else if (p.mode === "async") parts.push(p.framing);
   // LSB mirrors: the upper audio tone is the lower RF one
   const upper = mode === "lsb" ? !p.markHigh : p.markHigh;
-  if (p.mode !== "sync" && p.mode !== "dsc") parts.push(`mark ${upper ? "upper" : "lower"}`);
+  // i18n: mark = the FSK tone for a 1 bit; upper/lower = in frequency, relative to the space tone
+  if (p.mode !== "sync" && p.mode !== "dsc") parts.push(upper ? t("mark upper") : t("mark lower"));
   if (p.mode === "dsc") return parts.join(" · ");
   let cs = p.charset;
-  if (p.msb) cs += " MSB first";
-  if (cs === "ITA2" || cs === "US-TTY") cs += p.usos ? "" : ", no USOS";
+  // i18n: MSB first = most significant bit sent first; USOS = unshift on space (ITA2 teleprinter case-shift convention)
+  if (p.msb) cs = t("{charset} MSB first", { charset: cs });
+  if (cs === "ITA2" || cs === "US-TTY") cs = p.usos ? cs : t("{charset}, no USOS", { charset: cs });
   parts.push(cs);
   return parts.join(" · ");
 }
@@ -144,16 +147,16 @@ export function applyFsk(prev: FskSignal[], run: FskRun, now: number, rf: (hz: n
  * not (a leading "…" when cut). */
 export function textRuns(text: string, weak: string, n: number): { s: string; weak: boolean }[] {
   const cut = text.length > n;
-  const t = cut ? text.slice(text.length - n) : text;
+  const txt = cut ? text.slice(text.length - n) : text;
   const w = cut ? weak.slice(weak.length - n) : weak;
   const out: { s: string; weak: boolean }[] = cut ? [{ s: "…", weak: false }] : [];
-  for (let i = 0; i < t.length; ) {
+  for (let i = 0; i < txt.length; ) {
     const k = w[i] === "1";
     let j = i + 1;
-    while (j < t.length && (w[j] === "1") === k) j++;
+    while (j < txt.length && (w[j] === "1") === k) j++;
     const last = out[out.length - 1];
-    if (last && last.weak === k) last.s += t.slice(i, j);
-    else out.push({ s: t.slice(i, j), weak: k });
+    if (last && last.weak === k) last.s += txt.slice(i, j);
+    else out.push({ s: txt.slice(i, j), weak: k });
     i = j;
   }
   return out;
@@ -164,24 +167,25 @@ function key(s: FskSignal): string {
 }
 
 /** NAVTEX subjects (B2). */
+// i18n: NAVTEX message subject classes (the B2 character of the message header)
 export const NAVTEX_SUBJECTS: Record<string, string> = {
-  A: "navigational warning",
-  B: "meteorological warning",
-  C: "ice report",
-  D: "search and rescue",
-  E: "weather forecast",
-  F: "pilot service",
+  A: N_("navigational warning"),
+  B: N_("meteorological warning"),
+  C: N_("ice report"),
+  D: N_("search and rescue"),
+  E: N_("weather forecast"),
+  F: N_("pilot service"),
   G: "AIS",
   H: "LORAN",
   J: "GNSS",
-  K: "other navaid",
-  L: "navigational warning",
-  T: "test",
-  V: "special service",
-  W: "special service",
-  X: "special service",
-  Y: "special service",
-  Z: "no message on hand",
+  K: N_("other navaid"),
+  L: N_("navigational warning"),
+  T: N_("test"),
+  V: N_("special service"),
+  W: N_("special service"),
+  X: N_("special service"),
+  Y: N_("special service"),
+  Z: N_("no message on hand"),
 };
 
 /** A NAVTEX message. */

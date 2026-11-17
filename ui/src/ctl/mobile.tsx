@@ -8,6 +8,7 @@
 import { useSignal, type Signal } from "@preact/signals";
 import type { ComponentChildren } from "preact";
 import { useRef } from "preact/hooks";
+import { t, tc } from "../i18n.ts";
 import { BANDS, bandLabel, bandOf, bandsIn } from "../bands.ts";
 import { bandwidths, formatKhz, shownOffset, stepTo } from "../fmt.ts";
 import { keypadHz, keypadPress } from "../keypad.ts";
@@ -72,7 +73,7 @@ function Top({ open }: { open: (s: SheetName) => void }) {
   const bw = s ? bandwidths(s.mode, s.audio_rate).find((b) => b.lo === s.lo && b.hi === s.hi)?.label : undefined;
   return (
     <div class="m-top">
-      <button class="m-freq" onClick={() => open("keypad")} aria-label="Enter a frequency">
+      <button class="m-freq" onClick={() => open("keypad")} aria-label={t("Enter a frequency")}>
         {s ? formatKhz(s.hz) : "—"}
         <span class="unit">kHz</span>
       </button>
@@ -85,11 +86,12 @@ function Top({ open }: { open: (s: SheetName) => void }) {
           </>
         )}
         <span class={over ? "lamp lit" : "lamp"} hidden={!over}>
-          OVL
+          {/* i18n: OVL = overload: the ADC input is too strong */}
+          {t("OVL")}
         </span>
         <AttLamp />
       </div>
-      <div class="m-meter" title="Channel power before AGC (dBFS)">
+      <div class="m-meter" title={t("Channel power before AGC (dBFS)")}>
         <div class="fill" style={{ width: `${(pos * 100).toFixed(1)}%` }} />
       </div>
     </div>
@@ -108,24 +110,24 @@ function Wheel() {
   };
   const down = (e: PointerEvent) => {
     if ((e.target as Element).closest(".m-cap")) return;
-    const t = turn.current;
-    t.id = e.pointerId;
-    t.last = angle(e);
-    t.rest = 0;
+    const tr = turn.current;
+    tr.id = e.pointerId;
+    tr.last = angle(e);
+    tr.rest = 0;
     (e.currentTarget as Element).setPointerCapture(e.pointerId);
     e.preventDefault();
   };
   const move = (e: PointerEvent) => {
-    const t = turn.current;
+    const tr = turn.current;
     const s = st.value;
-    if (e.pointerId !== t.id || !s) return;
+    if (e.pointerId !== tr.id || !s) return;
     const a = angle(e);
-    const d = angleDelta(t.last, a);
-    t.last = a;
-    t.spin += d;
-    ticks.current?.setAttribute("transform", `rotate(${((t.spin * 180) / Math.PI).toFixed(1)} 75 75)`);
-    const got = takeClicks(t.rest, d);
-    t.rest = got.rest;
+    const d = angleDelta(tr.last, a);
+    tr.last = a;
+    tr.spin += d;
+    ticks.current?.setAttribute("transform", `rotate(${((tr.spin * 180) / Math.PI).toFixed(1)} 75 75)`);
+    const got = takeClicks(tr.rest, d);
+    tr.rest = got.rest;
     if (got.clicks !== 0) {
       tuneInView(wheelTarget(s.hz, wheelStep.value, got.clicks));
       navigator.vibrate?.(4);
@@ -146,8 +148,9 @@ function Wheel() {
         <circle cx="75" cy="75" r="72" class="rim" />
         <g ref={ticks}>{marks}</g>
       </svg>
-      <button class="m-cap" onClick={() => setWheelStep(nextWheelStep(wheelStep.value))} aria-label="Wheel resolution">
-        <small>step</small>
+      <button class="m-cap" onClick={() => setWheelStep(nextWheelStep(wheelStep.value))} aria-label={t("Wheel resolution")}>
+        {/* i18n: the dial step per click of the VFO wheel, shown small above its value */}
+        <small>{tc("wheel", "step")}</small>
         {wheelLabel(wheelStep.value)}
       </button>
     </div>
@@ -183,33 +186,33 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
           </button>
         </div>
         <div class="m-row">
-          <button onClick={() => s && tuneInView(stepTo(s.hz, step, -1))} aria-label="Down one step">
+          <button onClick={() => s && tuneInView(stepTo(s.hz, step, -1))} aria-label={t("Down one step")}>
             <LeftIcon />
           </button>
-          <button onClick={() => s && tuneInView(stepTo(s.hz, step, 1))} aria-label="Up one step">
+          <button onClick={() => s && tuneInView(stepTo(s.hz, step, 1))} aria-label={t("Up one step")}>
             <RightIcon />
           </button>
-          <button onClick={cycleBw} title="Passband">
+          <button onClick={cycleBw} title={t("Passband")}>
             {bw ?? "BW"}
           </button>
           {/* the amateur bands are on air: not with a converter's offset */}
-          {!radio.value?.freq_offset_hz && <button onClick={() => open("bands")}>Bands</button>}
+          {!radio.value?.freq_offset_hz && <button onClick={() => open("bands")}>{t("Bands")}</button>}
         </div>
         <div class="m-row">
           {audioOn.value ? (
             <button
               onClick={() => setVolume(volume.value, !muted.value)}
-              aria-label={muted.value ? "Unmute" : "Mute"}
-              title={muted.value ? "Unmute" : "Mute"}
+              aria-label={muted.value ? t("Unmute") : t("Mute")}
+              title={muted.value ? t("Unmute") : t("Mute")}
             >
               {muted.value ? <PlayIcon /> : <PauseIcon />}
             </button>
           ) : (
-            <button class="go" onClick={startAudio} aria-label="Start audio" title="Start audio">
+            <button class="go" onClick={startAudio} aria-label={t("Start audio")} title={t("Start audio")}>
               <PlayIcon />
             </button>
           )}
-          <button onClick={() => open("more")}>⋯ More</button>
+          <button onClick={() => open("more")}>⋯ {t("More")}</button>
         </div>
       </div>
       <Wheel />
@@ -223,7 +226,7 @@ function Sheet({ title, close, children }: { title: string; close: () => void; c
       <div class="m-sheet" role="dialog" aria-label={title}>
         <div class="m-sheet-head">
           <b>{title}</b>
-          <button onClick={close} aria-label="Close">
+          <button onClick={close} aria-label={t("Close")}>
             ✕
           </button>
         </div>
@@ -250,10 +253,10 @@ function Keypad({ close }: { close: () => void }) {
     </button>
   );
   return (
-    <Sheet title="Frequency" close={close}>
+    <Sheet title={t("Frequency")} close={close}>
       <div class="m-entry">
         <span class="num">{buf.value || (s ? formatKhz(s.hz).replace(/\.?0+$/, "") : "")}</span>
-        <span class="unit">{buf.value ? "" : "now"}</span>
+        <span class="unit">{buf.value ? "" : t("now")}</span>
       </div>
       <div class="m-pad">
         {["1", "2", "3", "4", "5", "6", "7", "8", "9", ".", "0", "⌫"].map(key)}
@@ -275,7 +278,7 @@ function Bands({ close }: { close: () => void }) {
   const r = radio.value;
   const bands = r ? bandsIn(r.rf_lo, r.rf_hi) : BANDS;
   return (
-    <Sheet title="Band" close={close}>
+    <Sheet title={t("Band")} close={close}>
       <div class="m-bands">
         {bands.map((b) => (
           <button
@@ -296,24 +299,24 @@ function Bands({ close }: { close: () => void }) {
 
 function More({ close }: { close: () => void }) {
   return (
-    <Sheet title="More" close={close}>
-      <h4>Audio</h4>
+    <Sheet title={t("More")} close={close}>
+      <h4>{t("Audio")}</h4>
       <AudioCtl />
       <div class="group">
         <CodecCtl />
       </div>
       <AudioRecCtl />
-      <h4>Noise</h4>
+      <h4>{t("Noise")}</h4>
       <DspCtl />
-      <h4>Waterfall</h4>
+      <h4>{t("Waterfall")}</h4>
       <ZoomCtl />
       <ContrastCtl />
       <LookCtl />
-      <h4>Memories</h4>
+      <h4>{t("Memories")}</h4>
       <MemCtl inline />
-      <h3>Configuration</h3>
+      <h3>{t("Configuration")}</h3>
       <ConfigBody />
-      <h4>Users</h4>
+      <h4>{t("Users")}</h4>
       <UsersCtl />
       <div class="m-panels">
         <SpotsCtl />

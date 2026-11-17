@@ -7,6 +7,7 @@
 import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import { bandHz, bandName, cellTitle, forecastBasis, forecastTitle, relColor, stormNote, type PropReply } from "../prop.ts";
+import { t } from "../i18n.ts";
 import { api, radio, tuneInView } from "../state.ts";
 import { cssGradient } from "../view/colormap.ts";
 
@@ -26,7 +27,7 @@ function BandLabel({ mhz, short = false }: { mhz: number; short?: boolean }) {
   const name = bandName(mhz);
   const text = short ? name.replace(/ m$/, "") : name;
   return can ? (
-    <button class="prop-band" title={`${name}: tune to ${(hz / 1e3).toFixed(0)} kHz`} onClick={() => tuneInView(hz)}>
+    <button class="prop-band" title={t("{band}: tune to {khz} kHz", { band: name, khz: (hz / 1e3).toFixed(0) })} onClick={() => tuneInView(hz)}>
       {text}
     </button>
   ) : (
@@ -48,14 +49,15 @@ function NowTable({ d, hour }: { d: PropReply & { forecast: NonNullable<PropRepl
               <BandLabel mhz={b} short />
             </th>
           ))}
-          <th title="Maximum usable frequency now (MHz)">MUF</th>
+          {/* i18n: MUF = maximum usable frequency */}
+          <th title={t("Maximum usable frequency now (MHz)")}>MUF</th>
         </tr>
       </thead>
       <tbody>
         {f.paths.map((p, i) => (
           <tr key={p.name}>
             <th class="prop-region">
-              <button class="prop-link" onClick={() => (regionIx.value = i)} title="The whole day for this region">
+              <button class="prop-link" onClick={() => (regionIx.value = i)} title={t("The whole day for this region")}>
                 {p.name}
               </button>
               <span class="dim prop-dist">
@@ -109,9 +111,9 @@ function DayTable({ d, hour }: { d: PropReply & { forecast: NonNullable<PropRepl
       </thead>
       <tbody>
         <tr>
-          <th title="Maximum usable frequency (MHz)">MUF</th>
+          <th title={t("Maximum usable frequency (MHz)")}>MUF</th>
           {hours.map((h) => (
-            <td key={h} class={`prop-muf${h === hour ? " prop-nowcol" : ""}`} title={p.muf[h] != null ? `${String(h).padStart(2, "0")} UTC: MUF ${p.muf[h]} MHz` : ""}>
+            <td key={h} class={`prop-muf${h === hour ? " prop-nowcol" : ""}`} title={p.muf[h] != null ? t("{hour} UTC: MUF {mhz} MHz", { hour: String(h).padStart(2, "0"), mhz: p.muf[h]! }) : ""}>
               {h % 3 === 0 && p.muf[h] != null ? Math.round(p.muf[h]) : ""}
             </td>
           ))}
@@ -135,12 +137,12 @@ function DayTable({ d, hour }: { d: PropReply & { forecast: NonNullable<PropRepl
 function Body({ d }: { d: PropReply }) {
   const [hour, setHour] = useState(utcHour());
   useEffect(() => {
-    const t = setInterval(() => setHour(utcHour()), 30_000);
-    return () => clearInterval(t);
+    const iv = setInterval(() => setHour(utcHour()), 30_000);
+    return () => clearInterval(iv);
   }, []);
-  if (!d.enabled) return <p class="dim">The owner has turned the forecast off.</p>;
+  if (!d.enabled) return <p class="dim">{t("The owner has turned the forecast off.")}</p>;
   const f = d.forecast;
-  if (!f) return <p class="dim">{d.problem ?? "The forecast is being made…"}</p>;
+  if (!f) return <p class="dim">{d.problem ?? t("The forecast is being made…")}</p>;
   const fd = { ...d, forecast: f };
   const storm = stormNote(d.kp);
   const region = f.paths[regionIx.value];
@@ -149,7 +151,7 @@ function Body({ d }: { d: PropReply }) {
       <p class="prop-what">
         {forecastTitle(f)}
         {d.kp && (
-          <span class="dim" title={`Planetary K index at ${d.kp.time} UTC (NOAA); the highest in 24 hours ${d.kp.max24.toFixed(1)}`}>
+          <span class="dim" title={t("Planetary K index at {time} UTC (NOAA); the highest in 24 hours {max}", { time: d.kp.time, max: d.kp.max24.toFixed(1) })}>
             {" "}
             · Kp {d.kp.kp.toFixed(1)}
           </span>
@@ -159,26 +161,26 @@ function Body({ d }: { d: PropReply }) {
       <div class="prop-opts">
         <span class="seg">
           {f.modes.map((m, i) => (
-            <button key={m.name} class={modeIx.value === i ? "on" : ""} onClick={() => (modeIx.value = i)} title={`Signals that need ${m.snr_db} dB SNR in 1 Hz`}>
+            <button key={m.name} class={modeIx.value === i ? "on" : ""} onClick={() => (modeIx.value = i)} title={t("Signals that need {snr} dB SNR in 1 Hz", { snr: m.snr_db })}>
               {m.name}
             </button>
           ))}
         </span>
-        <select value={regionIx.value} onChange={(e) => (regionIx.value = Number((e.target as HTMLSelectElement).value))} aria-label="Region">
-          <option value={-1}>All regions, now ({String(hour).padStart(2, "0")} UTC)</option>
+        <select value={regionIx.value} onChange={(e) => (regionIx.value = Number((e.target as HTMLSelectElement).value))} aria-label={t("Region")}>
+          <option value={-1}>{t("All regions, now ({hour} UTC)", { hour: String(hour).padStart(2, "0") })}</option>
           {f.paths.map((p, i) => (
             <option key={p.name} value={i}>
-              {p.name}, the day
+              {t("{region}, the day", { region: p.name })}
             </option>
           ))}
         </select>
       </div>
       {region ? <DayTable d={fd} hour={hour} /> : <NowTable d={fd} hour={hour} />}
       <p class="prop-legend">
-        <span class="dim">Share of days a signal gets through:</span> <span class="prop-scale" style={{ background: cssGradient("viridis") }} /> <span class="dim">0 – 100 %</span>
+        <span class="dim">{t("Share of days a signal gets through:")}</span> <span class="prop-scale" style={{ background: cssGradient("viridis") }} /> <span class="dim">0 – 100 %</span>
       </p>
       <p class="dim prop-basis">
-        From each region to this receiver ({f.rx.locator}). {forecastBasis(f)}
+        {t("From each region to this receiver ({locator}).", { locator: f.rx.locator })} {forecastBasis(f)}
       </p>
       {d.fetch_errors.length > 0 && <p class="dim">{d.fetch_errors.join("; ")}</p>}
     </>
@@ -199,25 +201,25 @@ export function PropPanel() {
           setD(v);
           setErr("");
         })
-        .catch((e: Error) => setErr(`The forecast didn't load (${e.message}).`));
+        .catch((e: Error) => setErr(t("The forecast didn't load ({msg}).", { msg: e.message })));
     void load();
-    const t = setInterval(load, 600_000);
+    const iv = setInterval(load, 600_000);
     const key = (e: KeyboardEvent) => e.key === "Escape" && (propOpen.value = false);
     window.addEventListener("keydown", key);
     return () => {
-      clearInterval(t);
+      clearInterval(iv);
       window.removeEventListener("keydown", key);
     };
   }, [open]);
   if (!open) return null;
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label="HF propagation" onClick={(e) => e.target === e.currentTarget && (propOpen.value = false)}>
+    <div class="overlay keyhelp" role="dialog" aria-label={t("HF propagation")} onClick={(e) => e.target === e.currentTarget && (propOpen.value = false)}>
       <div class="keyhelp-box info-box prop-box">
-        <button class="info-x" onClick={() => (propOpen.value = false)} title="Close (Escape)">
+        <button class="info-x" onClick={() => (propOpen.value = false)} title={t("Close (Escape)")}>
           ✕
         </button>
-        <h3>HF propagation</h3>
-        {d ? <Body d={d} /> : <p class="dim">{err || "Loading…"}</p>}
+        <h3>{t("HF propagation")}</h3>
+        {d ? <Body d={d} /> : <p class="dim">{err || t("Loading…")}</p>}
       </div>
     </div>
   );
@@ -227,8 +229,8 @@ export function PropPanel() {
 export function PropCtl() {
   return (
     <div class="group">
-      <button class={propOpen.value ? "on" : ""} onClick={() => (propOpen.value = !propOpen.value)} title="HF propagation: which bands are open to where, this hour and through the day">
-        Prop
+      <button class={propOpen.value ? "on" : ""} onClick={() => (propOpen.value = !propOpen.value)} title={t("HF propagation: which bands are open to where, this hour and through the day")}>
+        {t("Prop")}
       </button>
     </div>
   );

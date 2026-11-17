@@ -4,6 +4,8 @@
 // listed from the identifier's runs (sigid/worker.ts runs
 // crates/sigid-wasm: the signals in the passband named by a small CNN).
 
+import { N_ } from "./i18n.ts";
+
 /** A class of crates/sigid (its CLASSES). */
 export type SigClass =
   | "noise"
@@ -28,25 +30,26 @@ export type SigClass =
 /** The decoder in this page a class opens (none: listed only). */
 export type Opens = "cw" | "rtty" | "psk" | "img" | "ft8" | "ft4" | "wspr" | "hfdl" | "ssb" | "am" | null;
 
+// i18n: signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
 export const CLASS_INFO: Record<SigClass, { label: string; opens: Opens; hint: string }> = {
-  noise: { label: "Noise", opens: null, hint: "nothing recognisable at this frequency" },
-  carrier: { label: "Carrier", opens: null, hint: "an unmodulated carrier" },
-  cw: { label: "CW", opens: "cw", hint: "Morse" },
-  fsk: { label: "RTTY / FSK", opens: "rtty", hint: "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)" },
-  psk31: { label: "PSK31", opens: "psk", hint: "BPSK 31-125 Bd: PSK31, PSK63, PSK125" },
-  ft8: { label: "FT8", opens: "ft8", hint: "FT8" },
-  ft4: { label: "FT4", opens: "ft4", hint: "FT4" },
-  wspr: { label: "WSPR", opens: "wspr", hint: "WSPR beacons" },
-  ale: { label: "ALE", opens: null, hint: "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)" },
-  stanag4285: { label: "STANAG 4285", opens: null, hint: "2400 Bd PSK modem, 106.7 ms frames (not decoded here)" },
-  mil110a: { label: "MIL-110A", opens: null, hint: "MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)" },
-  sstv: { label: "SSTV", opens: "img", hint: "slow-scan television" },
-  fax: { label: "HF fax", opens: "img", hint: "weather fax (radiofax)" },
-  ssb: { label: "SSB voice", opens: "ssb", hint: "single-sideband speech" },
-  am: { label: "AM", opens: "am", hint: "AM broadcast or voice" },
-  interference: { label: "Interference", opens: null, hint: "local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands" },
-  radar: { label: "Radar", opens: null, hint: "over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second" },
-  hfdl: { label: "HFDL", opens: "hfdl", hint: "aircraft data link, 1800 Bd PSK bursts" },
+  noise: { label: N_("Noise"), opens: null, hint: N_("nothing recognisable at this frequency") },
+  carrier: { label: "Carrier", opens: null, hint: N_("an unmodulated carrier") },
+  cw: { label: "CW", opens: "cw", hint: N_("Morse") },
+  fsk: { label: "RTTY / FSK", opens: "rtty", hint: N_("two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)") },
+  psk31: { label: "PSK31", opens: "psk", hint: N_("BPSK 31-125 Bd: PSK31, PSK63, PSK125") },
+  ft8: { label: "FT8", opens: "ft8", hint: N_("FT8") },
+  ft4: { label: "FT4", opens: "ft4", hint: N_("FT4") },
+  wspr: { label: "WSPR", opens: "wspr", hint: N_("WSPR beacons") },
+  ale: { label: "ALE", opens: null, hint: N_("2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)") },
+  stanag4285: { label: "STANAG 4285", opens: null, hint: N_("2400 Bd PSK modem, 106.7 ms frames (not decoded here)") },
+  mil110a: { label: "MIL-110A", opens: null, hint: N_("MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)") },
+  sstv: { label: "SSTV", opens: "img", hint: N_("slow-scan television") },
+  fax: { label: N_("HF fax"), opens: "img", hint: N_("weather fax (radiofax)") },
+  ssb: { label: N_("SSB voice"), opens: "ssb", hint: N_("single-sideband speech") },
+  am: { label: "AM", opens: "am", hint: N_("AM broadcast or voice") },
+  interference: { label: N_("Interference"), opens: null, hint: N_("local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands") },
+  radar: { label: N_("Radar"), opens: null, hint: N_("over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second") },
+  hfdl: { label: "HFDL", opens: "hfdl", hint: N_("aircraft data link, 1800 Bd PSK bursts") },
 };
 
 /** One identification run (crates/sigid-wasm's JSON). */

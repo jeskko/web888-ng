@@ -119,7 +119,7 @@ export async function mapShot(p, file) {
     await p.ev(`(() => { const l = [...document.querySelectorAll(".map .spots-bar label")].find((x) => x.textContent.trim() === ${lit(n)}); const c = l?.querySelector("input"); if (c && c.checked !== ${n === "Browser"}) c.click(); })()`);
     await sleep(300);
   }
-  await p.ev(`(() => { const s = [...document.querySelectorAll(".map .spots-bar select")].find((x) => x.title === "Heard in the last"); s.value = "180"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
+  await p.ev(`(() => { const s = [...document.querySelectorAll(".map .spots-bar select")].find((x) => x.title === "Show the stations heard within this time"); s.value = "180"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);
   await sleep(1500);
   console.log("map: stations shown", await p.ev(`${q(".map .spots-bar .num")}?.textContent`));
   await p.shot(file);

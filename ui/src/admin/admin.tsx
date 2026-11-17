@@ -6,24 +6,26 @@
 import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
+import { N_, t, tc, tn, tx } from "../i18n.ts";
 import { call, get, href, loggedOut, putText, type Auth, type Changes, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
 type Tab = "status" | "sessions" | "config" | "labels" | "info" | "passwords" | "update" | "logs";
+// i18n: names of the admin page's tabs
 const TABS: { id: Tab; name: string }[] = [
-  { id: "status", name: "Status" },
-  { id: "sessions", name: "Sessions" },
-  { id: "config", name: "Configuration" },
-  { id: "labels", name: "Labels" },
-  { id: "info", name: "Info page" },
-  { id: "passwords", name: "Passwords" },
-  { id: "update", name: "Update" },
-  { id: "logs", name: "Logs" },
+  { id: "status", name: N_("Status") },
+  { id: "sessions", name: N_("Sessions") },
+  { id: "config", name: N_("Configuration") },
+  { id: "labels", name: N_("Labels") },
+  { id: "info", name: N_("Info page") },
+  { id: "passwords", name: N_("Passwords") },
+  { id: "update", name: N_("Update") },
+  { id: "logs", name: N_("Logs") },
 ];
 
 function tabFromHash(): Tab {
-  const t = location.hash.replace(/^#\/admin\/?/, "") as Tab;
-  return TABS.some((x) => x.id === t) ? t : "status";
+  const id = location.hash.replace(/^#\/admin\/?/, "") as Tab;
+  return TABS.some((x) => x.id === id) ? id : "status";
 }
 
 const tab = signal<Tab>(tabFromHash());
@@ -35,15 +37,15 @@ function usePoll(f: () => Promise<void>, ms: number) {
   ref.current = f;
   useEffect(() => {
     let stop = false;
-    let t: number | undefined;
+    let timer: number | undefined;
     const run = async () => {
       await ref.current().catch(() => {});
-      if (!stop) t = window.setTimeout(run, ms);
+      if (!stop) timer = window.setTimeout(run, ms);
     };
     void run();
     return () => {
       stop = true;
-      clearTimeout(t);
+      clearTimeout(timer);
     };
   }, [ms]);
 }
@@ -58,7 +60,7 @@ function ago(unixS: number): string {
 const khz = (hz: number | null) => (hz === null ? "–" : `${formatKhz(hz)} kHz`);
 
 async function restart(): Promise<void> {
-  if (!confirm("Restart web888d? Everyone is disconnected for a few seconds.")) return;
+  if (!confirm(t("Restart web888d? Everyone is disconnected for a few seconds."))) return;
   await call("POST", "api/admin/restart").catch((e: Error) => alert(e.message));
   // come back when it's up again
   const t0 = Date.now();
@@ -80,11 +82,11 @@ function Login({ auth, onDone }: { auth: Auth; onDone(): void }) {
   if (!auth.admin_password) {
     return (
       <div class="admin-login">
-        <h2>web888d admin</h2>
-        <p>No admin password is set. On the unit's console run</p>
+        <h2>{t("web888d admin")}</h2>
+        <p>{t("No admin password is set. On the unit's console run")}</p>
         <pre>web888d passwd</pre>
         <p>
-          or put the password (one line, at least 8 characters) in <code>/boot/web888d-admin</code> on the SD card and restart.
+          {tx("or put the password (one line, at least 8 characters) in {file} on the SD card and restart.", { file: <code>/boot/web888d-admin</code> })}
         </p>
       </div>
     );
@@ -101,21 +103,21 @@ function Login({ auth, onDone }: { auth: Auth; onDone(): void }) {
   };
   return (
     <form class="admin-login" onSubmit={submit}>
-      <h2>web888d admin</h2>
+      <h2>{t("web888d admin")}</h2>
       <input
         type="password"
-        placeholder="Admin password"
+        placeholder={t("Admin password")}
         autocomplete="current-password"
         autofocus
         value={pw}
         onInput={(e) => setPw((e.target as HTMLInputElement).value)}
       />
       <button type="submit" class="on" disabled={!pw}>
-        Log in
+        {t("Log in")}
       </button>
       {err && <p class="warn">{err}</p>}
       <p>
-        <a href="#">Back to the receiver</a>
+        <a href="#">{t("Back to the receiver")}</a>
       </p>
     </form>
   );
@@ -137,65 +139,68 @@ function StatusPage() {
     ]);
     setSkim(k);
     setOvl(o);
-    const t = performance.now();
+    const now = performance.now();
     const p = prev.current;
     if (p) {
-      const dt = (t - p.t) / 1000;
+      const dt = (now - p.t) / 1000;
       setRates({
         frames: (s.hw.rx_frames - p.s.hw.rx_frames) / dt,
         overloads: (s.hw.adc_overloads - p.s.hw.adc_overloads) / dt,
         busy: s.pool.map((w, k) => (100 * (w.busy_s - (p.s.pool[k]?.busy_s ?? 0))) / dt),
       });
     }
-    prev.current = { t, s };
+    prev.current = { t: now, s };
     setStats(s);
     setLeases(l);
   }, 2000);
-  if (!stats || !leases) return <p class="dim">Loading…</p>;
+  if (!stats || !leases) return <p class="dim">{t("Loading…")}</p>;
   const byChannel = new Map(leases.leases.filter((l) => l.channel !== null).map((l) => [l.channel!, l]));
   const queue = leases.leases.filter((l) => l.waiting !== null).sort((a, b) => a.waiting! - b.waiting!);
   const threads = [...stats.threads].sort((a, b) => (b.cpu_pct ?? 0) - (a.cpu_pct ?? 0));
   return (
     <div class="cards">
       <section class="card">
-        <h3>Radio</h3>
+        <h3>{t("Radio")}</h3>
         <dl>
-          <dt>Sessions</dt>
+          <dt>{t("Sessions")}</dt>
           <dd>{stats.sessions}</dd>
-          <dt>RX rate</dt>
+          <dt>{t("RX rate")}</dt>
           <dd class={stats.hw.hw_rate_ok ? "" : "warn"}>
-            {rates ? `${(rates.frames / 1e3).toFixed(1)} k frames/s` : "…"}
-            {!stats.hw.hw_rate_ok && " (falling behind)"}
+            {rates ? t("{rate} k frames/s", { rate: (rates.frames / 1e3).toFixed(1) }) : "…"}
+            {!stats.hw.hw_rate_ok && " " + t("(falling behind)")}
           </dd>
-          <dt>Frames lost</dt>
-          <dd class={stats.hw.rx_lost_frames ? "warn" : ""} title="RX frames lost to ring overruns: the reader fell behind, a gap in every listener's audio">
+          <dt>{t("Frames lost")}</dt>
+          {/* i18n: ring = the ring buffer between the hardware reader and the DSP; frame = one block of samples from the ADC */}
+          <dd class={stats.hw.rx_lost_frames ? "warn" : ""} title={t("RX frames lost to ring overruns: the reader fell behind, a gap in every listener's audio")}>
             {stats.hw.rx_lost_frames}
           </dd>
-          <dt>ADC overloads</dt>
-          <dd class={rates && rates.overloads > 0 ? "warn" : ""} title="RX blocks read while the ADC clipped: strong signals distort every listener's audio. The RF attenuator helps.">
-            {stats.hw.adc_overloads} blocks{rates && rates.overloads > 0 ? ` (${rates.overloads.toFixed(1)}/s now)` : ""}
+          <dt>{t("ADC overloads")}</dt>
+          {/* i18n: ADC = the analogue-to-digital converter; it overloads (clips) when the signal is too strong; a block = a chunk of samples read from it */}
+          <dd class={rates && rates.overloads > 0 ? "warn" : ""} title={t("RX blocks read while the ADC clipped: strong signals distort every listener's audio. The RF attenuator helps.")}>
+            {tn("{n} block", "{n} blocks", stats.hw.adc_overloads)}
+            {rates && rates.overloads > 0 ? " " + t("({rate}/s now)", { rate: rates.overloads.toFixed(1) }) : ""}
           </dd>
-          <dt>RF attenuator</dt>
+          <dt>{t("RF attenuator")}</dt>
           <dd>
             <AttenCtl set={stats.hw.atten_db} cfg={stats.hw.atten_cfg_db} />
           </dd>
           {stats.hw.adc_dither !== undefined && (
             <>
-              <dt>ADC</dt>
+              <dt>{t("ADC")}</dt>
               <dd>
                 <AdcCtl dither={!!stats.hw.adc_dither} pga={!!stats.hw.adc_pga} />
               </dd>
             </>
           )}
-          <dt>Clock</dt>
-          <dd>{stats.hw.clock_ppm === 0 ? "no GPS correction" : `${stats.hw.clock_ppm.toFixed(3)} ppm`}</dd>
+          <dt>{t("Clock")}</dt>
+          <dd>{stats.hw.clock_ppm === 0 ? t("no GPS correction") : `${stats.hw.clock_ppm.toFixed(3)} ppm`}</dd>
         </dl>
-        <button onClick={() => void restart()}>Restart web888d…</button>
+        <button onClick={() => void restart()}>{t("Restart web888d…")}</button>
       </section>
       {ovl && <OvlCard o={ovl} />}
       <section class="card">
         <h3>
-          RX channels ({byChannel.size}/{leases.channels} in use)
+          {t("RX channels ({used}/{total} in use)", { used: byChannel.size, total: leases.channels })}
         </h3>
         <table>
           <tbody>
@@ -204,7 +209,7 @@ function StatusPage() {
               return (
                 <tr key={ch} class={l ? "" : "dim"}>
                   <td>{ch}</td>
-                  <td>{l ? l.label : "free"}</td>
+                  <td>{l ? l.label : tc("RX channel", "free")}</td>
                   <td class="r">{l ? khz(l.hz) : ""}</td>
                 </tr>
               );
@@ -213,7 +218,7 @@ function StatusPage() {
         </table>
         {queue.length > 0 && (
           <>
-            <h4>Waiting</h4>
+            <h4>{t("Waiting")}</h4>
             <ol>
               {queue.map((l) => (
                 <li key={l.id}>{l.label}</li>
@@ -223,15 +228,17 @@ function StatusPage() {
         )}
       </section>
       <section class="card">
-        <h3>DSP workers</h3>
+        <h3>{t("DSP workers")}</h3>
         <table>
           <thead>
             <tr>
               <th>#</th>
-              <th class="r">jobs</th>
-              <th class="r">busy</th>
-              <th class="r">shed</th>
-              <th class="r">drops rx/wf</th>
+              {/* i18n: DSP worker = a thread that does the signal processing; jobs = work items it ran; busy = share of time working; shed = jobs skipped because it was overloaded; drops rx/wf = audio and waterfall blocks dropped (wf = waterfall) */}
+              <th class="r">{t("jobs")}</th>
+              {/* i18n: the share of time a DSP worker thread spends working (a column head) */}
+              <th class="r">{tc("DSP worker", "busy")}</th>
+              <th class="r">{t("shed")}</th>
+              <th class="r">{t("drops rx/wf")}</th>
             </tr>
           </thead>
           <tbody>
@@ -248,21 +255,24 @@ function StatusPage() {
             ))}
           </tbody>
         </table>
-        <h4>Waterfall views</h4>
+        <h4>{t("Waterfall views")}</h4>
         {stats.wf_views.length === 0 ? (
-          <p class="dim">none</p>
+          <p class="dim">{t("none")}</p>
         ) : (
           <table>
             <tbody>
               {stats.wf_views.map((v, k) => (
                 <tr key={k}>
-                  <td>slot {v.slot}</td>
+                  {/* i18n: slot = a numbered waterfall channel of the receiver */}
+                  <td>{t("slot {n}", { n: v.slot })}</td>
                   <td class="r">{khz(v.hz)}</td>
                   <td class="r">÷{v.decim}</td>
                   <td class="r">{v.fps} fps</td>
                   <td class="r">
-                    {v.sessions.length} session{v.sessions.length === 1 ? "" : "s"}
-                    {v.shared ? ", time-shared" : ""}
+                    {/* i18n: time-shared = the waterfall is shared between several listeners, taking turns */}
+                    {v.shared
+                      ? tn("{n} session, time-shared", "{n} sessions, time-shared", v.sessions.length)
+                      : tn("{n} session", "{n} sessions", v.sessions.length)}
                   </td>
                 </tr>
               ))}
@@ -272,26 +282,26 @@ function StatusPage() {
       </section>
       {skim?.available && <SkimCard skim={skim} />}
       <section class="card">
-        <h3>CPU per thread</h3>
+        <h3>{t("CPU per thread")}</h3>
         <table>
           <thead>
             <tr>
-              <th>thread</th>
-              <th class="r">now</th>
-              <th class="r">total</th>
+              <th>{t("thread")}</th>
+              <th class="r">{tc("CPU use", "now")}</th>
+              <th class="r">{tc("CPU use", "total")}</th>
             </tr>
           </thead>
           <tbody>
-            {threads.map((t) => (
-              <tr key={t.name}>
-                <td>{t.name}</td>
-                <td class="r">{t.cpu_pct === null ? "…" : `${t.cpu_pct.toFixed(1)} %`}</td>
-                <td class="r">{t.cpu_s.toFixed(0)} s</td>
+            {threads.map((th) => (
+              <tr key={th.name}>
+                <td>{th.name}</td>
+                <td class="r">{th.cpu_pct === null ? "…" : `${th.cpu_pct.toFixed(1)} %`}</td>
+                <td class="r">{th.cpu_s.toFixed(0)} s</td>
               </tr>
             ))}
           </tbody>
         </table>
-        <p class="dim">% of one core since the last refresh, summed over threads of a name.</p>
+        <p class="dim">{t("% of one core since the last refresh, summed over threads of a name.")}</p>
       </section>
     </div>
   );
@@ -322,8 +332,9 @@ function AttenCtl({ set, cfg }: { set: number; cfg: number }) {
   const on = cfg > 0;
   return (
     <>
-      <label title="Weakens every signal before the ADC, for all listeners: against overloads from strong signals">
-        <input type="checkbox" checked={on} disabled={busy} onChange={() => void put(on ? 0 : attenLevel.v)} /> in
+      <label title={t("Weakens every signal before the ADC, for all listeners: against overloads from strong signals")}>
+        {/* i18n: "in" = the attenuator is switched in (active), a checkbox label */}
+        <input type="checkbox" checked={on} disabled={busy} onChange={() => void put(on ? 0 : attenLevel.v)} /> {tc("attenuator switched in", "in")}
       </label>{" "}
       <select
         value={String(attenLevel.v)}
@@ -339,7 +350,7 @@ function AttenCtl({ set, cfg }: { set: number; cfg: number }) {
           </option>
         ))}
       </select>
-      {set !== cfg && <span class="warn"> now {set} dB (set by an HPSDR client)</span>}
+      {set !== cfg && <span class="warn"> {t("now {db} dB (set by an HPSDR client)", { db: set })}</span>}
       {err && <span class="warn"> {err}</span>}
     </>
   );
@@ -363,11 +374,13 @@ function AdcCtl({ dither, pga }: { dither: boolean; pga: boolean }) {
   };
   return (
     <>
-      <label title="The ADC's dither: spreads its own spurs (birdies) into the noise, at a little more noise">
-        <input type="checkbox" checked={dither} disabled={busy} onChange={() => void put({ dither: !dither })} /> dither
+      {/* i18n: dither = noise added in the ADC to linearise it; spurs/birdies = unwanted steady tones */}
+      <label title={t("The ADC's dither: spreads its own spurs (birdies) into the noise, at a little more noise")}>
+        <input type="checkbox" checked={dither} disabled={busy} onChange={() => void put({ dither: !dither })} /> {t("dither")}
       </label>{" "}
-      <label title="The ADC's PGA: 1.5 V full scale instead of 2.25 V, every signal ~3.5 dB higher (and overloads that much sooner); the dBFS levels move with it">
-        <input type="checkbox" checked={pga} disabled={busy} onChange={() => void put({ pga: !pga })} /> PGA (+3.5 dB)
+      {/* i18n: PGA = the ADC's programmable gain amplifier; full scale = the input voltage at which the ADC clips; dBFS = decibels relative to the ADC's full scale */}
+      <label title={t("The ADC's PGA: 1.5 V full scale instead of 2.25 V, every signal ~3.5 dB higher (and overloads that much sooner); the dBFS levels move with it")}>
+        <input type="checkbox" checked={pga} disabled={busy} onChange={() => void put({ pga: !pga })} /> {t("PGA (+3.5 dB)")}
       </label>
       {err && <span class="warn"> {err}</span>}
     </>
@@ -399,12 +412,13 @@ interface Ovl {
   events: OvlEvent[];
 }
 
+// i18n: causes of an ADC overload; carrier = a steady unmodulated signal; impulse = a very short broadband pulse
 const KIND: Record<OvlEvent["analysis"]["kind"], string> = {
-  carrier: "a carrier",
-  several: "several signals",
-  broadband: "broadband (an impulse)",
-  spread: "no single cause",
-  brief: "brief: a click or switching spike (too short to show in the band's power)",
+  carrier: N_("a carrier"),
+  several: N_("several signals"),
+  broadband: N_("broadband (an impulse)"),
+  spread: N_("no single cause"),
+  brief: N_("brief: a click or switching spike (too short to show in the band's power)"),
   unknown: "–",
 };
 
@@ -412,39 +426,44 @@ const KIND: Record<OvlEvent["analysis"]["kind"], string> = {
 export function ovlCause(e: OvlEvent): string {
   const a = e.analysis;
   const mhz = (hz: number) => `${(hz / 1e6).toFixed(3)} MHz`;
-  if (e.carrier) return `carrier at ${(e.carrier.hz / 1e3).toFixed(3)} kHz, ${e.carrier.dbfs.toFixed(0)} dBFS`;
+  if (e.carrier) return t("carrier at {khz} kHz, {dbfs} dBFS", { khz: (e.carrier.hz / 1e3).toFixed(3), dbfs: e.carrier.dbfs.toFixed(0) });
   const b = a.strongest[0];
-  if (a.kind === "carrier" && b) return `carrier near ${mhz(b.peak_hz)}, ${b.dbfs.toFixed(0)} dBFS (${Math.round(b.share * 100)} %)`;
-  if (a.kind === "several") return `several: ${a.strongest.map((s) => mhz(s.peak_hz)).join(", ")}`;
-  if (a.kind === "broadband") return `broadband, +${a.median_rise_db.toFixed(0)} dB everywhere`;
-  if (a.kind === "spread" && b) return `no single cause; strongest ${mhz(b.peak_hz)} (${Math.round(b.share * 100)} %)`;
-  return KIND[a.kind];
+  // i18n: the percentage is the share of the overload's power at that frequency
+  if (a.kind === "carrier" && b) return t("carrier near {mhz}, {dbfs} dBFS ({share} %)", { mhz: mhz(b.peak_hz), dbfs: b.dbfs.toFixed(0), share: Math.round(b.share * 100) });
+  if (a.kind === "several") return t("several: {list}", { list: a.strongest.map((s) => mhz(s.peak_hz)).join(", ") });
+  // i18n: broadband = the noise level rises across the whole band by this many dB
+  if (a.kind === "broadband") return t("broadband, +{db} dB everywhere", { db: a.median_rise_db.toFixed(0) });
+  if (a.kind === "spread" && b) return t("no single cause; strongest {mhz} ({share} %)", { mhz: mhz(b.peak_hz), share: Math.round(b.share * 100) });
+  return t(KIND[a.kind]);
 }
 
 /** The ADC overload events (`/api/admin/ovl`), newest first. */
 function OvlCard({ o }: { o: Ovl }) {
-  const t = (s: number) => new Date(s * 1000).toISOString().slice(5, 19).replace("T", " ");
+  const when = (s: number) => new Date(s * 1000).toISOString().slice(5, 19).replace("T", " ");
   return (
     <section class="card">
-      <h3>ADC overloads</h3>
+      <h3>{t("ADC overloads")}</h3>
       <p class="dim">
-        {o.events.length === 0 ? "None since web888d started." : `The last ${o.events.length} (UTC).`} Peak sample now: {o.peak_dbfs === null ? "unknown" : `${o.peak_dbfs.toFixed(1)} dBFS`}.
-        {!o.spectrum && " No channelizer: the causes aren't analysed."}
+        {o.events.length === 0 ? t("None since web888d started.") : t("The last {n} (UTC).", { n: o.events.length })}{" "}
+        {t("Peak sample now: {level}.", { level: o.peak_dbfs === null ? t("unknown") : `${o.peak_dbfs.toFixed(1)} dBFS` })}
+        {/* i18n: channelizer = the FPGA filter bank that splits the band into channels; the overload causes come from its spectrum */}
+        {!o.spectrum && " " + t("No channelizer: the causes aren't analysed.")}
       </p>
       {o.events.length > 0 && (
         <table class="ovl-events">
           <thead>
             <tr>
-              <th>When</th>
-              <th>Length</th>
-              <th title="ADC clocks with the overflow pin high">Clocks</th>
-              <th>Cause</th>
+              <th>{t("When")}</th>
+              <th>{t("Length")}</th>
+              {/* i18n: clocks = ADC sample clock cycles */}
+              <th title={t("ADC clocks with the overflow pin high")}>{t("Clocks")}</th>
+              <th>{t("Cause")}</th>
             </tr>
           </thead>
           <tbody>
             {o.events.slice(0, 30).map((e) => (
               <tr key={e.start}>
-                <td>{t(e.start)}</td>
+                <td>{when(e.start)}</td>
                 <td>{e.seconds.toFixed(1)} s</td>
                 <td>{e.clocks}</td>
                 <td>{ovlCause(e)}</td>
@@ -457,28 +476,41 @@ function OvlCard({ o }: { o: Ovl }) {
   );
 }
 
+function gpsFix(mode: number): string {
+  return mode >= 3 ? "3D" : mode === 2 ? "2D" : t("none");
+}
+
 function SkimCard({ skim }: { skim: Skimmers }) {
   const bands = skim.bands ?? [];
   const p = skim.pskreporter;
   return (
     <section class="card">
-      <h3>Skimmers</h3>
+      {/* i18n: skimmer = a background decoder that listens to a band (FT8, WSPR...) and reports the spots it hears */}
+      <h3>{t("Skimmers")}</h3>
       {bands.length === 0 ? (
-        <p class="dim">None configured ([[skimmer]] in the config).</p>
+        <p class="dim">{t("None configured ([[skimmer]] in the config).")}</p>
       ) : (
         <table>
           <thead>
             <tr>
-              <th>band</th>
-              <th>state</th>
-              <th class="r">spots/slot</th>
-              <th class="r">CPU/slot</th>
-              <th class="r">last</th>
+              {/* i18n: slot = one decoding period of the digital mode (15 s for FT8, 2 min for WSPR); spots = decoded stations reported */}
+              <th>{t("band")}</th>
+              <th>{t("state")}</th>
+              <th class="r">{t("spots/slot")}</th>
+              <th class="r">{t("CPU/slot")}</th>
+              <th class="r">{tc("skimmer", "last")}</th>
             </tr>
           </thead>
           <tbody>
             {bands.map((b, k) => {
-              const state = !b.enabled ? "off" : !b.running ? `idle (hours ${b.hours})` : b.granted ? "running" : "waiting";
+              // i18n: states of a skimmer; idle = outside its configured hours; waiting = no receiver channel free yet
+              const state = !b.enabled
+                ? tc("skimmer state", "off")
+                : !b.running
+                  ? t("idle (hours {hours})", { hours: b.hours })
+                  : b.granted
+                    ? tc("skimmer state", "running")
+                    : tc("skimmer state", "waiting");
               const late = b.running && b.granted && (!b.last_slot || Date.now() / 1000 - b.last_slot > 60);
               return (
                 <tr key={k} class={b.running ? "" : "dim"}>
@@ -488,7 +520,7 @@ function SkimCard({ skim }: { skim: Skimmers }) {
                   <td class={b.running && !b.granted ? "warn" : ""}>{state}</td>
                   <td class="r">{b.slots ? (b.spots! / b.slots).toFixed(1) : "–"}</td>
                   <td class="r">{b.slots ? `${(b.cpu_per_slot_s! * 1e3).toFixed(0)} ms` : "–"}</td>
-                  <td class={`r ${late ? "warn" : ""}`}>{b.last_slot ? `${ago(b.last_slot)} ago` : "–"}</td>
+                  <td class={`r ${late ? "warn" : ""}`}>{b.last_slot ? t("{when} ago", { when: ago(b.last_slot) }) : "–"}</td>
                 </tr>
               );
             })}
@@ -497,50 +529,69 @@ function SkimCard({ skim }: { skim: Skimmers }) {
       )}
       {bands.some((b) => (b.dropped ?? 0) + (b.cut_short ?? 0) > 0) && (
         <p class="warn">
-          Behind: {bands.reduce((a, b) => a + (b.dropped ?? 0), 0)} slots dropped, {bands.reduce((a, b) => a + (b.cut_short ?? 0), 0)} cut short by
-          the deadline.
+          {t("Behind: {dropped} slots dropped, {cut} cut short by the deadline.", {
+            dropped: bands.reduce((a, b) => a + (b.dropped ?? 0), 0),
+            cut: bands.reduce((a, b) => a + (b.cut_short ?? 0), 0),
+          })}
         </p>
       )}
       {skim.gpsd && (
         <>
           <h4>gpsd</h4>
           <dl>
-            <dt>Server</dt>
+            <dt>{t("Server")}</dt>
             <dd class={skim.gpsd.connected ? "" : "warn"}>
-              {skim.gpsd.server} {skim.gpsd.connected ? "" : `(not connected${skim.gpsd.last_error ? `: ${skim.gpsd.last_error}` : ""})`}
+              {skim.gpsd.server}{" "}
+              {skim.gpsd.connected ? "" : skim.gpsd.last_error ? t("(not connected: {error})", { error: skim.gpsd.last_error }) : t("(not connected)")}
             </dd>
-            <dt>Fix</dt>
+            {/* i18n: GPS position fix: 3D, 2D or none */}
+            <dt>{t("Fix")}</dt>
             <dd>
-              {skim.gpsd.mode >= 3 ? "3D" : skim.gpsd.mode === 2 ? "2D" : "none"}
-              {skim.gpsd.last_fix ? `, last ${ago(skim.gpsd.last_fix)} ago` : ""}
+              {skim.gpsd.last_fix
+                ? t("{fix}, last {when} ago", { fix: gpsFix(skim.gpsd.mode), when: ago(skim.gpsd.last_fix) })
+                : gpsFix(skim.gpsd.mode)}
             </dd>
-            <dt>Locator</dt>
-            <dd>{skim.gpsd.locator ?? `none yet (using ${skim.locator || "no locator"})`}</dd>
+            {/* i18n: locator = Maidenhead grid locator, e.g. FN42aa */}
+            <dt>{t("Locator")}</dt>
+            <dd>{skim.gpsd.locator ?? t("none yet (using {locator})", { locator: skim.locator || t("no locator") })}</dd>
           </dl>
         </>
       )}
       <h4>PSKReporter</h4>
       {!p || !p.enabled ? (
-        <p class="dim">Not uploading{!skim.callsign || (skim.locator ?? "").length < 4 ? ": [station] needs a callsign and a locator" : ""}.</p>
+        <p class="dim">
+          {!skim.callsign || (skim.locator ?? "").length < 4
+            ? t("Not uploading: [station] needs a callsign and a locator.")
+            : t("Not uploading.")}
+        </p>
       ) : (
         <dl>
-          <dt>As</dt>
+          {/* i18n: "As": the callsign and locator the reports are sent under */}
+          <dt>{tc("reporting identity", "As")}</dt>
           <dd>
             {skim.callsign} {skim.locator}
           </dd>
-          <dt>Sent</dt>
+          <dt>{t("Sent")}</dt>
           <dd>
-            {p.reports} reports in {p.datagrams} datagrams{p.last_sent ? `, last ${ago(p.last_sent)} ago` : ""}
+            {/* i18n: a datagram = one UDP packet sent to PSKReporter, carrying several reports */}
+            {p.last_sent
+              ? t("{reports} reports in {datagrams} datagrams, last {when} ago", { reports: p.reports, datagrams: p.datagrams, when: ago(p.last_sent) })
+              : t("{reports} reports in {datagrams} datagrams", { reports: p.reports, datagrams: p.datagrams })}
           </dd>
-          <dt>Waiting</dt>
+          <dt>{tc("upload queue", "Waiting")}</dt>
           <dd>{p.pending}</dd>
-          <dt>Not sent</dt>
+          <dt>{t("Not sent")}</dt>
           <dd>
-            {p.skipped_recent} reported within the hour, {p.skipped_unconfirmed ?? 0} uncertain and not heard again, {p.skipped_not_live} not live
+            {/* i18n: reasons for not sending a spot: already reported in the last hour; decoded with low confidence and not heard again; the radio is not live (a recording) */}
+            {t("{recent} reported within the hour, {unconfirmed} uncertain and not heard again, {notlive} not live", {
+              recent: p.skipped_recent,
+              unconfirmed: p.skipped_unconfirmed ?? 0,
+              notlive: p.skipped_not_live,
+            })}
           </dd>
           {p.last_error && (
             <>
-              <dt>Error</dt>
+              <dt>{t("Error")}</dt>
               <dd class="warn">{p.last_error}</dd>
             </>
           )}
@@ -548,24 +599,26 @@ function SkimCard({ skim }: { skim: Skimmers }) {
       )}
       <h4>WSPRnet</h4>
       {!skim.wsprnet || !skim.wsprnet.enabled ? (
-        <p class="dim">Not uploading ([report] wsprnet).</p>
+        <p class="dim">{t("Not uploading ([report] wsprnet).")}</p>
       ) : (
         <dl>
-          <dt>Sent</dt>
+          <dt>{t("Sent")}</dt>
           <dd>
-            {skim.wsprnet.sent} spots{skim.wsprnet.last_sent ? `, last ${ago(skim.wsprnet.last_sent)} ago` : ""}
+            {skim.wsprnet.last_sent
+              ? tn("{n} spot, last {when} ago", "{n} spots, last {when} ago", skim.wsprnet.sent, { when: ago(skim.wsprnet.last_sent) })
+              : tn("{n} spot", "{n} spots", skim.wsprnet.sent)}
           </dd>
-          <dt>Waiting</dt>
+          <dt>{tc("upload queue", "Waiting")}</dt>
           <dd>{skim.wsprnet.pending}</dd>
           {skim.wsprnet.last_reply && (
             <>
-              <dt>Reply</dt>
+              <dt>{t("Reply")}</dt>
               <dd class="dim">{skim.wsprnet.last_reply}</dd>
             </>
           )}
           {(skim.wsprnet.failed > 0 || skim.wsprnet.last_error) && (
             <>
-              <dt>Failed</dt>
+              <dt>{t("Failed")}</dt>
               <dd class="warn">
                 {skim.wsprnet.failed}
                 {skim.wsprnet.last_error ? ` (${skim.wsprnet.last_error})` : ""}
@@ -574,9 +627,14 @@ function SkimCard({ skim }: { skim: Skimmers }) {
           )}
         </dl>
       )}
-      {!skim.live && <p class="warn">This radio isn't live (a recording or a simulation): no spots are uploaded.</p>}
+      {!skim.live && <p class="warn">{t("This radio isn't live (a recording or a simulation): no spots are uploaded.")}</p>}
     </section>
   );
+}
+
+/** The receiver column: its channel, or its place in the queue. */
+function sessionRx(s: Session): string {
+  return s.channel !== null ? t("channel {n}", { n: s.channel }) : s.waiting !== null ? t("#{n} in queue", { n: s.waiting }) : "–";
 }
 
 function SessionsPage() {
@@ -588,36 +646,41 @@ function SessionsPage() {
   };
   usePoll(refresh, 2000);
   const kick = async (s: Session) => {
-    if (!confirm(`Disconnect session ${s.id} (${s.ip})?`)) return;
+    if (!confirm(t("Disconnect session {id} ({ip})?", { id: s.id, ip: s.ip }))) return;
     setErr("");
     await call("POST", `api/admin/sessions/${s.id}/kick`).catch((e: Error) => setErr(e.message));
     setTimeout(() => void refresh(), 300);
   };
   const ban = async (s: Session) => {
-    if (!confirm(`Ban ${s.ip}? Its sessions end now and new ones are refused (Configuration: limits.blocked lifts it).`)) return;
+    if (!confirm(t("Ban {ip}? Its sessions end now and new ones are refused (Configuration: limits.blocked lifts it).", { ip: s.ip }))) return;
     setErr("");
     await call("POST", `api/admin/sessions/${s.id}/ban`).catch((e: Error) => setErr(e.message));
     setTimeout(() => void refresh(), 300);
   };
-  if (!list) return <p class="dim">Loading…</p>;
+  if (!list) return <p class="dim">{t("Loading…")}</p>;
   return (
     <div>
       {err && <p class="warn">{err}</p>}
       {list.length === 0 ? (
-        <p class="dim">No web sessions.</p>
+        <p class="dim">{t("No web sessions.")}</p>
       ) : (
         <table class="wide">
           <thead>
             <tr>
               <th>#</th>
-              <th>address</th>
-              <th>class</th>
-              <th>for</th>
-              <th class="r">frequency</th>
-              <th>mode</th>
-              <th>receiver</th>
-              <th>shared</th>
-              <th class="r">drops a/wf</th>
+              <th>{t("address")}</th>
+              {/* i18n: class = the kind of session (listener, admin, ...) */}
+              <th>{tc("session", "class")}</th>
+              {/* i18n: "for" = how long the session has lasted */}
+              <th>{tc("session duration", "for")}</th>
+              <th class="r">{t("frequency")}</th>
+              <th>{tc("session", "mode")}</th>
+              {/* i18n: receiver = which receiver channel the session uses, or its place in the queue */}
+              <th>{tc("session", "receiver")}</th>
+              {/* i18n: shared = whether the listener shares their frequency with the others */}
+              <th>{tc("session", "shared")}</th>
+              {/* i18n: drops a/wf = dropped audio and waterfall blocks */}
+              <th class="r">{t("drops a/wf")}</th>
               <th></th>
             </tr>
           </thead>
@@ -631,18 +694,19 @@ function SessionsPage() {
                 <td class="r">{khz(s.hz)}</td>
                 <td>{s.mode ?? "–"}</td>
                 <td>
-                  {s.channel !== null ? `channel ${s.channel}` : s.waiting !== null ? `#${s.waiting} in queue` : "–"}
-                  {s.listen !== null && `, listening to #${s.listen}`}
+                  {s.listen !== null
+                    ? t("{rx}, listening to #{n}", { rx: sessionRx(s), n: s.listen })
+                    : sessionRx(s)}
                 </td>
-                <td>{s.share ? "yes" : "no"}</td>
+                <td>{s.share ? t("yes") : t("no")}</td>
                 <td class="r">
                   {s.audio_drops}/{s.wf_drops}
                 </td>
                 <td>
-                  <button onClick={() => void kick(s)}>Kick</button>{" "}
+                  <button onClick={() => void kick(s)}>{t("Kick")}</button>{" "}
                   {s.class !== "admin" && (
-                    <button onClick={() => void ban(s)} title="End its sessions and refuse its address from now on">
-                      Ban
+                    <button onClick={() => void ban(s)} title={t("End its sessions and refuse its address from now on")}>
+                      {t("Ban")}
                     </button>
                   )}
                 </td>
@@ -677,54 +741,65 @@ function LabelsPage() {
     setMsg(null);
     try {
       const r = await putText<{ count: number }>("api/admin/markers", await file.text(), "text/csv");
-      setMsg({ ok: true, text: `Saved: ${r.count} labels from ${file.name}.` });
+      setMsg({ ok: true, text: tn("Saved: {n} label from {file}.", "Saved: {n} labels from {file}.", r.count, { file: file.name }) });
       await load();
     } catch (err) {
-      setMsg({ ok: false, text: `${file.name}: ${(err as Error).message}. The list was not changed.` });
+      setMsg({ ok: false, text: t("{file}: {error}. The list was not changed.", { file: file.name, error: (err as Error).message }) });
     }
   };
   return (
     <div class="cards">
       <section class="card">
-        <h3>The station's labels</h3>
-        <p>{count("own")} labels. Listeners see them in yellow (Labels: Station).</p>
+        <h3>{t("The station's labels")}</h3>
+        {/* i18n: labels = the frequency labels (markers) on the receiver's scale */}
+        <p>{tn("{n} label. Listeners see them in yellow (Labels: Station).", "{n} labels. Listeners see them in yellow (Labels: Station).", count("own"))}</p>
         <p>
           <a href={href("api/admin/markers")} download="markers.csv">
-            Download markers.csv
+            {t("Download markers.csv")}
           </a>
           {" · "}
           <label class="file">
-            Upload a new list <input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => void upload(e)} />
+            {t("Upload a new list")} <input type="file" accept=".csv,text/csv,text/plain" onChange={(e) => void upload(e)} />
           </label>
         </p>
         {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
         <p class="dim">
-          A CSV file, as a spreadsheet saves it (comma or semicolon). The first line names the columns: <code>khz</code> and <code>name</code>{" "}
-          are needed; <code>mode</code> (usb, lsb, cw or am; default am), <code>note</code>, <code>category</code>, <code>emission</code>,{" "}
-          <code>schedule</code> and <code>dial_khz</code> may follow. An upload replaces the whole list.
+          {/* i18n: the {..} placeholders are CSV column names, shown as code; keep them as they are */}
+          {tx(
+            "A CSV file, as a spreadsheet saves it (comma or semicolon). The first line names the columns: {khz} and {name} are needed; {mode} (usb, lsb, cw or am; default am), {note}, {category}, {emission}, {schedule} and {dial_khz} may follow. An upload replaces the whole list.",
+            {
+              khz: <code>khz</code>,
+              name: <code>name</code>,
+              mode: <code>mode</code>,
+              note: <code>note</code>,
+              category: <code>category</code>,
+              emission: <code>emission</code>,
+              schedule: <code>schedule</code>,
+              dial_khz: <code>dial_khz</code>,
+            },
+          )}
         </p>
       </section>
       <section class="card">
-        <h3>Bundled lists</h3>
+        <h3>{t("Bundled lists")}</h3>
         <table>
           <tbody>
             <tr>
-              <td>Broadcast (EiBi {info?.eibi_season})</td>
+              <td>{t("Broadcast (EiBi {season})", { season: info?.eibi_season ?? "" })}</td>
               <td class="num">{count("eibi")}</td>
             </tr>
             <tr>
-              <td>Utility</td>
+              <td>{t("Utility")}</td>
               <td class="num">{count("utility")}</td>
             </tr>
             <tr>
-              <td>Amateur</td>
+              <td>{t("Amateur")}</td>
               <td class="num">{count("amateur")}</td>
             </tr>
           </tbody>
         </table>
         <p class="dim">
-          Listeners choose what they see. The band ribbon and the amateur frequencies follow IARU region {info?.region ?? "?"} (Configuration:
-          markers.region) until a listener picks another.
+          {t("Listeners choose what they see. The band ribbon and the amateur frequencies follow IARU region {region} (Configuration: markers.region) until a listener picks another.", { region: info?.region ?? "?" })}
         </p>
       </section>
     </div>
@@ -747,7 +822,7 @@ function InfoPage() {
     setMsg(null);
     try {
       await putText("api/admin/info/photo", file, file.type || "application/octet-stream");
-      setMsg({ ok: true, text: `Saved ${file.name}.` });
+      setMsg({ ok: true, text: t("Saved {file}.", { file: file.name }) });
       setV(v + 1);
       await load();
     } catch (err) {
@@ -755,38 +830,39 @@ function InfoPage() {
     }
   };
   const remove = async () => {
-    if (!confirm("Remove the photo?")) return;
+    if (!confirm(t("Remove the photo?"))) return;
     await call("DELETE", "api/admin/info/photo").catch((e: Error) => setMsg({ ok: false, text: e.message }));
     await load();
   };
   return (
     <div class="cards">
       <section class="card">
-        <h3>Photo</h3>
-        {photo && <img class="info-photo" src={`${href("api/info/photo")}?v=${v}`} alt="The receiver's photo" />}
+        <h3>{t("Photo")}</h3>
+        {photo && <img class="info-photo" src={`${href("api/info/photo")}?v=${v}`} alt={t("The receiver's photo")} />}
         <p>
           <label class="file">
-            {photo ? "Replace it" : "Upload one"} <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => void upload(e)} />
+            {photo ? t("Replace it") : t("Upload one")} <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => void upload(e)} />
           </label>
           {photo && (
             <>
               {" · "}
-              <button onClick={() => void remove()}>Remove</button>
+              <button onClick={() => void remove()}>{t("Remove")}</button>
             </>
           )}
         </p>
         {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
-        <p class="dim">JPEG, PNG or WebP, at most 3 MB: the antenna, the station, the view. Kept beside the configuration file.</p>
+        <p class="dim">{t("JPEG, PNG or WebP, at most 3 MB: the antenna, the station, the view. Kept beside the configuration file.")}</p>
       </section>
       <section class="card">
-        <h3>What it says</h3>
+        <h3>{t("What it says")}</h3>
         <p>
-          Listeners open it with <b>Info</b> on the receiver page. It shows the receiver's name and location (Configuration: kiwi.name,
-          kiwi.location), the station's callsign, locator and antenna (station), your words (info.description, info.contact), the photo,
-          and the limits they meet (limits).
+          {tx(
+            "Listeners open it with {info} on the receiver page. It shows the receiver's name and location (Configuration: kiwi.name, kiwi.location), the station's callsign, locator and antenna (station), your words (info.description, info.contact), the photo, and the limits they meet (limits).",
+            { info: <b>{t("Info")}</b> },
+          )}
         </p>
         <p>
-          <a href="#/admin/config">Configuration</a> · <a href="./#info">See it as listeners do</a>
+          <a href="#/admin/config">{t("Configuration")}</a> · <a href="./#info">{t("See it as listeners do")}</a>
         </p>
       </section>
     </div>
@@ -818,41 +894,44 @@ function PasswordsPage() {
   return (
     <div class="cards">
       <section class="card">
-        <h3>Admin password</h3>
+        <h3>{t("Admin password")}</h3>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void send("admin", a1, "Admin password changed; other admin logins have ended.");
+            void send("admin", a1, t("Admin password changed; other admin logins have ended."));
           }}
         >
-          <input type="password" placeholder="New password" autocomplete="new-password" value={a1} onInput={val(setA1)} />
-          <input type="password" placeholder="Again" autocomplete="new-password" value={a2} onInput={val(setA2)} />
+          <input type="password" placeholder={t("New password")} autocomplete="new-password" value={a1} onInput={val(setA1)} />
+          <input type="password" placeholder={t("Again")} autocomplete="new-password" value={a2} onInput={val(setA2)} />
           <button type="submit" disabled={a1.length < 8 || a1 !== a2}>
-            Change
+            {t("Change")}
           </button>
-          <p class="dim">At least 8 characters.{a2 && a1 !== a2 ? " The two differ." : ""}</p>
+          <p class="dim">
+            {t("At least 8 characters.")}
+            {a2 && a1 !== a2 ? " " + t("The two differ.") : ""}
+          </p>
         </form>
       </section>
       <section class="card">
-        <h3>Listener password</h3>
+        <h3>{t("Listener password")}</h3>
         <p>
           {auth?.listener_password
-            ? "Set: listeners need it (or the admin password) to use the receiver."
-            : "Not set: anyone who reaches the page can listen."}
+            ? t("Set: listeners need it (or the admin password) to use the receiver.")
+            : t("Not set: anyone who reaches the page can listen.")}
         </p>
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            void send("listener", l1, "Listener password set; listeners logged in with the old one must log in again.");
+            void send("listener", l1, t("Listener password set; listeners logged in with the old one must log in again."));
           }}
         >
-          <input type="password" placeholder="New listener password" autocomplete="new-password" value={l1} onInput={val(setL1)} />
+          <input type="password" placeholder={t("New listener password")} autocomplete="new-password" value={l1} onInput={val(setL1)} />
           <button type="submit" disabled={!l1}>
-            {auth?.listener_password ? "Change" : "Set"}
+            {auth?.listener_password ? t("Change") : tc("password", "Set")}
           </button>
           {auth?.listener_password && (
-            <button type="button" onClick={() => void send("listener", null, "Listener password removed: the receiver is open.")}>
-              Remove
+            <button type="button" onClick={() => void send("listener", null, t("Listener password removed: the receiver is open."))}>
+              {t("Remove")}
             </button>
           )}
         </form>
@@ -907,13 +986,13 @@ function UpdatePage() {
       setBusy("");
     }
   };
-  if (!v) return <p class="dim">Loading…</p>;
+  if (!v) return <p class="dim">{t("Loading…")}</p>;
   if (!v.available) {
     return (
       <div class="cards">
         <section class="card">
-          <h3>OS updates</h3>
-          <p>Not available: {v.why}.</p>
+          <h3>{t("OS updates")}</h3>
+          <p>{t("Not available: {why}.", { why: v.why ?? "" })}</p>
         </section>
       </div>
     );
@@ -922,11 +1001,12 @@ function UpdatePage() {
   const rel = v.latest;
   const check = () => act("check", () => call<UpdateView>("POST", "api/admin/update/check"));
   const install = (version: string) => {
-    if (!confirm(`Install web888-ng ${version} into the other root slot? The receiver keeps running; a reboot then starts the new system.`)) return;
+    // i18n: root slot = one of the two A/B system partitions; the update is written to the one not running
+    if (!confirm(t("Install web888-ng {version} into the other root slot? The receiver keeps running; a reboot then starts the new system.", { version }))) return;
     void act("install", () => call<UpdateView>("POST", "api/admin/update/install", { version }));
   };
   const reboot = () => {
-    if (!confirm("Reboot the unit now? Everyone is disconnected; it is back in a minute or two.")) return;
+    if (!confirm(t("Reboot the unit now? Everyone is disconnected; it is back in a minute or two."))) return;
     void act("reboot", async () => {
       await call("POST", "api/admin/update/reboot");
       setRebooting(true);
@@ -938,10 +1018,14 @@ function UpdatePage() {
     return (
       <div class="cards">
         <section class="card">
-          <h3>Rebooting</h3>
-          <p>The unit is restarting{i.phase === "done" ? ` into web888-ng ${i.version}` : ""}. This page reloads when it is back.</p>
+          <h3>{t("Rebooting")}</h3>
+          <p>
+            {i.phase === "done"
+              ? t("The unit is restarting into web888-ng {version}. This page reloads when it is back.", { version: i.version })
+              : t("The unit is restarting. This page reloads when it is back.")}
+          </p>
           <p class="dim">
-            If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes).
+            {t("If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes).")}
           </p>
         </section>
       </div>
@@ -950,11 +1034,14 @@ function UpdatePage() {
   return (
     <div class="cards">
       <section class="card">
-        <h3>OS</h3>
+        <h3>{tc("operating system", "OS")}</h3>
         <dl>
-          <dt>Running</dt>
-          <dd>web888-ng {v.current ?? "?"}{v.booted ? `, slot ${v.booted}` : ""}</dd>
-          <dt>Newest release</dt>
+          <dt>{tc("software version", "Running")}</dt>
+          <dd>
+            {/* i18n: slot = one of the two A/B system partitions (RAUC slots) */}
+            {v.booted ? t("web888-ng {version}, slot {slot}", { version: v.current ?? "?", slot: v.booted }) : `web888-ng ${v.current ?? "?"}`}
+          </dd>
+          <dt>{t("Newest release")}</dt>
           <dd>
             {rel ? (
               <>
@@ -962,80 +1049,89 @@ function UpdatePage() {
                   {rel.version}
                 </a>{" "}
                 <span class="dim">
-                  ({day(rel.published)}, {mb(rel.size)}
-                  {rel.prerelease ? ", pre-release" : ""})
+                  {rel.prerelease
+                    ? t("({date}, {size}, pre-release)", { date: day(rel.published), size: mb(rel.size) })
+                    : t("({date}, {size})", { date: day(rel.published), size: mb(rel.size) })}
                 </span>
               </>
             ) : v.checked ? (
-              "none found"
+              t("none found")
             ) : (
-              "not looked yet"
+              t("not looked yet")
             )}
           </dd>
-          <dt>Looked</dt>
+          {/* i18n: "Looked": when the server last checked GitHub for a new release */}
+          <dt>{t("Looked")}</dt>
           <dd>
-            {v.checked ? `${ago(v.checked)} ago` : "never"}
-            {v.check_hours > 0 && v.enabled ? <span class="dim"> (by itself every {v.check_hours} h)</span> : null}
+            {v.checked ? t("{when} ago", { when: ago(v.checked) }) : t("never")}
+            {v.check_hours > 0 && v.enabled ? <span class="dim"> {t("(by itself every {n} h)", { n: v.check_hours })}</span> : null}
           </dd>
         </dl>
-        {v.check_error && <p class="warn">Looking for releases failed: {v.check_error}</p>}
-        {!v.enabled && <p class="warn">Updates are off (Configuration: update.enabled).</p>}
+        {v.check_error && <p class="warn">{t("Looking for releases failed: {error}", { error: v.check_error })}</p>}
+        {!v.enabled && <p class="warn">{t("Updates are off (Configuration: update.enabled).")}</p>}
         <p>
           <button onClick={() => void check()} disabled={!!busy || !v.enabled}>
-            {busy === "check" ? "Looking…" : "Look for a release"}
+            {busy === "check" ? t("Looking…") : t("Look for a release")}
           </button>{" "}
           {rel && v.newer && i.phase !== "done" && (
             <button class="on" onClick={() => install(rel.version)} disabled={!!busy || running || !v.enabled}>
-              Install {rel.version}
+              {t("Install {version}", { version: rel.version })}
             </button>
           )}
-          {rel && !v.newer && v.checked && <span class="ok">Up to date.</span>}
+          {rel && !v.newer && v.checked && <span class="ok">{t("Up to date.")}</span>}
         </p>
         {rel && !v.newer && i.phase === "idle" && (
           <p class="dim">
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                install(rel.version);
-              }}
-            >
-              Install {rel.version} again
-            </a>{" "}
-            (into the other slot, as an update would).
+            {tx("{link} (into the other slot, as an update would).", {
+              link: (
+                <a
+                  href="#"
+                  onClick={(e) => {
+                    e.preventDefault();
+                    install(rel.version);
+                  }}
+                >
+                  {t("Install {version} again", { version: rel.version })}
+                </a>
+              ),
+            })}
           </p>
         )}
         {rel?.notes && (
           <details>
-            <summary>Release notes</summary>
+            <summary>{t("Release notes")}</summary>
             <pre class="notes">{rel.notes}</pre>
           </details>
         )}
       </section>
       {i.phase !== "idle" && (
         <section class="card">
-          <h3>Install {i.version}</h3>
+          <h3>{t("Install {version}", { version: i.version })}</h3>
           {i.phase === "running" && (
             <>
               <progress max={100} value={i.percent} />
               <p>
                 {i.percent} % · {i.step}
               </p>
-              <p class="dim">Streamed from the release and checked as it goes; the receiver keeps running.</p>
+              <p class="dim">{t("Streamed from the release and checked as it goes; the receiver keeps running.")}</p>
             </>
           )}
           {i.phase === "done" && (
             <>
-              <p class="ok">Installed{i.ended && i.started ? ` in ${Math.round((i.ended - i.started) / 60)} min` : ""}. Reboot to start it.</p>
+              <p class="ok">
+                {i.ended && i.started
+                  ? t("Installed in {n} min. Reboot to start it.", { n: Math.round((i.ended - i.started) / 60) })
+                  : t("Installed. Reboot to start it.")}
+              </p>
               <p>
                 <button class="on" onClick={reboot} disabled={!!busy}>
-                  Reboot now
+                  {t("Reboot now")}
                 </button>
               </p>
-              <p class="dim">The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay.</p>
+              <p class="dim">{t("The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay.")}</p>
             </>
           )}
-          {i.phase === "failed" && <p class="warn">Failed: {i.error}. The running system is unchanged.</p>}
+          {i.phase === "failed" && <p class="warn">{t("Failed: {error}. The running system is unchanged.", { error: i.error })}</p>}
           {i.log.length > 0 && (
             <details open={i.phase === "failed"}>
               <summary>RAUC</summary>
@@ -1045,16 +1141,18 @@ function UpdatePage() {
         </section>
       )}
       <section class="card">
-        <h3>Root slots</h3>
+        {/* i18n: root slot = one of the two A/B system partitions (RAUC slots); the update goes to the one not running */}
+        <h3>{t("Root slots")}</h3>
         {v.status_error && <p class="warn">{v.status_error}</p>}
         <table>
           <thead>
             <tr>
-              <th>Slot</th>
-              <th>State</th>
-              <th>Boot</th>
-              <th>Version</th>
-              <th>Installed (UTC)</th>
+              <th>{t("Slot")}</th>
+              <th>{t("State")}</th>
+              {/* i18n: Boot = the slot's boot status (good, bad, ...) */}
+              <th>{tc("slot", "Boot")}</th>
+              <th>{t("Version")}</th>
+              <th>{t("Installed (UTC)")}</th>
             </tr>
           </thead>
           <tbody>
@@ -1072,8 +1170,7 @@ function UpdatePage() {
           </tbody>
         </table>
         <p class="dim">
-          An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN,
-          u-boot.img) is not part of it: see Boot loader below.
+          {t("An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN, u-boot.img) is not part of it: see Boot loader below.")}
         </p>
       </section>
       {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
@@ -1092,10 +1189,10 @@ function BackupCard() {
       text = await f.text();
       JSON.parse(text);
     } catch {
-      setMsg({ ok: false, text: `${f.name}: not a settings backup (JSON)` });
+      setMsg({ ok: false, text: t("{file}: not a settings backup (JSON)", { file: f.name }) });
       return;
     }
-    if (!confirm(`Restore the settings from ${f.name}? The configuration, the passwords and the own labels are replaced by the file's.`)) return;
+    if (!confirm(t("Restore the settings from {file}? The configuration, the passwords and the own labels are replaced by the file's.", { file: f.name }))) return;
     setBusy(true);
     try {
       const r = await call<Changes & { labels: number | null; from: { server: string; created: number } }>(
@@ -1104,12 +1201,13 @@ function BackupCard() {
         JSON.parse(text),
       );
       const when = new Date(r.from.created * 1000).toISOString().slice(0, 16).replace("T", " ");
-      const parts = [`Restored the settings saved by web888d ${r.from.server} on ${when} UTC`];
-      if (r.labels !== null) parts.push(`${r.labels} own labels`);
-      if (r.restart.length) parts.push(`restart web888d for: ${r.restart.join(", ")}`);
+      // i18n: the three parts are joined with "; " into one report
+      const parts = [t("Restored the settings saved by web888d {server} on {when} UTC", { server: r.from.server, when })];
+      if (r.labels !== null) parts.push(tn("{n} own label", "{n} own labels", r.labels));
+      if (r.restart.length) parts.push(t("restart web888d for: {what}", { what: r.restart.join(", ") }));
       setMsg({ ok: true, text: parts.join("; ") + "." });
     } catch (e) {
-      setMsg({ ok: false, text: `Not restored: ${(e as Error).message}` });
+      setMsg({ ok: false, text: t("Not restored: {error}", { error: (e as Error).message }) });
     } finally {
       setBusy(false);
     }
@@ -1117,14 +1215,14 @@ function BackupCard() {
   return (
     <div class="cards">
       <section class="card">
-        <h3>Backup</h3>
+        <h3>{t("Backup")}</h3>
         <p>
           <a href={href("api/admin/backup")} download>
-            Download the settings
+            {t("Download the settings")}
           </a>
           {" · "}
           <label class="file">
-            {busy ? "Restoring…" : "Restore from a file"}{" "}
+            {busy ? t("Restoring…") : t("Restore from a file")}{" "}
             <input
               type="file"
               accept=".json,application/json"
@@ -1139,8 +1237,7 @@ function BackupCard() {
         </p>
         {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
         <p class="dim">
-          One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's
-          own settings (network, tunnels, SSH key) are in web888.txt on the card, not here.
+          {t("One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's own settings (network, tunnels, SSH key) are in web888.txt on the card, not here.")}
         </p>
       </section>
     </div>
@@ -1175,11 +1272,10 @@ function BootLoaderCard() {
   const install = async () => {
     if (
       !confirm(
-        "Write the boot loader to the card now?\n\n" +
-          "Unlike the system, the boot loader has no second copy to fall back to. If the unit loses power while it is written, " +
-          "or the new boot loader doesn't start, the unit won't boot until the card is fixed on a computer (rename boot.bin.old " +
-          "and u-boot.img.old back) or re-imaged. Download a settings backup first, and have a card reader at hand.\n\n" +
-          "The receiver keeps running; the new boot loader starts at the next reboot.",
+        // i18n: boot loader = the first software the unit runs at power-up (SPL + U-Boot on the SD card)
+        t(
+          "Write the boot loader to the card now?\n\nUnlike the system, the boot loader has no second copy to fall back to. If the unit loses power while it is written, or the new boot loader doesn't start, the unit won't boot until the card is fixed on a computer (rename boot.bin.old and u-boot.img.old back) or re-imaged. Download a settings backup first, and have a card reader at hand.\n\nThe receiver keeps running; the new boot loader starts at the next reboot.",
+        ),
       )
     )
       return;
@@ -1187,7 +1283,7 @@ function BootLoaderCard() {
     setMsg(null);
     try {
       const r = await call<{ output: string }>("POST", "api/admin/bootloader/install");
-      setMsg({ ok: true, text: r.output.split("\n").pop() ?? "done" });
+      setMsg({ ok: true, text: r.output.split("\n").pop() ?? t("done") });
       setB(await get<BootLoader>("api/admin/bootloader"));
     } catch (e) {
       setMsg({ ok: false, text: (e as Error).message });
@@ -1198,52 +1294,54 @@ function BootLoaderCard() {
   return (
     <div class="cards">
       <section class="card">
-        <h3>Boot loader</h3>
+        <h3>{t("Boot loader")}</h3>
         {!b.available || b.state === "unsupported" ? (
-          <p class="dim">Not updated from here: {b.reason}.</p>
+          <p class="dim">{t("Not updated from here: {reason}.", { reason: b.reason ?? "" })}</p>
         ) : (
           <>
             <dl>
-              <dt>On the card</dt>
+              <dt>{t("On the card")}</dt>
               <dd>
                 {b.state === "current" ? (
-                  <span class="ok">this system's{b.shipped_version ? ` (web888-ng ${b.shipped_version})` : ""}</span>
+                  <span class="ok">
+                    {b.shipped_version ? t("this system's (web888-ng {version})", { version: b.shipped_version }) : t("this system's")}
+                  </span>
                 ) : (
-                  <span class="warn">another one</span>
+                  <span class="warn">{t("another one")}</span>
                 )}{" "}
                 <span class="dim">
-                  SPL {short(b.installed_spl)}, U-Boot {short(b.installed_uboot)}
+                  {/* i18n: SPL = the first-stage boot loader (secondary program loader); the values are short hashes of the two files */}
+                  {t("SPL {spl}, U-Boot {uboot}", { spl: short(b.installed_spl), uboot: short(b.installed_uboot) })}
                 </span>
               </dd>
               {b.state === "update" && (
                 <>
-                  <dt>This system's</dt>
+                  <dt>{t("This system's")}</dt>
                   <dd>
                     web888-ng {b.shipped_version ?? "?"}{" "}
                     <span class="dim">
-                      SPL {short(b.shipped_spl)}, U-Boot {short(b.shipped_uboot)}
+                      {t("SPL {spl}, U-Boot {uboot}", { spl: short(b.shipped_spl), uboot: short(b.shipped_uboot) })}
                     </span>
                   </dd>
                 </>
               )}
               {b.old_kept && (
                 <>
-                  <dt>Kept</dt>
-                  <dd class="dim">boot.bin.old, u-boot.img.old (the one before)</dd>
+                  <dt>{t("Kept")}</dt>
+                  <dd class="dim">{t("boot.bin.old, u-boot.img.old (the one before)")}</dd>
                 </>
               )}
             </dl>
             {b.state === "update" && (
               <>
-                {b.blocked && <p class="warn">Not now: {b.blocked}.</p>}
+                {b.blocked && <p class="warn">{t("Not now: {reason}.", { reason: b.blocked })}</p>}
                 <p>
                   <button class="on" onClick={() => void install()} disabled={busy || !!b.blocked}>
-                    {busy ? "Writing…" : "Write it to the card…"}
+                    {busy ? t("Writing…") : t("Write it to the card…")}
                   </button>
                 </p>
                 <p class="dim">
-                  Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to
-                  re-image the card if something unexpected happens.
+                  {t("Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to re-image the card if something unexpected happens.")}
                 </p>
               </>
             )}
@@ -1256,10 +1354,11 @@ function BootLoaderCard() {
 }
 
 type LogSource = "web888d" | "boot" | "kernel" | "setup";
+// i18n: log sources; "System (this boot)" = the system log since the unit last booted; Kernel = the operating system kernel's log
 const LOG_SOURCES: { id: LogSource; name: string }[] = [
   { id: "web888d", name: "web888d" },
-  { id: "boot", name: "System (this boot)" },
-  { id: "kernel", name: "Kernel" },
+  { id: "boot", name: N_("System (this boot)") },
+  { id: "kernel", name: N_("Kernel") },
   { id: "setup", name: "web888-setup.log" },
 ];
 
@@ -1322,30 +1421,30 @@ function LogsPage() {
               key={s.id}
               class={src === s.id ? "on" : ""}
               disabled={logs ? !logs.sources[s.id] : false}
-              title={logs && !logs.sources[s.id] ? "not on this system" : ""}
+              title={logs && !logs.sources[s.id] ? t("not on this system") : ""}
               onClick={() => setSrc(s.id)}
             >
-              {s.name}
+              {t(s.name)}
             </button>
           ))}
         </nav>
         <select value={n} onChange={(e) => setN(Number((e.currentTarget as HTMLSelectElement).value))}>
           {[100, 300, 1000, 5000].map((k) => (
-            <option value={k}>{k} lines</option>
+            <option value={k}>{t("{n} lines", { n: k })}</option>
           ))}
         </select>
-        <input type="search" placeholder="Filter" value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
+        <input type="search" placeholder={t("Filter")} value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
         <label>
-          <input type="checkbox" checked={follow} onChange={(e) => setFollow((e.currentTarget as HTMLInputElement).checked)} /> Follow
+          <input type="checkbox" checked={follow} onChange={(e) => setFollow((e.currentTarget as HTMLInputElement).checked)} /> {t("Follow")}
         </label>
         <button onClick={save} disabled={!lines.length}>
-          Download
+          {t("Download")}
         </button>
       </div>
       {err && <p class="warn">{err}</p>}
       {logs?.error && logs.source === src && <p class="warn">{logs.error}</p>}
       {logs && logs.source === src && !logs.error && !lines.length && (
-        <p class="dim">{logs.lines.length ? "No line matches the filter." : "No lines yet."}</p>
+        <p class="dim">{logs.lines.length ? t("No line matches the filter.") : t("No lines yet.")}</p>
       )}
       <pre class="log" ref={pre}>
         {lines.join("\n")}
@@ -1373,7 +1472,7 @@ export function AdminApp() {
     if (loggedOut.value) refresh();
   }, [loggedOut.value]);
   if (err) return <p class="warn admin-login">{err}</p>;
-  if (!auth) return <p class="dim admin-login">Loading…</p>;
+  if (!auth) return <p class="dim admin-login">{t("Loading…")}</p>;
   if (auth.role !== "admin") return <Login auth={auth} onDone={refresh} />;
   const logout = async () => {
     await call("POST", "api/logout").catch(() => {});
@@ -1382,17 +1481,17 @@ export function AdminApp() {
   return (
     <div class="admin">
       <header>
-        <strong>web888d admin</strong>
+        <strong>{t("web888d admin")}</strong>
         <nav class="seg">
-          {TABS.map((t) => (
-            <button key={t.id} class={tab.value === t.id ? "on" : ""} onClick={() => (location.hash = `#/admin/${t.id}`)}>
-              {t.name}
+          {TABS.map((tb) => (
+            <button key={tb.id} class={tab.value === tb.id ? "on" : ""} onClick={() => (location.hash = `#/admin/${tb.id}`)}>
+              {t(tb.name)}
             </button>
           ))}
         </nav>
         <span class="spacer" />
-        <a href="#">Receiver</a>
-        <button onClick={() => void logout()}>Log out</button>
+        <a href="#">{t("Receiver")}</a>
+        <button onClick={() => void logout()}>{t("Log out")}</button>
       </header>
       <div class="page">
         {tab.value === "status" && <StatusPage />}

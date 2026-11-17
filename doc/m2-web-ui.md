@@ -659,3 +659,36 @@ under Configuration. Checked in headless Chromium with
 `ui/tools/cdp/config.mjs` (each setting takes effect and is stored; the
 phone sheet doesn't scroll sideways); `codec.mjs`, `listener.mjs` and
 `features.mjs` now reach the moved controls through the box.
+
+## 20. Languages (2026-11-17)
+
+The web UI, receiver and admin pages, is translatable; Finnish, Swedish
+and German are the first translations.
+
+* **Format**: gettext PO files in `ui/po/` (`web888d-ui.pot` the
+  template, `xx.po` per language), so translators can use Poedit,
+  Weblate, Lokalize or a text editor. `ui/po/README.md` is the guide for
+  translators and developers; `ui/po/GLOSSARY.md` fixes the technical
+  terms in each language.
+* **Code**: the English text is the key (`src/i18n.ts`): `t()`, `tc()`
+  with a context for words with two senses, `tn()` for plurals (the
+  PO header's Plural-Forms, evaluated in the page), `tx()` for sentences
+  with elements in them, `N_()` to mark constants. A `// i18n:` comment
+  before a call reaches translators as a note (111 notes on the radio
+  terms).
+* **Tooling** (`ui/scripts/i18n.mjs`, no dependencies): `extract` (from
+  the source; aliased imports of `t` are refused, since the scan looks
+  for `t(`), `update` (new messages into each language, removed ones
+  kept as `#~`), `new xx "Name"`, `compile` (build.mjs: `dist/i18n/xx.json`
+  and `index.json`), `check` (CI: the template is current, placeholders
+  kept, the header complete).
+* **Page**: the browser's language when there is a catalogue, else
+  English; Config → Language to choose. The catalogue is fetched before
+  the first render (a missing one leaves English); components re-render
+  on a change because t() reads a signal.
+* **Left in English**: what the server sends (refusal reasons, notices,
+  the config form's field help from the schema, and its section/field
+  titles made from key names), the decoder workers' error messages, and
+  decoded content. Texts put into signals when an event happens (a
+  recording done, the connection note) keep the language they were made
+  in until the next event.

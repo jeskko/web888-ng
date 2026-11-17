@@ -5,6 +5,7 @@
 // rate; I/Q shows both sides of the dial. Hovering reads the frequency.
 
 import { useEffect, useRef } from "preact/hooks";
+import { t } from "../i18n.ts";
 import { AfAnalyzer, audioPassband, noiseFloor, type AfLine } from "../view/afspec.ts";
 import { colormap } from "../view/colormap.ts";
 import { afOn, palette, setAf, st, tapAudio } from "../state.ts";
@@ -60,10 +61,10 @@ export function AfPanel() {
       const o = head * w * 4;
       for (let px = 0; px < w; px++) {
         const k = Math.min(n - 1, Math.floor((px / w) * n));
-        const t = Math.max(0, Math.min(255, Math.round(((l.db[k] - lo) / (hi - lo)) * 255)));
-        row[o + 4 * px] = lut[4 * t];
-        row[o + 4 * px + 1] = lut[4 * t + 1];
-        row[o + 4 * px + 2] = lut[4 * t + 2];
+        const v = Math.max(0, Math.min(255, Math.round(((l.db[k] - lo) / (hi - lo)) * 255)));
+        row[o + 4 * px] = lut[4 * v];
+        row[o + 4 * px + 1] = lut[4 * v + 1];
+        row[o + 4 * px + 2] = lut[4 * v + 2];
         row[o + 4 * px + 3] = 255;
       }
     };
@@ -149,14 +150,17 @@ export function AfPanel() {
   return (
     <aside class="spots afspec">
       <div class="spots-bar">
-        <strong>Audio spectrum</strong>
+        <strong>{t("Audio spectrum")}</strong>
         <span class="dim num" ref={tip} />
-        <button class="close" onClick={() => setAf(false)} title="Close">
+        <button class="close" onClick={() => setAf(false)} title={t("Close")}>
           ✕
         </button>
       </div>
       <canvas class="afspec-canvas" ref={ref} />
-      <p class="dim">The audio as it arrives (before this page's volume), ~23 Hz a point at 12 kS/s; the passband shaded. In IQ, both sides of the dial.</p>
+      <p class="dim">
+        {/* i18n: kS/s = thousand samples per second; passband = the range of audio frequencies the receiver lets through; IQ = complex baseband samples (both sides of the dial) */}
+        {t("The audio as it arrives (before this page's volume), ~23 Hz a point at 12 kS/s; the passband shaded. In IQ, both sides of the dial.")}
+      </p>
     </aside>
   );
 }

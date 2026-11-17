@@ -4,6 +4,7 @@
 // (optimistic) and send the request.
 
 import { batch, computed, effect, signal } from "@preact/signals";
+import { t } from "./i18n.ts";
 import { Player, type PlayerStats } from "./audio/player.ts";
 import { bandOf, type Band } from "./bands.ts";
 import { clamp, formatKhz, setShownOffset, shownOffset, snapFor, stepFor } from "./fmt.ts";
@@ -160,7 +161,7 @@ function askLogin(): void {
   batch(() => {
     needLogin.value = true;
     conn.value = "closed";
-    connNote.value = "password needed";
+    connNote.value = t("password needed");
   });
 }
 
@@ -184,7 +185,7 @@ export async function login(password: string): Promise<void> {
     return;
   }
   const body = (await r.json().catch(() => ({}))) as { error?: string };
-  loginError.value = body.error ?? `login failed (${r.status})`;
+  loginError.value = body.error ?? t("login failed ({status})", { status: r.status });
 }
 
 export function connect(): void {
@@ -708,7 +709,7 @@ export function stopIqRec(keep = true): void {
   wideSync();
   if (!keep) return;
   if (r.samples === 0) {
-    iqRecDone.value = "nothing was received";
+    iqRecDone.value = t("nothing was received");
     return;
   }
   const { bytes, name } = r.file(iqRecFormat.value);
@@ -718,8 +719,8 @@ export function stopIqRec(keep = true): void {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  const lost = r.lost ? `, ${(r.lost / r.rate).toFixed(2)} s lost (zeros)` : "";
-  iqRecDone.value = `${name} (${r.seconds.toFixed(1)} s${lost})`;
+  const lost = r.lost ? t(", {s} s lost (zeros)", { s: (r.lost / r.rate).toFixed(2) }) : "";
+  iqRecDone.value = t("{name} ({s} s{lost})", { name, s: r.seconds.toFixed(1), lost });
 }
 
 function recIq(f: IqFrame): void {
@@ -2138,7 +2139,7 @@ export function stopAudioRec(keep = true): void {
   audioRec.value = null;
   if (!keep) return;
   if (r.frames === 0) {
-    audioRecDone.value = r.skippedS > 0 ? "only silence was heard" : "nothing was received";
+    audioRecDone.value = r.skippedS > 0 ? t("only silence was heard") : t("nothing was received");
     return;
   }
   const { bytes, name } = r.file();
@@ -2148,9 +2149,9 @@ export function stopAudioRec(keep = true): void {
   a.download = name;
   a.click();
   setTimeout(() => URL.revokeObjectURL(url), 60_000);
-  const skipped = r.skippedS >= 1 ? `, ${r.skippedS.toFixed(0)} s of silence left out` : "";
-  const ended = r.ended ? "; ended when the audio format changed" : "";
-  audioRecDone.value = `${name} (${r.seconds.toFixed(1)} s${skipped}${ended})`;
+  const skipped = r.skippedS >= 1 ? t(", {s} s of silence left out", { s: r.skippedS.toFixed(0) }) : "";
+  const ended = r.ended ? t("; ended when the audio format changed") : "";
+  audioRecDone.value = t("{name} ({s} s{skipped}{ended})", { name, s: r.seconds.toFixed(1), skipped, ended });
 }
 
 function recAudio(f: AudioFrame): void {

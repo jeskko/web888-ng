@@ -9,9 +9,10 @@
 // with sigid.wasm (the signal identifier) and timecode-worker.js with
 // timecode.wasm (time-code stations); opus.wasm (the audio's Opus
 // decoder, loaded by the page itself); index.html, style.css, and the
-// map's world (map/*.json).
+// map's world (map/*.json), and the translations (i18n/*.json from po/).
 // `node build.mjs --watch` rebuilds on change (development).
 import * as esbuild from "esbuild";
+import { execFileSync } from "node:child_process";
 import { access, copyFile, mkdir } from "node:fs/promises";
 
 const watch = process.argv.includes("--watch");
@@ -23,6 +24,8 @@ const copyStatic = {
   setup(build) {
     build.onEnd(async () => {
       for (const f of ["index.html", "style.css"]) await copyFile(`src/${f}`, `${out}/${f}`);
+      // the translations: po/*.po -> dist/i18n/*.json (po/README.md)
+      execFileSync(process.execPath, ["scripts/i18n.mjs", "compile", out], { stdio: "inherit" });
       // the map's world (Natural Earth, public domain, via world-atlas)
       await mkdir(`${out}/map`, { recursive: true });
       for (const res of ["110m", "50m"]) await copyFile(`node_modules/world-atlas/countries-${res}.json`, `${out}/map/countries-${res}.json`);

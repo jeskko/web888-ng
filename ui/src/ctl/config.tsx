@@ -1,25 +1,28 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The listener's own settings in one place: their name and whether their
-// frequency is shared, the data saver, the waterfall's colours and time
-// marks, and the frequency labels. All remembered in this browser (the
-// name and sharing also go to the server). Opened from the header's
-// Config button (`#config`); the phone's More sheet shows it inline.
+// The listener's own settings in one place: the language, their name and
+// whether their frequency is shared, the data saver, the waterfall's
+// colours and time marks, and the frequency labels. All remembered in
+// this browser (the name and sharing also go to the server). Opened from
+// the header's Config button (`#config`); the phone's More sheet shows it
+// inline.
 
 import { signal } from "@preact/signals";
 import { useEffect } from "preact/hooks";
 import { cssGradient, PALETTE_NAMES, type Palette } from "../view/colormap.ts";
 import { NAME_MAX } from "../proto.ts";
 import { dataSaver, myName, palette, setDataSaver, setName, setPalette, setShare, setWfTimes, st, wfTimes } from "../state.ts";
+import { languages, langPref, N_, setLanguage, t } from "../i18n.ts";
 import { LabelOptions } from "./labels.tsx";
 
 export const configOpen = signal(location.hash === "#config");
 
+// i18n: names of waterfall colour palettes
 export const PALETTE_LABELS: Record<Palette, string> = {
-  web888: "Default",
+  web888: N_("Default"),
   viridis: "Viridis",
-  heat: "Heat",
-  phosphor: "Phosphor",
-  grey: "Grey",
+  heat: N_("Heat"),
+  phosphor: N_("Phosphor"),
+  grey: N_("Grey"),
 };
 
 /** The settings themselves (the box's body, and the phone's sheet). */
@@ -28,14 +31,25 @@ export function ConfigBody() {
   const p = palette.value;
   return (
     <div class="user-config">
-      <h4>You</h4>
-      <label class="config-row" title={`Shown to the other listeners (at most ${NAME_MAX} characters)`}>
-        Callsign or nickname
+      <label class="config-row">
+        {t("Language")}
+        <select class="lang" value={langPref.value} onChange={(e) => void setLanguage(e.currentTarget.value)}>
+          <option value="">{t("Automatic (the browser's)")}</option>
+          {languages.value.map((l) => (
+            <option key={l.code} value={l.code}>
+              {l.name}
+            </option>
+          ))}
+        </select>
+      </label>
+      <h4>{t("You")}</h4>
+      <label class="config-row" title={t("Shown to the other listeners (at most {n} characters)", { n: NAME_MAX })}>
+        {t("Callsign or nickname")}
         <input
           type="text"
           class="name"
           maxLength={NAME_MAX}
-          placeholder="callsign"
+          placeholder={t("callsign")}
           value={myName.value}
           onChange={(e) => setName(e.currentTarget.value)}
           onKeyDown={(e) => e.key === "Enter" && e.currentTarget.blur()}
@@ -45,31 +59,34 @@ export function ConfigBody() {
         <label class="config-check">
           <input type="checkbox" class="share" checked={s.share} onChange={(e) => setShare(e.currentTarget.checked)} />
           <span>
-            Share my frequency
+            {t("Share my frequency")}
             <span class="dim">
-              {" "}
-              {s.share ? "— others see it on their scale and may listen along while they wait for a receiver" : "— private: others see that you are here, not where"}
+              {" — "}
+              {s.share ? t("others see it on their scale and may listen along while they wait for a receiver") : t("private: others see that you are here, not where")}
             </span>
           </span>
         </label>
       )}
-      <h4>Data</h4>
+      <h4>{t("Data")}</h4>
       <label class="config-check">
         <input type="checkbox" class="saver" checked={dataSaver.value} onChange={(e) => setDataSaver(e.currentTarget.checked)} />
         <span>
-          Data saver
-          <span class="dim"> — half the waterfall lines a second and a bin for every two pixels (about a quarter of its data)</span>
+          {t("Data saver")}
+          <span class="dim">
+            {" — "}
+            {t("half the waterfall lines a second and a bin for every two pixels (about a quarter of its data)")}
+          </span>
         </span>
       </label>
-      <h4>Waterfall</h4>
+      <h4>{t("Waterfall")}</h4>
       <label class="config-row">
-        Colours
+        {t("Colours")}
         <span class="config-palette">
           <span class="swatch" style={{ backgroundImage: cssGradient(p) }} />
           <select class="palette" value={p} onChange={(e) => setPalette(e.currentTarget.value as Palette)}>
             {PALETTE_NAMES.map((n) => (
               <option key={n} value={n}>
-                {PALETTE_LABELS[n]}
+                {t(PALETTE_LABELS[n])}
               </option>
             ))}
           </select>
@@ -78,10 +95,14 @@ export function ConfigBody() {
       <label class="config-check">
         <input type="checkbox" class="times" checked={wfTimes.value} onChange={(e) => setWfTimes(e.currentTarget.checked)} />
         <span>
-          Time marks <span class="dim">— UTC down the waterfall's left edge</span>
+          {t("Time marks")}
+          <span class="dim">
+            {" — "}
+            {t("UTC down the waterfall's left edge")}
+          </span>
         </span>
       </label>
-      <h4>Labels</h4>
+      <h4>{t("Labels")}</h4>
       <LabelOptions />
     </div>
   );
@@ -91,8 +112,8 @@ export function ConfigBody() {
 export function ConfigCtl() {
   return (
     <div class="group">
-      <button class={configOpen.value ? "on" : ""} onClick={() => (configOpen.value = !configOpen.value)} title="Your settings: name, sharing, data saver, waterfall colours, labels">
-        Config
+      <button class={configOpen.value ? "on" : ""} onClick={() => (configOpen.value = !configOpen.value)} title={t("Your settings: language, name, sharing, data saver, waterfall colours, labels")}>
+        {t("Config")}
       </button>
     </div>
   );
@@ -109,14 +130,14 @@ export function ConfigPanel() {
   }, [open]);
   if (!open) return null;
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label="Configuration" onClick={(e) => e.target === e.currentTarget && (configOpen.value = false)}>
+    <div class="overlay keyhelp" role="dialog" aria-label={t("Configuration")} onClick={(e) => e.target === e.currentTarget && (configOpen.value = false)}>
       <div class="keyhelp-box info-box config-box">
-        <button class="info-x" onClick={() => (configOpen.value = false)} title="Close (Escape)">
+        <button class="info-x" onClick={() => (configOpen.value = false)} title={t("Close (Escape)")}>
           ✕
         </button>
-        <h3>Configuration</h3>
+        <h3>{t("Configuration")}</h3>
         <ConfigBody />
-        <p class="dim">Kept in this browser.</p>
+        <p class="dim">{t("Kept in this browser.")}</p>
       </div>
     </div>
   );

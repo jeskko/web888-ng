@@ -47,8 +47,11 @@ jobs:
       - run: pnpm install --frozen-lockfile
       # the info page's library list (crates/web/src/third-party.json) is current
       - run: python3 ../scripts/third-party.py --check
+      # the translations' template is current, their placeholders right (po/README.md)
+      - run: node scripts/i18n.mjs check
       - run: pnpm test
       - run: pnpm build
+      - run: test -s dist/i18n/index.json
       - run: test -s dist/jtty.wasm && test -s dist/digi.wasm && test -s dist/cw.wasm && test -s dist/fsk.wasm && test -s dist/psk.wasm && test -s dist/hfdl.wasm && test -s dist/js8.wasm && test -s dist/img.wasm && test -s dist/sigid.wasm && test -s dist/timecode.wasm && test -s dist/opus.wasm
       - uses: actions/upload-artifact@v4
         with:

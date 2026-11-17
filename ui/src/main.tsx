@@ -2,6 +2,7 @@
 // web888d web UI: the receiver (layout, keyboard shortcuts, start-audio
 // overlay), or the admin pages under #/admin.
 
+import { initI18n, t } from "./i18n.ts";
 import { render } from "preact";
 import { useEffect, useState } from "preact/hooks";
 import {
@@ -73,8 +74,8 @@ const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm"
 function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const t = e.target as HTMLElement;
-      if (t.tagName === "INPUT" || t.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+      const el = e.target as HTMLElement;
+      if (el.tagName === "INPUT" || el.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
       const s = st.value;
       if (!s) return;
       const step = stepOf(s.mode) * (e.shiftKey ? 10 : 1);
@@ -104,21 +105,21 @@ function Login() {
   };
   return (
     <form class="overlay login" onSubmit={submit}>
-      <p>{guest ? "Log in with the receiver's password for any of its receivers." : "This receiver is private."}</p>
+      <p>{guest ? t("Log in with the receiver's password for any of its receivers.") : t("This receiver is private.")}</p>
       <input
         type="password"
-        placeholder="Password"
+        placeholder={t("Password")}
         autocomplete="current-password"
         autofocus
         value={pw}
         onInput={(e) => setPw((e.target as HTMLInputElement).value)}
       />
       <button type="submit" disabled={busy || !pw}>
-        {guest ? "Log in" : "Listen"}
+        {guest ? t("Log in") : t("Listen")}
       </button>
       {guest && (
         <button type="button" onClick={cancelLogin}>
-          Stay a visitor
+          {t("Stay a visitor")}
         </button>
       )}
       {loginError.value && <p class="warn">{loginError.value}</p>}
@@ -131,16 +132,16 @@ function Overlay() {
   if (conn.value === "ended") {
     return (
       <div class="overlay">
-        <p>Session ended: {connNote.value}.</p>
-        <button onClick={reconnect}>Reconnect</button>
+        <p>{t("Session ended: {reason}.", { reason: connNote.value })}</p>
+        <button onClick={reconnect}>{t("Reconnect")}</button>
       </div>
     );
   }
   if (conn.value === "busy") {
     return (
       <div class="overlay">
-        <p>{connNote.value || "The receiver is in use."}</p>
-        <button onClick={reconnect}>Try again</button>
+        <p>{connNote.value || t("The receiver is in use.")}</p>
+        <button onClick={reconnect}>{t("Try again")}</button>
       </div>
     );
   }
@@ -148,7 +149,7 @@ function Overlay() {
   return (
     <div class="overlay small">
       <button class="start" onClick={startAudio}>
-        <PlayIcon /> Start audio
+        <PlayIcon /> {t("Start audio")}
       </button>
       {audioError.value && <p class="warn">{audioError.value}</p>}
     </div>
@@ -224,6 +225,10 @@ const admin = isAdmin();
 window.addEventListener("hashchange", () => {
   if (isAdmin() !== admin) location.reload();
 });
+// the language before the first render (a missing catalogue: English);
+// the receiver's connection starts meanwhile
+if (!admin) void start();
+await initI18n();
 if (admin) {
   document.title = "web888d admin";
   render(
@@ -234,7 +239,6 @@ if (admin) {
     document.getElementById("app")!,
   );
 } else {
-  void start();
   render(
     <>
       <SafeBanner />

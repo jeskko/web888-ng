@@ -6,6 +6,7 @@
 // its decoder.
 
 import { formatKhz } from "../fmt.ts";
+import { t } from "../i18n.ts";
 import { audioBand } from "../cw.ts";
 import { CLASS_INFO, SURE, type SigRow } from "../sigid.ts";
 import { openSig, setSig, sigError, sigOn, sigRows, st } from "../state.ts";
@@ -14,7 +15,7 @@ export function SigCtl() {
   const on = sigOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setSig(!on)} title="Identify the signals in the passband (CW, RTTY, FT8, SSTV, fax, voice, data modems…), in this browser">
+      <button class={on ? "on" : ""} onClick={() => setSig(!on)} title={t("Identify the signals in the passband (CW, RTTY, FT8, SSTV, fax, voice, data modems…), in this browser")}>
         ID
       </button>
     </div>
@@ -27,7 +28,7 @@ function Row({ r }: { r: SigRow }) {
   const sure = best && best.p >= SURE;
   const width = r.rfHi - r.rfLo;
   return (
-    <tr title={`${Math.round(r.hz)} Hz audio, ${Math.round(width)} Hz wide; ${r.top.map((t) => `${CLASS_INFO[t.cls].label} ${Math.round(100 * t.p)} %`).join(", ")}`}>
+    <tr title={t("{hz} Hz audio, {width} Hz wide; {classes}", { hz: Math.round(r.hz), width: Math.round(width), classes: r.top.map((c) => `${t(CLASS_INFO[c.cls].label)} ${Math.round(100 * c.p)} %`).join(", ") })}>
       <td class="r">{formatKhz(Math.round(r.rf)).slice(0, -2)}</td>
       <td class="r num">{r.db.toFixed(0)}</td>
       <td>
@@ -35,18 +36,18 @@ function Row({ r }: { r: SigRow }) {
           <span class="dim">…</span>
         ) : (
           <>
-            <span class={sure ? "" : "dim"} title={info!.hint}>
-              {info!.label}
+            <span class={sure ? "" : "dim"} title={t(info!.hint)}>
+              {t(info!.label)}
             </span>{" "}
             <span class="dim num">{Math.round(100 * best.p)} %</span>
-            {!sure && r.top[1] && <span class="dim"> / {CLASS_INFO[r.top[1].cls].label}?</span>}
+            {!sure && r.top[1] && <span class="dim"> / {t(CLASS_INFO[r.top[1].cls].label)}?</span>}
           </>
         )}
       </td>
       <td>
         {best && info!.opens && (
-          <button onClick={() => openSig(r, best.cls)} title={info!.opens === "ssb" || info!.opens === "am" ? "Tune to it" : `Open the ${info!.label} decoder`}>
-            {info!.opens === "ssb" || info!.opens === "am" ? "Tune" : "Decode"}
+          <button onClick={() => openSig(r, best.cls)} title={info!.opens === "ssb" || info!.opens === "am" ? t("Tune to it") : t("Open the {mode} decoder", { mode: t(info!.label) })}>
+            {info!.opens === "ssb" || info!.opens === "am" ? t("Tune") : t("Decode")}
           </button>
         )}
       </td>
@@ -62,24 +63,24 @@ export function SigPanel() {
   return (
     <aside class="spots sigid">
       <div class="spots-bar">
-        <strong>Signals</strong>
+        <strong>{t("Signals")}</strong>
         <span class="dim num">{rows.length}</span>
-        <button class="close" onClick={() => setSig(false)} title="Stop identifying">
+        <button class="close" onClick={() => setSig(false)} title={t("Stop identifying")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
         {sigError.value && <p class="warn">{sigError.value}</p>}
-        {s && !band && <p class="dim">Signals are identified in CW, USB and LSB.</p>}
+        {s && !band && <p class="dim">{t("Signals are identified in CW, USB and LSB.")}</p>}
         {rows.length === 0 ? (
-          <p class="dim">Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once.</p>
+          <p class="dim">{t("Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once.")}</p>
         ) : (
           <table>
             <thead>
               <tr>
                 <th class="r">kHz</th>
                 <th class="r">dB</th>
-                <th>Looks like</th>
+                <th>{t("Looks like")}</th>
                 <th />
               </tr>
             </thead>
@@ -90,7 +91,7 @@ export function SigPanel() {
             </tbody>
           </table>
         )}
-        <p class="dim">Trained on synthetic signals; a guess, not a decode.</p>
+        <p class="dim">{t("Trained on synthetic signals; a guess, not a decode.")}</p>
       </div>
     </aside>
   );

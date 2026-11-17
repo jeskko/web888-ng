@@ -3,6 +3,7 @@
 // it can also end safe mode (the unit reboots).
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../state.ts";
+import { t } from "../i18n.ts";
 
 interface SafeInfo {
   safe: boolean;
@@ -25,7 +26,7 @@ export function SafeBanner({ admin }: { admin?: boolean }) {
   }, []);
   if (!info.safe) return null;
   const leave = async () => {
-    if (!confirm("Leave safe mode? The unit reboots and starts the radio again.")) return;
+    if (!confirm(t("Leave safe mode? The unit reboots and starts the radio again."))) return;
     setState("leaving");
     try {
       const r = await fetch(api("api/admin/safe/leave"), { method: "POST" });
@@ -48,13 +49,14 @@ export function SafeBanner({ admin }: { admin?: boolean }) {
   };
   return (
     <div class="safe-banner" role="alert">
-      <strong>Safe mode:</strong> the radio is off{info.reason ? ` (${info.reason})` : ""}.{" "}
+      <strong>{t("Safe mode:")}</strong> {t("the radio is off")}
+      {info.reason ? ` (${info.reason})` : ""}.{" "}
       {state === "leaving" ? (
-        <span>Rebooting…</span>
+        <span>{t("Rebooting…")}</span>
       ) : admin ? (
-        <button onClick={() => void leave()}>Leave safe mode</button>
+        <button onClick={() => void leave()}>{t("Leave safe mode")}</button>
       ) : (
-        <a href="#/admin">Admin page</a>
+        <a href="#/admin">{t("Admin page")}</a>
       )}
       {state && state !== "leaving" && <span class="warn"> {state}</span>}
     </div>

@@ -3,6 +3,7 @@
 // with backoff (not when the receiver is busy, nor after the server ended
 // the session by its time or idle limit), ping for latency.
 
+import { t } from "./i18n.ts";
 import { parseFrame, PROTO, type AudioFrame, type ClientMsg, type IqFrame, type ServerMsg, type WfLine } from "./proto.ts";
 
 export type ConnState = "connecting" | "open" | "closed" | "busy" | "ended";
@@ -74,7 +75,7 @@ export class Conn {
       this.ws = null;
       if (e.code === CLOSE_TIME_LIMIT || e.code === CLOSE_IDLE || e.code === CLOSE_DAILY) {
         // reconnecting by itself would make the limits moot
-        this.h.onState("ended", e.reason || "session ended");
+        this.h.onState("ended", e.reason || t("session ended"));
         return;
       }
       if (this.busy || e.code === 1013) {
@@ -83,7 +84,7 @@ export class Conn {
       }
       const delay = [1000, 2000, 5000, 10000][Math.min(this.retry++, 3)];
       this.timer = window.setTimeout(() => this.connect(), delay);
-      this.h.onState("closed", `reconnecting in ${delay / 1000} s`, opened);
+      this.h.onState("closed", t("reconnecting in {s} s", { s: delay / 1000 }), opened);
     };
   }
 
