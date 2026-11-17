@@ -96,6 +96,8 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/stats", get(stats))
         .route("/api/admin/restart", post(restart))
         .route("/api/admin/atten", post(atten))
+        .route("/api/admin/adc", post(adc))
+        .route("/api/admin/sessions/{id}/ban", post(ban))
         .route("/api/admin/skimmers", get(skimmers))
         .route("/metrics", get(metrics))
 }
@@ -129,6 +131,19 @@ pub fn role(sh: &Shared, headers: &HeaderMap) -> Option<Role> {
     sh.admin.logins.role(headers, &cfg.auth)
 }
 
+/// Whether the request may listen: an open receiver, a login, or a
+/// visitor on a receiver that leaves channels open (`[limits]
+/// open_channels`).
+pub fn may_listen(sh: &Shared, headers: &HeaderMap) -> bool {
+    {
+        let c = sh.live.borrow();
+        if c.auth.listener_hash.is_none() || c.limits.open_channels > 0 {
+            return true;
+        }
+    }
+    role(sh, headers).is_some()
+}
+
 /// Extractor: the request is from a logged-in admin.
 pub struct AdminOnly;
 
@@ -144,10 +159,13 @@ impl FromRequestParts<Arc<Shared>> for AdminOnly {
 
 async fn whoami(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Json<Value> {
     let a = sh.live.borrow().auth.clone();
+    let open = sh.live.borrow().limits.open_channels;
     Json(json!({
         "role": sh.admin.logins.role(&headers, &a),
         "listener_password": a.listener_hash.is_some(),
         "admin_password": a.admin_hash.is_some(),
+        // receivers visitors without the password may use (with one set)
+        "open_channels": if a.listener_hash.is_some() { open } else { 0 },
     }))
 }
 
@@ -461,6 +479,61 @@ async fn atten(_: AdminOnly, State(sh): State<Arc<Shared>>, Json(r): Json<AttenR
 
 #[derive(Deserialize)]
 #[serde(deny_unknown_fields)]
+struct AdcReq {
+    dither: Option<bool>,
+    pga: Option<bool>,
+}
+
+/// Set the ADC's dither and PGA: saved as `[radio] adc_dither`,
+/// `adc_pga` and applied at once (for every listener).
+async fn adc(_: AdminOnly, State(sh): State<Arc<Shared>>, Json(r): Json<AdcReq>) -> Response {
+    let mut c = match file_config(&sh) {
+        Ok(c) => c,
+        Err(r) => return r.into_response(),
+    };
+    c.radio.adc_dither = r.dither.unwrap_or(c.radio.adc_dither);
+    c.radio.adc_pga = r.pga.unwrap_or(c.radio.adc_pga);
+    match save(&sh, &c) {
+        Ok(()) => {
+            Json(json!({ "dither": c.radio.adc_dither, "pga": c.radio.adc_pga })).into_response()
+        }
+        Err(r) => r.into_response(),
+    }
+}
+
+/// Refuse session `id`'s address from now on (`[limits] blocked`) and
+/// end its sessions there.
+async fn ban(_: AdminOnly, State(sh): State<Arc<Shared>>, Path(id): Path<SessionId>) -> Response {
+    let Some(ip) = sh.admin.sessions.lock().unwrap().get(&id).map(|e| e.ip) else {
+        return error(StatusCode::NOT_FOUND, format!("no session {id}"));
+    };
+    let mut c = match file_config(&sh) {
+        Ok(c) => c,
+        Err(r) => return r.into_response(),
+    };
+    let ip = ip.to_canonical();
+    let net = web888_config::IpNet {
+        addr: ip,
+        prefix: if ip.is_ipv4() { 32 } else { 128 },
+    };
+    if !c.limits.blocked.iter().any(|n| n.contains(ip)) {
+        c.limits.blocked.push(net);
+    }
+    if let Err(r) = save(&sh, &c) {
+        return r.into_response();
+    }
+    let mut n = 0;
+    for e in sh.admin.sessions.lock().unwrap().values() {
+        if e.ip.to_canonical() == ip && e.class != Class::Admin {
+            e.kick.notify_one();
+            n += 1;
+        }
+    }
+    Json(json!({ "blocked": net.to_string(), "ended": n })).into_response()
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
 struct PasswordReq {
     role: Role,
     /// None: remove the listener password (an open receiver).
@@ -625,6 +698,8 @@ async fn stats(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
             "rx_lost_frames": s.rx_lost_frames.load(Ordering::Relaxed),
             "atten_db": s.atten_db(),
             "atten_cfg_db": sh.live.borrow().radio.atten_db,
+            "adc_dither": sh.live.borrow().radio.adc_dither,
+            "adc_pga": sh.live.borrow().radio.adc_pga,
         },
     }))
 }

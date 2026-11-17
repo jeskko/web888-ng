@@ -39,12 +39,16 @@ import { TcPanel } from "./ctl/timecode.tsx";
 import { LabelsCtl } from "./ctl/labels.tsx";
 import { MemCtl, memOpen, VfoCtl } from "./ctl/memories.tsx";
 import { helpOpen, KeyHelp } from "./ctl/keys.tsx";
+import { InfoCtl, InfoPanel } from "./ctl/info.tsx";
+import { AfPanel } from "./ctl/afspec.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
 import type { Mode } from "./proto.ts";
 import {
   audioError,
   audioOn,
+  cancelLogin,
+  guestOpen,
   cycleAm,
   conn,
   connNote,
@@ -64,7 +68,7 @@ import { AdminApp } from "./admin/admin.tsx";
 import { SafeBanner } from "./ctl/safe.tsx";
 import { Pane } from "./view/pane.tsx";
 
-const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm" };
+const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm", i: "iq" };
 
 function useKeys() {
   useEffect(() => {
@@ -90,6 +94,7 @@ function useKeys() {
 }
 
 function Login() {
+  const guest = guestOpen.value > 0;
   const [pw, setPw] = useState("");
   const [busy, setBusy] = useState(false);
   const submit = async (e: Event) => {
@@ -99,7 +104,7 @@ function Login() {
   };
   return (
     <form class="overlay login" onSubmit={submit}>
-      <p>This receiver is private.</p>
+      <p>{guest ? "Log in with the receiver's password for any of its receivers." : "This receiver is private."}</p>
       <input
         type="password"
         placeholder="Password"
@@ -109,8 +114,13 @@ function Login() {
         onInput={(e) => setPw((e.target as HTMLInputElement).value)}
       />
       <button type="submit" disabled={busy || !pw}>
-        Listen
+        {guest ? "Log in" : "Listen"}
       </button>
+      {guest && (
+        <button type="button" onClick={cancelLogin}>
+          Stay a visitor
+        </button>
+      )}
       {loginError.value && <p class="warn">{loginError.value}</p>}
     </form>
   );
@@ -168,6 +178,7 @@ function App() {
           <AudioRecCtl />
           <IqRecCtl />
           <LabelsCtl />
+          <InfoCtl />
         </div>
       </header>
       <LeaseBanner />
@@ -187,6 +198,7 @@ function App() {
         <JttyPanel />
         <DigiPanel />
         <SigPanel />
+        <AfPanel />
         <MapPanel />
       </main>
       <footer>
@@ -200,6 +212,7 @@ function App() {
         <StatusBar />
       </footer>
       <KeyHelp />
+      <InfoPanel />
     </>
   );
 }

@@ -13,7 +13,7 @@ export const PROTO = 2;
  * narrow-band FM (VHF voice). */
 export type Mode = "usb" | "lsb" | "cw" | "am" | "sam" | "sal" | "sar" | "sas" | "iq" | "nbfm";
 export type AgcSpeed = "fast" | "medium" | "slow" | "custom";
-export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas", "nbfm"];
+export const MODES: Mode[] = ["usb", "lsb", "cw", "am", "sam", "sal", "sar", "sas", "iq", "nbfm"];
 /** The AM family, in the order the AM button cycles through: envelope,
  * then synchronous (both sidebands, lower, upper, stereo). */
 export const AM_MODES: Mode[] = ["am", "sam", "sal", "sar", "sas"];

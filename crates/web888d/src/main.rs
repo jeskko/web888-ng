@@ -833,6 +833,14 @@ impl Reloader {
                 db: new.radio.atten_db,
             });
         }
+        let (r, n) = (&running.radio, &new.radio);
+        if (n.adc_dither, n.adc_pga) != (r.adc_dither, r.adc_pga) {
+            eprintln!("config: ADC dither {}, PGA {}", n.adc_dither, n.adc_pga);
+            let _ = self.hw.send(web888_hw::HwCmd::Adc {
+                dither: n.adc_dither,
+                pga: n.adc_pga,
+            });
+        }
         if ch.live {
             eprintln!("config: reloaded");
             self.channels.set_policy(Policy::from_limits(&new.limits));
@@ -982,6 +990,12 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
     if cfg.radio.atten_db != 0.0 {
         ctl_tx.send(web888_hw::HwCmd::Atten {
             db: cfg.radio.atten_db,
+        })?;
+    }
+    if cfg.radio.adc_dither || cfg.radio.adc_pga {
+        ctl_tx.send(web888_hw::HwCmd::Adc {
+            dither: cfg.radio.adc_dither,
+            pga: cfg.radio.adc_pga,
         })?;
     }
     {

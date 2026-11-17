@@ -814,3 +814,114 @@ async fn custom_agc_speed_is_kept_and_clamped() {
     let s = ask!(r#"{"type":"audio","agc_decay_db_s":0}"#);
     assert_eq!(s.agc_decay_db_s, 1.0);
 }
+
+/// A plain GET: the status line and body.
+async fn get(addr: std::net::SocketAddr, path: &str) -> String {
+    use tokio::io::{AsyncReadExt, AsyncWriteExt};
+    let mut s = tokio::net::TcpStream::connect(addr).await.unwrap();
+    s.write_all(format!("GET {path} HTTP/1.1\r\nHost: x\r\nConnection: close\r\n\r\n").as_bytes())
+        .await
+        .unwrap();
+    let mut r = String::new();
+    s.read_to_string(&mut r).await.unwrap();
+    r
+}
+
+/// The first `busy` message a new session gets (none: let in).
+async fn refused(addr: std::net::SocketAddr) -> Option<String> {
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    match json(&ws.next().await.unwrap().unwrap()) {
+        Some(ServerMsg::Busy { msg }) => Some(msg),
+        _ => None,
+    }
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn blocked_addresses_and_the_daily_limit() {
+    let mut c = web888_config::Config::default();
+    c.limits.blocked = vec!["127.0.0.0/8".parse().unwrap()];
+    let (addr, stop, _) = start_with(c).await;
+    let why = refused(addr).await.expect("refused");
+    assert!(why.contains("doesn't accept"), "{why}");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    // three "minutes" (100 ms each) a day: a session ends when they are
+    // used, and the next is refused
+    let mut c = web888_config::Config::default();
+    c.limits.daily_minutes = 3;
+    let (addr, stop, _) = start_with(c).await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    let (warn, closed) = watch(&mut ws, Duration::from_millis(1500), true).await;
+    assert_eq!(closed, Some(web888_web::session::CLOSE_DAILY), "{warn:?}");
+    assert!(warn.iter().any(|w| w.contains("in a minute")), "{warn:?}");
+    drop(ws);
+    tokio::time::sleep(Duration::from_millis(100)).await;
+    let why = refused(addr).await.expect("refused");
+    assert!(why.contains("today's 3 minutes"), "{why}");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn guests_get_the_open_receivers_and_the_info_page() {
+    let mut c = web888_config::Config::default();
+    c.auth.listener_hash = Some(web888_web::auth::hash("radio"));
+    // no open receivers: the password is needed for everything
+    let (addr, stop, _) = start_with(c.clone()).await;
+    assert!(get(addr, "/api/info").await.starts_with("HTTP/1.1 401"));
+    assert!(
+        tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+            .await
+            .is_err()
+    );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+
+    c.limits.open_channels = 1;
+    c.kiwi.name = "Test receiver".into();
+    c.info.description = "A wire in a tree.".into();
+    let (addr, stop, channels) = start_with(c.clone()).await;
+    channels.set_policy(web888_core::leases::Policy::from_limits(&c.limits));
+    let r = get(addr, "/api/info").await;
+    assert!(r.starts_with("HTTP/1.1 200"), "{r}");
+    for want in [
+        "\"name\":\"Test receiver\"",
+        "A wire in a tree.",
+        "\"open_receivers\":1",
+        "\"photo\":false",
+    ] {
+        assert!(r.contains(want), "{want}: {r}");
+    }
+    assert!(get(addr, "/api/auth").await.contains("\"open_channels\":1"));
+    assert!(
+        get(addr, "/api/info/photo")
+            .await
+            .starts_with("HTTP/1.1 404")
+    );
+    // two visitors without the password: the first gets the open
+    // receiver, the second waits for it
+    let mut lease = vec![];
+    let mut keep = vec![];
+    for _ in 0..2 {
+        let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+            .await
+            .unwrap();
+        let mut class = None;
+        loop {
+            match json(&ws.next().await.unwrap().unwrap()) {
+                Some(ServerMsg::Hello { class: c, .. }) => class = Some(c),
+                Some(ServerMsg::Lease { granted, .. }) => {
+                    lease.push(granted);
+                    break;
+                }
+                _ => {}
+            }
+        }
+        assert_eq!(class.as_deref(), Some("guest"));
+        keep.push(ws);
+    }
+    assert_eq!(lease, [true, false]);
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}

@@ -12,6 +12,7 @@ const KEYS: [string, string][] = [
   ["u l c", "USB, LSB, CW"],
   ["a", "AM, then SAM, SAL, SAR, SAS in turn"],
   ["f", "FM"],
+  ["i", "I/Q (the channel, I left and Q right)"],
   ["v", "Swap VFO A and B"],
   ["m", "Frequency memories"],
   ["?", "This help"],

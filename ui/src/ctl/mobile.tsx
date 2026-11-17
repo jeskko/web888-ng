@@ -41,6 +41,8 @@ import { DigiCtl, DigiPanel } from "./digi.tsx";
 import { MapCtl, MapPanel } from "./map.tsx";
 import { LabelsCtl } from "./labels.tsx";
 import { MemCtl } from "./memories.tsx";
+import { InfoCtl, InfoPanel } from "./info.tsx";
+import { AfPanel } from "./afspec.tsx";
 import { AudioRecCtl } from "./audiorec.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
 import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, LookCtl, ShareCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
@@ -321,6 +323,7 @@ function More({ close }: { close: () => void }) {
         <RttyCtl />
         <ImgCtl />
         <JttyCtl />
+        <InfoCtl />
       </div>
       {spotsOpen.value && <SpotPanel />}
       <CwPanel />
@@ -328,6 +331,7 @@ function More({ close }: { close: () => void }) {
       <ImgPanel />
       <JttyPanel />
       <DigiPanel />
+      <AfPanel />
       <MapPanel />
       <StatusBar />
     </Sheet>
@@ -352,6 +356,7 @@ export function MobileApp({ overlay }: { overlay: ComponentChildren }) {
       {sheet.value === "keypad" && <Keypad close={close} />}
       {sheet.value === "bands" && <Bands close={close} />}
       {sheet.value === "more" && <More close={close} />}
+      <InfoPanel />
     </div>
   );
 }

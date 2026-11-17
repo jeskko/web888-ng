@@ -71,6 +71,10 @@ import {
   setPeakHold,
   setWfTimes,
   wfTimes,
+  guestOpen,
+  guestLogin,
+  afOn,
+  setAf,
 } from "../state.ts";
 
 /** Dial in kHz; wheel over a digit steps that digit, click to type. */
@@ -178,6 +182,13 @@ export function ModeBar() {
       >
         FM
       </button>
+      <button
+        class={s?.mode === "iq" ? "on" : ""}
+        onClick={() => setMode("iq")}
+        title="I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i"
+      >
+        IQ
+      </button>
     </div>
   );
 }
@@ -235,10 +246,19 @@ export function CodecCtl() {
   const shown = CODECS.filter((c) => c.pref !== "auto" || (sc.includes("opus") && opusDec.value));
   return (
     <>
-      <span class="seg" title={pref === "auto" && now !== "opus" ? "Opus is paused: a decoder reads the audio (μ-law until it closes)" : "How the audio comes"}>
+      <span
+        class="seg"
+        title={
+          pref === "auto" && now !== "opus"
+            ? now === "pcm16"
+              ? "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
+              : "Opus is paused: a decoder reads the audio (μ-law until it closes)"
+            : "How the audio comes"
+        }
+      >
         {shown.map((c) => (
           <button key={c.pref} class={pref === c.pref ? "on" : ""} title={c.title} onClick={() => setCodecPref(c.pref)}>
-            {c.pref === "auto" && pref === "auto" && now !== "opus" ? "Opus (μ-law)" : c.label}
+            {c.pref === "auto" && pref === "auto" && now !== "opus" ? `Opus (${now === "pcm16" ? "PCM" : "μ-law"})` : c.label}
           </button>
         ))}
       </span>
@@ -304,7 +324,7 @@ export function AudioCtl() {
         />
         <span class="num">{s.gain_db.toFixed(0)} dB</span>
       </label>
-      {!isAm(s.mode) && (
+      {!isAm(s.mode) && s.mode !== "iq" && (
         <button
           class={stereo.value ? "on" : ""}
           onClick={() => setStereo(!stereo.value)}
@@ -591,10 +611,19 @@ export function LeaseBanner() {
       </>
     );
   } else if (l && !l.granted) {
+    const g = guestOpen.value;
     body = (
       <span>
-        All receivers are in use: you are #{l.position} in the queue, waterfall only until then.
+        {g > 0
+          ? `Visitors without the password share ${g === 1 ? "one receiver, now in use" : `${g} receivers, all in use`}: you are #${l.position} in the queue, waterfall only until then.`
+          : `All receivers are in use: you are #${l.position} in the queue, waterfall only until then.`}
         {users.value.some(followable) && " Click a green marker on the scale to listen along with another user."}
+        {g > 0 && (
+          <>
+            {" "}
+            <button onClick={guestLogin}>Log in</button>
+          </>
+        )}
       </span>
     );
   }
@@ -675,6 +704,9 @@ export function LookCtl() {
       </button>
       <button onClick={() => paneHooks.saveImage?.()} title="Save the spectrum and waterfall as a PNG image (with time marks and the frequency)">
         PNG
+      </button>
+      <button class={afOn.value ? "on" : ""} onClick={() => setAf(!afOn.value)} title="Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)">
+        AF
       </button>
     </div>
   );
@@ -781,6 +813,21 @@ export function StatusBar() {
         </span>
       )}
       <span class="right">
+        {guestOpen.value > 0 && (
+          <>
+            <a
+              href="#"
+              onClick={(e) => {
+                e.preventDefault();
+                guestLogin();
+              }}
+              title={`You listen as a visitor: ${guestOpen.value} of the receivers are open without the password. Log in for any.`}
+            >
+              visitor: log in
+            </a>
+            {" · "}
+          </>
+        )}
         {server.value} ·{" "}
         <a
           href="#"

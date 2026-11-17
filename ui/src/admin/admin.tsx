@@ -9,12 +9,13 @@ import { formatKhz } from "../fmt.ts";
 import { call, get, href, loggedOut, putText, type Auth, type Changes, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
-type Tab = "status" | "sessions" | "config" | "labels" | "passwords" | "update" | "logs";
+type Tab = "status" | "sessions" | "config" | "labels" | "info" | "passwords" | "update" | "logs";
 const TABS: { id: Tab; name: string }[] = [
   { id: "status", name: "Status" },
   { id: "sessions", name: "Sessions" },
   { id: "config", name: "Configuration" },
   { id: "labels", name: "Labels" },
+  { id: "info", name: "Info page" },
   { id: "passwords", name: "Passwords" },
   { id: "update", name: "Update" },
   { id: "logs", name: "Logs" },
@@ -175,6 +176,14 @@ function StatusPage() {
           <dd>
             <AttenCtl set={stats.hw.atten_db} cfg={stats.hw.atten_cfg_db} />
           </dd>
+          {stats.hw.adc_dither !== undefined && (
+            <>
+              <dt>ADC</dt>
+              <dd>
+                <AdcCtl dither={!!stats.hw.adc_dither} pga={!!stats.hw.adc_pga} />
+              </dd>
+            </>
+          )}
           <dt>Clock</dt>
           <dd>{stats.hw.clock_ppm === 0 ? "no GPS correction" : `${stats.hw.clock_ppm.toFixed(3)} ppm`}</dd>
         </dl>
@@ -332,6 +341,35 @@ function AttenCtl({ set, cfg }: { set: number; cfg: number }) {
   );
 }
 
+/** The ADC's dither and PGA, for every listener at once; saved to the
+ * configuration (`radio.adc_dither`, `radio.adc_pga`). */
+function AdcCtl({ dither, pga }: { dither: boolean; pga: boolean }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const put = async (b: { dither?: boolean; pga?: boolean }) => {
+    setBusy(true);
+    setErr(null);
+    try {
+      await call("POST", "api/admin/adc", b);
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <>
+      <label title="The ADC's dither: spreads its own spurs (birdies) into the noise, at a little more noise">
+        <input type="checkbox" checked={dither} disabled={busy} onChange={() => void put({ dither: !dither })} /> dither
+      </label>{" "}
+      <label title="The ADC's PGA: 1.5 V full scale instead of 2.25 V, every signal ~3.5 dB higher (and overloads that much sooner); the dBFS levels move with it">
+        <input type="checkbox" checked={pga} disabled={busy} onChange={() => void put({ pga: !pga })} /> PGA (+3.5 dB)
+      </label>
+      {err && <span class="warn"> {err}</span>}
+    </>
+  );
+}
+
 function SkimCard({ skim }: { skim: Skimmers }) {
   const bands = skim.bands ?? [];
   const p = skim.pskreporter;
@@ -468,6 +506,12 @@ function SessionsPage() {
     await call("POST", `api/admin/sessions/${s.id}/kick`).catch((e: Error) => setErr(e.message));
     setTimeout(() => void refresh(), 300);
   };
+  const ban = async (s: Session) => {
+    if (!confirm(`Ban ${s.ip}? Its sessions end now and new ones are refused (Configuration: limits.blocked lifts it).`)) return;
+    setErr("");
+    await call("POST", `api/admin/sessions/${s.id}/ban`).catch((e: Error) => setErr(e.message));
+    setTimeout(() => void refresh(), 300);
+  };
   if (!list) return <p class="dim">Loading…</p>;
   return (
     <div>
@@ -508,7 +552,12 @@ function SessionsPage() {
                   {s.audio_drops}/{s.wf_drops}
                 </td>
                 <td>
-                  <button onClick={() => void kick(s)}>Kick</button>
+                  <button onClick={() => void kick(s)}>Kick</button>{" "}
+                  {s.class !== "admin" && (
+                    <button onClick={() => void ban(s)} title="End its sessions and refuse its address from now on">
+                      Ban
+                    </button>
+                  )}
                 </td>
               </tr>
             ))}
@@ -589,6 +638,68 @@ function LabelsPage() {
         <p class="dim">
           Listeners choose what they see. The band ribbon and the amateur frequencies follow IARU region {info?.region ?? "?"} (Configuration:
           markers.region) until a listener picks another.
+        </p>
+      </section>
+    </div>
+  );
+}
+
+/** The listeners' info page: its photo here; its words in Configuration
+ * (info, kiwi.name and location, station). */
+function InfoPage() {
+  const [photo, setPhoto] = useState<boolean | null>(null);
+  const [v, setV] = useState(0);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const load = () => get<{ photo: boolean }>("api/info").then((i) => setPhoto(i.photo));
+  useEffect(() => void load(), []);
+  const upload = async (e: Event) => {
+    const input = e.currentTarget as HTMLInputElement;
+    const file = input.files?.[0];
+    input.value = "";
+    if (!file) return;
+    setMsg(null);
+    try {
+      await putText("api/admin/info/photo", file, file.type || "application/octet-stream");
+      setMsg({ ok: true, text: `Saved ${file.name}.` });
+      setV(v + 1);
+      await load();
+    } catch (err) {
+      setMsg({ ok: false, text: `${file.name}: ${(err as Error).message}` });
+    }
+  };
+  const remove = async () => {
+    if (!confirm("Remove the photo?")) return;
+    await call("DELETE", "api/admin/info/photo").catch((e: Error) => setMsg({ ok: false, text: e.message }));
+    await load();
+  };
+  return (
+    <div class="cards">
+      <section class="card">
+        <h3>Photo</h3>
+        {photo && <img class="info-photo" src={`${href("api/info/photo")}?v=${v}`} alt="The receiver's photo" />}
+        <p>
+          <label class="file">
+            {photo ? "Replace it" : "Upload one"} <input type="file" accept="image/jpeg,image/png,image/webp" onChange={(e) => void upload(e)} />
+          </label>
+          {photo && (
+            <>
+              {" · "}
+              <button onClick={() => void remove()}>Remove</button>
+            </>
+          )}
+        </p>
+        {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+        <p class="dim">JPEG, PNG or WebP, at most 3 MB: the antenna, the station, the view. Kept beside the configuration file.</p>
+      </section>
+      <section class="card">
+        <h3>What it says</h3>
+        <p>
+          Listeners open it with <b>Info</b> on the receiver page. It shows the receiver's name and location (Configuration: kiwi.name,
+          kiwi.location), the station's callsign, locator and antenna (station), your words (info.description, info.contact), the photo,
+          and the limits they meet (limits).
+        </p>
+        <p>
+          <a href="#/admin/config">Configuration</a> · <a href="./#info">See it as listeners do</a>
         </p>
       </section>
     </div>
@@ -1206,6 +1317,7 @@ export function AdminApp() {
           </>
         )}
         {tab.value === "labels" && <LabelsPage />}
+        {tab.value === "info" && <InfoPage />}
         {tab.value === "passwords" && <PasswordsPage />}
         {tab.value === "update" && (
           <>

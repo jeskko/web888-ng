@@ -11,6 +11,7 @@ pub mod binview;
 pub mod bootloader;
 pub mod codec;
 pub mod dxspots;
+pub mod info;
 pub mod kiwi;
 pub mod logs;
 pub mod markers;
@@ -67,6 +68,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .route("/api/spots", get(spots))
         .merge(admin::routes())
         .merge(markers::routes())
+        .merge(info::routes())
         .merge(kiwi::routes())
         .merge(update::routes())
         .merge(logs::routes())
@@ -171,8 +173,7 @@ async fn ws(
     headers: HeaderMap,
 ) -> Response {
     let role = admin::role(&sh, &headers);
-    let open = sh.live.borrow().auth.listener_hash.is_none();
-    if role.is_none() && !open {
+    if !admin::may_listen(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
     up.read_buffer_size(WS_READ_BUFFER)
@@ -208,8 +209,7 @@ async fn spots(
     headers: HeaderMap,
     axum::extract::Query(q): axum::extract::Query<SpotQuery>,
 ) -> Response {
-    let open = sh.live.borrow().auth.listener_hash.is_none();
-    if admin::role(&sh, &headers).is_none() && !open {
+    if !admin::may_listen(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
     let Some(sk) = &sh.skim else {

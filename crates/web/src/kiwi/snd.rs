@@ -8,7 +8,7 @@ use super::{Geometry, answer_auth, band_msgs, command, send_config, send_msg, wa
 use crate::WS_READ_BUFFER;
 use crate::auth::Role;
 use crate::proto;
-use crate::session::{Admission, Shared, Timeout, Timeouts};
+use crate::session::{Admission, Shared, Timeout};
 use crate::users::{Name, UserPub};
 use crate::workers::{AudioCmd, AudioJob, Framing, Out, WfSink};
 use axum::extract::ws::{CloseFrame, Message, Utf8Bytes, WebSocket};
@@ -126,8 +126,11 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
         return close(&mut ws, 1000, "no camping").await;
     }
     // a listener like a web user (not under HPSDR's protocol quota)
+    let (role, guest) = role;
     let class = if role == Role::Admin {
         Class::Admin
+    } else if guest {
+        Class::Guest
     } else {
         Class::Web
     };
@@ -137,7 +140,7 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
         let _ = answer_auth(&mut ws, &sh, super::BADP_NO_MULTIPLE_CONNS).await;
         return close(&mut ws, 1008, "duplicate").await;
     };
-    let Ok(adm) = Admission::new(&sh, ip, class == Class::Admin).map(Admission::kiwi) else {
+    let Ok(mut adm) = Admission::new(&sh, ip, class == Class::Admin).map(Admission::kiwi) else {
         let _ = answer_auth(&mut ws, &sh, super::BADP_NO_MULTIPLE_CONNS).await;
         return close(&mut ws, 1013, "busy").await;
     };
@@ -268,7 +271,7 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
 
     let started = Instant::now();
     let mut last_msg = started;
-    let mut timeouts = Timeouts::default();
+    let mut timeouts = std::mem::take(&mut adm.timeouts);
     let mut tick = tokio::time::interval(Duration::from_secs(1));
     loop {
         tokio::select! {

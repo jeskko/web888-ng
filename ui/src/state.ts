@@ -120,20 +120,40 @@ export function api(path: string): string {
 }
 
 /** Does the receiver want a password we haven't given? */
-async function loginNeeded(): Promise<boolean> {
+/** Receivers open to visitors without the password, while this page is
+ * one (0: logged in, an open receiver, or no visitors let in). */
+export const guestOpen = signal(0);
+
+/** Whether a login is needed: the receiver has a password and we have
+ * no login; visitors may still listen if it leaves receivers open. */
+async function loginNeeded(): Promise<{ need: boolean; open: number }> {
   try {
     const r = await fetch(api("api/auth"));
-    const a = (await r.json()) as { role: string | null; listener_password: boolean };
-    return a.listener_password && a.role === null;
+    const a = (await r.json()) as { role: string | null; listener_password: boolean; open_channels?: number };
+    return { need: a.listener_password && a.role === null, open: a.open_channels ?? 0 };
   } catch {
-    return false; // the server isn't there: the connection retries
+    return { need: false, open: 0 }; // the server isn't there: the connection retries
   }
 }
 
-/** Ask for the password first if the receiver has one, then connect. */
+/** Ask for the password first if the receiver has one (unless it leaves
+ * receivers open to visitors), then connect. */
 export async function start(): Promise<void> {
-  if (await loginNeeded()) askLogin();
+  const { need, open } = await loginNeeded();
+  guestOpen.value = need ? open : 0;
+  if (need && open === 0) askLogin();
   else connect();
+}
+
+/** A visitor asks to log in (for any receiver, not only the open ones). */
+export function guestLogin(): void {
+  needLogin.value = true;
+}
+
+/** ... and changes their mind. */
+export function cancelLogin(): void {
+  needLogin.value = false;
+  loginError.value = "";
 }
 
 function askLogin(): void {
@@ -152,9 +172,15 @@ export async function login(password: string): Promise<void> {
     body: JSON.stringify({ password }),
   });
   if (r.ok) {
-    needLogin.value = false;
-    if (link) link.connect();
-    else connect();
+    batch(() => {
+      needLogin.value = false;
+      guestOpen.value = 0;
+    });
+    // a visitor's session gives way to one with the login
+    if (link) {
+      link.stop();
+      link.connect();
+    } else connect();
     return;
   }
   const body = (await r.json().catch(() => ({}))) as { error?: string };
@@ -165,7 +191,8 @@ export function connect(): void {
   link = new Conn(wsUrl(location), {
     onState(s, why, opened) {
       conn.value = s;
-      connNote.value = why ?? "";
+      // a refusal keeps the server's reason (its "busy" message came first)
+      if (!(s === "busy" && !why)) connNote.value = why ?? "";
       // refused: the password changed, or the login expired
       if (s === "closed" && !opened) {
         void loginNeeded().then((need) => {
@@ -262,6 +289,7 @@ export function connect(): void {
       digiAudio(f);
       sigAudio(f);
       recAudio(f);
+      for (const t of audioTaps) t(f);
       player.push(f.pcm, f.rate, f.stereo);
     },
     onIq(f: IqFrame) {
@@ -1921,6 +1949,9 @@ export const codecNow = computed<Codec>(() => {
     case "mulaw":
       return mulaw;
     default:
+      // I/Q: linear, both channels as they are (Opus and μ-law would
+      // bend them apart)
+      if (st.value?.mode === "iq") return "pcm16";
       return !decodersOnAudio.value && opusDec.value && has("opus") ? "opus" : mulaw;
   }
 });
@@ -2129,5 +2160,22 @@ function recAudio(f: AudioFrame): void {
   const v = audioRec.value;
   if (!v || r.seconds - v.seconds >= 0.25 || r.skippedS - v.skippedS >= 1) audioRec.value = { seconds: r.seconds, maxS: r.maxS, skippedS: r.skippedS };
   if (!going) stopAudioRec();
+}
+
+// ---------------------------------------------------- audio spectrum
+
+/** Views of the audio as it arrives (the AF spectrum). */
+const audioTaps = new Set<(f: AudioFrame) => void>();
+/** Hear the audio frames from now on; the returned function stops it. */
+export function tapAudio(f: (f: AudioFrame) => void): () => void {
+  audioTaps.add(f);
+  return () => audioTaps.delete(f);
+}
+
+/** The audio spectrum panel is open (remembered). */
+export const afOn = signal(load("af") === "1");
+export function setAf(on: boolean): void {
+  afOn.value = on;
+  save("af", on ? "1" : "0");
 }
 

@@ -26,6 +26,11 @@ pub enum HwCmd {
     Atten {
         db: f32,
     },
+    /// The ADC's dither and PGA (`FrontEnd::dither`, `pga`).
+    Adc {
+        dither: bool,
+        pga: bool,
+    },
     /// What WF slot `slot` captures: nothing, one view continuously, or
     /// several in turn as one-shot blocks (`wf::Rotation`). A view kept
     /// from the previous plan of a continuous slot isn't restarted.
@@ -439,6 +444,11 @@ impl HwLoop {
                                 .atten_half_db
                                 .store((fe.atten_db * 2.0) as u32, Ordering::Relaxed);
                         })
+                    }
+                    HwCmd::Adc { dither, pga } => {
+                        fe.dither = dither;
+                        fe.pga = pga;
+                        self.radio.front_end(fe)
                     }
                     HwCmd::WfPlan { slot, views } if slot < wf.len() => {
                         self.plan_wf(slot, &mut wf[slot], views)

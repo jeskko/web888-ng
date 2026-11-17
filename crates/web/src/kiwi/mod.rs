@@ -205,16 +205,24 @@ pub(crate) fn command(m: &Message) -> Option<String> {
     .filter(|s| !s.is_empty())
 }
 
-/// What a password gives: the role, or the `badp` code to refuse with.
+/// What a password gives: the role and whether as a guest (no password
+/// on a receiver with `[limits] open_channels`), or the `badp` code to
+/// refuse with.
 pub(crate) async fn check_password(
     sh: &Shared,
     ip: IpAddr,
     admin: bool,
     password: String,
-) -> Result<Role, u8> {
-    let a = sh.live.borrow().auth.clone();
+) -> Result<(Role, bool), u8> {
+    let (a, open) = {
+        let c = sh.live.borrow();
+        (c.auth.clone(), c.limits.open_channels)
+    };
     if !admin && a.listener_hash.is_none() {
-        return Ok(Role::Listener);
+        return Ok((Role::Listener, false));
+    }
+    if !admin && password.is_empty() && open > 0 {
+        return Ok((Role::Listener, true));
     }
     if admin && a.admin_hash.is_none() {
         return Err(BADP_NO_ADMIN_PWD_SET);
@@ -233,7 +241,7 @@ pub(crate) async fn check_password(
         .ok()
         .flatten();
     match got {
-        Some((role, _)) if role >= want => Ok(role),
+        Some((role, _)) if role >= want => Ok((role, false)),
         _ => {
             sh.admin.logins.failed(ip);
             Err(BADP_TRY_AGAIN)
@@ -248,7 +256,7 @@ pub(crate) async fn wait_auth(
     ws: &mut WebSocket,
     sh: &Shared,
     ip: IpAddr,
-) -> Option<Result<Role, u8>> {
+) -> Option<Result<(Role, bool), u8>> {
     let deadline = tokio::time::Instant::now() + KEEPALIVE_NO_AUTH;
     loop {
         let m = tokio::time::timeout_at(deadline, ws.recv()).await;
@@ -284,10 +292,19 @@ pub(crate) async fn wait_auth(
 /// The answer to `SET auth`, as upstream sends it.
 pub(crate) async fn answer_auth(ws: &mut WebSocket, sh: &Shared, badp: u8) -> bool {
     let n = sh.channels.channels();
+    // channels without the password: all on an open receiver
+    let open = {
+        let c = sh.live.borrow();
+        if c.auth.listener_hash.is_none() {
+            n
+        } else {
+            c.limits.open_channels.min(n)
+        }
+    };
     for t in [
         format!("rx_chans={n}"),
-        format!("chan_no_pwd={n}"),
-        format!("chan_no_pwd_true={n}"),
+        format!("chan_no_pwd={open}"),
+        format!("chan_no_pwd_true={open}"),
         "max_camp=0".into(),
         format!("badp={badp}"),
     ] {

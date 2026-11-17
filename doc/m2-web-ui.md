@@ -389,3 +389,59 @@ Checked with `ui/tools/cdp/listener.mjs` on the sim backend (every item
 above; the offset with `freq_offset_hz = 116000000`: the dial and scale
 at 144 MHz, 144300 typed tunes 28.3 MHz) and the phone layout
 (`phone.mjs`).
+
+## 12. The rest of receiver parity, access and the info page (2026-11-17)
+
+* **IQ mode** (the **IQ** button, key i): the channel itself as stereo
+  audio, I left and Q right, ±5 kHz around the dial (±10 kHz at
+  24 kS/s). The protocol had the mode for Kiwi clients; the page now
+  offers it. With the codec on Opus it comes as PCM (Opus and μ-law
+  would bend I and Q apart; the button reads "Opus (PCM)"). **Rec** then
+  saves an I/Q WAV (two channels) that SDR programs open. The
+  pseudo-stereo is off in IQ.
+* **Audio spectrum** (`ui/src/view/afspec.ts`, **AF** beside PNG): a side
+  panel with the audio's spectrum (averaged) over its waterfall, in the
+  waterfall's palette, the passband shaded; 512-point Hann blocks, half
+  overlapping (~23 Hz a point, ~47 lines a second at 12 kS/s). Mono
+  modes: 0 to half the rate; IQ: both sides of the dial. Lines are
+  queued and drawn once an animation frame from a ring of pixel rows
+  (drawing each line at once cost the page's thread so much that a fetch
+  took 15 s in headless Chromium).
+* **ADC dither and PGA** (admin Status card, beside the attenuator;
+  `[radio] adc_dither`, `adc_pga`, applied at once through the hw
+  thread's `HwCmd::Adc`; the GPIO word's bits 6 and 7, driven by every
+  bitstream). PGA: 1.5 V full scale instead of 2.25 V, ~3.5 dB more level
+  (and overloads that much sooner).
+* **Access** (`[limits]`, apply at once):
+  * `blocked`: addresses or networks refused (web and Kiwi); the admin
+    Sessions page's **Ban** adds the session's address and ends its
+    sessions. Admins still get in.
+  * `daily_minutes`: listening time per address and UTC day; when used
+    up, new sessions are refused and a running one ends with a minute's
+    notice (close code 4003, no reconnect). Ended sessions count; admins
+    and `trusted` addresses aren't limited.
+  * `open_channels`: with a listener password, visitors without it may
+    use this many receivers at once (a lease class `guest` below `web`
+    with this quota: beyond it they queue); the page connects them
+    without the form, shows *visitor: log in* in the status bar and
+    **Log in** in the queue banner; a login replaces the session. Kiwi
+    clients without a password get in as guests too (`chan_no_pwd`
+    says how many). `/api/auth` adds `open_channels`.
+* **Info page** (**Info** in the header, or the page with `#info`;
+  `/api/info`, `crates/web/src/info.rs`): the name and location (`[kiwi]
+  name`, `location`), the station's callsign, locator and antenna, the
+  owner's `[info] description` and `contact`, a photo, and the limits a
+  listener meets in sentences. The admin's **Info page** tab uploads or
+  removes the photo (JPEG, PNG or WebP by their first bytes, at most
+  3 MB, kept beside the configuration file as `info-photo.*`).
+* A refusal now keeps the server's reason on the page (the "busy" message
+  was replaced by the generic "The receiver is in use." when the
+  connection closed).
+
+Checked with `ui/tools/cdp/access.mjs` on the sim backend (IQ and its
+WAV, the AF panel, the info page, the admin's ADC switch, photo and Ban;
+`GUEST=1`: two visitors and one open receiver, the second queues, logs
+in and gets a receiver), and the server tests (`blocked_addresses_and_the_daily_limit`,
+`guests_get_the_open_receivers_and_the_info_page`,
+`adc_ban_and_the_info_photo`).
+

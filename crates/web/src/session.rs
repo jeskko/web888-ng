@@ -41,8 +41,9 @@ pub struct Shared {
     pub rx_r2: u16,
     /// The configuration's live settings (reloaded without a restart).
     pub live: tokio::sync::watch::Receiver<Arc<web888_config::Config>>,
-    /// Sessions per client address.
-    pub ips: Mutex<HashMap<IpAddr, usize>>,
+    /// Sessions per client address, and each address's listening time
+    /// today.
+    pub ips: Mutex<Ips>,
     pub sessions: AtomicUsize,
     pub next_session: AtomicU64,
     pub users: Users,
@@ -55,6 +56,72 @@ pub struct Shared {
     pub limit_unit: Duration,
     /// Kiwi protocol streams (`doc/m5-kiwi.md`).
     pub kiwi: crate::kiwi::Registry,
+}
+
+/// Sessions per client address, and the listening time each address
+/// used today (UTC; sessions that ended), for `[limits] per_ip` and
+/// `daily_minutes`.
+#[derive(Default)]
+pub struct Ips {
+    pub count: HashMap<IpAddr, usize>,
+    /// The UTC day (days since the epoch) `used` counts.
+    day: u64,
+    used: HashMap<IpAddr, Duration>,
+}
+
+/// Today's UTC day number.
+fn utc_day() -> u64 {
+    std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap_or_default()
+        .as_secs()
+        / 86_400
+}
+
+impl Ips {
+    fn roll(&mut self, day: u64) {
+        if day != self.day {
+            self.day = day;
+            self.used.clear();
+        }
+    }
+
+    /// The time `ip` used on `day`.
+    pub fn used(&mut self, ip: IpAddr, day: u64) -> Duration {
+        self.roll(day);
+        self.used.get(&ip).copied().unwrap_or_default()
+    }
+
+    /// `ip` listened `d` more on `day`.
+    pub fn add(&mut self, ip: IpAddr, d: Duration, day: u64) {
+        self.roll(day);
+        *self.used.entry(ip).or_default() += d;
+    }
+}
+
+/// Why a session isn't let in.
+#[derive(Debug, PartialEq)]
+pub(crate) enum Refused {
+    /// The address has this many sessions already.
+    TooMany(usize),
+    /// `[limits] blocked`.
+    Blocked,
+    /// The address used its `daily_minutes`.
+    Daily(u32),
+}
+
+impl Refused {
+    pub(crate) fn msg(&self) -> String {
+        match self {
+            Refused::TooMany(n) => format!("too many sessions from your address (at most {n})"),
+            Refused::Blocked => "this receiver doesn't accept connections from your address".into(),
+            Refused::Daily(m) => {
+                format!(
+                    "your address has used today's {m} minutes on this receiver: back at 00:00 UTC"
+                )
+            }
+        }
+    }
 }
 
 /// What the web side sees of the skimmers (`doc/m4-skimmers.md` §5).
@@ -76,6 +143,7 @@ const SPOTS_FIRST: usize = 1000;
 /// Close codes of sessions the server ends by its limits.
 pub const CLOSE_TIME_LIMIT: u16 = 4001;
 pub const CLOSE_IDLE: u16 = 4002;
+pub const CLOSE_DAILY: u16 = 4003;
 
 /// What the session and idle limits say now.
 #[derive(Debug, PartialEq)]
@@ -92,6 +160,10 @@ pub(crate) enum Timeout {
 pub(crate) struct Timeouts {
     warned_age: bool,
     warned_idle: bool,
+    warned_daily: bool,
+    /// What is left of the address's daily time (`[limits]
+    /// daily_minutes`) as the session began, and the limit; none: no limit.
+    pub(crate) daily: Option<(Duration, u32)>,
 }
 
 impl Timeouts {
@@ -114,6 +186,18 @@ impl Timeouts {
                 self.warned_age = true;
                 return Some(Timeout::Warn(
                     "the session time limit ends this session in a minute".into(),
+                ));
+            }
+        }
+        if let Some((left, m)) = self.daily {
+            if age >= left {
+                return Some(Timeout::End(CLOSE_DAILY, Refused::Daily(m).msg()));
+            }
+            if left >= unit * 2 && age + unit >= left && !self.warned_daily {
+                self.warned_daily = true;
+                return Some(Timeout::Warn(
+                    "your address's daily time on this receiver ends this session in a minute"
+                        .into(),
                 ));
             }
         }
@@ -306,21 +390,43 @@ pub(crate) struct Admission<'a> {
     pub(crate) id: SessionId,
     /// A Kiwi session (the metrics count them apart).
     kiwi: bool,
+    /// Counted against the address's daily time: from when.
+    since: Option<std::time::Instant>,
+    /// The session's timeouts, with what is left of the daily time.
+    pub(crate) timeouts: Timeouts,
 }
 
 impl<'a> Admission<'a> {
-    /// Err if the address has its limit of sessions already (`exempt`:
-    /// admins aren't limited, nor trusted addresses).
-    pub(crate) fn new(sh: &'a Shared, ip: IpAddr, exempt: bool) -> Result<Self, usize> {
-        let (limit, trusted) = {
+    /// Err if the address is blocked, has its limit of sessions already,
+    /// or used its daily time (`admin`: admins aren't limited, and trusted
+    /// addresses only by `blocked`).
+    pub(crate) fn new(sh: &'a Shared, ip: IpAddr, admin: bool) -> Result<Self, Refused> {
+        let (limit, trusted, blocked, daily) = {
             let l = &sh.live.borrow().limits;
-            (l.per_ip, l.trusted.iter().any(|n| n.contains(ip)))
+            (
+                l.per_ip,
+                l.trusted.iter().any(|n| n.contains(ip)),
+                l.blocked.iter().any(|n| n.contains(ip)),
+                l.daily_minutes,
+            )
         };
-        let exempt = exempt || trusted;
+        if blocked && !admin {
+            return Err(Refused::Blocked);
+        }
+        let exempt = admin || trusted;
         let mut ips = sh.ips.lock().unwrap();
-        let n = ips.entry(ip).or_insert(0);
+        let mut timeouts = Timeouts::default();
+        if daily > 0 && !exempt {
+            let full = sh.limit_unit * daily;
+            let used = ips.used(ip, utc_day());
+            if used >= full {
+                return Err(Refused::Daily(daily));
+            }
+            timeouts.daily = Some((full - used, daily));
+        }
+        let n = ips.count.entry(ip).or_insert(0);
         if limit > 0 && *n >= limit && !exempt {
-            return Err(limit);
+            return Err(Refused::TooMany(limit));
         }
         *n += 1;
         sh.sessions.fetch_add(1, Ordering::Relaxed);
@@ -329,6 +435,8 @@ impl<'a> Admission<'a> {
             ip,
             id: sh.next_session.fetch_add(1, Ordering::Relaxed) + 1,
             kiwi: false,
+            since: (!exempt).then(std::time::Instant::now),
+            timeouts,
         })
     }
 
@@ -349,10 +457,14 @@ impl Drop for Admission<'_> {
         self.sh.users.leave(self.id);
         self.sh.admin.sessions.lock().unwrap().remove(&self.id);
         let mut ips = self.sh.ips.lock().unwrap();
-        if let Some(n) = ips.get_mut(&self.ip) {
+        if let Some(t) = self.since {
+            // (the limit is in `limit_unit`s of real time: tests shorten them)
+            ips.add(self.ip, t.elapsed(), utc_day());
+        }
+        if let Some(n) = ips.count.get_mut(&self.ip) {
             *n -= 1;
             if *n == 0 {
-                ips.remove(&self.ip);
+                ips.count.remove(&self.ip);
             }
         }
         self.sh.sessions.fetch_sub(1, Ordering::Relaxed);
@@ -726,21 +838,17 @@ pub async fn run(
     peer: std::net::SocketAddr,
     role: Option<crate::auth::Role>,
 ) {
-    let class = if role == Some(crate::auth::Role::Admin) {
-        Class::Admin
-    } else {
-        Class::Web
+    let class = match role {
+        Some(crate::auth::Role::Admin) => Class::Admin,
+        Some(_) => Class::Web,
+        // no login: an open receiver, or a guest on one with a password
+        None if sh.live.borrow().auth.listener_hash.is_none() => Class::Web,
+        None => Class::Guest,
     };
-    let adm = match Admission::new(&sh, peer.ip(), class == Class::Admin) {
+    let mut adm = match Admission::new(&sh, peer.ip(), class == Class::Admin) {
         Ok(a) => a,
-        Err(limit) => {
-            let _ = send_json(
-                &mut ws,
-                &ServerMsg::Busy {
-                    msg: format!("too many sessions from your address (at most {limit})"),
-                },
-            )
-            .await;
+        Err(why) => {
+            let _ = send_json(&mut ws, &ServerMsg::Busy { msg: why.msg() }).await;
             let _ = ws
                 .send(Message::Close(Some(CloseFrame {
                     code: 1013,
@@ -881,7 +989,7 @@ pub async fn run(
     let mut skims_sent: Option<Vec<proto::SkimMark>> = None;
     let started = std::time::Instant::now();
     let mut last_input = started;
-    let mut timeouts = Timeouts::default();
+    let mut timeouts = std::mem::take(&mut adm.timeouts);
     let mut limit_tick = tokio::time::interval((sh.limit_unit / 4).min(Duration::from_secs(1)));
     loop {
         let replies = tokio::select! {

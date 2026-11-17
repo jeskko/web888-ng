@@ -43,7 +43,7 @@ pub fn routes() -> Router<Arc<Shared>> {
 }
 
 fn allowed(sh: &Shared, headers: &HeaderMap) -> bool {
-    sh.live.borrow().auth.listener_hash.is_none() || admin::role(sh, headers).is_some()
+    admin::may_listen(sh, headers)
 }
 
 /// The own list's file: `[markers] file`, a relative path next to the

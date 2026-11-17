@@ -99,6 +99,21 @@ pub struct Config {
     /// KiwiSDR protocol clients: kiwirecorder, SuperSDR, ... (apply at
     /// once; `doc/m5-kiwi.md`).
     pub kiwi: Kiwi,
+    /// The receiver's info page for listeners (apply at once).
+    pub info: Info,
+}
+
+/// What the receiver's info page tells listeners, beside the name and
+/// location (`[kiwi] name`, `location`), the station's callsign, locator
+/// and antenna (`[station]`), and a photo uploaded from the admin page.
+#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Info {
+    /// A few words about the receiver: the antenna's setup, the noise,
+    /// what it is meant for (plain text; blank lines start paragraphs).
+    pub description: String,
+    /// How to reach the owner (shown as written; an address here is public).
+    pub contact: String,
 }
 
 /// What the skimmers log, for choosing what goes to syslog and MQTT.
@@ -239,6 +254,13 @@ pub struct Radio {
     /// labels and the band ribbon are hidden while it is set. Kiwi and
     /// HPSDR clients see the receiver's own frequencies.
     pub freq_offset_hz: f64,
+    /// zynqsdr: the ADC's dither (LTC2208 DITH): spreads the ADC's
+    /// spurs into the noise, at a little noise. Applies at once.
+    pub adc_dither: bool,
+    /// zynqsdr: the ADC's PGA (LTC2208 PGA): 1.5 V full scale instead of
+    /// 2.25 V, signals ~3.5 dB higher (and overloads that much sooner);
+    /// levels in dBFS move with it. Applies at once.
+    pub adc_pga: bool,
     /// Backend sim: the simulated scene.
     pub sim: Sim,
     /// Backend iq: the wideband IQ input.
@@ -256,6 +278,8 @@ impl Default for Radio {
             zoom_engine: true,
             atten_db: 0.0,
             freq_offset_hz: 0.0,
+            adc_dither: false,
+            adc_pga: false,
             sim: Sim::default(),
             iq: Iq::default(),
         }
@@ -418,6 +442,20 @@ pub struct Limits {
     /// Skimmers give their channels to users when none is free, and get
     /// one again when a channel frees.
     pub skimmers_yield: bool,
+    /// Listening time per client address and UTC day, minutes (0 = no
+    /// limit): once used up, new sessions are refused and a running one
+    /// ends (a minute's notice), until 00:00 UTC. Admins and `trusted`
+    /// addresses aren't limited.
+    pub daily_minutes: u32,
+    /// Addresses or networks refused (web and Kiwi clients), e.g.
+    /// "192.0.2.7" or "198.51.100.0/24"; the admin page's Ban adds here.
+    /// Admins still get in.
+    #[schemars(with = "Vec<String>")]
+    pub blocked: Vec<IpNet>,
+    /// With a listener password: how many receivers visitors without it
+    /// may use at once (they queue for one beyond that; with the password
+    /// any). 0: the password is needed to listen at all.
+    pub open_channels: usize,
 }
 
 impl Default for Limits {
@@ -431,6 +469,9 @@ impl Default for Limits {
             hpsdr_channels: 7,
             share_default: true,
             skimmers_yield: true,
+            daily_minutes: 0,
+            blocked: Vec::new(),
+            open_channels: 0,
         }
     }
 }
@@ -826,9 +867,11 @@ impl Config {
     /// Classify the differences from `self` (running) to `new`.
     pub fn changes(&self, new: &Config) -> Changes {
         let mut c = Changes::default();
-        // the attenuator applies at once
+        // the attenuator and the ADC's dither and PGA apply at once
         let fixed = |r: &Radio| Radio {
             atten_db: 0.0,
+            adc_dither: false,
+            adc_pga: false,
             ..r.clone()
         };
         if fixed(&self.radio) != fixed(&new.radio) {
@@ -852,6 +895,9 @@ impl Config {
             c.restart.push("web");
         }
         c.live = self.radio.atten_db != new.radio.atten_db
+            || self.radio.adc_dither != new.radio.adc_dither
+            || self.radio.adc_pga != new.radio.adc_pga
+            || self.info != new.info
             || self.station != new.station
             || self.skimmer != new.skimmer
             || self.report != new.report

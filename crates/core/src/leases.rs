@@ -24,6 +24,10 @@ use web888_hw::HwCmd;
 /// Client classes, lowest first (design.md §6).
 #[derive(Clone, Copy, Debug, PartialEq, Eq, PartialOrd, Ord, Hash)]
 pub enum Class {
+    /// Web or Kiwi visitors without the listener password, on a receiver
+    /// that leaves some channels open (`[limits] open_channels`: their
+    /// quota).
+    Guest,
     Web,
     /// HPSDR and other network protocols.
     Protocol,
@@ -32,10 +36,17 @@ pub enum Class {
 }
 
 impl Class {
-    pub const ALL: [Class; 4] = [Class::Web, Class::Protocol, Class::Skimmer, Class::Admin];
+    pub const ALL: [Class; 5] = [
+        Class::Guest,
+        Class::Web,
+        Class::Protocol,
+        Class::Skimmer,
+        Class::Admin,
+    ];
 
     pub fn name(self) -> &'static str {
         match self {
+            Class::Guest => "guest",
             Class::Web => "web",
             Class::Protocol => "protocol",
             Class::Skimmer => "skimmer",
@@ -83,7 +94,10 @@ impl Policy {
     pub fn from_limits(l: &web888_config::Limits) -> Self {
         Policy {
             preempt: l.preempt,
-            quota: HashMap::from([(Class::Protocol, l.hpsdr_channels)]),
+            quota: HashMap::from([
+                (Class::Protocol, l.hpsdr_channels),
+                (Class::Guest, l.open_channels),
+            ]),
             skimmers_yield: l.skimmers_yield,
         }
     }

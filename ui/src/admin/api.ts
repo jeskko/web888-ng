@@ -37,8 +37,8 @@ export async function call<T>(method: string, path: string, body?: unknown): Pro
 
 export const get = <T>(path: string) => call<T>("GET", path);
 
-/** PUT a text file (`ctype`), the answer as JSON. */
-export async function putText<T>(path: string, text: string, ctype: string): Promise<T> {
+/** PUT a file (`ctype`; text or a Blob), the answer as JSON. */
+export async function putText<T>(path: string, text: string | Blob, ctype: string): Promise<T> {
   const r = await fetch(url(path), { method: "PUT", headers: { "Content-Type": ctype }, body: text });
   const data = (await r.json().catch(() => ({}))) as T & { error?: string };
   if (!r.ok) {
@@ -101,6 +101,9 @@ export interface Stats {
      * and as configured. */
     atten_db: number;
     atten_cfg_db: number;
+    /** The ADC's dither and PGA as configured (older servers: absent). */
+    adc_dither?: boolean;
+    adc_pga?: boolean;
   };
 }
 

@@ -10,6 +10,8 @@ export type ConnState = "connecting" | "open" | "closed" | "busy" | "ended";
 /** Close codes of sessions the server ended by its limits. */
 const CLOSE_TIME_LIMIT = 4001;
 const CLOSE_IDLE = 4002;
+/** The address's daily time used (`[limits] daily_minutes`). */
+const CLOSE_DAILY = 4003;
 
 export interface ConnHandlers {
   /** `opened`: closed after it had opened (else the connect failed). */
@@ -70,7 +72,7 @@ export class Conn {
       clearInterval(this.pinger);
       if (this.ws !== ws) return;
       this.ws = null;
-      if (e.code === CLOSE_TIME_LIMIT || e.code === CLOSE_IDLE) {
+      if (e.code === CLOSE_TIME_LIMIT || e.code === CLOSE_IDLE || e.code === CLOSE_DAILY) {
         // reconnecting by itself would make the limits moot
         this.h.onState("ended", e.reason || "session ended");
         return;

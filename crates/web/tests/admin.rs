@@ -272,7 +272,7 @@ async fn admin_api() {
     let r = http(addr, "GET", "/api/auth", None, None).await.json();
     assert_eq!(
         r,
-        json!({"role": null, "admin_password": true, "listener_password": false})
+        json!({"role": null, "admin_password": true, "listener_password": false, "open_channels": 0})
     );
     for (m, p) in [
         ("GET", "/api/admin/sessions"),
@@ -377,7 +377,7 @@ async fn admin_api() {
         keys,
         [
             "radio", "hpsdr", "web", "limits", "station", "skimmer", "report", "syslog", "mqtt",
-            "markers", "dxspots", "update", "kiwi"
+            "markers", "dxspots", "update", "kiwi", "info"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());
@@ -973,4 +973,142 @@ async fn settings_backup_and_restore() {
         200
     );
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn adc_ban_and_the_info_photo() {
+    let path = temp("adcban");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    let (addr, stop) = start(c, path.clone()).await;
+    let r = http(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password": ADMIN_PW, "admin": true})),
+    )
+    .await;
+    let admin = r.token();
+    for p in ["/api/admin/adc", "/api/admin/sessions/1/ban"] {
+        assert_eq!(
+            http(addr, "POST", p, None, Some(json!({}))).await.status,
+            401,
+            "{p}"
+        );
+    }
+    assert_eq!(
+        http_raw(
+            addr,
+            "PUT",
+            "/api/admin/info/photo",
+            None,
+            "x",
+            "image/png",
+            &[]
+        )
+        .await
+        .status,
+        401
+    );
+
+    // the ADC's dither and PGA: saved, and shown in the stats
+    let r = http(
+        addr,
+        "POST",
+        "/api/admin/adc",
+        Some(&admin),
+        Some(json!({"dither": true})),
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert_eq!(r.json(), json!({"dither": true, "pga": false}));
+    let saved = Config::load(&path).unwrap();
+    assert!(saved.radio.adc_dither && !saved.radio.adc_pga);
+    let st = http(addr, "GET", "/api/admin/stats", Some(&admin), None)
+        .await
+        .json();
+    assert_eq!(st["hw"]["adc_dither"], true);
+
+    // a listener banned: its address blocked, its session ended, new ones refused
+    let mut anon = ws(addr, None).await.unwrap();
+    let Some(ServerMsg::Hello { session, .. }) = next_json(&mut anon).await else {
+        panic!()
+    };
+    let r = http(
+        addr,
+        "POST",
+        &format!("/api/admin/sessions/{session}/ban"),
+        Some(&admin),
+        None,
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert_eq!(r.json()["blocked"], "127.0.0.1");
+    loop {
+        match next_json(&mut anon).await {
+            Some(ServerMsg::Error { msg }) if msg.contains("disconnected") => {}
+            None => break,
+            _ => {}
+        }
+    }
+    let saved = Config::load(&path).unwrap();
+    assert_eq!(saved.limits.blocked.len(), 1);
+    let mut again = ws(addr, None).await.unwrap();
+    assert!(matches!(
+        next_json(&mut again).await,
+        Some(ServerMsg::Busy { .. })
+    ));
+    // the admin still gets in
+    let mut own = ws(addr, Some(&admin)).await.unwrap();
+    assert!(matches!(
+        next_json(&mut own).await,
+        Some(ServerMsg::Hello { .. })
+    ));
+
+    // the info page's photo: not an image refused, a WebP kept and served
+    let r = http_raw(
+        addr,
+        "PUT",
+        "/api/admin/info/photo",
+        Some(&admin),
+        "<svg/>",
+        "image/svg+xml",
+        &[],
+    )
+    .await;
+    assert_eq!(r.status, 415);
+    let webp = "RIFF\0\0\0\0WEBPVP8 test";
+    let r = http_raw(
+        addr,
+        "PUT",
+        "/api/admin/info/photo",
+        Some(&admin),
+        webp,
+        "image/webp",
+        &[],
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    assert!(path.parent().unwrap().join("info-photo.webp").is_file());
+    let r = http(addr, "GET", "/api/info/photo", Some(&admin), None).await;
+    assert_eq!(r.status, 200);
+    assert_eq!(r.header("content-type"), Some("image/webp"));
+    assert_eq!(r.body, webp);
+    assert_eq!(
+        http(addr, "GET", "/api/info", Some(&admin), None)
+            .await
+            .json()["photo"],
+        true
+    );
+    let r = http(addr, "DELETE", "/api/admin/info/photo", Some(&admin), None).await;
+    assert_eq!(r.status, 200);
+    assert_eq!(
+        http(addr, "GET", "/api/info/photo", Some(&admin), None)
+            .await
+            .status,
+        404
+    );
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }

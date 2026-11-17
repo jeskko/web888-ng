@@ -347,3 +347,15 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .js8-msg { margin: 6px 0 10px; }
 .js8-msg.open .rtty-text { opacity: 0.8; }
 .js8-heard { font-size: 12px; line-height: 1.6; }
+.info-photo { display: block; max-width: 100%; max-height: 50vh; border-radius: 6px; margin: 6px 0; }
+.info-box { position: relative; max-height: 90vh; overflow-y: auto; width: min(34rem, 92vw); }
+.info-box h3 { margin-right: 2rem; }
+.info-x { position: absolute; top: 8px; right: 8px; }
+.info-where { margin-top: -4px; color: var(--dim); }
+.info-facts { display: grid; grid-template-columns: max-content 1fr; gap: 2px 12px; margin: 8px 0; }
+.info-facts dt { color: var(--dim); }
+.info-facts dd { margin: 0; }
+.info-text { white-space: pre-line; }
+.info-rules { margin: 4px 0; padding-left: 1.2em; }
+.afspec .afspec-canvas { display: block; width: 100%; height: 260px; cursor: crosshair; }
+.afspec p.dim { margin: 4px 8px; font-size: 12px; }

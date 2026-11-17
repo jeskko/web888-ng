@@ -15,6 +15,8 @@
         "zoom_engine": true,
         "atten_db": 0.0,
         "freq_offset_hz": 0.0,
+        "adc_dither": false,
+        "adc_pga": false,
         "sim": {
           "tones": [],
           "noise": false
@@ -69,7 +71,10 @@
         "preempt": false,
         "hpsdr_channels": 7,
         "share_default": true,
-        "skimmers_yield": true
+        "skimmers_yield": true,
+        "daily_minutes": 0,
+        "blocked": [],
+        "open_channels": 0
       }
     },
     "station": {
@@ -176,6 +181,14 @@
         "location": "",
         "smeter_offset_db": 0.0
       }
+    },
+    "info": {
+      "description": "The receiver's info page for listeners (apply at once).",
+      "$ref": "#/$defs/Info",
+      "default": {
+        "description": "",
+        "contact": ""
+      }
     }
   },
   "additionalProperties": false,
@@ -233,6 +246,16 @@
           "type": "number",
           "format": "double",
           "default": 0.0
+        },
+        "adc_dither": {
+          "description": "zynqsdr: the ADC's dither (LTC2208 DITH): spreads the ADC's\nspurs into the noise, at a little noise. Applies at once.",
+          "type": "boolean",
+          "default": false
+        },
+        "adc_pga": {
+          "description": "zynqsdr: the ADC's PGA (LTC2208 PGA): 1.5 V full scale instead of\n2.25 V, signals ~3.5 dB higher (and overloads that much sooner);\nlevels in dBFS move with it. Applies at once.",
+          "type": "boolean",
+          "default": false
         },
         "sim": {
           "description": "Backend sim: the simulated scene.",
@@ -558,6 +581,28 @@
           "description": "Skimmers give their channels to users when none is free, and get\none again when a channel frees.",
           "type": "boolean",
           "default": true
+        },
+        "daily_minutes": {
+          "description": "Listening time per client address and UTC day, minutes (0 = no\nlimit): once used up, new sessions are refused and a running one\nends (a minute's notice), until 00:00 UTC. Admins and `trusted`\naddresses aren't limited.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 0
+        },
+        "blocked": {
+          "description": "Addresses or networks refused (web and Kiwi clients), e.g.\n\"192.0.2.7\" or \"198.51.100.0/24\"; the admin page's Ban adds here.\nAdmins still get in.",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": []
+        },
+        "open_channels": {
+          "description": "With a listener password: how many receivers visitors without it\nmay use at once (they queue for one beyond that; with the password\nany). 0: the password is needed to listen at all.",
+          "type": "integer",
+          "format": "uint",
+          "minimum": 0,
+          "default": 0
         }
       },
       "additionalProperties": false
@@ -911,6 +956,23 @@
           "type": "number",
           "format": "float",
           "default": 0.0
+        }
+      },
+      "additionalProperties": false
+    },
+    "Info": {
+      "description": "What the receiver's info page tells listeners, beside the name and\nlocation (`[kiwi] name`, `location`), the station's callsign, locator\nand antenna (`[station]`), and a photo uploaded from the admin page.",
+      "type": "object",
+      "properties": {
+        "description": {
+          "description": "A few words about the receiver: the antenna's setup, the noise,\nwhat it is meant for (plain text; blank lines start paragraphs).",
+          "type": "string",
+          "default": ""
+        },
+        "contact": {
+          "description": "How to reach the owner (shown as written; an address here is public).",
+          "type": "string",
+          "default": ""
         }
       },
       "additionalProperties": false

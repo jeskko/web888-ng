@@ -56,7 +56,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | USB/LSB/CW/AM, passband presets | ✓ | ✓ | ✓ | – |
 | SAM (+ SAU/SAL/SAS, PLL speed, fade leveler) | ✓ | ✓ | ✓ SAM/SAL/SAR/SAS, one PLL speed, carrier AGC | – (PLL speed choice later) |
 | NBFM/NNFM + de-emphasis, noise squelch | ✓ | ✓ | ✓ NBFM (v0.10.0: ±5 kHz at 12 kS/s, 300 Hz de-emphasis, squelch; Kiwi `nbfm`) | – |
-| IQ mode (stereo IQ to the browser / recorder) | ✓ | ✓ | ~ Kiwi clients only (kiwirecorder, SuperSDR); not in the web UI | **R** (web UI) |
+| IQ mode (stereo IQ to the browser / recorder) | ✓ | ✓ | ✓ the web UI's IQ mode (PCM), Rec saves an I/Q WAV; Kiwi clients | – |
 | C-QUAM AM stereo | ✓ | ✓ | ✗ | omit |
 | AGC controls (threshold, slope, decay, hang) | ✓ | ✓ | ✓ F/M/S or custom hang and decay, max gain (threshold); no slope | – |
 | Noise blanker (2 algorithms) | ✓ | ✓ | ✓ (1) | – |
@@ -79,7 +79,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Full-band waterfall for everyone at once | ~ (zoom 0 takes one of the 2 slots) | ~ (one of its channels) | ✓ (channelizer: the power line, 0-61 MHz, any number of viewers) | – |
 | Auto levels | ✓ | ✓ | ✓ | – |
 | Colormaps (several + editor) | ✓ | ✓ | ✓ five (Default, Viridis, Heat, Phosphor, Grey), no editor | – |
-| Spectrum peak hold, audio (AF) spectrum | ✓ | ✓ | ~ peak hold ✓; no AF spectrum | **R** (AF spectrum) |
+| Spectrum peak hold, audio (AF) spectrum | ✓ | ✓ | ✓ peak hold; AF spectrum and waterfall panel (both sides of the dial in IQ) | – |
 | Timestamps on the waterfall, save as image | ✓ | ✓ | ✓ UTC marks; PNG with marks and a caption | – |
 | Window/interpolation/averaging choices | ✓ | ✓ | fixed (Welch) | omit (ours averages) |
 | Waterfall compression | ✓ ADPCM | ✓ | ✓ lossless Rice-coded lines (55 % of raw), a data saver | – |
@@ -141,9 +141,9 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Status, users + kick, config, passwords | ✓ | ✓ | ✓ | – |
 | Session time limit, inactivity limit | ✓ | ✓ | ✓ (fixed 2026-10-23) | – |
 | Client address behind a reverse proxy (trusted proxies, X-Forwarded-For) | ✓ | ✓ | ✓ `[web] trusted_proxies` (fixed 2026-10-23) | – |
-| Per-IP daily limit, IP block list, ban from the user list | ✓ | ✓ | per-IP sessions only | **O** |
-| Channels without a password (open + private sets) | ✓ | ✓ | ✗ (all or nothing) | **O** |
-| Receiver info page (name, location, antenna, photo) | ✓ | ✓ | ✗ | **O** |
+| Per-IP daily limit, IP block list, ban from the user list | ✓ | ✓ | ✓ `daily_minutes`, `blocked`, Ban in the admin's Sessions | – |
+| Channels without a password (open + private sets) | ✓ | ✓ | ✓ `open_channels`: visitors on that many, the password for any (web and Kiwi) | – |
+| Receiver info page (name, location, antenna, photo) | ✓ | ✓ | ✓ Info: name, place, station, antenna, description, contact, photo, the limits | – |
 | Logs in the admin page | ✓ | ✓ | ✓ (v0.13.0: the journal, the setup log) | – |
 | Updates (channels, rollback) | ✓ zip | ✓ | ✓ os: A/B with rollback (RAUC, since os v0.3.0); the admin page looks for a release (daily too), installs it with progress and reboots into it | – |
 | Network config (static IP, Wi-Fi) | ✓ | ✓ | ✓ os: DHCP or static from `web888.txt` (the board has no Wi-Fi) | – |
@@ -159,7 +159,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | 32 MHz "narrowband" (61.44 MHz ADC) | ✓ | ✗ | omit unless asked |
 | VHF airband by undersampling (98.304 / 110.592 MHz clocks, RF switch) | ✓ | ~ **experimental** (v0.10.0, `band = "vhf"`): 98.304-147.456 MHz on the VHF channelizer, NBFM; ran on a unit with no VHF antenna; 110.592 MHz (to 165.9 MHz, marine VHF) only with the frozen tuned bitstream | **V** (real signals; 110.592 MHz with the channelizer?) |
 | External 10 MHz reference, GPSDO output on CLK2 | ✓ | ✗ (the RF switch and clock select are in the driver; nothing configures the reference) | **V** |
-| ADC dither, PGA, DC-offset trim | ✓ | ✗ (in the backend's front end, not in the config or UI) | **V** (small: config + admin) |
+| ADC dither, PGA, DC-offset trim | ✓ | ✓ dither and PGA (admin Status, live); no DC trim (the channelizer has no DC term) | – |
 | GPS: position via gpsd, PPS clock correction | ✓ | PPS loop ✓, gpsd ✓ (M4) | **S** (grid for spots) |
 
 ## 3. Order
@@ -197,14 +197,14 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
    offset, AGC hang/decay, memories and VFO A/B, WAV recording,
    colormaps, peak hold, waterfall time marks and PNG, key help; before:
    the attenuator, 24 kS/s audio, Opus/μ-law, the auto-notch):
-   * the ADC controls (dither, PGA) in the admin page;
    * a measured S-meter calibration (dBm) for both the web UI and Kiwi
-     (waits for a signal source: the second unit);
-   * IQ in the web UI; an audio (AF) spectrum.
-3. **O — access and presentation** (for public receivers):
-   * per-IP daily limit, a block list, open + private channel sets;
-   * a receiver info page (name, location, antenna).
-   (Logs and settings backup: done in v0.13.0.)
+     (waits for a signal source: the second unit).
+   (Also done 2026-11-17: ADC dither/PGA, IQ in the web UI, the audio
+   spectrum.)
+3. **O — access and presentation**: done 2026-11-17 (per-IP daily
+   limit, block list and Ban, open channels for visitors, the info
+   page; logs and settings backup in v0.13.0). Left: a public listing
+   (§5).
 4. **B — more decoders in the browser**: done (M8: CW, RTTY/NAVTEX/DSC,
    PSK, FAX/SSTV, HFDL, JS8, time codes, the signal identifier); what is
    left is in `m8-browser-decoders.md`.
@@ -252,7 +252,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Scheduled squelched audio logger | MP3 per channel with SNR squelch and hang | e.g. VOLMET or a net; Opus at 12 kHz is cheap | later |
 | Bookmarks + scanner | Auto-bookmarks from EiBi (in range) and band plans; scanner steps through visible bookmarks with squelch | The scanner is client-side retuning; the server has squelch and power | **R** |
 | Chat, admin broadcast | Random nicknames, timestamps, federated over MQTT | Small. Moved from "omit" to a question (§5) | ? |
-| Abuse protection | Robot score from connection rate and rapid profile changes, timed IP bans, trusted proxies, session timeout with a policy page, LAN-only admin login | Trusted proxies are fixed now; the rest goes with **O** | **O** |
+| Abuse protection | Robot score from connection rate and rapid profile changes, timed IP bans, trusted proxies, session timeout with a policy page, LAN-only admin login | Trusted proxies, IP bans (`blocked`, Ban), a daily limit and session/idle limits (shown on the info page) done; no robot score or timed bans | later |
 | Opus audio | Wanted for years (upstream #220, a 2022 WebCodecs branch abandoned) | Done: Opus (pure-Rust encoder, WASM decoder in the page), μ-law, PCM | – |
 | Whisper speech-to-text | 20 s WAV chunks POSTed to an external Whisper server; transcripts to the page and MQTT | No inference on the unit; an optional URL in the config. Tried offline on our audio (2026-10-29): AM usable, SSB poor, hallucinations without voice detection | later (AM broadcast / VHF AM first) |
 | FreeDV (700D/E, RADE) | Server-side decoder per user | HF digital voice. Better as WASM in the browser (RADE is a neural network) | later, browser |
