@@ -142,6 +142,10 @@ pub fn interp(prev: f64, mid: f64, next: f64) -> f64 {
     (0.5 * (prev - next) / d).clamp(-0.5, 0.5)
 }
 
+/// An event whose strongest bin stays below this (and the band as a whole
+/// didn't rise) is brief: nothing in the power lines could have clipped.
+const BRIEF_BELOW_DBFS: f64 = -20.0;
+
 /// An event's spectrum: `lines` (power per bin, a full-scale sine 1)
 /// during it, against `avg` (dB per bin) outside events.
 pub fn analyse(lines: &[&[f32]], avg: &[f32], caps: &BinCaps) -> Analysis {
@@ -194,9 +198,12 @@ pub fn analyse(lines: &[&[f32]], avg: &[f32], caps: &BinCaps) -> Analysis {
         })
         .collect();
     let top3: f64 = strongest.iter().map(|b| b.share).sum();
-    // the strongest signals as they always are: nothing in the lines shows
-    // the overload
-    let none_rose = median_rise_db < 3.0 && strongest.iter().all(|b| b.rise_db < 3.0);
+    // nothing in the lines comes near clipping: a signal that clips the
+    // ADC is within ~10 dB of full scale in its bin, and the band didn't
+    // rise as a whole, so what clipped was shorter than a line (a spike).
+    // (Not "nothing rose": a bin's highest over the event's lines is
+    // above its average by a few dB anyway when the signal fades.)
+    let none_rose = median_rise_db < 3.0 && strongest[0].dbfs < BRIEF_BELOW_DBFS;
     let kind = if median_rise_db >= 3.0 {
         Kind::Broadband
     } else if none_rose {
@@ -337,7 +344,7 @@ pub fn describe(e: &Event) -> String {
             );
         }
         (Kind::Brief, _) => {
-            s += ": brief, nothing rose in the band's 0.1 s power (a click or switching spike)";
+            s += ": brief, nothing in the band's 0.1 s power near clipping (a click or switching spike)";
         }
         (Kind::Spread, Some(b)) => {
             s += &format!(
@@ -666,8 +673,8 @@ mod tests {
         let a = analyse(&[&l], &avg, &CAPS);
         assert_eq!(a.kind, Kind::Broadband);
         assert!((a.median_rise_db - 10.0).abs() < 0.1);
-        // many signals, none ahead: spread
-        let many: Vec<(usize, f32)> = (0..40).map(|i| (i * 50, 0.01)).collect();
+        // many signals near clipping, none ahead: spread
+        let many: Vec<(usize, f32)> = (0..40).map(|i| (i * 50, 0.02)).collect();
         assert_eq!(analyse(&[&line(&many)], &avg, &CAPS).kind, Kind::Spread);
         // a line before the carrier and one with it: held at the highest
         let quiet = line(&[]);
@@ -768,17 +775,18 @@ mod tests {
     fn nothing_rose_is_brief_and_a_signals_skirt_is_not_another_signal() {
         // the band as it always is, with its strong stations: an overload
         // shorter than a line doesn't show
-        let mut l = line(&[(200, 0.01), (201, 0.004), (300, 0.008), (500, 0.006)]);
+        let mut l = line(&[(200, 0.001), (201, 0.0004), (300, 0.0008), (500, 0.0006)]);
         let avg: Vec<f32> = l.iter().map(|&p| db(p as f64) as f32).collect();
         let a = analyse(&[&l], &avg, &CAPS);
         assert_eq!(a.kind, Kind::Brief);
         // bin 201 is 200's skirt: the three are 200, 300 and 500
         let bins: Vec<usize> = a.strongest.iter().map(|b| b.bin).collect();
         assert_eq!(bins, [200, 300, 500]);
-        // the same stations 10 dB up: they rose, so not brief
-        for p in &mut l {
-            *p *= 10.0;
-        }
+        // a fading station's highest is above its average: still brief
+        l[300] *= 4.0;
+        assert_eq!(analyse(&[&l], &avg, &CAPS).kind, Kind::Brief);
+        // a station near full scale could have clipped: not brief
+        l[300] = 0.05;
         assert_ne!(analyse(&[&l], &avg, &CAPS).kind, Kind::Brief);
     }
 }

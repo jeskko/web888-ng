@@ -626,10 +626,15 @@ Fixes from what the log showed:
   the highest reading while the event is open (the register holds each
   ~137 ms window's peak for the next window; the monitor reads it every
   50 ms).
-* **Brief**: when nothing rose in the band's 0.1 s power lines (neither
-  the median nor the strongest signals by 3 dB), the event is "brief, a
-  click or switching spike" instead of naming the usual strongest
-  station.
+* **Brief**: when the band as a whole didn't rise (median under 3 dB)
+  and no bin came within 20 dB of full scale, nothing in the 0.1 s
+  power lines could have clipped the ADC: the event is "brief, a click
+  or switching spike" instead of naming the usual strongest station.
+  (A first version asked for no bin to rise by 3 dB; on the unit a
+  fading medium-wave station's highest over the event's lines was
+  above its average by more than that, so the spikes still read "no
+  single cause".) With the peak fixed, the unit's events showed
+  -0.0 dBFS.
 * **Several** listed one signal twice (its skirt in the next bin): the
   three strongest are now distinct signals, bins next to one already
   taken skipped.
