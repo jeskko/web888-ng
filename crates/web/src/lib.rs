@@ -16,6 +16,7 @@ pub mod kiwi;
 pub mod logs;
 pub mod markers;
 pub mod metrics;
+pub mod ovl;
 pub mod prop;
 pub mod proto;
 pub mod safe;
@@ -71,6 +72,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .merge(markers::routes())
         .merge(info::routes())
         .merge(prop::routes())
+        .merge(ovl::routes())
         .merge(kiwi::routes())
         .merge(update::routes())
         .merge(logs::routes())

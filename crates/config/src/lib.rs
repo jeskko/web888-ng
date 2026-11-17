@@ -219,10 +219,17 @@ pub enum LogEvent {
     Band,
     /// What the uploaders (PSKReporter, WSPRnet) did, and their errors.
     Upload,
+    /// ADC overloads: when, how long, and the signal that caused them.
+    Adc,
 }
 
 fn all_events() -> Vec<LogEvent> {
-    vec![LogEvent::Spot, LogEvent::Band, LogEvent::Upload]
+    vec![
+        LogEvent::Spot,
+        LogEvent::Band,
+        LogEvent::Upload,
+        LogEvent::Adc,
+    ]
 }
 
 #[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]

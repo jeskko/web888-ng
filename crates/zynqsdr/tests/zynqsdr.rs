@@ -185,6 +185,7 @@ fn stats_only_with_the_open_driver() {
         r.hw_stats().unwrap(),
         Some(HwStats {
             adc_overflows: 5,
+            adc_peak: 0,
             rx_frames_dropped: 2,
             rx_overruns: 1,
             rx_overrun_bytes: 4800,

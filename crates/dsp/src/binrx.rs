@@ -959,6 +959,7 @@ impl<R: Radio + BinRadio> Radio for BinRx<R> {
         // here: only its ADC counters apply
         Ok(self.inner.hw_stats()?.map(|s| HwStats {
             adc_overflows: s.adc_overflows,
+            adc_peak: s.adc_peak,
             ..HwStats::default()
         }))
     }

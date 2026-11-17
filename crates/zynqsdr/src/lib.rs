@@ -594,6 +594,7 @@ impl<D: Device> Radio for ZynqsdrRadio<D> {
         }
         Ok(self.dev.stats().map_err(io)?.map(|s| HwStats {
             adc_overflows: s.adc_overflows,
+            adc_peak: s.adc_peak,
             rx_frames_dropped: s.rx_frames_dropped,
             rx_overruns: s.rx_overruns,
             rx_overrun_bytes: s.rx_overrun_bytes,

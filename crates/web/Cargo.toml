@@ -24,6 +24,7 @@ web888-core.workspace = true
 web888-skim.workspace = true
 web888-markers.workspace = true
 web888-prop.workspace = true
+rustfft.workspace = true
 tower = { version = "0.5.3", features = ["util"] }
 argon2 = "0.6.0"
 getrandom = "0.4.3"
@@ -38,7 +39,6 @@ kiwi = []
 [dev-dependencies]
 futures-util = "0.3.34"
 num-complex.workspace = true
-rustfft.workspace = true
 tokio-tungstenite = "0.30.0"
 web888-sim = { path = "../sim" }
 web888-iq.workspace = true

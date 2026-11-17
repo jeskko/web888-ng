@@ -286,6 +286,7 @@ pub fn spawn(
                         Ok(e) if events::wants(&c.events, &c.modes, e.kind(), None) => {
                             let sub = match e.kind() {
                                 LogEvent::Band => "band",
+                                LogEvent::Adc => "adc",
                                 _ => "upload",
                             };
                             out.push(publish_packet(

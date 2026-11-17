@@ -116,6 +116,9 @@ pub struct Identity {
 pub struct HwStats {
     /// Open bitstream: ADC clocks with the overflow pin high (wraps).
     pub adc_overflows: u32,
+    /// Open bitstream: the largest |sample| over the last 2^24 ADC clocks
+    /// (full scale 32768).
+    pub adc_peak: u32,
     /// Open bitstream: RX frames lost in the FPGA FIFO since RX start.
     pub rx_frames_dropped: u32,
     /// Driver: times the reader was lapped and the driver skipped ahead.

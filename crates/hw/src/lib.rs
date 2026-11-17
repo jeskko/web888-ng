@@ -199,6 +199,11 @@ fn lost_frames(bytes: u64, nch: usize) -> u64 {
 pub struct HwStatus {
     /// RX blocks read while the ADC overflowed.
     pub overload_blocks: AtomicU64,
+    /// ADC clocks with the overflow pin high (open bitstream).
+    pub overflow_clocks: AtomicU64,
+    /// The largest |sample| over the last 2^24 ADC clocks (~0.14 s;
+    /// full scale 32768; 0: not known).
+    pub adc_peak: std::sync::atomic::AtomicU32,
     /// PPS-corrected ADC clock error, ppb (0 without PPS).
     pub clock_ppb: std::sync::atomic::AtomicI64,
     /// The last rate window delivered the expected RX frames.
@@ -498,6 +503,10 @@ impl HwLoop {
             {
                 if let Some(l) = last_stats {
                     overload = s.adc_overflows != l.adc_overflows;
+                    self.status.overflow_clocks.fetch_add(
+                        s.adc_overflows.wrapping_sub(l.adc_overflows) as u64,
+                        Ordering::Relaxed,
+                    );
                     if s.rx_overruns != l.rx_overruns {
                         let bytes = s.rx_overrun_bytes.wrapping_sub(l.rx_overrun_bytes);
                         let lost = lost_frames(bytes, n);
@@ -519,6 +528,7 @@ impl HwLoop {
                         );
                     }
                 }
+                self.status.adc_peak.store(s.adc_peak, Ordering::Relaxed);
                 last_stats = Some(s);
             }
             if overload {

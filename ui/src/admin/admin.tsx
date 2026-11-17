@@ -127,13 +127,16 @@ function StatusPage() {
   const prev = useRef<{ t: number; s: Stats } | null>(null);
   const [rates, setRates] = useState<{ frames: number; busy: number[]; overloads: number } | null>(null);
   const [skim, setSkim] = useState<Skimmers | null>(null);
+  const [ovl, setOvl] = useState<Ovl | null>(null);
   usePoll(async () => {
-    const [s, l, k] = await Promise.all([
+    const [s, l, k, o] = await Promise.all([
       get<Stats>("api/admin/stats"),
       get<{ channels: number; leases: LeaseRow[] }>("api/admin/leases"),
       get<Skimmers>("api/admin/skimmers"),
+      get<Ovl>("api/admin/ovl").catch(() => null),
     ]);
     setSkim(k);
+    setOvl(o);
     const t = performance.now();
     const p = prev.current;
     if (p) {
@@ -189,6 +192,7 @@ function StatusPage() {
         </dl>
         <button onClick={() => void restart()}>Restart web888d…</button>
       </section>
+      {ovl && <OvlCard o={ovl} />}
       <section class="card">
         <h3>
           RX channels ({byChannel.size}/{leases.channels} in use)
@@ -367,6 +371,88 @@ function AdcCtl({ dither, pga }: { dither: boolean; pga: boolean }) {
       </label>
       {err && <span class="warn"> {err}</span>}
     </>
+  );
+}
+
+interface OvlBin {
+  bin: number;
+  hz: number;
+  peak_hz: number;
+  dbfs: number;
+  rise_db: number;
+  share: number;
+}
+interface OvlEvent {
+  start: number;
+  seconds: number;
+  blocks: number;
+  clocks: number;
+  peak_dbfs: number | null;
+  analysis: { kind: "carrier" | "several" | "broadband" | "spread" | "unknown"; strongest: OvlBin[]; median_rise_db: number; total_dbfs: number };
+  carrier: { hz: number; dbfs: number; snr_db: number } | null;
+}
+interface Ovl {
+  spectrum: boolean;
+  blocks: number;
+  clocks: number;
+  peak_dbfs: number | null;
+  events: OvlEvent[];
+}
+
+const KIND: Record<OvlEvent["analysis"]["kind"], string> = {
+  carrier: "a carrier",
+  several: "several signals",
+  broadband: "broadband (an impulse)",
+  spread: "no single cause",
+  unknown: "–",
+};
+
+/** What an overload event's cause was, in words. */
+export function ovlCause(e: OvlEvent): string {
+  const a = e.analysis;
+  const mhz = (hz: number) => `${(hz / 1e6).toFixed(3)} MHz`;
+  if (e.carrier) return `carrier at ${(e.carrier.hz / 1e3).toFixed(3)} kHz, ${e.carrier.dbfs.toFixed(0)} dBFS`;
+  const b = a.strongest[0];
+  if (a.kind === "carrier" && b) return `carrier near ${mhz(b.peak_hz)}, ${b.dbfs.toFixed(0)} dBFS (${Math.round(b.share * 100)} %)`;
+  if (a.kind === "several") return `several: ${a.strongest.map((s) => mhz(s.peak_hz)).join(", ")}`;
+  if (a.kind === "broadband") return `broadband, +${a.median_rise_db.toFixed(0)} dB everywhere`;
+  if (a.kind === "spread" && b) return `no single cause; strongest ${mhz(b.peak_hz)} (${Math.round(b.share * 100)} %)`;
+  return KIND[a.kind];
+}
+
+/** The ADC overload events (`/api/admin/ovl`), newest first. */
+function OvlCard({ o }: { o: Ovl }) {
+  const t = (s: number) => new Date(s * 1000).toISOString().slice(5, 19).replace("T", " ");
+  return (
+    <section class="card">
+      <h3>ADC overloads</h3>
+      <p class="dim">
+        {o.events.length === 0 ? "None since web888d started." : `The last ${o.events.length} (UTC).`} Peak sample now: {o.peak_dbfs === null ? "unknown" : `${o.peak_dbfs.toFixed(1)} dBFS`}.
+        {!o.spectrum && " No channelizer: the causes aren't analysed."}
+      </p>
+      {o.events.length > 0 && (
+        <table class="ovl-events">
+          <thead>
+            <tr>
+              <th>When</th>
+              <th>Length</th>
+              <th title="ADC clocks with the overflow pin high">Clocks</th>
+              <th>Cause</th>
+            </tr>
+          </thead>
+          <tbody>
+            {o.events.slice(0, 30).map((e) => (
+              <tr key={e.start}>
+                <td>{t(e.start)}</td>
+                <td>{e.seconds.toFixed(1)} s</td>
+                <td>{e.clocks}</td>
+                <td>{ovlCause(e)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </section>
   );
 }
 

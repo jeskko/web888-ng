@@ -223,6 +223,21 @@ fn hardware(o: &mut Out, sh: &Shared) {
         n(&s.overload_blocks),
     );
     o.one(
+        "adc_overflow_clocks_total",
+        "counter",
+        "ADC clocks with the overflow pin high.",
+        n(&s.overflow_clocks),
+    );
+    let peak = s.adc_peak.load(Ordering::Relaxed);
+    if peak > 0 {
+        o.one(
+            "adc_peak_dbfs",
+            "gauge",
+            "The largest ADC sample over the last 0.14 s (dBFS).",
+            20.0 * (peak as f64 / 32768.0).log10(),
+        );
+    }
+    o.one(
         "rx_frames_total",
         "counter",
         "RX frames read from the hardware.",

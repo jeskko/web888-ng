@@ -526,3 +526,36 @@ phone sizes, and on the unit.
   quietest fifth of all points, which on SSB are mostly the filter's
   stopband, ~60 dB under the noise. Now from the points in the passband
   (`noiseFloor`).
+
+## 15. ADC overload events (2026-11-17)
+
+`crates/web/src/ovl.rs`: each ADC overload is logged with its time,
+length and severity and, with the channelizer bitstream, its cause.
+
+* **Detection**: the FPGA counts ADC clocks with the overflow pin high;
+  the hw loop now keeps those clocks (`HwStatus::overflow_clocks`) beside
+  the blocks that had any, and the FPGA's peak-sample register
+  (`adc_peak`, the largest |sample| over 2^24 clocks). An event is a run
+  of overflowing blocks, ended by 1.5 s without one (cut at 60 s).
+* **Cause** (with a `BinTap`): the monitor takes the full-band power
+  lines (2048 bins of 30 kHz, 10 a second) and keeps a ~10 s per-bin
+  average outside events. An event's lines, each bin at its highest,
+  give the strongest bins, their rise over the average and their share
+  of the power: *carrier* (one bin ≥ half the power), *broadband* (the
+  median bin rose ≥ 3 dB: an impulse), *several* (the strongest three
+  ≥ 60 %), else *spread* (many signals adding up). The strongest bin's
+  frequency is interpolated between bins (±1-2 kHz).
+* **Exact carrier frequency**: for a carrier, 0.35 s into the event the
+  monitor bursts that bin (32768 samples at 60 kS/s through the tap) and
+  finds the carrier in a Hann-windowed FFT, interpolated: to a fraction
+  of a hertz, if it is still on and 20 dB above the bin's median.
+* **Where it goes**: stderr/journal and the skimmers' log bus as source
+  `adc` (a new `[syslog]`/`[mqtt]` event kind, `adc`; MQTT topic
+  `<topic>/adc`), metrics (`adc_overflow_clocks_total`, `adc_peak_dbfs`),
+  `GET /api/admin/ovl` (the last 100 events, the peak now) and the admin
+  Status page's **ADC overloads** card.
+* Limits: a power line averages 100 ms, so a burst of a few ms is
+  diluted in it (the counter itself has the block's resolution); the ADC
+  clips on the sum of everything, so "spread" is a real answer. A short
+  burst's frequency needs an FPGA capture of the samples at the overflow
+  (not done; decide after a week of events).
