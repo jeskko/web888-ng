@@ -13,10 +13,22 @@ export interface Tick {
   /** The round time crossed (Unix ms). */
   t: number;
   label: string;
+  /** The interval the marks are on (s). */
+  iv: number;
 }
 
-/** Marks for lines `times` (Unix ms, newest first; NaN: no line). */
-export function timeTicks(times: ArrayLike<number>, minRows: number): Tick[] {
+/** The interval for `perS` lines a second: the shortest that keeps marks
+ *  `minRows` apart; `prev` is kept while marks on it stay from 3/4 to 3
+ *  times that apart, so a line rate near a step doesn't make the marks
+ *  jump between two intervals from frame to frame. */
+export function pickInterval(perS: number, minRows: number, prev = 0): number {
+  if (prev > 0 && prev * perS >= 0.75 * minRows && prev * perS <= 3 * minRows) return prev;
+  return INTERVALS.find((s) => s * perS >= minRows) ?? INTERVALS[INTERVALS.length - 1];
+}
+
+/** Marks for lines `times` (Unix ms, newest first; NaN: no line); `prev`:
+ *  the interval the marks were on last time (see [`pickInterval`]). */
+export function timeTicks(times: ArrayLike<number>, minRows: number, prev = 0): Tick[] {
   const n = times.length;
   // lines per second over what is there (the rate changes with the view)
   let first = -1;
@@ -30,7 +42,7 @@ export function timeTicks(times: ArrayLike<number>, minRows: number): Tick[] {
   const secs = (times[first] - times[last]) / 1000;
   if (!(secs > 0)) return [];
   const perS = (last - first) / secs;
-  const iv = INTERVALS.find((s) => s * perS >= minRows) ?? INTERVALS[INTERVALS.length - 1];
+  const iv = pickInterval(perS, minRows, prev);
   const ms = iv * 1000;
   const out: Tick[] = [];
   let lastRow = -Infinity;
@@ -41,9 +53,9 @@ export function timeTicks(times: ArrayLike<number>, minRows: number): Tick[] {
     // the line at row i is the first after the round time b < t <= a
     const t = Math.floor(a / ms) * ms;
     if (t <= b) continue;
-    if (i - lastRow < minRows / 2) continue;
+    if (i - lastRow < minRows / 3) continue;
     lastRow = i;
-    out.push({ row: i, t, label: utcLabel(t, iv) });
+    out.push({ row: i, t, label: utcLabel(t, iv), iv });
   }
   return out;
 }

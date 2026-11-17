@@ -152,9 +152,11 @@ export function Pane() {
 
     /** UTC marks down the left edge of `ctx` (device px; the waterfall's
      * rows from `y0`, `h` of them). */
+    let tickIv = 0;
     const drawTicks = (ctx: CanvasRenderingContext2D, y0: number, h: number) => {
       if (!wf) return;
-      const ticks = timeTicks(wf.rowTimes(h), 40 * dpr);
+      const ticks = timeTicks(wf.rowTimes(h), 40 * dpr, tickIv);
+      if (ticks.length) tickIv = ticks[0].iv;
       ctx.font = `${10 * dpr}px ui-monospace, Menlo, Consolas, monospace`;
       ctx.textBaseline = "middle";
       for (const t of ticks) {

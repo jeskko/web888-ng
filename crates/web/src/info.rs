@@ -7,6 +7,8 @@
 //!   photo, and the rules a visitor meets (receivers, the per-address,
 //!   session, idle and daily limits, receivers open without the password);
 //! * `GET /api/info/photo`: the photo;
+//! * `GET /api/info/licences`: the third-party libraries built in, with
+//!   their licences (`third-party.json`, from `scripts/third-party.py`);
 //! * `PUT` / `DELETE /api/admin/info/photo`: the admin sets (JPEG, PNG or
 //!   WebP, at most [`PHOTO_MAX`] bytes) or removes it. It is kept next to
 //!   the configuration file as `info-photo.jpg` (`.png`, `.webp`).
@@ -40,6 +42,7 @@ pub fn routes() -> Router<Arc<Shared>> {
     Router::new()
         .route("/api/info", get(info))
         .route("/api/info/photo", get(photo))
+        .route("/api/info/licences", get(licences))
         .route(
             "/api/admin/info/photo",
             put(photo_put)
@@ -111,6 +114,13 @@ async fn info(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
     .into_response()
 }
 
+/// The libraries in this build (Rust crates, the UI's packages).
+const THIRD_PARTY: &str = include_str!("third-party.json");
+
+async fn licences() -> Response {
+    ([(header::CONTENT_TYPE, "application/json")], THIRD_PARTY).into_response()
+}
+
 async fn photo(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
     if !admin::may_listen(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
@@ -177,6 +187,28 @@ async fn photo_delete(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Response {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    #[test]
+    fn the_library_list_is_whole() {
+        let v: serde_json::Value = serde_json::from_str(THIRD_PARTY).unwrap();
+        for (kind, at_least) in [("rust", 50), ("npm", 3)] {
+            let l = v[kind].as_array().unwrap();
+            assert!(l.len() >= at_least, "{kind}: {}", l.len());
+            for p in l {
+                for k in ["name", "version", "license", "url"] {
+                    assert!(p[k].as_str().is_some_and(|s| !s.is_empty()), "{p}: {k}");
+                }
+            }
+        }
+        // what the propagation forecasts and the audio rest on
+        let names: Vec<&str> = v["rust"]
+            .as_array()
+            .unwrap()
+            .iter()
+            .map(|p| p["name"].as_str().unwrap())
+            .collect();
+        assert!(names.contains(&"hfcast") && names.contains(&"opus1"));
+    }
 
     #[test]
     fn photos_are_known_by_their_first_bytes() {

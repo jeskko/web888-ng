@@ -7,6 +7,7 @@ import { useEffect, useRef } from "preact/hooks";
 import { setFloor, setTop } from "../view/range.ts";
 import { cssGradient, PALETTE_NAMES, type Palette } from "../view/colormap.ts";
 import { helpOpen } from "./keys.tsx";
+import { Drop } from "./drop.tsx";
 import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, NAME_MAX, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
@@ -196,22 +197,23 @@ export function ModeBar() {
 export function Bandwidth() {
   const s = st.value;
   if (!s) return null;
+  const presets = bandwidths(s.mode, s.audio_rate);
+  const cur = presets.find((b) => s.lo === b.lo && s.hi === b.hi);
   return (
-    <div class="group" title="Passband">
-      {bandwidths(s.mode, s.audio_rate).map((b) => (
-        <button key={b.label} class={s.lo === b.lo && s.hi === b.hi ? "on" : ""} onClick={() => setPassband(b.lo, b.hi)}>
-          {b.label}
-        </button>
-      ))}
-      <CodecCtl />
+    <div class="group">
+      <Drop
+        cls="drop-bw"
+        label={cur?.label ?? `${((s.hi - s.lo) / 1000).toFixed(1)}k`}
+        title={`Passband: ${s.lo} to ${s.hi} Hz around the dial`}
+        items={presets.map((b) => ({ key: b.label, label: b.label, on: b === cur, pick: () => setPassband(b.lo, b.hi) }))}
+      />
+      <CodecCtl drop />
       {audioRates.value.includes(24000) && (
-        <span class="seg" title="Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)">
-          {[12000, 24000].map((r) => (
-            <button key={r} class={s.audio_rate === r ? "on" : ""} onClick={() => setAudio({ audio_rate: r })}>
-              {r / 1000} kS/s
-            </button>
-          ))}
-        </span>
+        <Drop
+          label={`${s.audio_rate / 1000} kS/s`}
+          title="Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)"
+          items={[12000, 24000].map((r) => ({ key: String(r), label: `${r / 1000} kS/s`, on: s.audio_rate === r, pick: () => setAudio({ audio_rate: r }) }))}
+        />
       )}
     </div>
   );
@@ -228,8 +230,8 @@ const CODECS: { pref: CodecPref; label: string; title: string }[] = [
 ];
 
 /** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM;
- * and the data saver. */
-export function CodecCtl() {
+ * and the data saver. `drop`: the codec as a drop-down. */
+export function CodecCtl({ drop = false }: { drop?: boolean }) {
   const sc = serverCodecs.value;
   const saver = (
     <button
@@ -244,24 +246,27 @@ export function CodecCtl() {
   const pref = codecPref.value;
   const now = codecNow.value;
   const shown = CODECS.filter((c) => c.pref !== "auto" || (sc.includes("opus") && opusDec.value));
+  const title =
+    pref === "auto" && now !== "opus"
+      ? now === "pcm16"
+        ? "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
+        : "Opus is paused: a decoder reads the audio (μ-law until it closes)"
+      : "How the audio comes";
+  const label = (c: (typeof CODECS)[number]) => (c.pref === "auto" && pref === "auto" && now !== "opus" ? `Opus (${now === "pcm16" ? "PCM" : "μ-law"})` : c.label);
+  const cur = shown.find((c) => c.pref === pref) ?? shown[0];
   return (
     <>
-      <span
-        class="seg"
-        title={
-          pref === "auto" && now !== "opus"
-            ? now === "pcm16"
-              ? "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
-              : "Opus is paused: a decoder reads the audio (μ-law until it closes)"
-            : "How the audio comes"
-        }
-      >
-        {shown.map((c) => (
-          <button key={c.pref} class={pref === c.pref ? "on" : ""} title={c.title} onClick={() => setCodecPref(c.pref)}>
-            {c.pref === "auto" && pref === "auto" && now !== "opus" ? `Opus (${now === "pcm16" ? "PCM" : "μ-law"})` : c.label}
-          </button>
-        ))}
-      </span>
+      {drop ? (
+        <Drop cls="drop-codec" label={label(cur)} title={`${title}. ${cur.title}`} items={shown.map((c) => ({ key: c.pref, label: label(c), title: c.title, on: pref === c.pref, pick: () => setCodecPref(c.pref) }))} />
+      ) : (
+        <span class="seg" title={title}>
+          {shown.map((c) => (
+            <button key={c.pref} class={pref === c.pref ? "on" : ""} title={c.title} onClick={() => setCodecPref(c.pref)}>
+              {label(c)}
+            </button>
+          ))}
+        </span>
+      )}
       {saver}
     </>
   );

@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { AF_N, AfAnalyzer, fft } from "../src/view/afspec.ts";
+import { AF_N, AfAnalyzer, audioPassband, fft, noiseFloor } from "../src/view/afspec.ts";
 
 test("the FFT agrees with a slow DFT", () => {
   const n = 16;
@@ -55,4 +55,22 @@ test("I/Q: a tone below the dial lands left of the middle", () => {
   // stereo that isn't I/Q: averaged, so the tone is only on the right
   const s = new AfAnalyzer().push(pcm, rate, true, false);
   assert.equal(s[0].db.length, AF_N / 2);
+});
+
+test("the display's floor is the noise in the passband, not the filter's stopband", () => {
+  // USB 300-2700 Hz in a 0-6 kHz spectrum: inside the noise at -60 dB,
+  // outside the stopband at -150 (most of the points)
+  const n = 256;
+  const f1 = 6000 - 6000 / n;
+  const db = Float32Array.from({ length: n }, (_, k) => {
+    const f = (k * f1) / (n - 1);
+    return f >= 300 && f <= 2700 ? -60 : -150;
+  });
+  const l = { db, f0: 0, f1 };
+  assert.equal(noiseFloor(l, { mode: "usb", lo: 300, hi: 2700 }), -60);
+  // LSB: the passband mirrored into positive audio
+  assert.deepEqual(audioPassband("lsb", -2700, -300), [300, 2700]);
+  assert.equal(noiseFloor(l, { mode: "lsb", lo: -2700, hi: -300 }), -60);
+  // no passband known: all points
+  assert.equal(noiseFloor(l, null), -150);
 });

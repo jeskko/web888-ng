@@ -2,7 +2,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { colormap, cssColor, isPalette, PALETTE_NAMES } from "../src/view/colormap.ts";
-import { timeTicks, utcLabel } from "../src/view/wfticks.ts";
+import { pickInterval, timeTicks, utcLabel } from "../src/view/wfticks.ts";
 
 test("every palette runs from its first stop to its last, opaque", () => {
   assert.deepEqual(PALETTE_NAMES, ["web888", "viridis", "heat", "phosphor", "grey"]);
@@ -47,4 +47,33 @@ test("no lines, one line, or a gap: no harm", () => {
   for (const t of timeTicks(l, 30)) assert.ok(Number.isFinite(t.t));
   assert.equal(utcLabel(Date.UTC(2026, 0, 1, 23, 5, 7), 10), "23:05:07");
   assert.equal(utcLabel(Date.UTC(2026, 0, 1, 23, 5, 0), 300), "23:05");
+});
+
+test("the marks' interval holds while the line rate wobbles near a step", () => {
+  // 8 lines/s and marks 40 rows apart: 5 s is just enough (40 rows); at
+  // 7.9 lines/s it isn't (39.5), so on its own the interval would flip
+  // between 5 and 10 s from frame to frame
+  assert.equal(pickInterval(8.0, 40), 5);
+  assert.equal(pickInterval(7.9, 40), 10);
+  assert.equal(pickInterval(7.9, 40, 5), 5);
+  assert.equal(pickInterval(8.1, 40, 10), 10);
+  // until the rate has really changed
+  assert.equal(pickInterval(5, 40, 5), 10);
+  assert.equal(pickInterval(40, 40, 10), 1);
+  const t0 = Date.UTC(2026, 10, 17, 9, 12, 33, 20);
+  let iv = 0;
+  for (const perS of [8.0, 7.9, 8.05, 7.95, 8.0]) {
+    const ticks = timeTicks(lines(400, perS, t0), 40, iv);
+    iv = ticks[0].iv;
+    assert.equal(iv, 5, `${perS}`);
+  }
+});
+
+test("a mark keeps its time as the lines scroll", () => {
+  const t0 = Date.UTC(2026, 10, 17, 9, 12, 33, 20);
+  const before = timeTicks(lines(400, 10, t0), 40);
+  // one more line on top: every mark one row down, the same times
+  const after = timeTicks(lines(401, 10, t0 + 100), 40, before[0].iv).filter((t) => t.row > 0);
+  const at = new Map(after.map((t) => [t.t, t.row]));
+  for (const t of before.slice(0, -1)) assert.equal(at.get(t.t), t.row + 1, t.label);
 });

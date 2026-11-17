@@ -55,6 +55,10 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .iqrec.on { color: #ff6060; border-color: #ff6060; font-variant-numeric: tabular-nums; }
 .iqrec-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; width: 24rem; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-size: 13px; }
 .iqrec-pop p { margin: 4px 0; font-size: 12px; }
+.drop { position: relative; display: inline-block; }
+.drop-btn.open { border-color: var(--accent); }
+.drop-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; display: flex; flex-direction: column; gap: 2px; min-width: 100%; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
+.drop-pop button { text-align: left; white-space: nowrap; }
 .m-app .iqrec-ctl .iqrec-pop { position: static; width: auto; margin-top: 6px; }
 .m-app .iqrec-ctl { flex-wrap: wrap; }
 .iqrec-row { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0; align-items: center; }
@@ -357,6 +361,12 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .info-facts dd { margin: 0; }
 .info-text { white-space: pre-line; }
 .info-rules { margin: 4px 0; padding-left: 1.2em; }
+.info-foot { margin: 12px 0 2px; }
+.lic-list { grid-template-columns: max-content 1fr; font-size: 13px; }
+.lic-list dd { margin-bottom: 4px; }
+.lic-libs { margin: 4px 0; font-size: 13px; }
+.lic-libs ul { margin: 4px 0; padding-left: 1.2em; max-height: 14rem; overflow-y: auto; }
+.info-box a { color: var(--accent, #7ab4ff); }
 .prop-box { width: min(48rem, 96vw); max-width: min(48rem, 96vw); padding: 12px 14px; }
 .prop-what { margin: -2px 0 8px; }
 .prop-opts { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-bottom: 8px; }

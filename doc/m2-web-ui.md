@@ -498,3 +498,31 @@ with VOACAP forecasts from a few regions to this receiver
 
 Checked with `ui/tools/cdp/prop.mjs` on the sim backend at desktop and
 phone sizes, and on the unit.
+
+## 14. Licences view, drop-downs, two fixes (2026-11-17)
+
+* **Licences and credits** (a button at the foot of the info box):
+  web888d's licence and the three source repositories; the code it was
+  ported from or written against (Kiwi protocol, ft8_lib, wsprd and
+  Phil Karn's Fano decoder, jtty-cuf, JS8Call, dumphfdl's station table,
+  opus1/libopus, hfcast/VOACAP) with authors and licences; the data
+  (VOACAP's coefficients and their CCIR origin, EiBi, Natural Earth, NOAA
+  SWPC, Spothole, our own band plans); and every third-party library in
+  the build. That list is `crates/web/src/third-party.json` (the Rust
+  crates web888d builds with for the device, from `cargo metadata`, and
+  the page's npm packages), written by `scripts/third-party.py` and
+  served at `GET /api/info/licences`; CI fails when it is out of date
+  (`scripts/third-party.py --check`, in the ui job).
+* **Drop-downs** (`ui/src/ctl/drop.tsx`): the passband, the codec and the
+  audio rate are one button each in the header (the current choice and
+  ▾) instead of a row of buttons; the phone's More sheet keeps the
+  buttons. `cdp/codec.mjs`, `cw.mjs` and `sigid.mjs` open the drop-downs.
+* **Waterfall time marks flickered**: their interval was chosen afresh
+  every frame from the measured line rate, and near a step (5 s or
+  10 s, say) it flipped between the two, moving every mark. Now the
+  interval holds while the marks on it stay 3/4 to 3 times the minimum
+  spacing apart (`pickInterval`).
+* **The AF spectrum on SSB was overdriven**: its range started from the
+  quietest fifth of all points, which on SSB are mostly the filter's
+  stopband, ~60 dB under the noise. Now from the points in the passband
+  (`noiseFloor`).

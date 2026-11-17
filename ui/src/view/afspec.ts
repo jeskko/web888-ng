@@ -8,6 +8,8 @@
 // the dial. Other stereo (SAS, the pseudo-stereo is the page's own and
 // not seen here): left and right averaged.
 
+import type { Mode } from "../proto.ts";
+
 /** Points per block: ~23 Hz bins at 12 kS/s. */
 export const AF_N = 512;
 
@@ -118,4 +120,32 @@ export class AfAnalyzer {
     for (let i = 0; i < AF_N / 2; i++) db[i] = db10(i);
     return { db, f0: 0, f1: this.rate / 2 - df };
   }
+}
+
+/** The level the display's range starts from: the quietest fifth of the
+ *  points in the passband. (Of all points, on SSB most would be the
+ *  filter's stopband, far below the noise, and everything heard would
+ *  overload the colours.) */
+export function noiseFloor(l: AfLine, s: { mode: Mode; lo: number; hi: number } | null): number {
+  const n = l.db.length;
+  const df = (l.f1 - l.f0) / Math.max(1, n - 1);
+  let inside: number[] = [];
+  if (s) {
+    const [p0, p1] = audioPassband(s.mode, s.lo, s.hi);
+    for (let k = 0; k < n; k++) {
+      const f = l.f0 + k * df;
+      if (f >= p0 && f <= p1) inside.push(l.db[k]);
+    }
+  }
+  if (inside.length < 8) inside = Array.from(l.db);
+  inside.sort((a, b) => a - b);
+  return inside[Math.floor(0.2 * inside.length)];
+}
+
+/** The passband in audio Hz, as the spectrum's axis has it. */
+export function audioPassband(mode: Mode, lo: number, hi: number): [number, number] {
+  if (mode === "lsb") return [-hi, -lo];
+  if (mode === "usb" || mode === "cw" || mode === "iq") return [lo, hi];
+  // AM, FM: the audio is the modulation, up to the passband's edge
+  return [0, Math.max(Math.abs(lo), Math.abs(hi))];
 }

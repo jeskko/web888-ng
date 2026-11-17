@@ -5,22 +5,13 @@
 // rate; I/Q shows both sides of the dial. Hovering reads the frequency.
 
 import { useEffect, useRef } from "preact/hooks";
-import { AfAnalyzer, type AfLine } from "../view/afspec.ts";
+import { AfAnalyzer, audioPassband, noiseFloor, type AfLine } from "../view/afspec.ts";
 import { colormap } from "../view/colormap.ts";
 import { afOn, palette, setAf, st, tapAudio } from "../state.ts";
-import type { Mode } from "../proto.ts";
 
 /** Height of the spectrum above the waterfall (CSS px). */
 const SPEC_PX = 70;
 const AXIS_PX = 14;
-
-/** The passband in audio Hz, as the spectrum's axis has it. */
-export function audioPassband(mode: Mode, lo: number, hi: number): [number, number] {
-  if (mode === "lsb") return [-hi, -lo];
-  if (mode === "usb" || mode === "cw" || mode === "iq") return [lo, hi];
-  // AM, FM: the audio is the modulation, up to the passband's edge
-  return [0, Math.max(Math.abs(lo), Math.abs(hi))];
-}
 
 export function AfPanel() {
   const ref = useRef<HTMLCanvasElement>(null);
@@ -54,8 +45,7 @@ export function AfPanel() {
     /** A line into the ring and the running average (no drawing). */
     const take = (l: AfLine) => {
       const n = l.db.length;
-      const sorted = Float32Array.from(l.db).sort();
-      const f20 = sorted[Math.floor(0.2 * n)];
+      const f20 = noiseFloor(l, st.value);
       floor = Number.isNaN(floor) ? f20 : floor + 0.05 * (f20 - floor);
       const lo = floor - 6;
       const hi = floor + 60;

@@ -11,7 +11,12 @@ await p.goto(url);
 await sleep(3000);
 await p.ev(`${q(".start")}?.click()`);
 await sleep(1500);
-if (bw) await p.ev(`[...document.querySelectorAll('header button')].find((b) => b.textContent === ${JSON.stringify(bw)})?.click()`);
+// the passband is a drop-down: open it, pick
+if (bw) {
+  await p.ev(`document.querySelector('.drop-bw .drop-btn')?.click()`);
+  await sleep(100);
+  await p.ev(`[...document.querySelectorAll('.drop-bw .drop-pop button')].find((b) => b.textContent === ${JSON.stringify(bw)})?.click()`);
+}
 await sleep(500);
 await decoder(p, "Signal ID");
 const t0 = Date.now();

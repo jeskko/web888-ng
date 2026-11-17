@@ -6,6 +6,7 @@
 import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../state.ts";
+import { Licences } from "./licences.tsx";
 
 export const infoOpen = signal(location.hash === "#info");
 
@@ -93,8 +94,10 @@ export function InfoPanel() {
   const open = infoOpen.value;
   const [info, setInfo] = useState<Info | null>(null);
   const [err, setErr] = useState("");
+  const [lic, setLic] = useState(false);
   useEffect(() => {
     if (!open) return;
+    setLic(false);
     fetch(api("api/info"))
       .then((r) => (r.ok ? (r.json() as Promise<Info>) : Promise.reject(new Error(`${r.status}`))))
       .then(setInfo)
@@ -110,7 +113,12 @@ export function InfoPanel() {
         <button class="info-x" onClick={() => (infoOpen.value = false)} title="Close (Escape)">
           ✕
         </button>
-        {info ? <Body i={info} /> : <p class="dim">{err || "Loading…"}</p>}
+        {!info ? <p class="dim">{err || "Loading…"}</p> : lic ? <Licences server={info.server} /> : <Body i={info} />}
+        {info && (
+          <p class="info-foot">
+            <button onClick={() => setLic(!lic)}>{lic ? "← About this receiver" : "Licences and credits"}</button>
+          </p>
+        )}
       </div>
     </div>
   );

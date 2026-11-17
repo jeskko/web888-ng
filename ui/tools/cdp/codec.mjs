@@ -17,12 +17,17 @@ const status = async (what) => {
   const codec = s.match(/(pcm16|mulaw|opus)\s*(\d+)\s*kbit\/s/);
   const wf = s.match(/wf\s*(\d+)\s*kbit\/s/);
   const under = s.match(/(\d+)\s*underruns/);
-  const seg = await p.ev(
-    "[...document.querySelectorAll('.seg button')].filter((b) => /Opus|law|PCM/.test(b.textContent)).map((b) => (b.classList.contains('on') ? '[' + b.textContent + ']' : b.textContent)).join(' ')",
-  );
-  console.log(`${what}: ${codec ? `${codec[1]} ${codec[2]} kbit/s` : "no codec in the status bar"}, wf ${wf?.[1] ?? "?"} kbit/s, underruns ${under?.[1] ?? "?"}; buttons: ${seg}`);
+  const seg = await p.ev("document.querySelector('.drop-codec .drop-btn')?.textContent");
+  console.log(`${what}: ${codec ? `${codec[1]} ${codec[2]} kbit/s` : "no codec in the status bar"}, wf ${wf?.[1] ?? "?"} kbit/s, underruns ${under?.[1] ?? "?"}; codec button: ${seg}`);
 };
-const choose = (label) => p.ev(`[...document.querySelectorAll('button')].find((b) => b.textContent.startsWith(${JSON.stringify(label)})).click()`);
+// the codec is a drop-down (open it first); Saver is a plain button
+const choose = async (label) => {
+  if (label !== "Saver") {
+    await p.ev(`document.querySelector('.drop-codec .drop-btn').click()`);
+    await sleep(100);
+  }
+  await p.ev(`[...document.querySelectorAll(${JSON.stringify(label === "Saver" ? "button" : ".drop-codec .drop-pop button")})].find((b) => b.textContent.startsWith(${JSON.stringify(label)})).click()`);
+};
 await status("start");
 await p.shot(`${out}/codec.png`);
 await decoder(p, "FT8/FT4/WSPR");
