@@ -533,6 +533,17 @@ that can't go are dropped. It applies live.
   lag sums in registers (more instructions: bounds checks). Left: the
   FFTs (about 28 % of the decoder; rustfft has no NEON path on ARMv7),
   the lag loop's arithmetic (~13 %), BP (~13 %).
+* NEON FFT (2026-11-17, `crates/fft`): a mixed-radix Stockham FFT
+  (radix 4, 2, 5, 3) with NEON butterflies in inline assembly, for
+  2^a 3^b 5^c points with a >= 4, behind rustfft's `Fft` trait
+  (`web888_fft::plan`; rustfft for other sizes and off ARM). The A9:
+  1.2-1.9x rustfft (3200: 1.6x, 51200: 1.5-1.7x, 96000: 1.17x). FT8
+  decoder -8 % cycles, FT4 -8 %; decodes identical on both sets
+  (`WEB888_FFT=stockham` scores the scalar form on a desktop; the unit's
+  NEON decodes match it byte for byte).
+* Tried and dropped the same night: the coarse search in passes 2-3
+  only around the last pass's new decodes (loses 9-54 decodes per set:
+  later passes find signals elsewhere too, and the normalisation moves).
 
 ## 8. Open
 
