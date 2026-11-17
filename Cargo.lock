@@ -1827,9 +1827,18 @@ version = "0.14.0"
 dependencies = [
  "num-complex",
  "rustfft",
+ "web888-fft",
  "web888-iq",
  "web888-radio",
  "web888-sim",
+]
+
+[[package]]
+name = "web888-fft"
+version = "0.14.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
 ]
 
 [[package]]
@@ -1856,6 +1865,7 @@ dependencies = [
  "num-complex",
  "rustfft",
  "web888-clock",
+ "web888-fft",
 ]
 
 [[package]]

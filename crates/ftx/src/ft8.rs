@@ -27,7 +27,7 @@ use crate::realfft::RealFft;
 use crate::tones::{self, FT8_COSTAS, FT8_GRAY, Shape};
 use crate::{FftScratch, wrap};
 use num_complex::Complex32 as C32;
-use rustfft::{Fft, FftPlanner};
+use rustfft::Fft;
 use std::cell::RefCell;
 use std::sync::Arc;
 use web888_clock::Instant;
@@ -245,7 +245,6 @@ struct SearchBufs {
 
 impl Decoder {
     pub fn new(cfg: Config) -> Self {
-        let mut p = FftPlanner::new();
         let tone_ref = std::array::from_fn(|t| {
             std::array::from_fn(|n| {
                 let ph = 2.0 * std::f32::consts::PI * t as f32 * n as f32 / DS_NSPS as f32;
@@ -257,11 +256,11 @@ impl Decoder {
         Decoder {
             cfg,
             fft1: RealFft::new(NFFT1),
-            fft2: p.plan_fft_forward(NFFT2),
-            ifft2: p.plan_fft_inverse(NFFT2),
-            spec_fft: p.plan_fft_forward(SPEC_NFFT),
-            spec_ifft: p.plan_fft_inverse(SPEC_N),
-            fft32: p.plan_fft_forward(DS_NSPS),
+            fft2: web888_fft::plan(NFFT2, false),
+            ifft2: web888_fft::plan(NFFT2, true),
+            spec_fft: web888_fft::plan(SPEC_NFFT, false),
+            spec_ifft: web888_fft::plan(SPEC_N, true),
+            fft32: web888_fft::plan(DS_NSPS, false),
             bp: if js8 { Bp::js8() } else { Bp::default() },
             costas,
             map: if js8 { js8::TONE_MAP } else { FT8_GRAY },

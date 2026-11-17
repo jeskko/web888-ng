@@ -5,7 +5,7 @@
 
 use crate::FftScratch;
 use num_complex::Complex32 as C32;
-use rustfft::{Fft, FftPlanner};
+use rustfft::Fft;
 use std::sync::Arc;
 
 pub struct RealFft {
@@ -20,7 +20,6 @@ pub struct RealFft {
 impl RealFft {
     pub fn new(n: usize) -> Self {
         assert!(n.is_multiple_of(2));
-        let mut p = FftPlanner::new();
         let tw = (0..n / 2)
             .map(|k| {
                 let a = -2.0 * std::f64::consts::PI * k as f64 / n as f64;
@@ -29,8 +28,8 @@ impl RealFft {
             .collect();
         RealFft {
             n,
-            fwd: p.plan_fft_forward(n / 2),
-            inv: p.plan_fft_inverse(n / 2),
+            fwd: web888_fft::plan(n / 2, false),
+            inv: web888_fft::plan(n / 2, true),
             tw,
             scratch: FftScratch::default(),
         }
@@ -83,6 +82,7 @@ impl RealFft {
 #[cfg(test)]
 mod tests {
     use super::*;
+    use rustfft::FftPlanner;
 
     #[test]
     fn matches_complex_fft() {

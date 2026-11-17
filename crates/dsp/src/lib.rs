@@ -29,17 +29,7 @@ pub use num_complex::Complex32 as C32;
 /// new view's FFTs don't plan again (on the A9 that is noticeable work
 /// for a pool worker, with many sessions starting at once).
 pub fn fft_plan(n: usize, inverse: bool) -> std::sync::Arc<dyn rustfft::Fft<f32>> {
-    use std::sync::{Mutex, OnceLock};
-    static PLANNER: OnceLock<Mutex<rustfft::FftPlanner<f32>>> = OnceLock::new();
-    let mut p = PLANNER
-        .get_or_init(|| Mutex::new(rustfft::FftPlanner::new()))
-        .lock()
-        .unwrap();
-    if inverse {
-        p.plan_fft_inverse(n)
-    } else {
-        p.plan_fft_forward(n)
-    }
+    web888_fft::plan(n, inverse)
 }
 
 /// Convert hardware RX samples to f32, scaled so that a full-scale ADC sine

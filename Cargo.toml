@@ -1,6 +1,6 @@
 [workspace]
 resolver = "3"
-members = ["crates/radio", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm", "crates/markers", "crates/clock", "crates/digi-wasm", "crates/cw", "crates/cw-wasm", "crates/fsk", "crates/fsk-wasm", "crates/psk", "crates/psk-wasm", "crates/hfdl", "crates/js8", "crates/js8-wasm", "crates/hfdl-wasm", "crates/img", "crates/img-wasm", "crates/sigid", "crates/sigid-wasm", "crates/timecode", "crates/timecode-wasm", "crates/opus-wasm"]
+members = ["crates/radio", "crates/fft", "crates/sim", "crates/dsp", "crates/zynqsdr", "crates/hpsdr", "crates/iq", "crates/hw", "crates/core", "crates/config", "crates/web", "crates/web888d", "crates/ftx", "crates/skim", "crates/wspr", "crates/jtty", "crates/jtty-wasm", "crates/markers", "crates/clock", "crates/digi-wasm", "crates/cw", "crates/cw-wasm", "crates/fsk", "crates/fsk-wasm", "crates/psk", "crates/psk-wasm", "crates/hfdl", "crates/js8", "crates/js8-wasm", "crates/hfdl-wasm", "crates/img", "crates/img-wasm", "crates/sigid", "crates/sigid-wasm", "crates/timecode", "crates/timecode-wasm", "crates/opus-wasm"]
 
 [workspace.package]
 version = "0.14.0"
@@ -12,6 +12,7 @@ repository = "https://github.com/jeskko/web888-ng"
 web888-radio = { path = "crates/radio" }
 web888-sim = { path = "crates/sim" }
 web888-dsp = { path = "crates/dsp" }
+web888-fft = { path = "crates/fft" }
 web888-zynqsdr = { path = "crates/zynqsdr" }
 web888-hpsdr = { path = "crates/hpsdr" }
 web888-iq = { path = "crates/iq" }

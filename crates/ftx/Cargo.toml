@@ -10,3 +10,4 @@ repository.workspace = true
 web888-clock.workspace = true
 num-complex.workspace = true
 rustfft.workspace = true
+web888-fft.workspace = true

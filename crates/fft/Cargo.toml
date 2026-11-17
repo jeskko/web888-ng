@@ -1,0 +1,11 @@
+[package]
+name = "web888-fft"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "FFT plans: NEON radix-4 for power-of-two sizes on 32-bit ARM, rustfft otherwise"
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true
