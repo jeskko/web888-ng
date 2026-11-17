@@ -388,7 +388,7 @@ interface OvlEvent {
   blocks: number;
   clocks: number;
   peak_dbfs: number | null;
-  analysis: { kind: "carrier" | "several" | "broadband" | "spread" | "unknown"; strongest: OvlBin[]; median_rise_db: number; total_dbfs: number };
+  analysis: { kind: "carrier" | "several" | "broadband" | "spread" | "brief" | "unknown"; strongest: OvlBin[]; median_rise_db: number; total_dbfs: number };
   carrier: { hz: number; dbfs: number; snr_db: number } | null;
 }
 interface Ovl {
@@ -404,6 +404,7 @@ const KIND: Record<OvlEvent["analysis"]["kind"], string> = {
   several: "several signals",
   broadband: "broadband (an impulse)",
   spread: "no single cause",
+  brief: "brief: a click or switching spike (too short to show in the band's power)",
   unknown: "–",
 };
 

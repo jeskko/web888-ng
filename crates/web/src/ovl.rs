@@ -85,6 +85,10 @@ pub enum Kind {
     Several,
     Broadband,
     Spread,
+    /// Nothing rose in the band's power lines: the overload was shorter
+    /// than a line (0.1 s) and too small in energy to show (a click, a
+    /// switching spike).
+    Brief,
     /// No spectrum (no channelizer, or no lines yet).
     Unknown,
 }
@@ -162,9 +166,19 @@ pub fn analyse(lines: &[&[f32]], avg: &[f32], caps: &BinCaps) -> Analysis {
     let median_rise_db = rises[n / 2];
     let mut order: Vec<usize> = (0..n).collect();
     order.sort_by(|&a, &b| hold[b].total_cmp(&hold[a]));
-    let strongest: Vec<Bin> = order
+    // the three strongest signals: a bin next to one already taken is the
+    // same signal's skirt
+    let mut picked: Vec<usize> = Vec::with_capacity(3);
+    for &k in &order {
+        if picked.len() == 3 {
+            break;
+        }
+        if picked.iter().all(|&j| k.abs_diff(j) > 1) {
+            picked.push(k);
+        }
+    }
+    let strongest: Vec<Bin> = picked
         .iter()
-        .take(3)
         .map(|&k| {
             let side =
                 |j: Option<usize>| j.filter(|&j| j < n).map_or(level[k] - 30.0, |j| level[j]);
@@ -180,10 +194,15 @@ pub fn analyse(lines: &[&[f32]], avg: &[f32], caps: &BinCaps) -> Analysis {
         })
         .collect();
     let top3: f64 = strongest.iter().map(|b| b.share).sum();
-    let kind = if strongest[0].share >= 0.5 {
-        Kind::Carrier
-    } else if median_rise_db >= 3.0 {
+    // the strongest signals as they always are: nothing in the lines shows
+    // the overload
+    let none_rose = median_rise_db < 3.0 && strongest.iter().all(|b| b.rise_db < 3.0);
+    let kind = if median_rise_db >= 3.0 {
         Kind::Broadband
+    } else if none_rose {
+        Kind::Brief
+    } else if strongest[0].share >= 0.5 {
+        Kind::Carrier
     } else if top3 >= 0.6 {
         Kind::Several
     } else {
@@ -276,9 +295,17 @@ fn mhz(hz: f64) -> String {
 pub fn describe(e: &Event) -> String {
     let t = web888_skim::utc::utc(e.start);
     let mut s = format!(
-        "ADC overload at {:02}:{:02}:{:02} UTC, {:.1} s, {} clocks over in {} blocks",
-        t.hour, t.min, t.sec, e.seconds, e.clocks, e.blocks
+        "ADC overload at {:02}:{:02}:{:02} UTC, ",
+        t.hour, t.min, t.sec
     );
+    s += &if e.blocks <= 1 {
+        format!("{} clocks over in one block", e.clocks)
+    } else {
+        format!(
+            "{:.1} s, {} clocks over in {} blocks",
+            e.seconds, e.clocks, e.blocks
+        )
+    };
     if let Some(p) = e.peak_dbfs {
         s += &format!(", peak {p:.1} dBFS");
     }
@@ -308,6 +335,9 @@ pub fn describe(e: &Event) -> String {
                 ": broadband, the whole band up {:.0} dB (an impulse)",
                 a.median_rise_db
             );
+        }
+        (Kind::Brief, _) => {
+            s += ": brief, nothing rose in the band's 0.1 s power (a click or switching spike)";
         }
         (Kind::Spread, Some(b)) => {
             s += &format!(
@@ -362,6 +392,10 @@ struct Open {
     analysed: Option<Analysis>,
     capture: Option<Capture>,
     carrier: Option<Carrier>,
+    /// The peak register's highest reading while the event was open (it
+    /// holds each 2^24-clock window's peak for the next window, ~137 ms,
+    /// and the ticks are 50 ms apart).
+    peak: u32,
 }
 
 /// The monitor's state; [`Monitor::tick`] every 50 ms.
@@ -470,6 +504,7 @@ impl Monitor {
                         analysed: None,
                         capture: None,
                         carrier: None,
+                        peak: 0,
                     })
                 }
             }
@@ -477,7 +512,9 @@ impl Monitor {
         self.blocks = blocks;
         self.clocks = clocks;
         let caps = self.caps;
+        let peak_now = self.status.adc_peak.load(Ordering::Relaxed);
         let Some(o) = &mut self.open else { return None };
+        o.peak = o.peak.max(peak_now);
         // a first look 0.35 s in: a carrier's bin is read while it is on
         if o.analysed.is_none() && now.duration_since(o.began) >= Duration::from_millis(350) {
             let lines: Vec<&[f32]> = o.lines.iter().map(|l| &l[..]).collect();
@@ -521,7 +558,7 @@ impl Monitor {
         }
         let o = self.open.take().expect("some");
         let analysis = self.analyse(&o);
-        let peak = self.status.adc_peak.load(Ordering::Relaxed);
+        let peak = o.peak;
         Some(Event {
             start: o.start,
             seconds: o.last.duration_since(o.began).as_secs_f64(),
@@ -704,5 +741,44 @@ mod tests {
             describe(&e)
         );
         assert!(m.tick(t0 + Duration::from_millis(2100)).is_none());
+    }
+
+    #[test]
+    fn the_peak_is_the_highest_while_the_event_is_open() {
+        let st = Arc::new(HwStatus::default());
+        let mut m = Monitor::new(st.clone(), None);
+        let t0 = Instant::now();
+        st.adc_peak.store(6000, Ordering::Relaxed);
+        assert!(m.tick(t0).is_none());
+        st.overload_blocks.store(1, Ordering::Relaxed);
+        st.overflow_clocks.store(40, Ordering::Relaxed);
+        assert!(m.tick(t0 + Duration::from_millis(50)).is_none());
+        // the overload's window, held for the next one
+        st.adc_peak.store(32767, Ordering::Relaxed);
+        assert!(m.tick(t0 + Duration::from_millis(100)).is_none());
+        // back to the band's usual peak before the event closes
+        st.adc_peak.store(6000, Ordering::Relaxed);
+        let e = m.tick(t0 + Duration::from_millis(2000)).unwrap();
+        assert!(e.peak_dbfs.unwrap() > -0.01, "{:?}", e.peak_dbfs);
+        let d = describe(&e);
+        assert!(d.contains("40 clocks over in one block"), "{d}");
+    }
+
+    #[test]
+    fn nothing_rose_is_brief_and_a_signals_skirt_is_not_another_signal() {
+        // the band as it always is, with its strong stations: an overload
+        // shorter than a line doesn't show
+        let mut l = line(&[(200, 0.01), (201, 0.004), (300, 0.008), (500, 0.006)]);
+        let avg: Vec<f32> = l.iter().map(|&p| db(p as f64) as f32).collect();
+        let a = analyse(&[&l], &avg, &CAPS);
+        assert_eq!(a.kind, Kind::Brief);
+        // bin 201 is 200's skirt: the three are 200, 300 and 500
+        let bins: Vec<usize> = a.strongest.iter().map(|b| b.bin).collect();
+        assert_eq!(bins, [200, 300, 500]);
+        // the same stations 10 dB up: they rose, so not brief
+        for p in &mut l {
+            *p *= 10.0;
+        }
+        assert_ne!(analyse(&[&l], &avg, &CAPS).kind, Kind::Brief);
     }
 }

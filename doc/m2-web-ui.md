@@ -605,3 +605,32 @@ commercial activity (sellers of hardware with it are another matter).
   tables take the box's width, and the box scrolls when the window is
   short. `ui/tools/cdp/keys.mjs` measures it: before, 171 px out to the
   right at 1400×900; now nothing sticks out at 1400×900 or 1024×640.
+
+## 18. ADC overload log: first day on the unit, fixes (2026-11-17)
+
+The remote unit logged 10 events in 3 hours, all a single block:
+* broadband impulses (the whole band up 3-21 dB, 54-6424 clocks over);
+* "no single cause" or "several signals" for the smallest (3-99 clocks
+  over), which named the band's usual strongest stations.
+
+They come in pairs 4.8 minutes apart, the pairs about every 29 minutes.
+Prometheus shows the same before this week's software (6 days, 382
+overload minutes; the commonest gaps between them 5 and 28-34 minutes):
+something near the antenna or on the mains cycles on for about 5 minutes
+every half hour, and its switching spikes overload the ADC. Not our Kp
+fetch (every 30 min, new on 11-17).
+
+Fixes from what the log showed:
+* **Peak**: it was the peak register read when the event closed, 1.5 s
+  later: the band's usual peak (-15 to -20 dBFS), not the overload. Now
+  the highest reading while the event is open (the register holds each
+  ~137 ms window's peak for the next window; the monitor reads it every
+  50 ms).
+* **Brief**: when nothing rose in the band's 0.1 s power lines (neither
+  the median nor the strongest signals by 3 dB), the event is "brief, a
+  click or switching spike" instead of naming the usual strongest
+  station.
+* **Several** listed one signal twice (its skirt in the next bin): the
+  three strongest are now distinct signals, bins next to one already
+  taken skipped.
+* A single block reads "N clocks over in one block" instead of "0.0 s".
