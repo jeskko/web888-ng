@@ -176,7 +176,8 @@ On the A9 the WF budget (FFTs per line) has to start low: the default is
 without converting them (before, ~8 % of an A9 core per view at 1.92 MS/s
 went to buffering samples no FFT used). The unit's own load (FT8 decoder
 bursts every 15 s) makes single runs at nice 19 noisy; repeat them. The FFT is the kernel worth a NEON
-implementation if the board still needs it.
+implementation if the board still needs it (done 2026-11-17: `crates/fft`,
+1.2-1.9x rustfft on the A9 for 2^a 3^b 5^c sizes; m4-skimmers §7).
 
 ## 5. DSP additions
 
