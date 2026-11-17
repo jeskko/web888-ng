@@ -126,9 +126,10 @@ impl Slotter {
         }
         // Keep a little more than a slot.
         let keep = ((self.period + 1.0) * self.rate) as usize;
-        while self.buf.len() > keep {
-            self.buf.pop_front();
-            self.first += 1;
+        if self.buf.len() > keep {
+            let n = self.buf.len() - keep;
+            self.buf.drain(..n);
+            self.first += n as u64;
         }
         out
     }

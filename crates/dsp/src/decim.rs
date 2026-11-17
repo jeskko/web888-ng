@@ -70,10 +70,15 @@ impl Decimator {
         self.taps.len()
     }
 
+    /// Whether `process` only copies (r = 1, nothing held).
+    pub fn passes_through(&self) -> bool {
+        self.r == 1 && self.taps == [1.0] && self.buf.is_empty()
+    }
+
     /// Filter and decimate `input`, appending the outputs to `out`.
     pub fn process(&mut self, input: &[C32], out: &mut Vec<C32>) {
         // the RX channels are often at the output rate already
-        if self.r == 1 && self.taps == [1.0] && self.buf.is_empty() {
+        if self.passes_through() {
             out.extend_from_slice(input);
             return;
         }

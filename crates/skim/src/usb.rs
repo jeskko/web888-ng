@@ -18,6 +18,11 @@ pub struct UsbAudio {
     out: Vec<C32>,
 }
 
+/// Re(z e^(j pi n / 2)) as z.re * c + z.im * s for n mod 4: products, not a
+/// branch (a jump table that changes target every sample mispredicts on
+/// the A9 every time).
+const MIX: [(f32, f32); 4] = [(1.0, 0.0), (0.0, -1.0), (-1.0, 0.0), (0.0, 1.0)];
+
 impl UsbAudio {
     pub fn new(rx_rate: f64) -> Self {
         let r = (rx_rate / AUDIO_RATE).round() as usize;
@@ -35,19 +40,33 @@ impl UsbAudio {
 
     /// Append the audio of `iq` (channel samples) to `audio`.
     pub fn process(&mut self, iq: impl IntoIterator<Item = C32>, audio: &mut Vec<f32>) {
+        if self.dec.passes_through() {
+            // the channel is at the audio rate already: straight to the mix
+            let mut n = self.n;
+            audio.extend(iq.into_iter().map(|z| {
+                let (c, s) = MIX[n & 3];
+                n = n.wrapping_add(1);
+                z.re * c + z.im * s
+            }));
+            self.n = n;
+            return;
+        }
         self.buf.clear();
         self.buf.extend(iq);
         self.out.clear();
         self.dec.process(&self.buf, &mut self.out);
-        for z in &self.out {
-            audio.push(match self.n & 3 {
-                0 => z.re,
-                1 => -z.im,
-                2 => -z.re,
-                _ => z.im,
-            });
-            self.n = self.n.wrapping_add(1);
+        for i in 0..self.out.len() {
+            let z = self.out[i];
+            audio.push(self.mix(z));
         }
+    }
+
+    /// One sample shifted up a quarter of the rate, its real part.
+    #[inline]
+    fn mix(&mut self, z: C32) -> f32 {
+        let (c, s) = MIX[self.n & 3];
+        self.n = self.n.wrapping_add(1);
+        z.re * c + z.im * s
     }
 }
 
