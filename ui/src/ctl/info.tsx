@@ -7,6 +7,7 @@ import { signal } from "@preact/signals";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../state.ts";
 import { Licences } from "./licences.tsx";
+import { privacyText, RECEPTION_NOTICE, type Privacy } from "../privacy.ts";
 
 export const infoOpen = signal(location.hash === "#info");
 
@@ -20,6 +21,8 @@ interface Info {
   contact: string;
   photo: boolean;
   server: string;
+  privacy: Privacy;
+  reception_notice: boolean;
   rules: {
     receivers: number;
     password: boolean;
@@ -83,7 +86,22 @@ function Body({ i }: { i: Info }) {
         {rulesText(i.rules).map((t) => (
           <li key={t}>{t}</li>
         ))}
+        {i.reception_notice && <li>{RECEPTION_NOTICE}</li>}
       </ul>
+      <details class="info-privacy">
+        <summary>Privacy</summary>
+        {privacyText(i.privacy).map((t) => (
+          <p key={t}>{t}</p>
+        ))}
+        {i.privacy.text
+          .split(/\n\s*\n/)
+          .filter((p) => p.trim())
+          .map((p, k) => (
+            <p key={`o${k}`} class="info-text">
+              {p.trim()}
+            </p>
+          ))}
+      </details>
       <p class="dim">{i.server}: open-source receiver software (web888-ng).</p>
     </>
   );

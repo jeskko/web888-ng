@@ -189,7 +189,9 @@
       "$ref": "#/$defs/Info",
       "default": {
         "description": "",
-        "contact": ""
+        "contact": "",
+        "privacy": "",
+        "reception_notice": true
       }
     },
     "propagation": {
@@ -1042,9 +1044,19 @@
           "default": ""
         },
         "contact": {
-          "description": "How to reach the owner (shown as written; an address here is public).",
+          "description": "How to reach the owner (shown as written; an address here is public).\nAlso given as the contact for privacy questions.",
           "type": "string",
           "default": ""
+        },
+        "privacy": {
+          "description": "More for the info page's Privacy section, after what web888d says\nitself (e.g. who runs the receiver, a proxy in front of it and its\nlogs).",
+          "type": "string",
+          "default": ""
+        },
+        "reception_notice": {
+          "description": "Tell listeners that what isn't meant for the public may be heard\nbut not passed on or used.",
+          "type": "boolean",
+          "default": true
         }
       },
       "additionalProperties": false

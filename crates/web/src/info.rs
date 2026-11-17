@@ -4,7 +4,10 @@
 //! * `GET /api/info`: the name and location (`[kiwi] name`, `location`),
 //!   the station's callsign, locator and antenna (`[station]`), the
 //!   owner's words (`[info] description`, `contact`), whether there is a
-//!   photo, and the rules a visitor meets (receivers, the per-address,
+//!   photo, what the Privacy section says (`privacy`: what this receiver
+//!   keeps about listeners and the outside services it talks to, from
+//!   the settings; `[info] privacy`), whether to show the reception
+//!   notice, and the rules a visitor meets (receivers, the per-address,
 //!   session, idle and daily limits, receivers open without the password);
 //! * `GET /api/info/photo`: the photo;
 //! * `GET /api/info/licences`: the third-party libraries built in, with
@@ -101,6 +104,8 @@ async fn info(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
         "contact": c.info.contact,
         "photo": find_photo(&sh).is_some(),
         "server": concat!("web888d ", env!("CARGO_PKG_VERSION")),
+        "privacy": privacy(&c),
+        "reception_notice": c.info.reception_notice,
         "rules": {
             "receivers": sh.channels.channels(),
             "password": password,
@@ -119,6 +124,54 @@ const THIRD_PARTY: &str = include_str!("third-party.json");
 
 async fn licences() -> Response {
     ([(header::CONTENT_TYPE, "application/json")], THIRD_PARTY).into_response()
+}
+
+/// What the Privacy section says, from the settings: what this receiver
+/// keeps about listeners, the outside services it talks to (none of them
+/// gets anything about listeners), and the owner's own words.
+fn privacy(c: &web888_config::Config) -> serde_json::Value {
+    let l = &c.limits;
+    let mut services: Vec<serde_json::Value> = Vec::new();
+    let mut add = |name: &str, what: &str| services.push(json!({ "name": name, "what": what }));
+    if c.propagation.enabled && c.propagation.fetch {
+        add(
+            "NOAA SWPC",
+            "sunspot numbers and the K index, for the propagation forecast",
+        );
+    }
+    if c.dxspots.enabled {
+        add("Spothole", "DX spots, shown on the spectrum");
+    }
+    if c.report.pskreporter {
+        add(
+            "PSKReporter",
+            "the stations the skimmers decode, with this receiver's callsign and locator",
+        );
+    }
+    if c.report.wsprnet {
+        add(
+            "WSPRnet",
+            "the WSPR stations the skimmers decode, with this receiver's callsign and locator",
+        );
+    }
+    if c.update.enabled {
+        add("GitHub", "the list of software releases");
+    }
+    if !c.syslog.server.is_empty() || !c.mqtt.server.is_empty() {
+        add(
+            "the owner's log servers",
+            "what the skimmers decode and do, and ADC overloads",
+        );
+    }
+    json!({
+        "per_ip": l.per_ip > 0,
+        "daily": l.daily_minutes > 0,
+        "blocked": !l.blocked.is_empty(),
+        "proxy": !c.web.trusted_proxies.is_empty(),
+        "contact": c.info.contact,
+        "text": c.info.privacy,
+        "services": services,
+    })
 }
 
 async fn photo(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {

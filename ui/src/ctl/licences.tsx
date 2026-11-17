@@ -146,6 +146,11 @@ export function Licences({ server }: { server: string }) {
         {server}: free software under the <A href="https://www.gnu.org/licenses/gpl-3.0.html">GNU GPL, version 3 or later</A>. Sources: <A href="https://github.com/jeskko/web888-ng">the server and web UI</A>,{" "}
         <A href="https://github.com/jeskko/web888-ng-hw">the FPGA design and driver</A>, <A href="https://github.com/jeskko/web888-ng-os">the OS image</A>. Not affiliated with the Web-888 / RX-888 vendor.
       </p>
+      <h4>AI</h4>
+      <p>
+        The CW decoder and the signal identifier use small neural networks, trained by this project on synthetic signals; they run in your browser, and what they say can be wrong. Much of web888-ng's code and
+        documentation was written with an AI coding assistant (Anthropic's Claude) at the project author's direction.
+      </p>
       <h4>Code it builds on</h4>
       <Table rows={PORTED} />
       <h4>Data</h4>

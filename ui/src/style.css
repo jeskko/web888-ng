@@ -362,6 +362,9 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .info-text { white-space: pre-line; }
 .info-rules { margin: 4px 0; padding-left: 1.2em; }
 .info-foot { margin: 12px 0 2px; }
+.info-privacy { margin: 8px 0; font-size: 13px; }
+.info-privacy summary { cursor: pointer; }
+.info-privacy p { margin: 6px 0; }
 .lic-list { grid-template-columns: max-content 1fr; font-size: 13px; }
 .lic-list dd { margin-bottom: 4px; }
 .lic-libs { margin: 4px 0; font-size: 13px; }

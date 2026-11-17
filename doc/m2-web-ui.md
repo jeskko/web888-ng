@@ -559,3 +559,36 @@ length and severity and, with the channelizer bitstream, its cause.
   clips on the sum of everything, so "spread" is a real answer. A short
   burst's frequency needs an FPGA capture of the samples at the overflow
   (not done; decide after a week of events).
+
+## 16. Privacy, reception notice, AI note, SBOM (2026-11-17)
+
+What EU rules ask of a public receiver, as the project read them (not
+legal advice): GDPR makes the owner of a receiver open to the public a
+controller who has to tell listeners what is processed (Art. 13); the AI
+Act asks nothing of the browser decoders' small networks (no
+interaction, no synthetic media, not high-risk; free software), and the
+Cyber Resilience Act doesn't reach free software supplied outside a
+commercial activity (sellers of hardware with it are another matter).
+
+* **Privacy** (a section of the info box, `ui/src/privacy.ts`): what
+  web888d keeps about listeners, in sentences built from the settings
+  (`/api/info` `privacy`): the IP address while connected (and per
+  address for `per_ip`, the daily minutes until 00:00 UTC, blocked
+  addresses in the settings), failed logins briefly, the login cookie
+  (12 h), names shown to others, settings in the browser; nothing on
+  disk but the block list, no analytics; a proxy's own logs when
+  `trusted_proxies` is set; the outside services the receiver talks to
+  (NOAA SWPC, Spothole, PSKReporter, WSPRnet, GitHub, the owner's log
+  servers, as enabled), none told anything about listeners; and who to
+  ask (`[info] contact`). The owner adds their own words in `[info]
+  privacy`.
+* **Reception notice** (`[info] reception_notice`, on by default) under
+  "For listeners": what isn't meant for the public may be heard but not
+  passed on or used.
+* **AI** (Licences and credits): the CW decoder and the signal
+  identifier are small neural networks that can be wrong; much of the
+  code and documentation was written with an AI coding assistant
+  (Anthropic's Claude) at the author's direction.
+* **SBOM**: each release gets `web888d-vX.Y.Z.cdx.json` (CycloneDX 1.5,
+  every library with its version, purl and licence), from
+  `crates/web/src/third-party.json` by `scripts/third-party.py --sbom`.

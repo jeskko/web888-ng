@@ -108,14 +108,33 @@ pub struct Config {
 /// What the receiver's info page tells listeners, beside the name and
 /// location (`[kiwi] name`, `location`), the station's callsign, locator
 /// and antenna (`[station]`), and a photo uploaded from the admin page.
-#[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
 #[serde(default, deny_unknown_fields)]
 pub struct Info {
     /// A few words about the receiver: the antenna's setup, the noise,
     /// what it is meant for (plain text; blank lines start paragraphs).
     pub description: String,
     /// How to reach the owner (shown as written; an address here is public).
+    /// Also given as the contact for privacy questions.
     pub contact: String,
+    /// More for the info page's Privacy section, after what web888d says
+    /// itself (e.g. who runs the receiver, a proxy in front of it and its
+    /// logs).
+    pub privacy: String,
+    /// Tell listeners that what isn't meant for the public may be heard
+    /// but not passed on or used.
+    pub reception_notice: bool,
+}
+
+impl Default for Info {
+    fn default() -> Self {
+        Info {
+            description: String::new(),
+            contact: String::new(),
+            privacy: String::new(),
+            reception_notice: true,
+        }
+    }
 }
 
 /// HF propagation forecasts (`doc/m2-web-ui.md` §13): VOACAP from a few

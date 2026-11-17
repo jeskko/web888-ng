@@ -891,6 +891,10 @@ async fn guests_get_the_open_receivers_and_the_info_page() {
         "A wire in a tree.",
         "\"open_receivers\":1",
         "\"photo\":false",
+        // the privacy section's facts, and the reception notice (on by default)
+        "\"reception_notice\":true",
+        "\"per_ip\":",
+        "\"name\":\"NOAA SWPC\"",
     ] {
         assert!(r.contains(want), "{want}: {r}");
     }

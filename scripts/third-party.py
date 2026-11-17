@@ -12,6 +12,8 @@ the info page's Licences view lists (`/api/info/licences`).
 
   scripts/third-party.py          # write the file
   scripts/third-party.py --check  # fail if it is out of date (CI)
+  scripts/third-party.py --sbom OUT VERSION
+      # a CycloneDX 1.5 SBOM of a release from the file (no cargo needed)
 """
 
 import json
@@ -103,7 +105,48 @@ def npm():
     return sorted(out, key=lambda p: (p["name"], p["version"]))
 
 
+def sbom(out, version):
+    """CycloneDX 1.5 JSON: web888d `version` and the libraries in it."""
+    libs = json.load(open(OUT))
+
+    def comp(p, eco):
+        purl_name = p["name"].replace("@", "%40") if eco == "npm" else p["name"]
+        c = {
+            "type": "library",
+            "name": p["name"],
+            "version": p["version"],
+            "purl": f"pkg:{eco}/{purl_name}@{p['version']}",
+            "externalReferences": [{"type": "vcs", "url": p["url"]}] if p["url"] else [],
+        }
+        if p["license"]:
+            c["licenses"] = [{"expression": p["license"]}]
+        return c
+
+    doc = {
+        "bomFormat": "CycloneDX",
+        "specVersion": "1.5",
+        "version": 1,
+        "metadata": {
+            "component": {
+                "type": "application",
+                "name": "web888d",
+                "version": version,
+                "licenses": [{"expression": "GPL-3.0-or-later"}],
+                "externalReferences": [{"type": "vcs", "url": "https://github.com/jeskko/web888-ng"}],
+            }
+        },
+        "components": [comp(p, "cargo") for p in libs["rust"]] + [comp(p, "npm") for p in libs["npm"]],
+    }
+    with open(out, "w") as f:
+        json.dump(doc, f, indent=1, ensure_ascii=False)
+        f.write("\n")
+
+
 def main():
+    if "--sbom" in sys.argv:
+        i = sys.argv.index("--sbom")
+        sbom(sys.argv[i + 1], sys.argv[i + 2])
+        return
     text = json.dumps({"rust": rust(), "npm": npm()}, indent=1, ensure_ascii=False) + "\n"
     if "--check" in sys.argv:
         old = open(OUT).read() if os.path.exists(OUT) else ""
