@@ -1,10 +1,11 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! FFT plans for the server. On 32-bit ARM, power-of-two sizes from 16 up
-//! run a radix-4 Stockham FFT whose butterflies are NEON code, four at a
-//! time (rustfft has no NEON path on ARMv7; its scalar VFP code was about
-//! a third of the FT8 decoder's time on the unit's Cortex-A9). Other sizes
-//! and other targets use rustfft. Results are those of a DFT to float
-//! rounding, not rustfft's bit for bit.
+//! FFT plans for the server. On 32-bit ARM, sizes 2^a 3^b 5^c with a >= 4
+//! (16, 512, 3200, 51200, 96000, ...) run a mixed-radix Stockham FFT whose
+//! butterflies are NEON code, four at a time (rustfft has no NEON path on
+//! ARMv7; its scalar VFP code was about a third of the FT8 decoder's time
+//! on the unit's Cortex-A9). Other sizes and other targets use rustfft.
+//! Results are those of a DFT to float rounding, not rustfft's bit for
+//! bit.
 //!
 //! The NEON code is inline assembly with the `.fpu neon` directive: the
 //! armv7 target leaves NEON off for the compiler, and Rust's ARM NEON
@@ -14,8 +15,9 @@
 //! image's, cortexa9 NEON) may keep values there, so each call saves and
 //! restores them on the stack.
 //!
-//! The algorithm (Stockham, radix 4 then one radix-2 stage when log2 n is
-//! odd): with `ns` the length of the transforms built so far, stage input
+//! The algorithm (Stockham: radix-4 stages, a radix-2 stage when the power
+//! of two is odd, then radix 5s and 3s): with `ns` the length of the
+//! transforms built so far, stage input
 //! `x` and output `y`, for each j < n/r with k = j mod ns:
 //! `v[q] = x[j + q n/r] w^(q k)` (w = e^(-+2 pi i / (ns r))), an r-point
 //! DFT of `v`, and `y[(j / ns) ns r + k + q ns] = v'[q]`. Four consecutive
@@ -55,13 +57,14 @@ struct Stage {
     /// Transform length before the stage.
     ns: usize,
     radix: usize,
-    /// Per 4 k: radix 4: w1 re, w1 im, w2 re, w2 im, w3 re, w3 im (4 each);
-    /// radix 2: w re, w im. Empty for ns = 1.
+    /// Per 4 k: w^k re, w^k im, w^2k re, w^2k im, ... up to w^((r-1)k)
+    /// (4 each). Empty for ns = 1.
     tw: Vec<f32>,
 }
 
-/// The radix-4 Stockham FFT (NEON butterflies on ARM, the same steps in
-/// scalar code elsewhere: the tests check the algorithm on any machine).
+/// The mixed-radix Stockham FFT (NEON butterflies on ARM, the same steps
+/// in scalar code elsewhere: the tests check the algorithm on any
+/// machine).
 pub struct Stockham {
     n: usize,
     inverse: bool,
@@ -69,24 +72,52 @@ pub struct Stockham {
 }
 
 impl Stockham {
-    /// Sizes it takes: powers of two from 16.
+    /// Sizes it takes: 2^a 3^b 5^c with a >= 4.
     pub fn fits(n: usize) -> bool {
-        n >= 16 && n.is_power_of_two()
+        let mut m = n;
+        for f in [3, 5] {
+            while m > 0 && m.is_multiple_of(f) {
+                m /= f;
+            }
+        }
+        m >= 16 && m.is_power_of_two()
     }
 
     pub fn new(n: usize, inverse: bool) -> Self {
         assert!(Self::fits(n), "{n} points");
         let sign = if inverse { 1.0 } else { -1.0 };
+        // the radices: 4 first (its stage takes ns = 1), 4s, a 2, 5s, 3s;
+        // every later stage then has ns a multiple of 4
+        let twos = 1usize << n.trailing_zeros();
+        let mut radices = vec![4];
+        let mut t = twos / 4;
+        while t >= 4 {
+            radices.push(4);
+            t /= 4;
+        }
+        if t == 2 {
+            radices.push(2);
+        }
+        let mut odd = n / twos;
+        while odd.is_multiple_of(5) {
+            radices.push(5);
+            odd /= 5;
+        }
+        while odd.is_multiple_of(3) {
+            radices.push(3);
+            odd /= 3;
+        }
+        debug_assert_eq!(odd, 1);
         let mut stages = vec![];
         let mut ns = 1;
-        while ns * 4 <= n {
+        for r in radices {
             let mut tw = vec![];
             if ns > 1 {
                 for k0 in (0..ns).step_by(4) {
-                    for q in 1..4 {
+                    for q in 1..r {
                         let w = |k: usize| {
                             let a = sign * 2.0 * std::f64::consts::PI * (q * k) as f64
-                                / (4 * ns) as f64;
+                                / (r * ns) as f64;
                             (a.cos() as f32, a.sin() as f32)
                         };
                         tw.extend((k0..k0 + 4).map(|k| w(k).0));
@@ -94,21 +125,8 @@ impl Stockham {
                     }
                 }
             }
-            stages.push(Stage { ns, radix: 4, tw });
-            ns *= 4;
-        }
-        if ns < n {
-            // one radix-2 stage: ns = n / 2
-            let mut tw = vec![];
-            for k0 in (0..ns).step_by(4) {
-                let w = |k: usize| {
-                    let a = sign * 2.0 * std::f64::consts::PI * k as f64 / n as f64;
-                    (a.cos() as f32, a.sin() as f32)
-                };
-                tw.extend((k0..k0 + 4).map(|k| w(k).0));
-                tw.extend((k0..k0 + 4).map(|k| w(k).1));
-            }
-            stages.push(Stage { ns, radix: 2, tw });
+            stages.push(Stage { ns, radix: r, tw });
+            ns *= r;
         }
         Stockham { n, inverse, stages }
     }
@@ -126,7 +144,9 @@ impl Stockham {
             match (s.radix, s.ns) {
                 (4, 1) => first4(src, dst, self.inverse),
                 (4, _) => stage4(src, dst, s, self.inverse),
-                _ => stage2(src, dst, s),
+                (2, _) => stage2(src, dst, s),
+                (5, _) => stage5(src, dst, s, self.inverse),
+                _ => stage3(src, dst, s, self.inverse),
             }
             in_x = !in_x;
         }
@@ -191,24 +211,151 @@ fn stage4(x: &[C32], y: &mut [C32], s: &Stage, inverse: bool) {
     }
 }
 
-/// The last stage, radix 2 (ns = n / 2).
+/// A radix-2 stage.
 fn stage2(x: &[C32], y: &mut [C32], s: &Stage) {
-    let ns = s.ns;
+    let n = x.len();
+    let (m, ns) = (n / 2, s.ns);
     assert!(s.tw.len() == ns / 4 * 8);
-    #[cfg(target_arch = "arm")]
-    // SAFETY: ns / 4 blocks of four k: k + 3 + ns < n on both sides,
-    // ns / 4 * 8 twiddles
-    unsafe {
-        neon::stage2(x.as_ptr(), ns, s.tw.as_ptr(), y.as_mut_ptr());
+    for g in 0..m / ns {
+        #[cfg(target_arch = "arm")]
+        // SAFETY: the group's ns / 4 blocks: g ns + ns - 1 + m < n,
+        // 2 g ns + 2 ns - 1 < n, ns / 4 * 8 twiddles
+        unsafe {
+            neon::stage2(
+                x.as_ptr().add(g * ns),
+                m,
+                s.tw.as_ptr(),
+                y.as_mut_ptr().add(g * ns * 2),
+                ns,
+            );
+        }
+        #[cfg(not(target_arch = "arm"))]
+        for k in 0..ns {
+            let tw = &s.tw[k / 4 * 8..][..8];
+            let j = g * ns + k;
+            let a = x[j];
+            let b = x[j + m] * C32::new(tw[k % 4], tw[4 + k % 4]);
+            y[g * ns * 2 + k] = a + b;
+            y[g * ns * 2 + k + ns] = a - b;
+        }
     }
-    #[cfg(not(target_arch = "arm"))]
-    for k in 0..ns {
-        let tw = &s.tw[k / 4 * 8..][..8];
-        let a = x[k];
-        let b = x[k + ns] * C32::new(tw[k % 4], tw[4 + k % 4]);
-        y[k] = a + b;
-        y[k + ns] = a - b;
+}
+
+/// A radix-5 stage.
+fn stage5(x: &[C32], y: &mut [C32], s: &Stage, inverse: bool) {
+    let n = x.len();
+    let (m, ns) = (n / 5, s.ns);
+    assert!(s.tw.len() == ns / 4 * 32);
+    for g in 0..m / ns {
+        #[cfg(target_arch = "arm")]
+        // SAFETY: the group's ns / 4 blocks: g ns + ns - 1 + 4m < n,
+        // 5 g ns + 5 ns - 1 < n, ns / 4 * 32 twiddles
+        unsafe {
+            neon::stage5(
+                x.as_ptr().add(g * ns),
+                m,
+                s.tw.as_ptr(),
+                y.as_mut_ptr().add(g * ns * 5),
+                ns,
+                inverse,
+            );
+        }
+        #[cfg(not(target_arch = "arm"))]
+        for k in 0..ns {
+            let tw = &s.tw[k / 4 * 32..][..32];
+            let l = k % 4;
+            let w = |q: usize| C32::new(tw[(q - 1) * 8 + l], tw[(q - 1) * 8 + 4 + l]);
+            let j = g * ns + k;
+            let v = [
+                x[j],
+                x[j + m] * w(1),
+                x[j + 2 * m] * w(2),
+                x[j + 3 * m] * w(3),
+                x[j + 4 * m] * w(4),
+            ];
+            for (q, r) in dft5(v, inverse).into_iter().enumerate() {
+                y[g * ns * 5 + k + q * ns] = r;
+            }
+        }
     }
+}
+
+/// A radix-3 stage.
+fn stage3(x: &[C32], y: &mut [C32], s: &Stage, inverse: bool) {
+    let n = x.len();
+    let (m, ns) = (n / 3, s.ns);
+    assert!(s.tw.len() == ns / 4 * 16);
+    for g in 0..m / ns {
+        #[cfg(target_arch = "arm")]
+        // SAFETY: the group's ns / 4 blocks: g ns + ns - 1 + 2m < n,
+        // 3 g ns + 3 ns - 1 < n, ns / 4 * 16 twiddles
+        unsafe {
+            neon::stage3(
+                x.as_ptr().add(g * ns),
+                m,
+                s.tw.as_ptr(),
+                y.as_mut_ptr().add(g * ns * 3),
+                ns,
+                inverse,
+            );
+        }
+        #[cfg(not(target_arch = "arm"))]
+        for k in 0..ns {
+            let tw = &s.tw[k / 4 * 16..][..16];
+            let l = k % 4;
+            let w = |q: usize| C32::new(tw[(q - 1) * 8 + l], tw[(q - 1) * 8 + 4 + l]);
+            let j = g * ns + k;
+            let v = [x[j], x[j + m] * w(1), x[j + 2 * m] * w(2)];
+            for (q, r) in dft3(v, inverse).into_iter().enumerate() {
+                y[g * ns * 3 + k + q * ns] = r;
+            }
+        }
+    }
+}
+
+/// cos and sin of 2 pi / 5 and 4 pi / 5.
+const C5: [f32; 4] = [0.309_017, -0.809_017, 0.951_056_5, 0.587_785_24];
+/// 1/2 and sin(2 pi / 3).
+const C3: [f32; 2] = [0.5, 0.866_025_4];
+
+/// A 5-point DFT (the NEON code's order of operations).
+#[cfg(not(target_arch = "arm"))]
+fn dft5(v: [C32; 5], inverse: bool) -> [C32; 5] {
+    let [c1, c2, s1, s2] = C5;
+    let (u, d1) = (v[1] + v[4], v[1] - v[4]);
+    let (u2, d2) = (v[2] + v[3], v[2] - v[3]);
+    let a1 = C32::new(
+        v[0].re + u.re * c1 + u2.re * c2,
+        v[0].im + u.im * c1 + u2.im * c2,
+    );
+    let a2 = C32::new(
+        v[0].re + u.re * c2 + u2.re * c1,
+        v[0].im + u.im * c2 + u2.im * c1,
+    );
+    let y0 = C32::new(v[0].re + u.re + u2.re, v[0].im + u.im + u2.im);
+    let b1 = C32::new(d1.re * s1 + d2.re * s2, d1.im * s1 + d2.im * s2);
+    let b2 = C32::new(d1.re * s2 - d2.re * s1, d1.im * s2 - d2.im * s1);
+    // a -/+ i b: (a.re + b.im, a.im - b.re) / (a.re - b.im, a.im + b.re)
+    let m = |a: C32, b: C32| C32::new(a.re + b.im, a.im - b.re);
+    let p = |a: C32, b: C32| C32::new(a.re - b.im, a.im + b.re);
+    if inverse {
+        [y0, p(a1, b1), p(a2, b2), m(a2, b2), m(a1, b1)]
+    } else {
+        [y0, m(a1, b1), m(a2, b2), p(a2, b2), p(a1, b1)]
+    }
+}
+
+/// A 3-point DFT (the NEON code's order of operations).
+#[cfg(not(target_arch = "arm"))]
+fn dft3(v: [C32; 3], inverse: bool) -> [C32; 3] {
+    let [h, s] = C3;
+    let (u, d) = (v[1] + v[2], v[1] - v[2]);
+    let a = C32::new(v[0].re - u.re * h, v[0].im - u.im * h);
+    let y0 = v[0] + u;
+    let b = C32::new(d.re * s, d.im * s);
+    let m = C32::new(a.re + b.im, a.im - b.re);
+    let p = C32::new(a.re - b.im, a.im + b.re);
+    if inverse { [y0, p, m] } else { [y0, m, p] }
 }
 
 /// A 4-point DFT (the NEON code's order of operations).
@@ -459,50 +606,361 @@ mod neon {
         }
     }
 
-    /// The radix-2 stage, ns / 4 blocks of four k: y[k] = a + w b,
-    /// y[k + ns] = a - w b.
+    /// A radix-2 group, ns / 4 blocks of four k: y[k] = a + w b,
+    /// y[k + ns] = a - w b with a = x[k], b = x[k + m].
     ///
     /// # Safety
-    /// x[0..2 ns] readable, w[0..ns / 4 * 8] readable, y[0..2 ns]
-    /// writable, ns a multiple of 4 (> 0).
-    pub unsafe fn stage2(x: *const C32, ns: usize, w: *const f32, y: *mut C32) {
+    /// x[0..ns], x[m..m + ns] readable, w[0..ns / 4 * 8] readable,
+    /// y[0..2 ns] writable, ns a multiple of 4 (> 0).
+    pub unsafe fn stage2(x: *const C32, m: usize, w: *const f32, y: *mut C32, ns: usize) {
         unsafe {
             asm!(
-            ".fpu neon",
-                    "vpush {{d16-d31}}",
-            "2:",
-            "vld2.32 {{d0-d3}}, [{x}]",
-            "add {t}, {x}, {o}",
-            "vld2.32 {{d4-d7}}, [{t}]",
-            "vld1.32 {{d8-d11}}, [{w}]!",
-            // b *= w -> (q6, q7)
-            "vmul.f32 q6, q2, q4",
-            "vmls.f32 q6, q3, q5",
-            "vmul.f32 q7, q2, q5",
-            "vmla.f32 q7, q3, q4",
-            "vadd.f32 q8, q0, q6",
-            "vadd.f32 q9, q1, q7",
-            "vsub.f32 q10, q0, q6",
-            "vsub.f32 q11, q1, q7",
-            "vst2.32 {{d16-d19}}, [{y}]",
-            "add {t}, {y}, {o}",
-            "vst2.32 {{d20-d23}}, [{t}]",
-            "add {x}, {x}, #32",
-            "add {y}, {y}, #32",
-            "subs {c}, {c}, #1",
-            "bne 2b",
-                    "vpop {{d16-d31}}",
-            c = inout(reg) ns / 4 => _,
-            x = inout(reg) x => _,
-            w = inout(reg) w => _,
-            y = inout(reg) y => _,
-            o = in(reg) ns * 8,
-            t = out(reg) _,
-            out("d0") _, out("d1") _, out("d2") _, out("d3") _,
-            out("d4") _, out("d5") _, out("d6") _, out("d7") _,
-            out("d8") _, out("d9") _, out("d10") _, out("d11") _,
-            out("d12") _, out("d13") _, out("d14") _, out("d15") _,
-                        );
+                ".fpu neon",
+                "vpush {{d16-d31}}",
+                "2:",
+                "vld2.32 {{d0-d3}}, [{x}]",
+                "add {t}, {x}, {s}",
+                "vld2.32 {{d4-d7}}, [{t}]",
+                "vld1.32 {{d8-d11}}, [{w}]!",
+                // b *= w -> (q6, q7)
+                "vmul.f32 q6, q2, q4",
+                "vmls.f32 q6, q3, q5",
+                "vmul.f32 q7, q2, q5",
+                "vmla.f32 q7, q3, q4",
+                "vadd.f32 q8, q0, q6",
+                "vadd.f32 q9, q1, q7",
+                "vsub.f32 q10, q0, q6",
+                "vsub.f32 q11, q1, q7",
+                "vst2.32 {{d16-d19}}, [{y}]",
+                "add {t}, {y}, {o}",
+                "vst2.32 {{d20-d23}}, [{t}]",
+                "add {x}, {x}, #32",
+                "add {y}, {y}, #32",
+                "subs {c}, {c}, #1",
+                "bne 2b",
+                "vpop {{d16-d31}}",
+                c = inout(reg) ns / 4 => _,
+                x = inout(reg) x => _,
+                w = inout(reg) w => _,
+                y = inout(reg) y => _,
+                s = in(reg) m * 8,
+                o = in(reg) ns * 8,
+                t = out(reg) _,
+                out("d0") _, out("d1") _, out("d2") _, out("d3") _,
+                out("d4") _, out("d5") _, out("d6") _, out("d7") _,
+                out("d8") _, out("d9") _, out("d10") _, out("d11") _,
+                out("d12") _, out("d13") _, out("d14") _, out("d15") _,
+            );
+        }
+    }
+
+    /// Twiddles the input in (re, im) by the next w from {w} (temps
+    /// q11-q14).
+    macro_rules! twiddle {
+        ($re:literal, $im:literal) => {
+            concat!(
+                "vld1.32 {{d22-d25}}, [{w}]!\n",
+                "vmul.f32 q13, ",
+                $re,
+                ", q11\n",
+                "vmls.f32 q13, ",
+                $im,
+                ", q12\n",
+                "vmul.f32 q14, ",
+                $re,
+                ", q12\n",
+                "vmla.f32 q14, ",
+                $im,
+                ", q11\n",
+                "vmov ",
+                $re,
+                ", q13\n",
+                "vmov ",
+                $im,
+                ", q14\n",
+            )
+        };
+    }
+
+    /// The radix-5 butterfly. In: constants d0 = (c1, c2), d1 = (s1, s2);
+    /// v0 (q1, q2) .. v4 (q9, q10). Out: y0 (q1, q2), y1 (q7, q8),
+    /// y2 (q11, q12), y3 (q13, q14), y4 (q9, q10).
+    macro_rules! dft5 {
+        ($dir:ident) => {
+            concat!(
+                // u = v1 + v4 -> (q3, q4), d1 = v1 - v4 -> (q9, q10)
+                "vadd.f32 q13, q3, q9\n",
+                "vadd.f32 q14, q4, q10\n",
+                "vsub.f32 q9, q3, q9\n",
+                "vsub.f32 q10, q4, q10\n",
+                "vmov q3, q13\n",
+                "vmov q4, q14\n",
+                // u2 = v2 + v3 -> (q5, q6), d2 = v2 - v3 -> (q7, q8)
+                "vadd.f32 q13, q5, q7\n",
+                "vadd.f32 q14, q6, q8\n",
+                "vsub.f32 q7, q5, q7\n",
+                "vsub.f32 q8, q6, q8\n",
+                "vmov q5, q13\n",
+                "vmov q6, q14\n",
+                // a1 = v0 + c1 u + c2 u2 -> (q11, q12)
+                "vmov q11, q1\n",
+                "vmla.f32 q11, q3, d0[0]\n",
+                "vmla.f32 q11, q5, d0[1]\n",
+                "vmov q12, q2\n",
+                "vmla.f32 q12, q4, d0[0]\n",
+                "vmla.f32 q12, q6, d0[1]\n",
+                // a2 = v0 + c2 u + c1 u2 -> (q13, q14)
+                "vmov q13, q1\n",
+                "vmla.f32 q13, q3, d0[1]\n",
+                "vmla.f32 q13, q5, d0[0]\n",
+                "vmov q14, q2\n",
+                "vmla.f32 q14, q4, d0[1]\n",
+                "vmla.f32 q14, q6, d0[0]\n",
+                // y0 = v0 + u + u2
+                "vadd.f32 q1, q1, q3\n",
+                "vadd.f32 q1, q1, q5\n",
+                "vadd.f32 q2, q2, q4\n",
+                "vadd.f32 q2, q2, q6\n",
+                // b1 = s1 d1 + s2 d2 -> (q3, q4); b2 = s2 d1 - s1 d2 -> (q5, q6)
+                "vmul.f32 q3, q9, d1[0]\n",
+                "vmla.f32 q3, q7, d1[1]\n",
+                "vmul.f32 q4, q10, d1[0]\n",
+                "vmla.f32 q4, q8, d1[1]\n",
+                "vmul.f32 q5, q9, d1[1]\n",
+                "vmls.f32 q5, q7, d1[0]\n",
+                "vmul.f32 q6, q10, d1[1]\n",
+                "vmls.f32 q6, q8, d1[0]\n",
+                dft5_out!($dir),
+            )
+        };
+    }
+
+    /// a -/+ i b: (a.re + b.im, a.im - b.re), (a.re - b.im, a.im + b.re).
+    /// Forward: y1 = a1 - i b1, y4 = a1 + i b1, y2 = a2 - i b2,
+    /// y3 = a2 + i b2; inverse the other way.
+    macro_rules! dft5_out {
+        (forward) => {
+            concat!(
+                "vadd.f32 q7, q11, q4\n",
+                "vsub.f32 q8, q12, q3\n",
+                "vsub.f32 q9, q11, q4\n",
+                "vadd.f32 q10, q12, q3\n",
+                "vadd.f32 q11, q13, q6\n",
+                "vsub.f32 q13, q13, q6\n",
+                "vsub.f32 q12, q14, q5\n",
+                "vadd.f32 q14, q14, q5\n",
+            )
+        };
+        (inverse) => {
+            concat!(
+                "vsub.f32 q7, q11, q4\n",
+                "vadd.f32 q8, q12, q3\n",
+                "vadd.f32 q9, q11, q4\n",
+                "vsub.f32 q10, q12, q3\n",
+                "vsub.f32 q11, q13, q6\n",
+                "vadd.f32 q13, q13, q6\n",
+                "vadd.f32 q12, q14, q5\n",
+                "vsub.f32 q14, q14, q5\n",
+            )
+        };
+    }
+
+    macro_rules! stage5_fn {
+        ($name:ident, $dir:ident) => {
+            /// One radix-5 group: ns / 4 blocks of four k.
+            ///
+            /// # Safety
+            /// x[0..ns + 4m] readable, w[0..ns / 4 * 32] readable,
+            /// y[0..5 ns] writable, ns a multiple of 4 (> 0).
+            pub unsafe fn $name(x: *const C32, m: usize, w: *const f32, y: *mut C32, ns: usize) {
+                unsafe {
+                    asm!(
+                        ".fpu neon",
+                        "vpush {{d16-d31}}",
+                        "vld1.32 {{d0-d1}}, [{k}]",
+                        "2:",
+                        "vld2.32 {{d2-d5}}, [{x}]",
+                        "add {t}, {x}, {s}",
+                        "vld2.32 {{d6-d9}}, [{t}]",
+                        "add {t}, {t}, {s}",
+                        "vld2.32 {{d10-d13}}, [{t}]",
+                        "add {t}, {t}, {s}",
+                        "vld2.32 {{d14-d17}}, [{t}]",
+                        "add {t}, {t}, {s}",
+                        "vld2.32 {{d18-d21}}, [{t}]",
+                        twiddle!("q3", "q4"),
+                        twiddle!("q5", "q6"),
+                        twiddle!("q7", "q8"),
+                        twiddle!("q9", "q10"),
+                        dft5!($dir),
+                        "vst2.32 {{d2-d5}}, [{y}]",
+                        "add {t}, {y}, {o}",
+                        "vst2.32 {{d14-d17}}, [{t}]",
+                        "add {t}, {t}, {o}",
+                        "vst2.32 {{d22-d25}}, [{t}]",
+                        "add {t}, {t}, {o}",
+                        "vst2.32 {{d26-d29}}, [{t}]",
+                        "add {t}, {t}, {o}",
+                        "vst2.32 {{d18-d21}}, [{t}]",
+                        "add {x}, {x}, #32",
+                        "add {y}, {y}, #32",
+                        "subs {c}, {c}, #1",
+                        "bne 2b",
+                        "vpop {{d16-d31}}",
+                        c = inout(reg) ns / 4 => _,
+                        x = inout(reg) x => _,
+                        w = inout(reg) w => _,
+                        y = inout(reg) y => _,
+                        k = in(reg) super::C5.as_ptr(),
+                        s = in(reg) m * 8,
+                        o = in(reg) ns * 8,
+                        t = out(reg) _,
+                        out("d0") _, out("d1") _, out("d2") _, out("d3") _,
+                        out("d4") _, out("d5") _, out("d6") _, out("d7") _,
+                        out("d8") _, out("d9") _, out("d10") _, out("d11") _,
+                        out("d12") _, out("d13") _, out("d14") _, out("d15") _,
+                    );
+                }
+            }
+        };
+    }
+
+    /// The radix-3 butterfly. In: d0 = (1/2, sin(2 pi / 3)); v0 (q1, q2),
+    /// v1 (q3, q4), v2 (q5, q6). Out: y0 (q1, q2), y1 (q3, q4),
+    /// y2 (q5, q6).
+    macro_rules! dft3 {
+        ($dir:ident) => {
+            concat!(
+                // u = v1 + v2 -> (q7, q8), d = v1 - v2 -> (q9, q10)
+                "vadd.f32 q7, q3, q5\n",
+                "vadd.f32 q8, q4, q6\n",
+                "vsub.f32 q9, q3, q5\n",
+                "vsub.f32 q10, q4, q6\n",
+                // a = v0 - u / 2 -> (q11, q12)
+                "vmov q11, q1\n",
+                "vmls.f32 q11, q7, d0[0]\n",
+                "vmov q12, q2\n",
+                "vmls.f32 q12, q8, d0[0]\n",
+                // y0 = v0 + u
+                "vadd.f32 q1, q1, q7\n",
+                "vadd.f32 q2, q2, q8\n",
+                // b = s d
+                "vmul.f32 q9, q9, d0[1]\n",
+                "vmul.f32 q10, q10, d0[1]\n",
+                dft3_out!($dir),
+            )
+        };
+    }
+
+    macro_rules! dft3_out {
+        (forward) => {
+            concat!(
+                "vadd.f32 q3, q11, q10\n",
+                "vsub.f32 q4, q12, q9\n",
+                "vsub.f32 q5, q11, q10\n",
+                "vadd.f32 q6, q12, q9\n",
+            )
+        };
+        (inverse) => {
+            concat!(
+                "vsub.f32 q3, q11, q10\n",
+                "vadd.f32 q4, q12, q9\n",
+                "vadd.f32 q5, q11, q10\n",
+                "vsub.f32 q6, q12, q9\n",
+            )
+        };
+    }
+
+    macro_rules! stage3_fn {
+        ($name:ident, $dir:ident) => {
+            /// One radix-3 group: ns / 4 blocks of four k.
+            ///
+            /// # Safety
+            /// x[0..ns + 2m] readable, w[0..ns / 4 * 16] readable,
+            /// y[0..3 ns] writable, ns a multiple of 4 (> 0).
+            pub unsafe fn $name(x: *const C32, m: usize, w: *const f32, y: *mut C32, ns: usize) {
+                unsafe {
+                    asm!(
+                        ".fpu neon",
+                        "vpush {{d16-d31}}",
+                        "vld1.32 {{d0}}, [{k}]",
+                        "2:",
+                        "vld2.32 {{d2-d5}}, [{x}]",
+                        "add {t}, {x}, {s}",
+                        "vld2.32 {{d6-d9}}, [{t}]",
+                        "add {t}, {t}, {s}",
+                        "vld2.32 {{d10-d13}}, [{t}]",
+                        twiddle!("q3", "q4"),
+                        twiddle!("q5", "q6"),
+                        dft3!($dir),
+                        "vst2.32 {{d2-d5}}, [{y}]",
+                        "add {t}, {y}, {o}",
+                        "vst2.32 {{d6-d9}}, [{t}]",
+                        "add {t}, {t}, {o}",
+                        "vst2.32 {{d10-d13}}, [{t}]",
+                        "add {x}, {x}, #32",
+                        "add {y}, {y}, #32",
+                        "subs {c}, {c}, #1",
+                        "bne 2b",
+                        "vpop {{d16-d31}}",
+                        c = inout(reg) ns / 4 => _,
+                        x = inout(reg) x => _,
+                        w = inout(reg) w => _,
+                        y = inout(reg) y => _,
+                        k = in(reg) super::C3.as_ptr(),
+                        s = in(reg) m * 8,
+                        o = in(reg) ns * 8,
+                        t = out(reg) _,
+                        out("d0") _, out("d1") _, out("d2") _, out("d3") _,
+                        out("d4") _, out("d5") _, out("d6") _, out("d7") _,
+                        out("d8") _, out("d9") _, out("d10") _, out("d11") _,
+                        out("d12") _, out("d13") _, out("d14") _, out("d15") _,
+                    );
+                }
+            }
+        };
+    }
+
+    stage5_fn!(stage5_fwd, forward);
+    stage5_fn!(stage5_inv, inverse);
+    stage3_fn!(stage3_fwd, forward);
+    stage3_fn!(stage3_inv, inverse);
+
+    /// # Safety
+    /// As the macro-made functions.
+    pub unsafe fn stage5(
+        x: *const C32,
+        m: usize,
+        w: *const f32,
+        y: *mut C32,
+        ns: usize,
+        inverse: bool,
+    ) {
+        unsafe {
+            if inverse {
+                stage5_inv(x, m, w, y, ns)
+            } else {
+                stage5_fwd(x, m, w, y, ns)
+            }
+        }
+    }
+
+    /// # Safety
+    /// As the macro-made functions.
+    pub unsafe fn stage3(
+        x: *const C32,
+        m: usize,
+        w: *const f32,
+        y: *mut C32,
+        ns: usize,
+        inverse: bool,
+    ) {
+        unsafe {
+            if inverse {
+                stage3_inv(x, m, w, y, ns)
+            } else {
+                stage3_fwd(x, m, w, y, ns)
+            }
         }
     }
 }
@@ -594,8 +1052,9 @@ mod tests {
     #[test]
     fn matches_rustfft() {
         let mut p = FftPlanner::new();
-        for log in 4..=16 {
-            let n = 1usize << log;
+        let mixed = [48, 80, 240, 400, 720, 3200, 40_000, 51_200, 96_000];
+        for n in (4..=16).map(|l| 1usize << l).chain(mixed) {
+            let log = n.ilog2() + 1;
             for inverse in [false, true] {
                 let s = Stockham::new(n, inverse);
                 let r = if inverse {
@@ -603,7 +1062,7 @@ mod tests {
                 } else {
                     p.plan_fft_forward(n)
                 };
-                let x = signal(2 * n, log as u32 + inverse as u32 * 100);
+                let x = signal(2 * n, log + inverse as u32 * 100);
                 let mut a = x.clone();
                 let mut b = x.clone();
                 let mut scratch = vec![C32::default(); s.get_inplace_scratch_len()];
@@ -633,7 +1092,9 @@ mod tests {
 
     #[test]
     fn plan_takes_any_size() {
-        for n in [1, 5, 12, 16, 3200, 1024] {
+        assert!(Stockham::fits(3200) && Stockham::fits(96_000) && Stockham::fits(16));
+        assert!(!Stockham::fits(5000) && !Stockham::fits(8) && !Stockham::fits(7 * 16));
+        for n in [1, 5, 12, 16, 3200, 1024, 5000] {
             let p = plan(n, false);
             assert_eq!(p.len(), n);
             let mut x = signal(n, 7);
