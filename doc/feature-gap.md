@@ -99,6 +99,7 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 | Themes | ✓ | ~ | ✓ | ✗ (dark) | later |
 | Map (receivers, spots, aircraft) | ✗ | TDoA map | ✓ | ✓ skimmer spots, the browser's own decodes and live DX spots with great circle lines; great circle (azimuthal equidistant), globe or Mercator, greyline; on phones too (tap, tap again to tune) (no aircraft, no other receivers) | **M** (more layers) |
 | Languages | ✗ | ✗ | ✗ | ✗ | omit |
+| Propagation forecast | ✗ | ✗ | ✗ | ✓ VOACAP (hfcast) from 7 regions, per band and UTC hour, SSB/CW/FT8; NOAA's sunspot number when online, a built-in table offline (`m2-web-ui.md` §13) | – |
 
 ### 2.4 Decoders
 
@@ -214,7 +215,10 @@ Legend: ✓ has it, ~ partly, ✗ no, – not applicable.
 7. **V — the rest**: the external 10 MHz reference, ACARS on VHF,
    110.592 MHz on the channelizer (a fractional rate) if marine VHF is
    wanted.
-8. **Later**: S2 (CW/RTTY skimmers, off the unit), FST4W, GPS
+8. **P — propagation**: done 2026-11-17 (the VOACAP panel, §13 of
+   `m2-web-ui.md`). Next steps there: the band ribbon shaded by the
+   forecast, a "now" view from the skimmers' own spots beside it.
+9. **Later**: S2 (CW/RTTY skimmers, off the unit), FST4W, GPS
    timestamps and TDoA (M6's open item; the second unit has a GPS
    antenna), IQ stream/rtl_tcp/SpyServer, ACME, themes, ALE, public
    listing (§5).

@@ -435,4 +435,6 @@ CI builds a static `armv7-unknown-linux-musleabihf` binary for the device.
 
 GPL-3.0-or-later (`COPYING`). Code ported from RaspSDR/server (KiwiSDR-derived)
 keeps its original notices. Provenance rules are in `doc/design.md` §12.
+The propagation forecasts use hfcast (Apache-2.0) and VOACAP's
+coefficient data, which keep their own status: `NOTICE-hfcast.md`.
 Not affiliated with the Web-888 / RX-888 vendor.

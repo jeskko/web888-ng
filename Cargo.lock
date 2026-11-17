@@ -664,6 +664,11 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "2304e00983f87ffb38b55b444b5e3b60a884b5d30c0fca7d82fe33449bbe55ea"
 
 [[package]]
+name = "hfcast"
+version = "2.14.0"
+source = "git+https://github.com/jeskko/hfcast-engine?rev=bf34e8f9f375e190ed43fcac19f25d800992e0e6#bf34e8f9f375e190ed43fcac19f25d800992e0e6"
+
+[[package]]
 name = "http"
 version = "1.5.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1976,6 +1981,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-prop"
+version = "0.14.0"
+dependencies = [
+ "hfcast",
+ "serde",
+ "serde_json",
+]
+
+[[package]]
 name = "web888-psk"
 version = "0.14.0"
 dependencies = [
@@ -2076,6 +2090,7 @@ dependencies = [
  "web888-hw",
  "web888-iq",
  "web888-markers",
+ "web888-prop",
  "web888-radio",
  "web888-sim",
  "web888-skim",

@@ -101,6 +101,8 @@ pub struct Config {
     pub kiwi: Kiwi,
     /// The receiver's info page for listeners (apply at once).
     pub info: Info,
+    /// HF propagation forecasts for listeners (apply at once).
+    pub propagation: Propagation,
 }
 
 /// What the receiver's info page tells listeners, beside the name and
@@ -114,6 +116,96 @@ pub struct Info {
     pub description: String,
     /// How to reach the owner (shown as written; an address here is public).
     pub contact: String,
+}
+
+/// HF propagation forecasts (`doc/m2-web-ui.md` §13): VOACAP from a few
+/// regions to the receiver (at `[station] locator`), per UTC hour and
+/// band, for the month. Works with no network: the sunspot number is
+/// `ssn`, else NOAA's prediction when it can be fetched (kept on disk),
+/// else a table built into the server.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Propagation {
+    /// Forecast (needs `[station] locator`).
+    pub enabled: bool,
+    /// "voacap": the month's median; "truecast": the same model at the
+    /// day's index (the month's sunspot number with a fitted correction
+    /// for the day of the year).
+    pub engine: PropEngine,
+    /// A fixed smoothed sunspot number, instead of NOAA's or the built-in.
+    #[schemars(range(min = 0.0, max = 300.0))]
+    pub ssn: Option<f64>,
+    /// Fetch NOAA's predicted sunspot numbers (daily) and the planetary
+    /// K index (every 30 minutes). Off: no connections are made.
+    pub fetch: bool,
+    /// Where they come from (NOAA SWPC's JSON, or a copy of it).
+    pub ssn_url: String,
+    pub kp_url: String,
+    /// CA certificates (PEM) to check the server with; empty: the
+    /// system's.
+    pub ca_file: PathBuf,
+    /// The transmitter's power (W), with isotropic antennas at both ends.
+    #[schemars(range(min = 0.1, max = 1000000.0))]
+    pub power_w: f64,
+    /// Man-made noise at the receiver, at 3 MHz (dBW in 1 Hz): -136
+    /// industrial, -145 residential, -150 rural, -153 remote.
+    #[schemars(range(min = -170.0, max = -120.0))]
+    pub noise_dbw: f64,
+    /// The bands (MHz, 2 to 30, at most 11).
+    pub bands_mhz: Vec<f64>,
+    /// The regions, as signals from there to the receiver.
+    pub targets: Vec<PropTarget>,
+}
+
+/// A region for the forecast.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct PropTarget {
+    pub name: String,
+    #[schemars(range(min = -90.0, max = 90.0))]
+    pub lat: f64,
+    #[schemars(range(min = -180.0, max = 180.0))]
+    pub lon: f64,
+}
+
+#[derive(Clone, Copy, Debug, Default, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum PropEngine {
+    #[default]
+    Voacap,
+    Truecast,
+}
+
+impl Default for Propagation {
+    fn default() -> Self {
+        let t = |name: &str, lat, lon| PropTarget {
+            name: name.into(),
+            lat,
+            lon,
+        };
+        Propagation {
+            enabled: true,
+            engine: PropEngine::Voacap,
+            ssn: None,
+            fetch: true,
+            ssn_url: "https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json"
+                .into(),
+            kp_url: "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json".into(),
+            ca_file: PathBuf::new(),
+            power_w: 100.0,
+            noise_dbw: -150.0,
+            bands_mhz: vec![3.6, 5.36, 7.1, 10.12, 14.1, 18.1, 21.1, 24.9, 28.2],
+            targets: vec![
+                t("Europe", 50.0, 10.0),
+                t("N. America east", 40.7, -74.0),
+                t("N. America west", 37.8, -122.4),
+                t("S. America", -23.5, -46.6),
+                t("Africa", -26.2, 28.0),
+                t("Asia", 35.7, 139.7),
+                t("Oceania", -33.9, 151.2),
+            ],
+        }
+    }
 }
 
 /// What the skimmers log, for choosing what goes to syslog and MQTT.
@@ -898,6 +990,7 @@ impl Config {
             || self.radio.adc_dither != new.radio.adc_dither
             || self.radio.adc_pga != new.radio.adc_pga
             || self.info != new.info
+            || self.propagation != new.propagation
             || self.station != new.station
             || self.skimmer != new.skimmer
             || self.report != new.report

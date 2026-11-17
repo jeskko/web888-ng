@@ -42,6 +42,7 @@ import { MapCtl, MapPanel } from "./map.tsx";
 import { LabelsCtl } from "./labels.tsx";
 import { MemCtl } from "./memories.tsx";
 import { InfoCtl, InfoPanel } from "./info.tsx";
+import { PropCtl, PropPanel } from "./prop.tsx";
 import { AfPanel } from "./afspec.tsx";
 import { AudioRecCtl } from "./audiorec.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
@@ -323,6 +324,7 @@ function More({ close }: { close: () => void }) {
         <RttyCtl />
         <ImgCtl />
         <JttyCtl />
+        <PropCtl />
         <InfoCtl />
       </div>
       {spotsOpen.value && <SpotPanel />}
@@ -357,6 +359,7 @@ export function MobileApp({ overlay }: { overlay: ComponentChildren }) {
       {sheet.value === "bands" && <Bands close={close} />}
       {sheet.value === "more" && <More close={close} />}
       <InfoPanel />
+      <PropPanel />
     </div>
   );
 }

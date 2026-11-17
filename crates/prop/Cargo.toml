@@ -1,0 +1,16 @@
+[package]
+name = "web888-prop"
+description = "HF propagation forecasts: VOACAP (the hfcast port) from the receiver to a few regions, with the sunspot number from NOAA, a fixed value or a built-in table"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+# A Rust port of VOACAP (Apache-2.0), from our fork of
+# github.com/jonathanmcsweet/hfcast-engine, pinned to a commit. The
+# coefficient maps are compiled in (they are not in the crates.io
+# package, so this comes from git); see NOTICE-hfcast.md.
+hfcast = { git = "https://github.com/jeskko/hfcast-engine", rev = "bf34e8f9f375e190ed43fcac19f25d800992e0e6", features = ["embedded-coefficients"] }
+serde = { version = "1.0.229", features = ["derive"] }
+serde_json = "1.0.154"

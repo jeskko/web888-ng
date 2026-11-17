@@ -189,6 +189,69 @@
         "description": "",
         "contact": ""
       }
+    },
+    "propagation": {
+      "description": "HF propagation forecasts for listeners (apply at once).",
+      "$ref": "#/$defs/Propagation",
+      "default": {
+        "enabled": true,
+        "engine": "voacap",
+        "ssn": null,
+        "fetch": true,
+        "ssn_url": "https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json",
+        "kp_url": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json",
+        "ca_file": "",
+        "power_w": 100.0,
+        "noise_dbw": -150.0,
+        "bands_mhz": [
+          3.6,
+          5.36,
+          7.1,
+          10.12,
+          14.1,
+          18.1,
+          21.1,
+          24.9,
+          28.2
+        ],
+        "targets": [
+          {
+            "name": "Europe",
+            "lat": 50.0,
+            "lon": 10.0
+          },
+          {
+            "name": "N. America east",
+            "lat": 40.7,
+            "lon": -74.0
+          },
+          {
+            "name": "N. America west",
+            "lat": 37.8,
+            "lon": -122.4
+          },
+          {
+            "name": "S. America",
+            "lat": -23.5,
+            "lon": -46.6
+          },
+          {
+            "name": "Africa",
+            "lat": -26.2,
+            "lon": 28.0
+          },
+          {
+            "name": "Asia",
+            "lat": 35.7,
+            "lon": 139.7
+          },
+          {
+            "name": "Oceania",
+            "lat": -33.9,
+            "lon": 151.2
+          }
+        ]
+      }
     }
   },
   "additionalProperties": false,
@@ -976,6 +1039,166 @@
         }
       },
       "additionalProperties": false
+    },
+    "Propagation": {
+      "description": "HF propagation forecasts (`doc/m2-web-ui.md` §13): VOACAP from a few\nregions to the receiver (at `[station] locator`), per UTC hour and\nband, for the month. Works with no network: the sunspot number is\n`ssn`, else NOAA's prediction when it can be fetched (kept on disk),\nelse a table built into the server.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Forecast (needs `[station] locator`).",
+          "type": "boolean",
+          "default": true
+        },
+        "engine": {
+          "description": "\"voacap\": the month's median; \"truecast\": the same model at the\nday's index (the month's sunspot number with a fitted correction\nfor the day of the year).",
+          "$ref": "#/$defs/PropEngine",
+          "default": "voacap"
+        },
+        "ssn": {
+          "description": "A fixed smoothed sunspot number, instead of NOAA's or the built-in.",
+          "type": [
+            "number",
+            "null"
+          ],
+          "format": "double",
+          "minimum": 0.0,
+          "maximum": 300.0,
+          "default": null
+        },
+        "fetch": {
+          "description": "Fetch NOAA's predicted sunspot numbers (daily) and the planetary\nK index (every 30 minutes). Off: no connections are made.",
+          "type": "boolean",
+          "default": true
+        },
+        "ssn_url": {
+          "description": "Where they come from (NOAA SWPC's JSON, or a copy of it).",
+          "type": "string",
+          "default": "https://services.swpc.noaa.gov/json/solar-cycle/predicted-solar-cycle.json"
+        },
+        "kp_url": {
+          "type": "string",
+          "default": "https://services.swpc.noaa.gov/products/noaa-planetary-k-index.json"
+        },
+        "ca_file": {
+          "description": "CA certificates (PEM) to check the server with; empty: the\nsystem's.",
+          "type": "string",
+          "default": ""
+        },
+        "power_w": {
+          "description": "The transmitter's power (W), with isotropic antennas at both ends.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0.1,
+          "maximum": 1000000.0,
+          "default": 100.0
+        },
+        "noise_dbw": {
+          "description": "Man-made noise at the receiver, at 3 MHz (dBW in 1 Hz): -136\nindustrial, -145 residential, -150 rural, -153 remote.",
+          "type": "number",
+          "format": "double",
+          "minimum": -170.0,
+          "maximum": -120.0,
+          "default": -150.0
+        },
+        "bands_mhz": {
+          "description": "The bands (MHz, 2 to 30, at most 11).",
+          "type": "array",
+          "items": {
+            "type": "number",
+            "format": "double"
+          },
+          "default": [
+            3.6,
+            5.36,
+            7.1,
+            10.12,
+            14.1,
+            18.1,
+            21.1,
+            24.9,
+            28.2
+          ]
+        },
+        "targets": {
+          "description": "The regions, as signals from there to the receiver.",
+          "type": "array",
+          "items": {
+            "$ref": "#/$defs/PropTarget"
+          },
+          "default": [
+            {
+              "name": "Europe",
+              "lat": 50.0,
+              "lon": 10.0
+            },
+            {
+              "name": "N. America east",
+              "lat": 40.7,
+              "lon": -74.0
+            },
+            {
+              "name": "N. America west",
+              "lat": 37.8,
+              "lon": -122.4
+            },
+            {
+              "name": "S. America",
+              "lat": -23.5,
+              "lon": -46.6
+            },
+            {
+              "name": "Africa",
+              "lat": -26.2,
+              "lon": 28.0
+            },
+            {
+              "name": "Asia",
+              "lat": 35.7,
+              "lon": 139.7
+            },
+            {
+              "name": "Oceania",
+              "lat": -33.9,
+              "lon": 151.2
+            }
+          ]
+        }
+      },
+      "additionalProperties": false
+    },
+    "PropEngine": {
+      "type": "string",
+      "enum": [
+        "voacap",
+        "truecast"
+      ]
+    },
+    "PropTarget": {
+      "description": "A region for the forecast.",
+      "type": "object",
+      "properties": {
+        "name": {
+          "type": "string"
+        },
+        "lat": {
+          "type": "number",
+          "format": "double",
+          "minimum": -90.0,
+          "maximum": 90.0
+        },
+        "lon": {
+          "type": "number",
+          "format": "double",
+          "minimum": -180.0,
+          "maximum": 180.0
+        }
+      },
+      "additionalProperties": false,
+      "required": [
+        "name",
+        "lat",
+        "lon"
+      ]
     }
   }
 }

@@ -40,6 +40,7 @@ kill $P
 | `update.mjs` | the Update tab: look for an OS release; `ACT=install` installs it into the other slot, `ACT=reboot` reboots | the OS image with RAUC (the emulator); `ADMIN_PW` |
 | `idle.mjs` | idle limit ends the session, no auto-reconnect | `[limits] idle_minutes = 1` |
 | `access.mjs` | IQ mode and its WAV, the AF spectrum, the info page, the admin's ADC switch, info photo and Ban; `GUEST=1`: two visitors on one open receiver (queue, log in) | `ADMIN_PW` (an admin password); `GUEST=1`: `LISTENER_PW` and `[limits] open_channels = 1` |
+| `prop.mjs` | the propagation panel: all regions now, a mode, one region's day, no sideways scroll; `W`/`H`/`DPR` for a phone | `[station] locator` |
 | `listener.mjs` | palettes, peak hold, time marks, the PNG snapshot, key help, memories (store, recall, export, import), VFO A/B, audio recording, the custom AGC speed; downloads and screenshots in `OUT` | — |
 | `features.mjs` | name, users list, hover preview, tuning step, AM/SAM/SAL/SAR/SAS cycle, CPU/temperature | — (the iq backend on a recording shows AM stations) |
 | `spots.mjs` | spot list, band filter, row click tunes, labels on the scale | `[[skimmer]]` bands with spots (live, or the iq backend on a recording) |

@@ -445,3 +445,56 @@ in and gets a receiver), and the server tests (`blocked_addresses_and_the_daily_
 `guests_get_the_open_receivers_and_the_info_page`,
 `adc_ban_and_the_info_photo`).
 
+
+## 13. HF propagation forecasts (2026-11-17)
+
+**Prop** in the header (or the page with `#propagation`) opens a panel
+with VOACAP forecasts from a few regions to this receiver
+(`crates/prop`, `crates/web/src/prop.rs`, `ui/src/ctl/prop.tsx`).
+
+* **The engine** is [hfcast](https://github.com/jonathanmcsweet/hfcast-engine),
+  a Rust port of VOACAP checked value by value against the Fortran
+  (Apache-2.0; we depend on our fork `jeskko/hfcast-engine`, pinned to
+  a commit, with the coefficient maps compiled in; `NOTICE-hfcast.md`).
+  We evaluated it on 2026-11-17: its own checks pass against a gfortran
+  build of voacapl; of 3,000 random inputs 2,941 matched exactly, 46
+  differed where the Fortran itself changes with its compiler flags,
+  about 12 by one in the last digit, and one (a user-supplied electron
+  density profile, which we never send) panicked. Each engine run is
+  inside `catch_unwind`; a failure is that region's error.
+* **What it computes**: per region, the month's median for each UTC
+  hour: the MUF, and for each band the reliability (the share of days a
+  signal gets through) for three kinds of signal, SSB (48 dB in 1 Hz),
+  CW (27) and FT8 (13), and the median SNR. The transmitter is
+  `power_w` (100 W) with isotropic antennas at both ends; the receiver's
+  man-made noise is `noise_dbw` (-150 dBW at 3 MHz, rural). One engine
+  run per region and mode: 7 regions take 3.8 s on the receiver, in the
+  blocking pool, once when an input changes (the month, the sunspot
+  number, the locator, the settings; with Truecast, the day).
+* **Offline or online**: the smoothed sunspot number is `[propagation]
+  ssn` if set; else NOAA SWPC's predicted solar cycle
+  (`predicted-solar-cycle.json`, fetched daily when `fetch` is on and
+  kept in `[web] state_dir` as `propagation-ssn.json`, so a receiver that
+  loses its network keeps the last table); else the table built into
+  hfcast (to 2030, held at its end after). The planetary K index is
+  fetched every 30 minutes and shown; from Kp 5 the panel warns that the
+  forecast is too optimistic (VOACAP knows only quiet days). With
+  `fetch = false` the server makes no connections for this; the URLs can
+  point at a local copy.
+* **Engines**: `engine = "voacap"` (the month's median, default) or
+  `"truecast"` (hfcast's day-conditioned form: the month's number plus
+  its fitted correction for the day of the year; validated only by its
+  author).
+* **The panel**: *All regions, now*: regions by bands at the current
+  UTC hour, the reliability in each cell (0-100) and the MUF; a region's
+  name opens *the day*: bands by the 24 UTC hours, with the MUF row. The
+  mode buttons switch SSB/CW/FT8. A band's name tunes to it. The
+  receiver's location is `[station] locator` (gpsd's when set).
+* `GET /api/propagation` (a login where `/ws` needs one): `enabled`,
+  `problem` (why there is no forecast), `fetch_errors`, `kp`, and
+  `forecast` (`ssn`, `ssn_source` {kind: config, noaa, builtin}, `modes`,
+  `bands`, `paths` with `muf`, `fot`, `luf[mode]`, `rel[mode][band][hour]`,
+  `snr[band][hour]`).
+
+Checked with `ui/tools/cdp/prop.mjs` on the sim backend at desktop and
+phone sizes, and on the unit.

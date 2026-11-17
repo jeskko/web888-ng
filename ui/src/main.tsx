@@ -40,6 +40,7 @@ import { LabelsCtl } from "./ctl/labels.tsx";
 import { MemCtl, memOpen, VfoCtl } from "./ctl/memories.tsx";
 import { helpOpen, KeyHelp } from "./ctl/keys.tsx";
 import { InfoCtl, InfoPanel } from "./ctl/info.tsx";
+import { PropCtl, PropPanel } from "./ctl/prop.tsx";
 import { AfPanel } from "./ctl/afspec.tsx";
 import { isMobile } from "./mobile.ts";
 import { stepTo } from "./fmt.ts";
@@ -178,6 +179,7 @@ function App() {
           <AudioRecCtl />
           <IqRecCtl />
           <LabelsCtl />
+          <PropCtl />
           <InfoCtl />
         </div>
       </header>
@@ -213,6 +215,7 @@ function App() {
       </footer>
       <KeyHelp />
       <InfoPanel />
+      <PropPanel />
     </>
   );
 }
