@@ -4,7 +4,7 @@
 // install (ACT=install: it really installs into the other root slot) or
 // reboot (ACT=reboot); prints the cards and saves update.png in OUT.
 //   CHROME=... ADMIN_PW=... [ACT=check|install|reboot] node update.mjs URL
-import { launch, q, sleep } from "./lib.mjs";
+import { launch, q, sleep, lit } from "./lib.mjs";
 const url = process.argv[2];
 const out = process.env.OUT ?? ".";
 const pw = process.env.ADMIN_PW;
@@ -29,7 +29,7 @@ const click = async (text) =>
   console.log(
     `${text}:`,
     await p.ev(
-      `(() => { const b = [...document.querySelectorAll('.card button, .card a')].find(b => b.textContent.startsWith(${JSON.stringify(text)})); if (!b) return false; b.click(); return true; })()`,
+      `(() => { const b = [...document.querySelectorAll('.card button, .card a')].find(b => b.textContent.startsWith(${lit(text)})); if (!b) return false; b.click(); return true; })()`,
     ),
   );
 await click("Look for");

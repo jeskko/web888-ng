@@ -5,14 +5,14 @@
 // phone layout. Screenshots admin-*.png in OUT (default .).
 // It saves limits.per_ip = PER_IP (default 6) to the server's config file.
 //   CHROME=... ADMIN_PW=... node admin.mjs URL
-import { launch, q, sleep } from "./lib.mjs";
+import { launch, q, sleep, lit } from "./lib.mjs";
 const url = process.argv[2];
 const out = process.env.OUT ?? ".";
 const pw = process.env.ADMIN_PW;
 if (!pw) throw new Error("set ADMIN_PW");
 const perIp = process.env.PER_IP ?? "6";
 const field = (name) =>
-  `[...document.querySelectorAll('.field')].find(f => f.querySelector('.name').title === ${JSON.stringify(name)}).querySelector('input')`;
+  `[...document.querySelectorAll('.field')].find(f => f.querySelector('.name').title === ${lit(name)}).querySelector('input')`;
 const savebar = () => p.ev("document.querySelector('.savebar').textContent");
 const p = await launch({ width: 1300, height: 900 });
 await p.goto(url + "#/admin");
@@ -20,7 +20,7 @@ await sleep(1500);
 await p.type(q(".admin-login input"), pw);
 await p.ev("document.querySelector('.admin-login button').click()");
 await sleep(1500);
-await p.ev(`(() => { const f = document.createElement("iframe"); f.src = ${JSON.stringify(url)};
+await p.ev(`(() => { const f = document.createElement("iframe"); f.src = ${lit(url)};
   f.style.cssText = "position:fixed;width:400px;height:300px;right:0;bottom:0;opacity:0;pointer-events:none";
   document.body.appendChild(f); })()`);
 await sleep(5000);

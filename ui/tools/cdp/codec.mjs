@@ -4,7 +4,7 @@
 // bar's codec and rates and the player's underruns at each step, and
 // saves codec.png in OUT (default .).
 //   CHROME=... node codec.mjs URL
-import { decoder, launch, sleep } from "./lib.mjs";
+import { decoder, launch, sleep, lit } from "./lib.mjs";
 const url = process.argv[2];
 const out = process.env.OUT ?? ".";
 const p = await launch({ autoplay: true });
@@ -26,7 +26,7 @@ const choose = async (label) => {
     await p.ev(`document.querySelector('.drop-codec .drop-btn').click()`);
     await sleep(100);
   }
-  await p.ev(`[...document.querySelectorAll(${JSON.stringify(label === "Saver" ? "button" : ".drop-codec .drop-pop button")})].find((b) => b.textContent.startsWith(${JSON.stringify(label)})).click()`);
+  await p.ev(`[...document.querySelectorAll(${lit(label === "Saver" ? "button" : ".drop-codec .drop-pop button")})].find((b) => b.textContent.startsWith(${lit(label)})).click()`);
 };
 await status("start");
 await p.shot(`${out}/codec.png`);

@@ -2,7 +2,7 @@
 // JTTY decoding in the page: start audio, turn JTTY on, pick a dial from
 // its list, wait, print the decoded rows; saves jtty.png in OUT.
 //   CHROME=... node jtty.mjs URL [DIAL_HZ] [SECONDS]
-import { launch, q, sleep, decoder } from "./lib.mjs";
+import { launch, q, sleep, decoder, lit } from "./lib.mjs";
 const [url, dial = "14090000", secs = "70"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -13,7 +13,7 @@ await p.ev(`${q(".start")}?.click()`);
 await sleep(2000);
 await decoder(p, "JTTY");
 await sleep(500);
-await p.ev(`(() => { const s = ${q(".jtty select")}; s.value = ${JSON.stringify(dial)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+await p.ev(`(() => { const s = ${q(".jtty select")}; s.value = ${lit(dial)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 await sleep(Number(secs) * 1000);
 console.log("freq:", await p.ev(`${q(".freq")}.textContent`), "mode:", await p.ev(`${q("header button.on")}?.textContent`));
 console.log("status:", await p.ev(`${q(".status")}.textContent`));

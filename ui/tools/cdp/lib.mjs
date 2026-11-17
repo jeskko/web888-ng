@@ -27,6 +27,11 @@ export async function launch({ width = 1400, height = 900, dpr = 1, autoplay = f
   // page that isn't localhost (no secure context: the audio fallback)
   if (process.env.CHROME_ARGS) args.push(...process.env.CHROME_ARGS.split("|"));
   const proc = spawn(chrome, [...args, "about:blank"], { stdio: "ignore" });
+  // however the script ends (an error, a timeout's signal), the browser
+  // goes too: a stray one keeps the DevTools port and the next run
+  // drives its old page
+  process.on("exit", () => proc.kill("SIGKILL"));
+  for (const sig of ["SIGINT", "SIGTERM"]) process.once(sig, () => process.exit(1));
   let list;
   for (let i = 0; i < 50 && !list; i++) {
     try {
@@ -85,8 +90,13 @@ export async function launch({ width = 1400, height = 900, dpr = 1, autoplay = f
   return page;
 }
 
+/** A value as a JS string expression for page code: percent-encoded and
+ * decoded in the page, so no character of it can end the literal (as
+ * JSON.stringify's can: U+2028, "</script>"). */
+export const lit = (s) => `decodeURIComponent("${encodeURIComponent(String(s))}")`;
+
 /** A selector as a JS expression for `type`. */
-export const q = (sel) => `document.querySelector(${JSON.stringify(sel)})`;
+export const q = (sel) => `document.querySelector(${lit(sel)})`;
 
 /** Turns a browser decoder on (or off) from the header's Decoders list,
  * by its label there ("FT8/FT4/WSPR", "CW", "RTTY", "PSK", "JS8", "HFDL",
@@ -94,7 +104,7 @@ export const q = (sel) => `document.querySelector(${JSON.stringify(sel)})`;
 export async function decoder(p, label, on = true) {
   await p.ev(`document.querySelector(".decoders-pop") || document.querySelector("header button.decoders").click()`);
   await sleep(200);
-  await p.ev(`(() => { const c = document.querySelector('.decoders-pop input[data-dec=${JSON.stringify(label)}]'); if (c.checked !== ${on}) c.click(); })()`);
+  await p.ev(`(() => { const c = document.querySelector('.decoders-pop input[data-dec="' + ${lit(label)} + '"]'); if (c.checked !== ${on}) c.click(); })()`);
   await sleep(200);
   await p.ev(`document.querySelector(".decoders-pop") && document.querySelector("header button.decoders").click()`);
 }
@@ -106,7 +116,7 @@ export async function mapShot(p, file) {
   await sleep(2500);
   // one at a time: each change renders the bar again
   for (const n of ["Skimmers", "Browser", "DX spots"]) {
-    await p.ev(`(() => { const l = [...document.querySelectorAll(".map .spots-bar label")].find((x) => x.textContent.trim() === ${JSON.stringify(n)}); const c = l?.querySelector("input"); if (c && c.checked !== ${n === "Browser"}) c.click(); })()`);
+    await p.ev(`(() => { const l = [...document.querySelectorAll(".map .spots-bar label")].find((x) => x.textContent.trim() === ${lit(n)}); const c = l?.querySelector("input"); if (c && c.checked !== ${n === "Browser"}) c.click(); })()`);
     await sleep(300);
   }
   await p.ev(`(() => { const s = [...document.querySelectorAll(".map .spots-bar select")].find((x) => x.title === "Heard in the last"); s.value = "180"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);

@@ -6,7 +6,7 @@
 //   CHROME=... OUT=/tmp/x node listener.mjs URL
 import { readdirSync, statSync, writeFileSync } from "node:fs";
 import { resolve } from "node:path";
-import { launch, q, sleep } from "./lib.mjs";
+import { launch, q, sleep, lit } from "./lib.mjs";
 const [url] = process.argv.slice(2);
 const out = resolve(process.env.OUT ?? ".");
 const p = await launch({ autoplay: true });
@@ -24,7 +24,7 @@ const key = async (k, code = k) => {
   await sleep(300);
 };
 const dial = () => p.ev(`${q(".freq")}?.textContent`);
-const btn = (text) => `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(text)})`;
+const btn = (text) => `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${lit(text)})`;
 let seen = new Set(readdirSync(out));
 const newFiles = async (wait = 3000) => {
   await sleep(wait);

@@ -3,7 +3,7 @@
 // its list (the USB dial, Hz), print the messages every 30 s; saves
 // js8.png in OUT (with MAP=1, the map too: js8-map.png).
 //   CHROME=... node js8.mjs URL [DIAL_HZ] [SECONDS]
-import { launch, q, sleep, decoder, mapShot } from "./lib.mjs";
+import { launch, q, sleep, decoder, mapShot, lit } from "./lib.mjs";
 const [url, dial = "7078000", secs = "120"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -13,7 +13,7 @@ await p.ev(`${q(".start")}?.click()`);
 await sleep(1500);
 await decoder(p, "JS8");
 await sleep(500);
-await p.ev(`(() => { const s = ${q(".js8 select")}; s.value = ${JSON.stringify(dial)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+await p.ev(`(() => { const s = ${q(".js8 select")}; s.value = ${lit(dial)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 const t0 = Date.now();
 while (Date.now() - t0 < Number(secs) * 1000) {
   await sleep(30000);

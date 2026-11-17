@@ -4,7 +4,7 @@
 // FT8/FT4/WSPR panel, Labels and the status bar; prints what it finds and
 // saves 0-main.png ... 6-status.png in OUT.
 //   CHROME=... node phone.mjs URL OUT
-import { launch, sleep } from "./lib.mjs";
+import { launch, sleep, lit } from "./lib.mjs";
 const [url, out] = process.argv.slice(2);
 const p = await launch({ width: 390, height: 844 });
 await p.cdp("Emulation.setDeviceMetricsOverride", { width: 390, height: 844, deviceScaleFactor: 1, mobile: true });
@@ -13,7 +13,7 @@ await p.cdp("Network.enable");
 await p.cdp("Network.setCacheDisabled", { cacheDisabled: true });
 await p.goto(url + "?ui=mobile");
 await sleep(5000);
-const btn = (t) => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${JSON.stringify(t)})`;
+const btn = (t) => `[...document.querySelectorAll('button')].find(b => b.textContent.trim() === ${lit(t)})`;
 const click = async (t) => console.log(`click ${t}:`, await p.ev(`(() => { const b = ${btn(t)}; if (!b) return false; b.click(); return true; })()`));
 const off = (t) => p.ev(`(() => { const b = ${btn(t)}; if (b && b.classList.contains('on')) b.click(); })()`);
 const overflow = () => p.ev("(() => { const b = document.querySelector('.m-sheet-body'); return b ? [b.scrollWidth, b.clientWidth] : null; })()");

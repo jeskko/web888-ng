@@ -4,7 +4,7 @@
 // start a fax by hand (no start tone heard), wait, print the status line
 // and save img.png in OUT.
 //   CHROME=... node img.mjs URL [STATION] [SECONDS] [start]
-import { launch, q, sleep, decoder } from "./lib.mjs";
+import { launch, q, sleep, decoder, lit } from "./lib.mjs";
 const [url, station = "f7880000", secs = "60", start = ""] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -14,7 +14,7 @@ await p.ev(`${q(".start")}?.click()`);
 await sleep(1500);
 await decoder(p, "FAX/SSTV");
 await sleep(500);
-await p.ev(`(() => { const s = ${q(".img select")}; s.value = ${JSON.stringify(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+await p.ev(`(() => { const s = ${q(".img select")}; s.value = ${lit(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 await sleep(3000);
 if (start) await p.ev(`[...document.querySelectorAll('.img-ctl button')].find((b) => b.textContent === 'Fax start').click()`);
 const t0 = Date.now();

@@ -7,11 +7,11 @@
 //   CHROME=... LISTENER_PW=... GUEST=1 OUT=/tmp/x node access.mjs URL
 import { readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { launch, q, sleep } from "./lib.mjs";
+import { launch, q, sleep, lit } from "./lib.mjs";
 const [url] = process.argv.slice(2);
 const out = resolve(process.env.OUT ?? ".");
 const btn = (text, root = "document") =>
-  `[...${root}.querySelectorAll("button")].find((b) => b.textContent.trim() === ${JSON.stringify(text)})`;
+  `[...${root}.querySelectorAll("button")].find((b) => b.textContent.trim() === ${lit(text)})`;
 
 if (process.env.GUEST) {
   const p = await launch({ autoplay: true });

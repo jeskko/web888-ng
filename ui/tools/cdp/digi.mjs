@@ -3,7 +3,7 @@
 // mode and a dial from its list, wait, print the status line and the
 // decoded rows; saves digi.png in OUT.
 //   CHROME=... node digi.mjs URL [MODE] [DIAL_HZ] [SECONDS] [DEEP]
-import { launch, q, sleep, decoder } from "./lib.mjs";
+import { launch, q, sleep, decoder, lit } from "./lib.mjs";
 const [url, mode = "ft8", dial = "7074000", secs = "50", deep = ""] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -13,7 +13,7 @@ await p.ev(`${q(".start")}?.click()`);
 await sleep(2000);
 await decoder(p, "FT8/FT4/WSPR");
 await sleep(500);
-const pick = (sel, v) => p.ev(`(() => { const s = document.querySelectorAll('.digi .spots-bar select')[${sel}]; s.value = ${JSON.stringify(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+const pick = (sel, v) => p.ev(`(() => { const s = document.querySelectorAll('.digi .spots-bar select')[${sel}]; s.value = ${lit(v)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 await pick(0, mode);
 await sleep(300);
 await pick(1, dial);

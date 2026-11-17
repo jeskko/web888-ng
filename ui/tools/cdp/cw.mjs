@@ -3,7 +3,7 @@
 // #f=7018.0&m=usb), start audio, pick a passband button, turn CW on, wait,
 // print the signals' rows; saves cw.png in OUT.
 //   CHROME=... [NEURAL=0|1] [WIDE=0|1] node cw.mjs URL [PASSBAND_LABEL] [SECONDS]
-import { launch, q, sleep, decoder } from "./lib.mjs";
+import { launch, q, sleep, decoder, lit } from "./lib.mjs";
 const [url, bw = "", secs = "60"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ width: Number(process.env.W ?? 1400), height: Number(process.env.H ?? 900), autoplay: true });
@@ -15,7 +15,7 @@ await sleep(1500);
 if (bw) {
   await p.ev(`document.querySelector('.drop-bw .drop-btn')?.click()`);
   await sleep(100);
-  await p.ev(`[...document.querySelectorAll('.drop-bw .drop-pop button')].find((b) => b.textContent === ${JSON.stringify(bw)})?.click()`);
+  await p.ev(`[...document.querySelectorAll('.drop-bw .drop-pop button')].find((b) => b.textContent === ${lit(bw)})?.click()`);
 }
 await sleep(500);
 await decoder(p, "CW");

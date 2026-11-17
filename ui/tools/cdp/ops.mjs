@@ -5,7 +5,7 @@
 // Screenshots ops-*.png in OUT (default .). Restoring writes the server's
 // own settings back to its config file (unchanged).
 //   CHROME=... ADMIN_PW=... OUT=... node ops.mjs URL
-import { launch, q, sleep } from "./lib.mjs";
+import { launch, q, sleep, lit } from "./lib.mjs";
 import { writeFileSync } from "node:fs";
 import { join, resolve } from "node:path";
 const url = process.argv[2];
@@ -25,9 +25,9 @@ await sleep(2000);
 const sources = await p.ev("[...document.querySelectorAll('.logbar nav button')].map(b => b.textContent + (b.disabled ? ' (off)' : '')).join(' | ')");
 console.log("log sources:", sources);
 for (const name of ["web888d", "System (this boot)", "Kernel", "web888-setup.log"]) {
-  const off = await p.ev(`[...document.querySelectorAll('.logbar nav button')].find(b => b.textContent === ${JSON.stringify(name)}).disabled`);
+  const off = await p.ev(`[...document.querySelectorAll('.logbar nav button')].find(b => b.textContent === ${lit(name)}).disabled`);
   if (off) continue;
-  await p.ev(`[...document.querySelectorAll('.logbar nav button')].find(b => b.textContent === ${JSON.stringify(name)}).click()`);
+  await p.ev(`[...document.querySelectorAll('.logbar nav button')].find(b => b.textContent === ${lit(name)}).click()`);
   await sleep(1500);
   const n = await p.ev("document.querySelector('pre.log').textContent.split('\\n').filter(Boolean).length");
   const warn = await p.ev("document.querySelector('.logs > .warn')?.textContent ?? ''");
@@ -46,7 +46,7 @@ console.log(`filter: ${before} lines -> ${after}`);
 await p.ev("location.hash = '#/admin/config'");
 await sleep(2000);
 console.log("cards:", await p.ev("[...document.querySelectorAll('.card h3')].map(h => h.textContent).join(' | ')"));
-const backup = await p.ev(`fetch(${JSON.stringify(url)} + "api/admin/backup").then(async r => ({ status: r.status, disp: r.headers.get('content-disposition'), body: await r.text() }))`);
+const backup = await p.ev(`fetch(${lit(url)} + "api/admin/backup").then(async r => ({ status: r.status, disp: r.headers.get('content-disposition'), body: await r.text() }))`);
 console.log("backup:", backup.status, backup.disp, `${backup.body.length} bytes`);
 const file = join(out, "ops-backup.json");
 writeFileSync(file, backup.body);

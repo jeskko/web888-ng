@@ -4,7 +4,7 @@
 // the panel (status, this minute's seconds, the minutes read) every 30 s;
 // saves timecode.png in OUT.
 //   CHROME=... node timecode.mjs URL [STATION|CARRIER] [SECONDS]
-import { decoder, launch, q, sleep } from "./lib.mjs";
+import { decoder, launch, q, sleep, lit } from "./lib.mjs";
 const [url, station = "DCF77|77500", secs = "300"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
 const p = await launch({ autoplay: true });
@@ -15,7 +15,7 @@ await sleep(1500);
 await decoder(p, "Time");
 await sleep(500);
 if (station !== "-")
-  await p.ev(`(() => { const s = [...document.querySelectorAll('.tc .spots-bar select')][1]; s.value = ${JSON.stringify(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+  await p.ev(`(() => { const s = [...document.querySelectorAll('.tc .spots-bar select')][1]; s.value = ${lit(station)}; s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
 const t0 = Date.now();
 while (Date.now() - t0 < Number(secs) * 1000) {
   await sleep(30000);
