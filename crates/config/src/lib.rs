@@ -514,6 +514,11 @@ pub struct Web {
     /// forwarded address that isn't a trusted proxy itself.
     #[schemars(with = "Vec<String>")]
     pub trusted_proxies: Vec<IpNet>,
+    /// Other web sites whose pages may open listening sessions (`/ws`)
+    /// from their visitors' browsers, as origins ("https://example.org");
+    /// "*": any site. Pages served from this receiver's own address
+    /// always may, and programs (which send no Origin) aren't affected.
+    pub allowed_origins: Vec<String>,
 }
 
 impl Default for Web {
@@ -531,6 +536,7 @@ impl Default for Web {
             metrics: false,
             metrics_allow: Vec::new(),
             trusted_proxies: Vec::new(),
+            allowed_origins: Vec::new(),
         }
     }
 }
@@ -602,6 +608,40 @@ pub struct Auth {
     pub admin_hash: Option<String>,
     /// argon2 hash of the shared listener password; none = open receiver.
     pub listener_hash: Option<String>,
+    /// API tokens for programs (`doc/api.md` §8.3), made in the admin
+    /// page; kept as hashes.
+    pub tokens: Vec<ApiToken>,
+}
+
+/// An API token: a program sends it as `Authorization: Bearer <token>`.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(deny_unknown_fields)]
+pub struct ApiToken {
+    /// Shown in the admin page and the session list (unique).
+    pub name: String,
+    pub scope: TokenScope,
+    /// BLAKE2b-512 of the token, hex.
+    pub hash: String,
+    /// When it was made, and when it stops working (UTC seconds).
+    pub created: u64,
+    #[serde(default, skip_serializing_if = "Option::is_none")]
+    pub expires: Option<u64>,
+    /// The per-address, session, idle and daily limits don't apply to its
+    /// sessions (a recorder).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub unlimited: bool,
+}
+
+/// What a token may do.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize, JsonSchema)]
+#[serde(rename_all = "lowercase")]
+pub enum TokenScope {
+    /// The public JSON (spots, labels, info, propagation), no receiver.
+    Read,
+    /// Also listening sessions (`/ws`), as a listener login.
+    Listen,
+    /// Also the admin API, as an admin login.
+    Admin,
 }
 
 #[derive(Clone, Debug, Default, PartialEq, Serialize, Deserialize, JsonSchema)]

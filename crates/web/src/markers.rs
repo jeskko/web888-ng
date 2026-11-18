@@ -43,7 +43,7 @@ pub fn routes() -> Router<Arc<Shared>> {
 }
 
 fn allowed(sh: &Shared, headers: &HeaderMap) -> bool {
-    admin::may_listen(sh, headers)
+    admin::may_read(sh, headers)
 }
 
 /// The own list's file: `[markers] file`, a relative path next to the

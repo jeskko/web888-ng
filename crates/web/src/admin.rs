@@ -61,6 +61,8 @@ pub struct Entry {
     pub listen: Arc<AtomicU64>,
     pub audio_drops: Arc<AtomicU64>,
     pub wf_drops: Arc<AtomicU64>,
+    /// The API token the session came with (its name).
+    pub token: Option<String>,
 }
 
 #[derive(Default)]
@@ -93,6 +95,11 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/config/validate", post(config_validate))
         .route("/api/admin/schema", get(schema))
         .route("/api/admin/password", post(password))
+        .route("/api/admin/tokens", get(tokens_list).post(token_create))
+        .route(
+            "/api/admin/tokens/{name}",
+            axum::routing::delete(token_delete),
+        )
         .route("/api/admin/stats", get(stats))
         .route("/api/admin/restart", post(restart))
         .route("/api/admin/atten", post(atten))
@@ -125,15 +132,26 @@ fn secure(tls: Option<axum::Extension<IsTls>>) -> bool {
     tls.is_some_and(|t| t.0.0)
 }
 
-/// The request's role under the live configuration.
+/// The request's role under the live configuration: its login cookie,
+/// else its API token.
 pub fn role(sh: &Shared, headers: &HeaderMap) -> Option<Role> {
     let cfg = sh.live.borrow().clone();
-    sh.admin.logins.role(headers, &cfg.auth)
+    sh.admin
+        .logins
+        .role(headers, &cfg.auth)
+        .or_else(|| auth::token(headers, &cfg.auth).map(auth::token_role))
 }
 
-/// Whether the request may listen: an open receiver, a login, or a
-/// visitor on a receiver that leaves channels open (`[limits]
-/// open_channels`).
+/// The API token the request carries (its name and whether the limits
+/// spare it), if it is valid.
+pub fn token(sh: &Shared, headers: &HeaderMap) -> Option<(String, bool)> {
+    let cfg = sh.live.borrow();
+    auth::token(headers, &cfg.auth).map(|t| (t.name.clone(), t.unlimited))
+}
+
+/// Whether the request may listen: an open receiver, a login, a token
+/// that may listen, or a visitor on a receiver that leaves channels open
+/// (`[limits] open_channels`).
 pub fn may_listen(sh: &Shared, headers: &HeaderMap) -> bool {
     {
         let c = sh.live.borrow();
@@ -141,7 +159,13 @@ pub fn may_listen(sh: &Shared, headers: &HeaderMap) -> bool {
             return true;
         }
     }
-    role(sh, headers).is_some()
+    role(sh, headers).is_some_and(|r| r >= Role::Listener)
+}
+
+/// Whether the request may read the public JSON: who may listen, and
+/// `read` tokens.
+pub fn may_read(sh: &Shared, headers: &HeaderMap) -> bool {
+    may_listen(sh, headers) || role(sh, headers).is_some()
 }
 
 /// Extractor: the request is from a logged-in admin.
@@ -293,6 +317,7 @@ async fn sessions(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
                 "listen": (listen != 0).then_some(listen),
                 "audio_drops": e.audio_drops.load(Ordering::Relaxed),
                 "wf_drops": e.wf_drops.load(Ordering::Relaxed),
+                "token": e.token,
             })
         })
         .collect();
@@ -378,7 +403,9 @@ pub fn config_schema() -> Value {
         p.shift_remove("auth");
     }
     if let Some(d) = v.get_mut("$defs").and_then(Value::as_object_mut) {
-        d.shift_remove("Auth");
+        for k in ["Auth", "ApiToken", "TokenScope"] {
+            d.shift_remove(k);
+        }
     }
     v
 }
@@ -546,6 +573,12 @@ async fn password(
     tls: Option<axum::Extension<IsTls>>,
     Json(req): Json<PasswordReq>,
 ) -> Response {
+    if req.role == Role::Reader {
+        return error(
+            StatusCode::BAD_REQUEST,
+            "roles with passwords: admin, listener",
+        );
+    }
     let pw = match (req.role, req.password) {
         (Role::Admin, None) => {
             return error(
@@ -582,6 +615,7 @@ async fn password(
     match req.role {
         Role::Admin => c.auth.admin_hash = hash.clone(),
         Role::Listener => c.auth.listener_hash = hash.clone(),
+        Role::Reader => unreachable!("refused above"),
     }
     if let Err(r) = save(&sh, &c) {
         return r.into_response();
@@ -597,6 +631,118 @@ async fn password(
             Json(json!({})),
         )
             .into_response();
+    }
+    Json(json!({})).into_response()
+}
+
+/// Longest token name, in characters.
+pub const TOKEN_NAME_MAX: usize = 32;
+/// Most tokens a receiver keeps.
+pub const TOKENS_MAX: usize = 50;
+
+fn token_json(t: &web888_config::ApiToken) -> Value {
+    json!({
+        "name": t.name,
+        "scope": t.scope,
+        "created": t.created,
+        "expires": t.expires,
+        "unlimited": t.unlimited,
+    })
+}
+
+/// The API tokens (without their hashes).
+async fn tokens_list(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Response {
+    match file_config(&sh) {
+        Ok(c) => {
+            Json(json!({ "tokens": c.auth.tokens.iter().map(token_json).collect::<Vec<_>>() }))
+                .into_response()
+        }
+        Err(r) => r.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct TokenReq {
+    name: String,
+    scope: web888_config::TokenScope,
+    /// Days until it stops working (none: never).
+    #[serde(default)]
+    expires_days: Option<u32>,
+    #[serde(default)]
+    unlimited: bool,
+}
+
+/// A new API token: the token itself is in this answer only.
+async fn token_create(
+    _: AdminOnly,
+    State(sh): State<Arc<Shared>>,
+    Json(req): Json<TokenReq>,
+) -> Response {
+    let name = req.name.trim().to_string();
+    if name.is_empty()
+        || name.chars().count() > TOKEN_NAME_MAX
+        || name.chars().any(|c| c.is_control())
+    {
+        return error(
+            StatusCode::BAD_REQUEST,
+            format!("a name of 1 to {TOKEN_NAME_MAX} characters"),
+        );
+    }
+    if req.expires_days == Some(0) {
+        return error(StatusCode::BAD_REQUEST, "expires_days: at least 1");
+    }
+    let mut c = match file_config(&sh) {
+        Ok(c) => c,
+        Err(r) => return r.into_response(),
+    };
+    if c.auth.tokens.iter().any(|t| t.name == name) {
+        return error(StatusCode::CONFLICT, format!("a token named {name} exists"));
+    }
+    if c.auth.tokens.len() >= TOKENS_MAX {
+        return error(StatusCode::CONFLICT, format!("at most {TOKENS_MAX} tokens"));
+    }
+    let now = unix(SystemTime::now()) as u64;
+    let secret = auth::new_token();
+    let t = web888_config::ApiToken {
+        name,
+        scope: req.scope,
+        hash: auth::token_hash(&secret),
+        created: now,
+        expires: req.expires_days.map(|d| now + u64::from(d) * 86_400),
+        unlimited: req.unlimited,
+    };
+    let mut out = token_json(&t);
+    out["token"] = json!(secret);
+    c.auth.tokens.push(t);
+    if let Err(r) = save(&sh, &c) {
+        return r.into_response();
+    }
+    Json(out).into_response()
+}
+
+/// Revoke a token: its sessions end too.
+async fn token_delete(
+    _: AdminOnly,
+    State(sh): State<Arc<Shared>>,
+    Path(name): Path<String>,
+) -> Response {
+    let mut c = match file_config(&sh) {
+        Ok(c) => c,
+        Err(r) => return r.into_response(),
+    };
+    let n = c.auth.tokens.len();
+    c.auth.tokens.retain(|t| t.name != name);
+    if c.auth.tokens.len() == n {
+        return error(StatusCode::NOT_FOUND, format!("no token named {name}"));
+    }
+    if let Err(r) = save(&sh, &c) {
+        return r.into_response();
+    }
+    for e in sh.admin.sessions.lock().unwrap().values() {
+        if e.token.as_deref() == Some(name.as_str()) {
+            e.kick.notify_one();
+        }
     }
     Json(json!({})).into_response()
 }

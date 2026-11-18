@@ -88,7 +88,7 @@ fn find_photo(sh: &Shared) -> Option<(PathBuf, &'static str)> {
 }
 
 async fn info(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
-    if !admin::may_listen(&sh, &headers) {
+    if !admin::may_read(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
     let c = sh.live.borrow().clone();
@@ -175,7 +175,7 @@ fn privacy(c: &web888_config::Config) -> serde_json::Value {
 }
 
 async fn photo(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
-    if !admin::may_listen(&sh, &headers) {
+    if !admin::may_read(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
     let Some((path, ct)) = find_photo(&sh) else {

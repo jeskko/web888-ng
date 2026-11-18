@@ -1,13 +1,13 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// WebSocket protocol v2, mirroring crates/web/src/proto.rs
-// (doc/m2-web-ui.md §4; M3 additions in doc/m3-multi-user.md §8; spots
-// in doc/m4-skimmers.md §5).
+// WebSocket protocol v3, mirroring crates/web/src/proto.rs (the
+// reference for programs: doc/api.md; history in doc/m2-web-ui.md §4,
+// doc/m3-multi-user.md §8, doc/m4-skimmers.md §5).
 // Fixtures shared with the Rust tests: crates/web/tests/proto/.
 
 import { mulawDecode } from "./audio/codec.ts";
 import { unpackWf } from "./wfpack.ts";
 
-export const PROTO = 2;
+export const PROTO = 3;
 
 /** "iq": Kiwi protocol clients only (not offered in the UI). "nbfm":
  * narrow-band FM (VHF voice). */
@@ -187,6 +187,8 @@ export type ServerMsg =
       spots?: boolean;
       /** Wide IQ can be asked for (a channelizer's bins). */
       wide?: boolean;
+      /** What the server can do (protocol 3; `doc/api.md` §8.1). */
+      features?: string[];
     }
   | ({ type: "state" } & State)
   | { type: "lease"; granted: boolean; position: number }

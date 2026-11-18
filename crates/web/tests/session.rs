@@ -144,7 +144,7 @@ async fn session_streams_audio_and_waterfall() {
 
     let hello = json(&ws.next().await.unwrap().unwrap()).unwrap();
     let ServerMsg::Hello {
-        proto: 2,
+        proto: proto::PROTO,
         audio_rate,
         radio,
         ..
@@ -927,5 +927,106 @@ async fn guests_get_the_open_receivers_and_the_info_page() {
         keep.push(ws);
     }
     assert_eq!(lease, [true, false]);
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}
+
+/// Protocol 3 (`doc/api.md` §8): features in hello and `/api/version`,
+/// request ids echoed in the replies, an unsupported version turned
+/// away with close 4004; a version 2 client is still served.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn protocol_3_ids_features_and_versions() {
+    let (addr, stop) = start().await;
+    let v = get(addr, "/api/version").await;
+    assert!(v.starts_with("HTTP/1.1 200"), "{v}");
+    let body: serde_json::Value =
+        serde_json::from_str(v.split("\r\n\r\n").nth(1).unwrap()).unwrap();
+    assert_eq!(body["proto"], proto::PROTO);
+    assert_eq!(body["proto_min"], 2);
+    assert!(body["features"].as_array().unwrap().contains(&"ids".into()));
+
+    let url = format!("ws://{addr}/ws");
+    let (mut ws, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    let Some(ServerMsg::Hello {
+        proto: p, features, ..
+    }) = json(&ws.next().await.unwrap().unwrap())
+    else {
+        panic!("no hello")
+    };
+    assert_eq!(p, 3);
+    assert!(features.iter().any(|f| f == "ids") && features.iter().any(|f| f == "opus"));
+
+    // the raw JSON of the next text message carrying an id
+    async fn reply<S, E>(ws: &mut S) -> serde_json::Value
+    where
+        S: futures_util::Stream<Item = std::result::Result<Message, E>> + Unpin,
+        E: std::fmt::Debug,
+    {
+        loop {
+            let m = tokio::time::timeout(Duration::from_secs(10), ws.next())
+                .await
+                .expect("a reply")
+                .unwrap()
+                .unwrap();
+            if let Message::Text(t) = m {
+                let v: serde_json::Value = serde_json::from_str(&t).unwrap();
+                if v.get("id").is_some() {
+                    return v;
+                }
+            }
+        }
+    }
+    ws.send(Message::Text(
+        r#"{"type":"hello","proto":3,"id":"h"}"#.into(),
+    ))
+    .await
+    .unwrap();
+    ws.send(Message::Text(
+        r#"{"type":"tune","hz":7074000,"id":"t1"}"#.into(),
+    ))
+    .await
+    .unwrap();
+    let r = reply(&mut ws).await;
+    assert_eq!(
+        (r["type"].as_str(), r["id"].as_str()),
+        (Some("state"), Some("t1"))
+    );
+    assert_eq!(r["hz"], 7_074_000.0);
+    ws.send(Message::Text(r#"{"type":"tune","hz":"x","id":42}"#.into()))
+        .await
+        .unwrap();
+    let r = reply(&mut ws).await;
+    assert_eq!(
+        (r["type"].as_str(), r["id"].as_i64()),
+        (Some("error"), Some(42))
+    );
+
+    // version 2 is served; version 1 is not
+    let (mut old, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    old.send(Message::Text(r#"{"type":"hello","proto":2}"#.into()))
+        .await
+        .unwrap();
+    old.send(Message::Text(r#"{"type":"ping","t":5,"id":"p"}"#.into()))
+        .await
+        .unwrap();
+    assert_eq!(reply(&mut old).await["type"], "pong");
+    let (mut bad, _) = tokio_tungstenite::connect_async(&url).await.unwrap();
+    bad.send(Message::Text(
+        r#"{"type":"hello","proto":1,"id":"v"}"#.into(),
+    ))
+    .await
+    .unwrap();
+    let r = reply(&mut bad).await;
+    assert_eq!(r["type"], "error");
+    let close = loop {
+        match tokio::time::timeout(Duration::from_secs(10), bad.next())
+            .await
+            .unwrap()
+        {
+            Some(Ok(Message::Close(c))) => break c,
+            Some(Ok(_)) => continue,
+            other => panic!("no close frame: {other:?}"),
+        }
+    };
+    assert_eq!(u16::from(close.unwrap().code), 4004);
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }

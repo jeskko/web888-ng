@@ -1,9 +1,9 @@
 # web888d API for external applications
 
-Status: **draft for review** (2026-11-19). Sections 2-7 describe what
-web888d does today (WebSocket protocol 2, server 0.16.0); everything
-marked **Proposed** is not built yet. When the proposals are settled
-this becomes the reference, and the protocol becomes version 3.
+Status: **draft, being built** (2026-11-19). Sections 2-7 describe what
+web888d does; §8 says which proposals are built (**Built**) and which
+are not yet (**Proposed**). Protocol version 3 is served from server
+0.17.0; version 2 clients are still served.
 
 ## 1. Why
 
@@ -83,9 +83,8 @@ sequenceDiagram
 
 * The server speaks first: `hello`, the session's `state` (defaults:
   the receiver's default frequency and mode), then `lease`.
-* The client's `hello` names the protocol it speaks; a different
-  number gets an `error` (today the session goes on regardless;
-  **proposed**: close with 4004, §8).
+* The client's `hello` names the protocol it speaks (2 or 3); another
+  number gets an `error` and close 4004.
 * **Receivers are leased.** A session gets an RX channel when one is
   free; otherwise it waits in a queue (`lease {granted: false,
   position: n}`, 1 = next) and can meanwhile listen along with another
@@ -226,14 +225,16 @@ that wouldn't shrink is sent unpacked.
 
 | code | why |
 |---|---|
-| 1008 | kicked by the admin |
+| 1008 | kicked by the admin, or its API token revoked |
+| 1013 | refused at admission (after `busy`) |
 | 4001 | session time limit |
 | 4002 | idle limit |
 | 4003 | daily minutes used |
-| 4004 | **proposed**: protocol version not supported |
+| 4004 | protocol version not supported |
 
-HTTP 401 `login required` before the upgrade: a listener password is
-set and the request has no login.
+Before the upgrade: HTTP 401 `login required` when a listener password
+is set and the request has no login or token that may listen; HTTP 403
+`origin not allowed` for a page from another site (§8.4).
 
 ### 6.4 Wide IQ (`kind` 3)
 
@@ -295,15 +296,16 @@ overload log, update status) can be promoted to stable on request.
 
 ## 8. Proposed for version 3
 
-### 8.1 Versioning and compatibility
+### 8.1 Versioning and compatibility (**built**, except the stable and experimental marks)
 
-* `proto` becomes 3. The server accepts 2 and 3 for at least two
-  releases after 3 ships, so the page and programs needn't change at
-  once.
-* `hello` (server) gains `features`: a list of names for what this
-  server can do (`spots`, `wide`, `opus`, `listen`, `wfpack`, ...),
-  replacing the separate booleans over time. A client checks a feature
-  before using it, not the version number.
+* `proto` is 3. The server accepts 2 and 3 for at least two releases
+  after 3 ships, so the page and programs needn't change at once.
+* `hello` (server) has `features`: names for what this server can do.
+  Now: `ids`, `listen`, `share`, `name`, `wfpack`, `agc-custom`,
+  `notch`, `squelch`, the codecs (`pcm16`, `mulaw`, `opus`),
+  `audio-rates` (more than one), `spots` (skimmers run), `wide` (wide
+  IQ). They replace the separate booleans over time. A client checks a
+  feature before using it, not the version number.
 * **Additions don't change the version**: new optional fields, new
   message types, new binary kinds and flags, new features. Clients
   must ignore what they don't know (§3). **Changes and removals do**,
@@ -316,46 +318,57 @@ overload log, update status) can be promoted to stable on request.
 * A client `hello` with an unsupported `proto` gets `error` and close
   4004, instead of a session that goes on misunderstanding each other.
 
-### 8.2 Request ids
+### 8.2 Request ids (**built**)
 
-A client may put `id` (a string) in any message; the server copies it
-into the `state` or `error` that answers it. Without it, a program
+A client may put `id` (a number, or a string of at most 64 characters)
+in any message; the server copies it into every message that answers
+it (`state`, `error`, `pong`, `spots`, ...), also into the `error` for
+a message it couldn't parse. Without it, a program
 can't tell which of several requests an `error` was about.
 
-### 8.3 Tokens
+### 8.3 Tokens (**built**; the admin page's part proposed)
 
 A browser login is awkward for programs (a password in a script, a
-cookie jar, 12 h expiry). Proposed:
+cookie jar, 12 h expiry), so:
 
-* The admin creates **API tokens** in the admin page: a name, a scope
-  and an optional expiry. The token (random 256 bit, shown once) is
-  kept server side as a hash.
-* Scopes: `listen` (`/ws` and the public JSON), `spots` (only
-  `/api/spots` and `spots` over `/ws`, no receiver), `admin` (the admin
-  API).
+* The admin creates **API tokens**: a name, a scope, an optional
+  expiry. The token (`w888_` and 64 hex digits, random 256 bit) is in
+  the answer only; the config keeps its BLAKE2b hash (`[[auth.tokens]]`).
+  * `GET /api/admin/tokens`: the list (no secrets);
+  * `POST /api/admin/tokens {name, scope, expires_days?, unlimited?}`:
+    a new one, `{name, scope, created, expires, unlimited, token}`;
+  * `DELETE /api/admin/tokens/<name>`: revoked; its sessions end.
+* Scopes: `read` (the public JSON, §7.1: spots, labels, info,
+  propagation; no receiver), `listen` (also `/ws`, as a listener
+  login), `admin` (also the admin API, as an admin login).
 * Sent as `Authorization: Bearer <token>` on HTTP and on the WebSocket
   upgrade (programs can set the header; browsers can't, so the page
   keeps the cookie).
-* A token session is an ordinary listener for the limits: it takes a
-  lease from the same pool, counts against the per-address limit and
-  shows in the admin's session list with the token's name. The admin
-  can give a token its own limits (for example no idle limit for a
-  recorder), and revoke it.
+* A token session is an ordinary listener: it takes a lease from the
+  same pool, counts against the limits and shows in the admin's session
+  list with the token's name (`token`). A token made `unlimited` (a
+  recorder) is spared the per-address, session, idle and daily limits,
+  as an admin is.
+* **Proposed:** a Tokens section in the admin page (until then, the
+  calls above, e.g. with `curl` and the admin's token or cookie).
 * Kiwi and HPSDR stay as they are (Kiwi has its own password; HPSDR is
   for the local network).
 
 ### 8.4 Other changes
 
-* `Origin` check on `/ws` for cookie sessions, as defence in depth:
+* **Built:** `Origin` check on `/ws`, as defence in depth:
   SameSite=Strict already keeps the cookie out of a WebSocket that
   another site opens, but an open receiver (no listener password)
   accepts such sessions today, which lets another site's page use the
-  receiver's channels from its visitors' browsers. Token sessions
-  don't need the check (no browser opens them).
-* `GET /api/openapi.json`: the JSON endpoints as an OpenAPI 3.1
+  receiver's channels from its visitors' browsers. A page's Origin must
+  name this receiver's host (the Host or X-Forwarded-Host name, any
+  port) or be in `[web] allowed_origins` (`"*"`: any). Programs send no
+  Origin and aren't affected. Kiwi's endpoints aren't checked.
+* **Proposed:** `GET /api/openapi.json`: the JSON endpoints as an OpenAPI 3.1
   description, checked against the handlers in CI.
-* `GET /api/version`: server version, protocol versions and features,
-  without a login (for a client to say "this receiver is too old").
+* **Built:** `GET /api/version`, without a login (for a client to say
+  "this receiver is too old"): `{server, version, proto, proto_min,
+  features}`.
 
 ## 9. Reference client and adapters (proposed)
 
@@ -390,11 +403,10 @@ cookie jar, 12 h expiry). Proposed:
 
 ## 11. Open questions
 
-1. Token scopes: are `listen`, `spots`, `admin` enough, or should
-   `admin` be split (read-only status vs changes)?
-2. Should a token session be able to keep a receiver without any idle
-   limit (recorders, wsprdaemon-like use), or always within an
-   admin-set maximum?
+1. Token scopes: `read`, `listen`, `admin` are built; should `admin`
+   be split (read-only status vs changes)?
+2. Settled for now: an `unlimited` token skips the limits entirely; an
+   admin-set maximum per token could come later.
 3. The rigctld adapter: a separate program (any machine, many
    receivers) or built into web888d (one port per receiver, nothing to
    install)?

@@ -87,7 +87,7 @@ pub fn routes() -> Router<Arc<Shared>> {
 }
 
 async fn forecast(State(sh): State<Arc<Shared>>, headers: HeaderMap) -> Response {
-    if !admin::may_listen(&sh, &headers) {
+    if !admin::may_read(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
     let c = sh.live.borrow().propagation.clone();

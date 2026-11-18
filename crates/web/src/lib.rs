@@ -67,6 +67,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
     Router::new()
         .route("/ws", get(ws))
         .route("/api/status", get(status))
+        .route("/api/version", get(version))
         .route("/api/spots", get(spots))
         .merge(admin::routes())
         .merge(markers::routes())
@@ -177,12 +178,67 @@ async fn ws(
     headers: HeaderMap,
 ) -> Response {
     let role = admin::role(&sh, &headers);
+    if !origin_ok(&headers, &sh.live.borrow().web.allowed_origins) {
+        return (StatusCode::FORBIDDEN, "origin not allowed").into_response();
+    }
     if !admin::may_listen(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
+    let token = admin::token(&sh, &headers);
     up.read_buffer_size(WS_READ_BUFFER)
-        .on_upgrade(move |s| session::run(s, sh, peer, role))
+        .on_upgrade(move |s| session::run(s, sh, peer, role, token))
         .into_response()
+}
+
+/// The server's version, the protocol versions it speaks and its
+/// features (`doc/api.md` §8.4); no login, so a client can tell a
+/// receiver too old for it before logging in.
+async fn version(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
+    Json(serde_json::json!({
+        "server": "web888d",
+        "version": env!("CARGO_PKG_VERSION"),
+        "proto": proto::PROTO,
+        "proto_min": proto::PROTO_MIN,
+        "features": sh.features(),
+    }))
+}
+
+/// Whether a WebSocket's Origin may open a session: none (a program),
+/// the receiver's own host (the Host or X-Forwarded-Host name, any port:
+/// a page can't set those headers on a WebSocket), or one of
+/// `[web] allowed_origins`. Without the check any site's page could use
+/// the receiver's channels from its visitors' browsers.
+pub fn origin_ok(h: &HeaderMap, allowed: &[String]) -> bool {
+    let Some(origin) = h.get(axum::http::header::ORIGIN) else {
+        return true;
+    };
+    let Ok(origin) = origin.to_str() else {
+        return false;
+    };
+    let origin = origin.trim().trim_end_matches('/');
+    if allowed
+        .iter()
+        .any(|a| a == "*" || a.trim_end_matches('/').eq_ignore_ascii_case(origin))
+    {
+        return true;
+    }
+    let Some(ohost) = origin.split_once("://").map(|(_, rest)| host_name(rest)) else {
+        return false; // "null" (a file, a sandbox) and the like
+    };
+    h.get_all(axum::http::header::HOST)
+        .iter()
+        .chain(h.get_all("x-forwarded-host").iter())
+        .filter_map(|v| v.to_str().ok())
+        .flat_map(|v| v.split(','))
+        .any(|v| host_name(v.trim()).eq_ignore_ascii_case(ohost))
+}
+
+/// The host name of "host", "host:port", "[v6]" or "[v6]:port".
+fn host_name(s: &str) -> &str {
+    if let Some(rest) = s.strip_prefix('[') {
+        return rest.split(']').next().unwrap_or(rest);
+    }
+    s.rsplit_once(':').map_or(s, |(h, _)| h)
 }
 
 async fn status(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
@@ -213,7 +269,7 @@ async fn spots(
     headers: HeaderMap,
     axum::extract::Query(q): axum::extract::Query<SpotQuery>,
 ) -> Response {
-    if !admin::may_listen(&sh, &headers) {
+    if !admin::may_read(&sh, &headers) {
         return (StatusCode::UNAUTHORIZED, "login required").into_response();
     }
     let Some(sk) = &sh.skim else {
@@ -298,6 +354,63 @@ mod tests {
             h.append("x-forwarded-for", s.parse().unwrap());
         }
         h
+    }
+
+    #[test]
+    fn origins() {
+        let h = |pairs: &[(&str, &str)]| {
+            let mut h = HeaderMap::new();
+            for (k, v) in pairs {
+                h.append(
+                    axum::http::HeaderName::from_bytes(k.as_bytes()).unwrap(),
+                    v.parse().unwrap(),
+                );
+            }
+            h
+        };
+        let none: Vec<String> = vec![];
+        // programs send no Origin
+        assert!(origin_ok(&h(&[("host", "rx.example:8073")]), &none));
+        // the receiver's own pages, any port, also behind a proxy
+        assert!(origin_ok(
+            &h(&[
+                ("host", "rx.example:8073"),
+                ("origin", "https://rx.example:8073")
+            ]),
+            &none
+        ));
+        assert!(origin_ok(
+            &h(&[("host", "rx.example"), ("origin", "https://RX.example")]),
+            &none
+        ));
+        assert!(origin_ok(
+            &h(&[
+                ("host", "10.0.0.2:8073"),
+                ("x-forwarded-host", "rx.example"),
+                ("origin", "https://rx.example")
+            ]),
+            &none
+        ));
+        assert!(origin_ok(
+            &h(&[
+                ("host", "[2001:db8::1]:8073"),
+                ("origin", "http://[2001:db8::1]:8073")
+            ]),
+            &none
+        ));
+        // other sites: not unless allowed
+        let other = h(&[("host", "rx.example"), ("origin", "https://evil.example")]);
+        assert!(!origin_ok(&other, &none));
+        assert!(!origin_ok(
+            &h(&[("host", "rx.example"), ("origin", "null")]),
+            &none
+        ));
+        assert!(origin_ok(&other, &["https://evil.example/".to_string()]));
+        assert!(origin_ok(&other, &["*".to_string()]));
+        assert!(!origin_ok(
+            &other,
+            &["https://evil.example:8443".to_string()]
+        ));
     }
 
     #[test]

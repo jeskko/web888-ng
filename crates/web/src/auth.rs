@@ -8,6 +8,11 @@
 //! it was checked against is unchanged, so changing a password logs out
 //! everyone who used the old one.
 //!
+//! Programs use API tokens instead (`doc/api.md` §8.3): random 256-bit
+//! strings sent as `Authorization: Bearer`, kept in the config as
+//! BLAKE2b hashes (a fast hash is enough for a random token; argon2's
+//! second per request would not do).
+//!
 //! Failed logins are limited per client address (they age out; a success
 //! doesn't clear them, or the listener password would reset the count
 //! between admin guesses), and hashes are checked one at a time (argon2 takes about a second on the A9 by design).
@@ -20,7 +25,7 @@ use std::collections::{HashMap, VecDeque};
 use std::net::IpAddr;
 use std::sync::Mutex;
 use std::time::{Duration, Instant};
-use web888_config::Auth;
+use web888_config::{ApiToken, Auth, TokenScope};
 
 pub const COOKIE: &str = "web888d";
 pub const LOGIN_TTL: Duration = Duration::from_secs(12 * 3600);
@@ -36,8 +41,65 @@ const MAX_LOGINS: usize = 1000;
 )]
 #[serde(rename_all = "lowercase")]
 pub enum Role {
+    /// A `read` token: the public JSON only.
+    Reader,
     Listener,
     Admin,
+}
+
+/// What every API token starts with (secret scanners can spot them).
+pub const TOKEN_PREFIX: &str = "w888_";
+
+/// A new API token.
+pub fn new_token() -> String {
+    let mut b = [0u8; 32];
+    getrandom::fill(&mut b).expect("system random source");
+    let hex: String = b.iter().map(|x| format!("{x:02x}")).collect();
+    format!("{TOKEN_PREFIX}{hex}")
+}
+
+/// The hash a token is kept as.
+pub fn token_hash(token: &str) -> String {
+    use blake2::Digest;
+    blake2::Blake2b512::digest(token.as_bytes())
+        .iter()
+        .map(|x| format!("{x:02x}"))
+        .collect()
+}
+
+/// The request's `Authorization: Bearer` token, if any.
+pub fn bearer(headers: &HeaderMap) -> Option<&str> {
+    let v = headers
+        .get(axum::http::header::AUTHORIZATION)?
+        .to_str()
+        .ok()?;
+    let (scheme, t) = v.trim().split_once(' ')?;
+    scheme.eq_ignore_ascii_case("bearer").then(|| t.trim())
+}
+
+/// The configured token the request carries, if it is valid now.
+pub fn token<'a>(headers: &HeaderMap, auth: &'a Auth) -> Option<&'a ApiToken> {
+    let h = token_hash(bearer(headers)?);
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .map_or(0, |d| d.as_secs());
+    auth.tokens
+        .iter()
+        .find(|t| t.hash.len() == h.len() && constant_eq(t.hash.as_bytes(), h.as_bytes()))
+        .filter(|t| t.expires.is_none_or(|e| now < e))
+}
+
+/// The role a token gives.
+pub fn token_role(t: &ApiToken) -> Role {
+    match t.scope {
+        TokenScope::Read => Role::Reader,
+        TokenScope::Listen => Role::Listener,
+        TokenScope::Admin => Role::Admin,
+    }
+}
+
+fn constant_eq(a: &[u8], b: &[u8]) -> bool {
+    a.len() == b.len() && a.iter().zip(b).fold(0u8, |acc, (x, y)| acc | (x ^ y)) == 0
 }
 
 /// An argon2id PHC string for `password` (random salt).
@@ -130,6 +192,7 @@ impl Logins {
         let current = match l.role {
             Role::Admin => auth.admin_hash.as_ref(),
             Role::Listener => auth.listener_hash.as_ref(),
+            Role::Reader => None, // tokens only, never a login
         };
         (l.expires > Instant::now() && current == Some(&l.hash)).then_some(l.role)
     }
@@ -199,6 +262,7 @@ mod tests {
         let auth = Auth {
             admin_hash: Some(a.clone()),
             listener_hash: Some(l.clone()),
+            tokens: vec![],
         };
         assert_eq!(
             check(&auth, "correct horse", Role::Listener),
@@ -226,6 +290,40 @@ mod tests {
         assert_eq!(logins.role(&h, &changed), None);
         logins.remove(&t);
         assert_eq!(logins.role(&h, &auth), None);
+    }
+
+    #[test]
+    fn tokens_are_checked_by_hash_and_expire() {
+        let t = new_token();
+        assert!(t.starts_with(TOKEN_PREFIX) && t.len() == TOKEN_PREFIX.len() + 64);
+        assert_ne!(t, new_token());
+        let tok = |name: &str, token: &str, expires| ApiToken {
+            name: name.into(),
+            scope: TokenScope::Listen,
+            hash: token_hash(token),
+            created: 0,
+            expires,
+            unlimited: false,
+        };
+        let auth = Auth {
+            tokens: vec![tok("rec", &t, None), tok("old", "w888_old", Some(1))],
+            ..Default::default()
+        };
+        let h = |v: &str| {
+            let mut h = HeaderMap::new();
+            h.insert(axum::http::header::AUTHORIZATION, v.parse().unwrap());
+            h
+        };
+        let got = token(&h(&format!("Bearer {t}")), &auth).unwrap();
+        assert_eq!(
+            (got.name.as_str(), token_role(got)),
+            ("rec", Role::Listener)
+        );
+        assert!(token(&h(&format!("bearer  {t} ")), &auth).is_some());
+        assert!(token(&h("Bearer w888_nope"), &auth).is_none());
+        assert!(token(&h("Bearer w888_old"), &auth).is_none(), "expired");
+        assert!(token(&h(&format!("Basic {t}")), &auth).is_none());
+        assert!(token(&HeaderMap::new(), &auth).is_none());
     }
 
     #[test]

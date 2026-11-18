@@ -1,15 +1,65 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! WebSocket protocol, version 2 (`doc/m2-web-ui.md` §4, with the M3
-//! additions in `doc/m3-multi-user.md` §8: lease, users, share, listen;
-//! M4's spots in `doc/m4-skimmers.md` §5):
+//! WebSocket protocol, version 3 (the reference for programs is
+//! `doc/api.md`; the history in `doc/m2-web-ui.md` §4,
+//! `doc/m3-multi-user.md` §8 and `doc/m4-skimmers.md` §5):
 //! JSON control in text frames, audio and waterfall data in binary frames
-//! (little endian).
+//! (little endian). Version 3 adds `features` to the server's hello and
+//! request ids (`id`, [`parse_client`]); version 2 clients are still
+//! served.
 //! The TypeScript mirror is `ui/src/proto.ts`; `tests/proto/*.json` holds
 //! fixtures both sides check against.
 
 use serde::{Deserialize, Serialize};
 
-pub const PROTO: u32 = 2;
+pub const PROTO: u32 = 3;
+/// The oldest protocol a client may speak.
+pub const PROTO_MIN: u32 = 2;
+
+/// Longest request id (`id`) a client may send, in characters.
+pub const ID_MAX: usize = 64;
+
+/// A client message and its request id: the id (a string of at most
+/// [`ID_MAX`] characters, or a number) goes back in the replies to it.
+/// The id is taken even when the message is bad, so the error can carry
+/// it.
+pub fn parse_client(text: &str) -> (Option<serde_json::Value>, Result<ClientMsg, String>) {
+    let mut v: serde_json::Value = match serde_json::from_str(text) {
+        Ok(v) => v,
+        Err(e) => return (None, Err(format!("bad message: {e}"))),
+    };
+    let id = v.as_object_mut().and_then(|o| o.remove("id"));
+    let id = match id {
+        None => None,
+        Some(serde_json::Value::String(s)) if s.chars().count() <= ID_MAX => {
+            Some(serde_json::Value::String(s))
+        }
+        Some(n @ serde_json::Value::Number(_)) => Some(n),
+        Some(_) => {
+            return (
+                None,
+                Err(format!(
+                    "bad message: id must be a number or a string of at most {ID_MAX} characters"
+                )),
+            );
+        }
+    };
+    let m = serde_json::from_value(v).map_err(|e| format!("bad message: {e}"));
+    (id, m)
+}
+
+/// A server message as JSON text, with the request id it answers.
+pub fn server_text(m: &ServerMsg, id: Option<&serde_json::Value>) -> String {
+    match id {
+        None => serde_json::to_string(m).expect("serialisable"),
+        Some(id) => {
+            let mut v = serde_json::to_value(m).expect("serialisable");
+            if let Some(o) = v.as_object_mut() {
+                o.insert("id".into(), id.clone());
+            }
+            v.to_string()
+        }
+    }
+}
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
 #[serde(rename_all = "lowercase")]
@@ -403,6 +453,10 @@ pub enum ServerMsg {
         /// Wide IQ can be asked for (a channelizer's bins).
         #[serde(default)]
         wide: bool,
+        /// What this server can do (`doc/api.md` §8.1): a client checks
+        /// a feature before using it. Absent from version 2 servers.
+        #[serde(default, skip_serializing_if = "Vec::is_empty")]
+        features: Vec<String>,
     },
     State(State),
     /// The session's receiver: granted, or waiting at `position` (1 =
@@ -575,6 +629,31 @@ mod tests {
             serde_json::to_string(&m).unwrap(),
             r#"{"type":"skimmers","skimmers":[{"mode":"FT8","dial":7074000.0,"lo":7074200.0,"hi":7077000.0,"on":true},{"mode":"WSPR","dial":10138700.0,"lo":10140090.0,"hi":10140310.0,"on":false}]}"#
         );
+    }
+
+    #[test]
+    fn request_ids_come_back() {
+        let (id, m) = parse_client(r#"{"type":"tune","hz":7074000,"id":"a1"}"#);
+        assert_eq!(id, Some(serde_json::json!("a1")));
+        assert_eq!(m, Ok(ClientMsg::Tune { hz: 7_074_000.0 }));
+        let (id, m) = parse_client(r#"{"type":"nope","id":7}"#);
+        assert_eq!(id, Some(serde_json::json!(7)));
+        assert!(m.is_err());
+        // no id, a too long one, one of another type
+        assert_eq!(parse_client(r#"{"type":"ping","t":1}"#).0, None);
+        let long = format!(
+            r#"{{"type":"ping","t":1,"id":"{}"}}"#,
+            "x".repeat(ID_MAX + 1)
+        );
+        assert!(parse_client(&long).1.is_err());
+        assert!(parse_client(r#"{"type":"ping","t":1,"id":{}}"#).1.is_err());
+        assert!(parse_client("not json").1.is_err());
+
+        let pong = ServerMsg::Pong { t: 1.0 };
+        assert_eq!(server_text(&pong, None), r#"{"type":"pong","t":1.0}"#);
+        let v: serde_json::Value =
+            serde_json::from_str(&server_text(&pong, Some(&serde_json::json!("a1")))).unwrap();
+        assert_eq!(v, serde_json::json!({"type": "pong", "t": 1.0, "id": "a1"}));
     }
 
     #[test]

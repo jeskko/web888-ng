@@ -266,6 +266,7 @@ async fn run(mut ws: WebSocket, sh: Arc<Shared>, peer: SocketAddr, ts: u64, camp
             listen: Arc::default(),
             audio_drops,
             wf_drops: Arc::default(),
+            token: None,
         },
     );
 

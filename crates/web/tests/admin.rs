@@ -1125,3 +1125,125 @@ async fn adc_ban_and_the_info_photo() {
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// API tokens (`doc/api.md` §8.3): the admin makes them; programs use
+/// them as `Authorization: Bearer` on HTTP and the WebSocket, within
+/// their scope; a revoked token's sessions end.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn api_tokens() {
+    let path = temp("tokens");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    c.auth.listener_hash = Some(auth::hash("radio"));
+    let (addr, stop) = start(c, path.clone()).await;
+    let admin = http(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password": ADMIN_PW, "admin": true})),
+    )
+    .await
+    .token();
+    let make = |body: Value| http(addr, "POST", "/api/admin/tokens", Some(&admin), Some(body));
+    let rec = make(json!({"name": "recorder", "scope": "listen", "unlimited": true})).await;
+    assert_eq!(rec.status, 200, "{}", rec.body);
+    let rec = rec.json();
+    let listen = rec["token"].as_str().unwrap().to_string();
+    assert!(listen.starts_with(auth::TOKEN_PREFIX));
+    let read = make(json!({"name": "map", "scope": "read", "expires_days": 30}))
+        .await
+        .json()["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    let adm = make(json!({"name": "ops", "scope": "admin"})).await.json()["token"]
+        .as_str()
+        .unwrap()
+        .to_string();
+    // names are unique; bad requests are refused
+    assert_eq!(
+        make(json!({"name": "map", "scope": "read"})).await.status,
+        409
+    );
+    assert_eq!(make(json!({"name": "", "scope": "read"})).await.status, 400);
+    assert_eq!(
+        make(json!({"name": "x", "scope": "root"})).await.status,
+        422
+    );
+    // the list has no secrets; the file keeps hashes only
+    let list = http(addr, "GET", "/api/admin/tokens", Some(&admin), None).await;
+    assert_eq!(list.json()["tokens"].as_array().unwrap().len(), 3);
+    assert!(!list.body.contains(&listen) && !list.body.contains("hash"));
+    let file = std::fs::read_to_string(&path).unwrap();
+    assert!(!file.contains(&listen) && file.contains(&auth::token_hash(&listen)));
+
+    let bearer = |t: &str| format!("Bearer {t}");
+    let get = |p: &'static str, t: String| async move {
+        http_h(addr, "GET", p, None, None, &[("Authorization", &t)])
+            .await
+            .status
+    };
+    // read: the public JSON, not the receiver or the admin API
+    assert_eq!(get("/api/spots", bearer(&read)).await, 200);
+    assert_eq!(get("/api/spots", "Bearer w888_wrong".into()).await, 401);
+    assert!(
+        ws_h(addr, None, &[("authorization", &bearer(&read))])
+            .await
+            .unwrap_err()
+            .contains("401")
+    );
+    assert_eq!(get("/api/admin/sessions", bearer(&read)).await, 401);
+    // listen: a session, shown with the token's name
+    let mut w = ws_h(addr, None, &[("authorization", &bearer(&listen))])
+        .await
+        .unwrap();
+    let Some(ServerMsg::Hello { class, .. }) = next_json(&mut w).await else {
+        panic!("no hello")
+    };
+    assert_eq!(class, "web");
+    assert_eq!(get("/api/admin/sessions", bearer(&listen)).await, 401);
+    // admin: the admin API
+    let s = http_h(
+        addr,
+        "GET",
+        "/api/admin/sessions",
+        None,
+        None,
+        &[("Authorization", &bearer(&adm))],
+    )
+    .await;
+    assert_eq!(s.status, 200);
+    assert_eq!(s.json()["sessions"][0]["token"], "recorder");
+    // revoked: refused, and its session ends
+    let r = http(
+        addr,
+        "DELETE",
+        "/api/admin/tokens/recorder",
+        Some(&admin),
+        None,
+    )
+    .await;
+    assert_eq!(r.status, 200, "{}", r.body);
+    let ended = async { while next_json(&mut w).await.is_some() {} };
+    tokio::time::timeout(Duration::from_secs(10), ended)
+        .await
+        .expect("session ended");
+    assert!(
+        ws_h(addr, None, &[("authorization", &bearer(&listen))])
+            .await
+            .is_err()
+    );
+    let r = http(
+        addr,
+        "DELETE",
+        "/api/admin/tokens/recorder",
+        Some(&admin),
+        None,
+    )
+    .await;
+    assert_eq!(r.status, 404);
+
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+    let _ = std::fs::remove_dir_all(path.parent().unwrap());
+}

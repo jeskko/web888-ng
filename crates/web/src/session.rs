@@ -144,6 +144,8 @@ const SPOTS_FIRST: usize = 1000;
 pub const CLOSE_TIME_LIMIT: u16 = 4001;
 pub const CLOSE_IDLE: u16 = 4002;
 pub const CLOSE_DAILY: u16 = 4003;
+/// The client speaks a protocol version the server doesn't.
+pub const CLOSE_PROTO: u16 = 4004;
 
 /// What the session and idle limits say now.
 #[derive(Debug, PartialEq)]
@@ -280,9 +282,46 @@ impl Shared {
                 bins_max: BINS_MAX,
                 fps_max: FPS_MAX,
             },
-            spots: self.skim.is_some() && self.live.borrow().skimmer.iter().any(|s| s.enabled),
-            wide: self.waterfalls.tap().is_some(),
+            spots: self.spots_on(),
+            wide: self.wide_on(),
+            features: self.features(),
         }
+    }
+
+    /// The server runs skimmers (spots can be asked for).
+    fn spots_on(&self) -> bool {
+        self.skim.is_some() && self.live.borrow().skimmer.iter().any(|s| s.enabled)
+    }
+
+    /// Wide IQ can be asked for.
+    fn wide_on(&self) -> bool {
+        self.waterfalls.tap().is_some()
+    }
+
+    /// What this server can do, for `hello` and `/api/version`
+    /// (`doc/api.md` §8.1).
+    pub fn features(&self) -> Vec<String> {
+        let mut f: Vec<&str> = vec![
+            "ids",
+            "listen",
+            "share",
+            "name",
+            "wfpack",
+            "agc-custom",
+            "notch",
+            "squelch",
+        ];
+        f.extend(crate::codec::Codec::ALL.iter().map(|c| c.name()));
+        if self.audio_rates().len() > 1 {
+            f.push("audio-rates");
+        }
+        if self.spots_on() {
+            f.push("spots");
+        }
+        if self.wide_on() {
+            f.push("wide");
+        }
+        f.into_iter().map(String::from).collect()
     }
 
     /// A new session's waterfall: START_SPAN_HZ around the dial (or the
@@ -508,7 +547,12 @@ fn apply_wf(
 }
 
 async fn send_json(ws: &mut WebSocket, m: &ServerMsg) -> bool {
-    let s = serde_json::to_string(m).expect("serialisable");
+    send_reply(ws, m, None).await
+}
+
+/// A message answering a request with this id (none: not an answer).
+async fn send_reply(ws: &mut WebSocket, m: &ServerMsg, id: Option<&serde_json::Value>) -> bool {
+    let s = proto::server_text(m, id);
     ws.send(Message::Text(s.into())).await.is_ok()
 }
 
@@ -659,14 +703,7 @@ impl Session<'_> {
     fn handle(&mut self, msg: ClientMsg) -> Vec<ServerMsg> {
         let st = |s: &Self| ServerMsg::State(s.st.clone());
         match msg {
-            ClientMsg::Hello { proto, .. } if proto != crate::proto::PROTO => {
-                vec![ServerMsg::Error {
-                    msg: format!(
-                        "protocol {proto} not supported (server: {})",
-                        crate::proto::PROTO
-                    ),
-                }]
-            }
+            // (an unsupported version is turned away in `run`)
             ClientMsg::Hello { .. } => vec![],
             ClientMsg::Ping { t } => vec![ServerMsg::Pong { t }],
             ClientMsg::Tune { hz } => {
@@ -837,15 +874,19 @@ pub async fn run(
     sh: Arc<Shared>,
     peer: std::net::SocketAddr,
     role: Option<crate::auth::Role>,
+    // the API token's name, and whether the limits spare it
+    token: Option<(String, bool)>,
 ) {
+    use crate::auth::Role;
     let class = match role {
-        Some(crate::auth::Role::Admin) => Class::Admin,
-        Some(_) => Class::Web,
+        Some(Role::Admin) => Class::Admin,
+        Some(Role::Listener) => Class::Web,
         // no login: an open receiver, or a guest on one with a password
-        None if sh.live.borrow().auth.listener_hash.is_none() => Class::Web,
-        None => Class::Guest,
+        _ if sh.live.borrow().auth.listener_hash.is_none() => Class::Web,
+        _ => Class::Guest,
     };
-    let mut adm = match Admission::new(&sh, peer.ip(), class == Class::Admin) {
+    let unlimited = class == Class::Admin || token.as_ref().is_some_and(|t| t.1);
+    let mut adm = match Admission::new(&sh, peer.ip(), unlimited) {
         Ok(a) => a,
         Err(why) => {
             let _ = send_json(&mut ws, &ServerMsg::Busy { msg: why.msg() }).await;
@@ -954,6 +995,7 @@ pub async fn run(
             listen: listen_pub.clone(),
             audio_drops: audio_drops.clone(),
             wf_drops: wf_drops.clone(),
+            token: token.map(|t| t.0),
         },
     );
     let mut s = Session {
@@ -992,6 +1034,8 @@ pub async fn run(
     let mut timeouts = std::mem::take(&mut adm.timeouts);
     let mut limit_tick = tokio::time::interval((sh.limit_unit / 4).min(Duration::from_secs(1)));
     loop {
+        // the request the replies answer (its `id`)
+        let mut reply_to = None;
         let replies = tokio::select! {
             m = ws.recv() => {
                 let Some(Ok(m)) = m else { break };
@@ -1000,7 +1044,26 @@ pub async fn run(
                     Message::Close(_) => break,
                     _ => continue,
                 };
-                match serde_json::from_str::<ClientMsg>(&text) {
+                let (id, m) = proto::parse_client(&text);
+                reply_to = id;
+                match m {
+                    Ok(ClientMsg::Hello { proto: p, .. })
+                        if !(proto::PROTO_MIN..=proto::PROTO).contains(&p) =>
+                    {
+                        let msg = format!(
+                            "protocol {p} not supported (server: {}-{})",
+                            proto::PROTO_MIN,
+                            proto::PROTO
+                        );
+                        let _ = send_reply(&mut ws, &ServerMsg::Error { msg }, reply_to.as_ref()).await;
+                        let _ = ws
+                            .send(Message::Close(Some(CloseFrame {
+                                code: CLOSE_PROTO,
+                                reason: Utf8Bytes::from_static("protocol not supported"),
+                            })))
+                            .await;
+                        break;
+                    }
                     Ok(m) => {
                         // the client's own pings aren't activity
                         if !matches!(m, ClientMsg::Ping { .. } | ClientMsg::Hello { .. }) {
@@ -1009,7 +1072,7 @@ pub async fn run(
                         }
                         s.handle(m)
                     }
-                    Err(e) => vec![ServerMsg::Error { msg: format!("bad message: {e}") }],
+                    Err(msg) => vec![ServerMsg::Error { msg }],
                 }
             }
             l = s.lease.changed() => {
@@ -1027,7 +1090,7 @@ pub async fn run(
                 r.push(ServerMsg::State(s.st.clone()));
                 r
             }
-            _ = limit_tick.tick(), if class != Class::Admin => {
+            _ = limit_tick.tick(), if !unlimited => {
                 let l = sh.live.borrow().limits.clone();
                 match timeouts.check(&l, sh.limit_unit, started.elapsed(), last_input.elapsed()) {
                     Some(Timeout::Warn(msg)) => vec![ServerMsg::Error { msg }],
@@ -1110,7 +1173,7 @@ pub async fn run(
             }
         };
         for r in &replies {
-            if !send_json(&mut ws, r).await {
+            if !send_reply(&mut ws, r, reply_to.as_ref()).await {
                 return;
             }
         }
