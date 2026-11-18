@@ -3,6 +3,7 @@
 // any key or a click closes it.
 
 import { signal } from "@preact/signals";
+import { useDialog } from "../a11y.ts";
 import { useEffect } from "preact/hooks";
 import { N_, t } from "../i18n.ts";
 
@@ -10,6 +11,8 @@ export const helpOpen = signal(false);
 
 const KEYS: [string, string][] = [
   ["← →", N_("Step the dial (shift: ×10)")],
+  ["g", N_("Type a frequency (Enter tunes)")],
+  ["Tab", N_("Move between the controls; the labels near the dial follow the header")],
   ["u l c", "USB, LSB, CW"],
   // i18n: SAM, SAL, SAR, SAS = synchronous AM detector (both sidebands, lower, upper, stereo)
   ["a", N_("AM, then SAM, SAL, SAR, SAS in turn")],
@@ -36,6 +39,11 @@ export function KeyHelp() {
   useEffect(() => {
     if (!open) return;
     const close = (e: Event) => {
+      // Tab and the modifiers move about (a screen reader's keys), not close
+      if (e instanceof KeyboardEvent && ["Tab", "Shift", "Control", "Alt", "Meta", "CapsLock"].includes(e.key)) {
+        window.addEventListener("keydown", close, { capture: true, once: true });
+        return;
+      }
       e.preventDefault();
       e.stopPropagation();
       helpOpen.value = false;
@@ -51,6 +59,7 @@ export function KeyHelp() {
       window.removeEventListener("pointerdown", close, { capture: true });
     };
   }, [open]);
+  const box = useDialog(open, () => (helpOpen.value = false));
   if (!open) return null;
   // keys in <kbd>; the pointer's gestures are words, which may wrap
   const rows = (list: [string, string][], keys: boolean) =>
@@ -61,7 +70,7 @@ export function KeyHelp() {
       </tr>
     ));
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label={t("Keys")}>
+    <div ref={box} class="overlay keyhelp" role="dialog" aria-modal="true" aria-label={t("Keys")}>
       <div class="keyhelp-box">
         <h3>{t("Keys")}</h3>
         <table>

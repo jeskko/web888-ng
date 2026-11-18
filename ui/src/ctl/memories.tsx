@@ -6,6 +6,7 @@
 // the dial there. All kept in this browser.
 
 import { signal } from "@preact/signals";
+import { rowAction, usePopFocus } from "../a11y.ts";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
 import { t, tn } from "../i18n.ts";
@@ -77,6 +78,7 @@ function MemList({ close }: { close?: () => void }) {
       >
         <input
           type="text"
+          aria-label={t("Memory name (optional)")}
           placeholder={t("name (optional)")}
           maxLength={MEM_NAME_MAX}
           value={name}
@@ -94,7 +96,7 @@ function MemList({ close }: { close?: () => void }) {
           <table>
             <tbody>
               {list.map((m) => (
-                <tr key={`${m.hz}${m.mode}`} class={m === here ? "pick here" : "pick"} onClick={() => pick(m)} title={t("Tune to {tuning}, passband {lo}..{hi} Hz", { tuning: tuningText(m), lo: m.lo, hi: m.hi })}>
+                <tr key={`${m.hz}${m.mode}`} class={m === here ? "pick here" : "pick"} {...rowAction(() => pick(m))} title={t("Tune to {tuning}, passband {lo}..{hi} Hz", { tuning: tuningText(m), lo: m.lo, hi: m.hi })}>
                   <td class="r">{formatKhz(m.hz)}</td>
                   <td>{m.mode.toUpperCase()}</td>
                   <td class="mem-name">{m.name}</td>
@@ -105,8 +107,7 @@ function MemList({ close }: { close?: () => void }) {
                       onClick={(e) => {
                         e.stopPropagation();
                         deleteMemory(m);
-                      }}
-                    >
+                      }} aria-label={t("Forget this memory")}>
                       ✕
                     </button>
                   </td>
@@ -164,15 +165,16 @@ export function MemCtl({ inline = false }: { inline?: boolean }) {
       document.removeEventListener("keydown", key);
     };
   }, [open]);
+  const pop = usePopFocus(open && !inline);
   if (inline) return <MemList />;
   return (
     <div class="group mem-ctl" ref={box}>
-      <button class={open ? "on" : ""} onClick={() => (memOpen.value = !open)} title={t("Frequency memories (key m)")}>
+      <button class={open ? "on" : ""} aria-expanded={open} aria-haspopup="dialog" onClick={() => (memOpen.value = !open)} title={t("Frequency memories (key m)")}>
         {/* i18n: Mem = short for Memories, stored frequencies */}
         {t("Mem")} {memories.value.length || ""}
       </button>
       {open && (
-        <div class="mem-pop">
+        <div class="mem-pop" ref={pop}>
           <MemList close={() => (memOpen.value = false)} />
         </div>
       )}

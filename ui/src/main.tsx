@@ -12,6 +12,7 @@ import {
   LookCtl,
   DspCtl,
   FreqDisplay,
+  freqEdit,
   LeaseBanner,
   ModeBar,
   SMeter,
@@ -67,6 +68,8 @@ import {
 } from "./state.ts";
 import { AdminApp } from "./admin/admin.tsx";
 import { SafeBanner } from "./ctl/safe.tsx";
+import { NearDial } from "./ctl/neardial.tsx";
+import { announcement, keyIsTaken } from "./a11y.ts";
 import { Pane } from "./view/pane.tsx";
 
 const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm", i: "iq" };
@@ -74,8 +77,7 @@ const KEY_MODES: Record<string, Mode> = { u: "usb", l: "lsb", c: "cw", f: "nbfm"
 function useKeys() {
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      const el = e.target as HTMLElement;
-      if (el.tagName === "INPUT" || el.tagName === "SELECT" || e.ctrlKey || e.metaKey || e.altKey) return;
+      if (keyIsTaken(e)) return;
       const s = st.value;
       if (!s) return;
       const step = stepOf(s.mode) * (e.shiftKey ? 10 : 1);
@@ -86,6 +88,7 @@ function useKeys() {
       else if (e.key === "v") swapVfo();
       else if (e.key === "m") memOpen.value = !memOpen.value;
       else if (e.key === "?") helpOpen.value = true;
+      else if (e.key === "g") freqEdit.value = true;
       else return;
       e.preventDefault();
     };
@@ -108,6 +111,7 @@ function Login() {
       <p>{guest ? t("Log in with the receiver's password for any of its receivers.") : t("This receiver is private.")}</p>
       <input
         type="password"
+        aria-label={t("Password")}
         placeholder={t("Password")}
         autocomplete="current-password"
         autofocus
@@ -122,7 +126,7 @@ function Login() {
           {t("Stay a visitor")}
         </button>
       )}
-      {loginError.value && <p class="warn">{loginError.value}</p>}
+      {loginError.value && <p class="warn" role="alert">{loginError.value}</p>}
     </form>
   );
 }
@@ -131,7 +135,7 @@ function Overlay() {
   if (needLogin.value) return <Login />;
   if (conn.value === "ended") {
     return (
-      <div class="overlay">
+      <div class="overlay" role="alert">
         <p>{t("Session ended: {reason}.", { reason: connNote.value })}</p>
         <button onClick={reconnect}>{t("Reconnect")}</button>
       </div>
@@ -139,7 +143,7 @@ function Overlay() {
   }
   if (conn.value === "busy") {
     return (
-      <div class="overlay">
+      <div class="overlay" role="alert">
         <p>{connNote.value || t("The receiver is in use.")}</p>
         <button onClick={reconnect}>{t("Try again")}</button>
       </div>
@@ -151,7 +155,16 @@ function Overlay() {
       <button class="start" onClick={startAudio}>
         <PlayIcon /> {t("Start audio")}
       </button>
-      {audioError.value && <p class="warn">{audioError.value}</p>}
+      {audioError.value && <p class="warn" role="alert">{audioError.value}</p>}
+    </div>
+  );
+}
+
+/** Where announce() speaks: a polite live region only screen readers hear. */
+function Announcer() {
+  return (
+    <div class="sr-only" aria-live="polite" aria-atomic="true">
+      {announcement.value}
     </div>
   );
 }
@@ -161,6 +174,8 @@ function App() {
   if (isMobile.value) return <MobileApp overlay={<Overlay />} />;
   return (
     <>
+      {/* i18n: a heading only screen readers hear: the page's title */}
+      <h1 class="sr-only">{t("Web-888 receiver")}</h1>
       <header>
         <FreqDisplay />
         <VfoCtl />
@@ -185,6 +200,7 @@ function App() {
       <main>
         <div class="view">
           <Pane />
+          <NearDial />
           <Overlay />
         </div>
         <SpotPanel />
@@ -243,6 +259,7 @@ if (admin) {
     <>
       <SafeBanner />
       <App />
+      <Announcer />
     </>,
     document.getElementById("app")!,
   );

@@ -522,10 +522,10 @@ export function Pane() {
 
   return (
     <div class="pane" ref={boxRef}>
-      <canvas class="spectrum" ref={specRef} />
-      <canvas class="waterfall" ref={wfRef} />
-      <canvas class="wf-ticks" ref={ticksRef} />
-      <div class="pane-error" ref={errRef} />
+      <canvas class="spectrum" ref={specRef} role="img" aria-label={t("Spectrum, frequency scale and labels (the labels near the dial are also listed as text)")} />
+      <canvas class="waterfall" ref={wfRef} role="img" aria-label={t("Waterfall: signal strength over frequency and time")} />
+      <canvas class="wf-ticks" ref={ticksRef} aria-hidden="true" />
+      <div class="pane-error" role="alert" ref={errRef} />
       <div class="ghost" ref={ghostRef} style={{ display: "none" }}>
         <span />
       </div>

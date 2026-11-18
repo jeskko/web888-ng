@@ -152,11 +152,11 @@ export function AfPanel() {
       <div class="spots-bar">
         <strong>{t("Audio spectrum")}</strong>
         <span class="dim num" ref={tip} />
-        <button class="close" onClick={() => setAf(false)} title={t("Close")}>
+        <button class="close" onClick={() => setAf(false)} title={t("Close")} aria-label={t("Close")}>
           ✕
         </button>
       </div>
-      <canvas class="afspec-canvas" ref={ref} />
+      <canvas class="afspec-canvas" ref={ref} role="img" aria-label={t("Audio spectrum and waterfall")} />
       <p class="dim">
         {/* i18n: kS/s = thousand samples per second; passband = the range of audio frequencies the receiver lets through; IQ = complex baseband samples (both sides of the dial) */}
         {t("The audio as it arrives (before this page's volume), ~23 Hz a point at 12 kS/s; the passband shaded. In IQ, both sides of the dial.")}

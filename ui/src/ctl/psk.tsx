@@ -34,12 +34,12 @@ export function PskPanel() {
         <button onClick={clearPsk} title={t("Clear the text")}>
           {t("Clear")}
         </button>
-        <button class="close" onClick={() => setPsk(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setPsk(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {pskError.value && <p class="warn">{pskError.value}</p>}
+        {pskError.value && <p class="warn" role="alert">{pskError.value}</p>}
         {s && !band && <p class="dim">{t("PSK is decoded in USB, LSB and CW.")}</p>}
         {sigs.length === 0 ? (
           <p class="dim">{t("Nothing yet: every PSK31, PSK63 and PSK125 signal in the passband is found (its carrier and rate from the signal) and decoded. A wide passband (USB, 3 kHz) reads several at once.")}</p>

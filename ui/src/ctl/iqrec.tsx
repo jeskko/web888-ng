@@ -5,6 +5,7 @@
 // click.
 
 import { useEffect, useRef, useState } from "preact/hooks";
+import { usePopFocus } from "../a11y.ts";
 import { N_, t } from "../i18n.ts";
 import { iqRec, iqRecDone, iqRecFormat, setIqRecFormat, startIqRec, stopIqRec, wideAvail } from "../state.ts";
 import type { RecFormat } from "../iqrec.ts";
@@ -38,6 +39,7 @@ export function IqRecCtl() {
       document.removeEventListener("keydown", key);
     };
   }, [open]);
+  const pop = usePopFocus(open);
   if (!wideAvail.value) return null;
   const r = iqRec.value;
   if (r) {
@@ -48,7 +50,7 @@ export function IqRecCtl() {
         <button class="iqrec on" onClick={() => stopIqRec()} title={t("Recording the IQ{where}{lost}: click to stop and save", { where, lost })}>
           ● {r.seconds.toFixed(0)} / {r.maxS} s
         </button>
-        <button class="iqrec-x" onClick={() => stopIqRec(false)} title={t("Stop without saving")}>
+        <button class="iqrec-x" onClick={() => stopIqRec(false)} title={t("Stop without saving")} aria-label={t("Stop without saving")}>
           ✕
         </button>
       </div>
@@ -56,12 +58,12 @@ export function IqRecCtl() {
   }
   return (
     <div class="group iqrec-ctl" ref={box}>
-      <button class={`iqrec${open ? " open" : ""}`} onClick={() => setOpen(!open)} title={t("Record the IQ around the dial (60 kHz) to a file")}>
+      <button class={`iqrec${open ? " open" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)} title={t("Record the IQ around the dial (60 kHz) to a file")}>
         {/* i18n: Rec = short for Record; IQ = complex baseband samples (in-phase and quadrature) */}
         {t("Rec IQ")} ▾
       </button>
       {open && (
-        <div class="iqrec-pop">
+        <div class="iqrec-pop" ref={pop}>
           <p class="dim">
             {/* i18n: channelizer bin = one 60 kHz slice of the spectrum that the receiver's channelizer produces; IQ = complex baseband samples */}
             {t(

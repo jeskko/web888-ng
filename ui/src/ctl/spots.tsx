@@ -4,6 +4,7 @@
 // there) and the button that opens it.
 
 import { useSignal } from "@preact/signals";
+import { rowAction } from "../a11y.ts";
 import { formatKhz } from "../fmt.ts";
 import { N_, t } from "../i18n.ts";
 import { choices, filterRows, spotRows, utcTime, type SpotRow, type SpotSource } from "../spots.ts";
@@ -24,7 +25,7 @@ export function SpotsCtl() {
   const what = spotsAvail.value ? (dxAvail.value ? t("Decodes of this receiver's skimmers and live DX spots") : t("Decodes of this receiver's skimmers")) : t("Live DX spots");
   return (
     <div class="group">
-      <button class={open ? "on" : ""} onClick={() => showSpots(!open)} title={what}>
+      <button class={open ? "on" : ""} aria-pressed={!!(open)} onClick={() => showSpots(!open)} title={what}>
         {t("Spots")}
       </button>
     </div>
@@ -50,7 +51,7 @@ export function SpotPanel() {
   const all = spotRows(spots.value, mapDx.value, src);
   const list = filterRows(all, { band: band.value, mode: mode.value, text: text.value });
   const select = (v: typeof band, opts: string[], none: string) => (
-    <select value={v.value} onChange={(e) => (v.value = (e.target as HTMLSelectElement).value)}>
+    <select aria-label={none} value={v.value} onChange={(e) => (v.value = (e.target as HTMLSelectElement).value)}>
       <option value="">{none}</option>
       {opts.map((o) => (
         <option value={o}>{o}</option>
@@ -76,9 +77,9 @@ export function SpotPanel() {
         )}
         {select(band, choices(all, "band"), t("All bands"))}
         {select(mode, choices(all, "mode"), t("All modes"))}
-        <input type="text" placeholder={t("Call or text")} value={text.value} onInput={(e) => (text.value = (e.target as HTMLInputElement).value)} />
+        <input type="text" aria-label={t("Filter by call or text")} placeholder={t("Call or text")} value={text.value} onInput={(e) => (text.value = (e.target as HTMLInputElement).value)} />
         <span class="dim num">{list.length}</span>
-        <button class="close" onClick={() => showSpots(false)} title={t("Close")}>
+        <button class="close" onClick={() => showSpots(false)} title={t("Close")} aria-label={t("Close")}>
           ✕
         </button>
       </div>
@@ -97,7 +98,7 @@ export function SpotPanel() {
             </thead>
             <tbody>
               {list.slice(0, ROWS).map((r) => (
-                <tr class={r.dx ? "dx" : ""} onClick={() => pick(r)} title={rowTitle(r)}>
+                <tr class={r.dx ? "dx" : ""} {...rowAction(() => pick(r))} title={rowTitle(r)}>
                   <td class="dim">{utcTime(r.t)}</td>
                   <td class="r">{formatKhz(r.hz).slice(0, -2)}</td>
                   <td class="r">{r.snr ?? <span class="dx-tag">{r.mode}</span>}</td>

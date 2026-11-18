@@ -20,7 +20,7 @@ export function RttyCtl() {
   return (
     <div class="group">
       <button
-        class={on ? "on" : ""}
+        class={on ? "on" : ""} aria-pressed={!!(on)}
         onClick={() => setRtty(!on)}
         // i18n: FSK = frequency-shift keying (two tones); rate = baud; shift = tone spacing, Hz; framing = start, data, parity and stop bits of each character
         title={t("Decode FSK/RTTY (and NAVTEX) from this receiver's audio, in this browser: rate, shift, framing and character set found from the signal")}
@@ -51,7 +51,7 @@ export function RttyPanel() {
         <span class="dim num">{sigs.filter((x) => x.active && x.locked).length}</span>
         {wideAvail.value && (
           <button
-            class={rttyWide.value ? "on" : ""}
+            class={rttyWide.value ? "on" : ""} aria-pressed={!!(rttyWide.value)}
             onClick={() => setRttyWide(!rttyWide.value)}
             // i18n: Wide = skim a 40 kHz slice of spectrum (a channelizer bin of the receiver's filter bank) instead of the narrow audio passband
             title={t("Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband")}
@@ -63,12 +63,12 @@ export function RttyPanel() {
         <button onClick={clearRtty} title={t("Clear the text")}>
           {t("Clear")}
         </button>
-        <button class="close" onClick={() => setRtty(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setRtty(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {rttyError.value && <p class="warn">{rttyError.value}</p>}
+        {rttyError.value && <p class="warn" role="alert">{rttyError.value}</p>}
         {wideAvail.value && rttyWide.value ? (
           <p class="dim">{wideCentre.value ? t("Skimming {lo}–{hi} kHz", { lo: formatKhz(wideCentre.value - WIDE_HALF).slice(0, -2), hi: formatKhz(wideCentre.value + WIDE_HALF).slice(0, -2) }) : t("Waiting for the wide IQ…")}</p>
         ) : (

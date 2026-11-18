@@ -13,7 +13,7 @@ export function ImgCtl() {
   const on = imgOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setImg(!on)} title={t("Decode HF fax (weather charts) and SSTV pictures from this receiver's audio (USB), in this browser")}>
+      <button class={on ? "on" : ""} aria-pressed={!!(on)} onClick={() => setImg(!on)} title={t("Decode HF fax (weather charts) and SSTV pictures from this receiver's audio (USB), in this browser")}>
         FAX/SSTV
       </button>
     </div>
@@ -41,7 +41,7 @@ function PictureView({ p, cls }: { p: Picture; cls?: string }) {
       d.rows = p.rows;
     }
   }, [p, p.version, p.rows]);
-  return <canvas ref={ref} class={cls ?? "img-pic"} />;
+  return <canvas ref={ref} class={cls ?? "img-pic"} role="img" aria-label={t("Decoded picture")} />;
 }
 
 function save(p: Picture): void {
@@ -98,12 +98,12 @@ export function ImgPanel() {
             <option value={`s${x.hz}`}>{x.name}</option>
           ))}
         </select>
-        <button class="close" onClick={() => setImg(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setImg(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {imgError.value && <p class="warn">{imgError.value}</p>}
+        {imgError.value && <p class="warn" role="alert">{imgError.value}</p>}
         {s && s.mode !== "usb" && <p class="dim">{t("Fax and SSTV are decoded in USB.")}</p>}
         <p class="dim img-status">
           {faxLine}
@@ -115,16 +115,16 @@ export function ImgPanel() {
             {fs?.state === "image" ? t("Fax stop") : t("Fax start")}
           </button>
           <button onClick={() => trimFax(-50, 0)} // i18n: slant = image skew (lines lean) from a sample-rate error between sender and receiver
-            title={t("Fax slant: lines lean left")}>
+            title={t("Fax slant: lines lean left")} aria-label={t("Fax slant: lines lean left")}>
             ⟲
           </button>
-          <button onClick={() => trimFax(50, 0)} title={t("Fax slant: lines lean right")}>
+          <button onClick={() => trimFax(50, 0)} title={t("Fax slant: lines lean right")} aria-label={t("Fax slant: lines lean right")}>
             ⟳
           </button>
-          <button onClick={() => trimFax(0, -0.02)} title={t("Fax: move the image left")}>
+          <button onClick={() => trimFax(0, -0.02)} title={t("Fax: move the image left")} aria-label={t("Fax: move the image left")}>
             ◀
           </button>
-          <button onClick={() => trimFax(0, 0.02)} title={t("Fax: move the image right")}>
+          <button onClick={() => trimFax(0, 0.02)} title={t("Fax: move the image right")} aria-label={t("Fax: move the image right")}>
             ▶
           </button>
           <span class="dim num" title={t("Manual fax slant (ppm) and shift")}>

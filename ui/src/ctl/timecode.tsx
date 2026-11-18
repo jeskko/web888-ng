@@ -51,12 +51,12 @@ export function TcPanel() {
         <button onClick={clearTc} title={t("Clear the minutes")}>
           {t("Clear")}
         </button>
-        <button class="close" onClick={() => setTc(false)} title={t("Stop")}>
+        <button class="close" onClick={() => setTc(false)} title={t("Stop")} aria-label={t("Stop")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {tcError.value && <p class="warn">{tcError.value}</p>}
+        {tcError.value && <p class="warn" role="alert">{tcError.value}</p>}
         {"error" in plan ? (
           plan.error && <p class="dim">{plan.error}</p>
         ) : (

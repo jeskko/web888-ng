@@ -106,6 +106,7 @@ function Login({ auth, onDone }: { auth: Auth; onDone(): void }) {
       <h2>{t("web888d admin")}</h2>
       <input
         type="password"
+        aria-label={t("Admin password")}
         placeholder={t("Admin password")}
         autocomplete="current-password"
         autofocus
@@ -337,6 +338,7 @@ function AttenCtl({ set, cfg }: { set: number; cfg: number }) {
         <input type="checkbox" checked={on} disabled={busy} onChange={() => void put(on ? 0 : attenLevel.v)} /> {tc("attenuator switched in", "in")}
       </label>{" "}
       <select
+        aria-label={t("Attenuation")}
         value={String(attenLevel.v)}
         disabled={busy}
         onChange={(e) => {
@@ -901,8 +903,8 @@ function PasswordsPage() {
             void send("admin", a1, t("Admin password changed; other admin logins have ended."));
           }}
         >
-          <input type="password" placeholder={t("New password")} autocomplete="new-password" value={a1} onInput={val(setA1)} />
-          <input type="password" placeholder={t("Again")} autocomplete="new-password" value={a2} onInput={val(setA2)} />
+          <input type="password" aria-label={t("New password")} placeholder={t("New password")} autocomplete="new-password" value={a1} onInput={val(setA1)} />
+          <input type="password" aria-label={t("New password again")} placeholder={t("Again")} autocomplete="new-password" value={a2} onInput={val(setA2)} />
           <button type="submit" disabled={a1.length < 8 || a1 !== a2}>
             {t("Change")}
           </button>
@@ -925,7 +927,7 @@ function PasswordsPage() {
             void send("listener", l1, t("Listener password set; listeners logged in with the old one must log in again."));
           }}
         >
-          <input type="password" placeholder={t("New listener password")} autocomplete="new-password" value={l1} onInput={val(setL1)} />
+          <input type="password" aria-label={t("New listener password")} placeholder={t("New listener password")} autocomplete="new-password" value={l1} onInput={val(setL1)} />
           <button type="submit" disabled={!l1}>
             {auth?.listener_password ? t("Change") : tc("password", "Set")}
           </button>
@@ -1419,7 +1421,7 @@ function LogsPage() {
           {LOG_SOURCES.map((s) => (
             <button
               key={s.id}
-              class={src === s.id ? "on" : ""}
+              class={src === s.id ? "on" : ""} aria-pressed={!!(src === s.id)}
               disabled={logs ? !logs.sources[s.id] : false}
               title={logs && !logs.sources[s.id] ? t("not on this system") : ""}
               onClick={() => setSrc(s.id)}
@@ -1428,12 +1430,12 @@ function LogsPage() {
             </button>
           ))}
         </nav>
-        <select value={n} onChange={(e) => setN(Number((e.currentTarget as HTMLSelectElement).value))}>
+        <select aria-label={t("How many lines")} value={n} onChange={(e) => setN(Number((e.currentTarget as HTMLSelectElement).value))}>
           {[100, 300, 1000, 5000].map((k) => (
             <option value={k}>{t("{n} lines", { n: k })}</option>
           ))}
         </select>
-        <input type="search" placeholder={t("Filter")} value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
+        <input type="search" aria-label={t("Filter the lines")} placeholder={t("Filter")} value={filter} onInput={(e) => setFilter((e.currentTarget as HTMLInputElement).value)} />
         <label>
           <input type="checkbox" checked={follow} onChange={(e) => setFollow((e.currentTarget as HTMLInputElement).checked)} /> {t("Follow")}
         </label>
@@ -1484,7 +1486,7 @@ export function AdminApp() {
         <strong>{t("web888d admin")}</strong>
         <nav class="seg">
           {TABS.map((tb) => (
-            <button key={tb.id} class={tab.value === tb.id ? "on" : ""} onClick={() => (location.hash = `#/admin/${tb.id}`)}>
+            <button key={tb.id} class={tab.value === tb.id ? "on" : ""} aria-current={tab.value === tb.id ? "page" : undefined} onClick={() => (location.hash = `#/admin/${tb.id}`)}>
               {t(tb.name)}
             </button>
           ))}

@@ -5,6 +5,7 @@
 // page with #propagation. A band's name tunes there.
 
 import { signal } from "@preact/signals";
+import { useDialog } from "../a11y.ts";
 import { useEffect, useState } from "preact/hooks";
 import { bandHz, bandName, cellTitle, forecastBasis, forecastTitle, relColor, stormNote, type PropReply } from "../prop.ts";
 import { t } from "../i18n.ts";
@@ -125,7 +126,12 @@ function DayTable({ d, hour }: { d: PropReply & { forecast: NonNullable<PropRepl
             </th>
             {hours.map((h) => {
               const r = p.rel[m]?.[b]?.[h] ?? null;
-              return <td key={h} class={`prop-cell prop-hour${h === hour ? " prop-nowcol" : ""}`} style={{ background: relColor(r) }} title={cellTitle(f, p, m, b, h)} />;
+              // the colour, and the number for screen readers
+              return (
+                <td key={h} class={`prop-cell prop-hour${h === hour ? " prop-nowcol" : ""}`} style={{ background: relColor(r) }} title={cellTitle(f, p, m, b, h)}>
+                  <span class="sr-only">{r === null ? "–" : `${Math.round(r * 100)} %`}</span>
+                </td>
+              );
             })}
           </tr>
         ))}
@@ -161,7 +167,7 @@ function Body({ d }: { d: PropReply }) {
       <div class="prop-opts">
         <span class="seg">
           {f.modes.map((m, i) => (
-            <button key={m.name} class={modeIx.value === i ? "on" : ""} onClick={() => (modeIx.value = i)} title={t("Signals that need {snr} dB SNR in 1 Hz", { snr: m.snr_db })}>
+            <button key={m.name} class={modeIx.value === i ? "on" : ""} aria-pressed={!!(modeIx.value === i)} onClick={() => (modeIx.value = i)} title={t("Signals that need {snr} dB SNR in 1 Hz", { snr: m.snr_db })}>
               {m.name}
             </button>
           ))}
@@ -204,18 +210,14 @@ export function PropPanel() {
         .catch((e: Error) => setErr(t("The forecast didn't load ({msg}).", { msg: e.message })));
     void load();
     const iv = setInterval(load, 600_000);
-    const key = (e: KeyboardEvent) => e.key === "Escape" && (propOpen.value = false);
-    window.addEventListener("keydown", key);
-    return () => {
-      clearInterval(iv);
-      window.removeEventListener("keydown", key);
-    };
+    return () => clearInterval(iv);
   }, [open]);
+  const box = useDialog(open, () => (propOpen.value = false));
   if (!open) return null;
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label={t("HF propagation")} onClick={(e) => e.target === e.currentTarget && (propOpen.value = false)}>
+    <div ref={box} class="overlay keyhelp" role="dialog" aria-modal="true" aria-label={t("HF propagation")} onClick={(e) => e.target === e.currentTarget && (propOpen.value = false)}>
       <div class="keyhelp-box info-box prop-box">
-        <button class="info-x" onClick={() => (propOpen.value = false)} title={t("Close (Escape)")}>
+        <button class="info-x" onClick={() => (propOpen.value = false)} title={t("Close (Escape)")} aria-label={t("Close (Escape)")}>
           ✕
         </button>
         <h3>{t("HF propagation")}</h3>
@@ -229,7 +231,7 @@ export function PropPanel() {
 export function PropCtl() {
   return (
     <div class="group">
-      <button class={propOpen.value ? "on" : ""} onClick={() => (propOpen.value = !propOpen.value)} title={t("HF propagation: which bands are open to where, this hour and through the day")}>
+      <button class={propOpen.value ? "on" : ""} aria-expanded={propOpen.value} aria-haspopup="dialog" onClick={() => (propOpen.value = !propOpen.value)} title={t("HF propagation: which bands are open to where, this hour and through the day")}>
         {t("Prop")}
       </button>
     </div>

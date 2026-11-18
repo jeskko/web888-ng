@@ -15,7 +15,7 @@ export function SigCtl() {
   const on = sigOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setSig(!on)} title={t("Identify the signals in the passband (CW, RTTY, FT8, SSTV, fax, voice, data modems…), in this browser")}>
+      <button class={on ? "on" : ""} aria-pressed={!!(on)} onClick={() => setSig(!on)} title={t("Identify the signals in the passband (CW, RTTY, FT8, SSTV, fax, voice, data modems…), in this browser")}>
         ID
       </button>
     </div>
@@ -65,12 +65,12 @@ export function SigPanel() {
       <div class="spots-bar">
         <strong>{t("Signals")}</strong>
         <span class="dim num">{rows.length}</span>
-        <button class="close" onClick={() => setSig(false)} title={t("Stop identifying")}>
+        <button class="close" onClick={() => setSig(false)} title={t("Stop identifying")} aria-label={t("Stop identifying")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {sigError.value && <p class="warn">{sigError.value}</p>}
+        {sigError.value && <p class="warn" role="alert">{sigError.value}</p>}
         {s && !band && <p class="dim">{t("Signals are identified in CW, USB and LSB.")}</p>}
         {rows.length === 0 ? (
           <p class="dim">{t("Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once.")}</p>

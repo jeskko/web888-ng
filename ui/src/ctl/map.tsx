@@ -26,6 +26,7 @@ import { formatKhz } from "../fmt.ts";
 import { bearing, distanceKm, gridToLatLon, latLonToGrid, subsolar, GridBook, type LatLon } from "../geo.ts";
 import { bandColour, bandsOf, browserPoints, dxPoints, heardTimes, hfdlPoints, js8Points, LAYERS, skimmerPoints, type Layer, type MapPoint } from "../map.ts";
 import { utcTime } from "../spots.ts";
+import { rowAction } from "../a11y.ts";
 import { api, digiRows, hfdlMsgs, hfdlStations, js8Msgs, mapDx, mapInfo, mapOpen, mapOpts, pickMapPoint, setMapOpts, showMap, spots, type MapOpts } from "../state.ts";
 
 const AGES = [5, 15, 30, 60, 180];
@@ -37,7 +38,7 @@ export function MapCtl() {
   const open = mapOpen.value;
   return (
     <div class="group">
-      <button class={open ? "on" : ""} onClick={() => showMap(!open)} title={t("Map of the stations heard")}>
+      <button class={open ? "on" : ""} aria-pressed={!!(open)} onClick={() => showMap(!open)} title={t("Map of the stations heard")}>
         {t("Map")}
       </button>
     </div>
@@ -576,7 +577,7 @@ export function MapPanel() {
   return (
     <aside class="map">
       <div class="spots-bar">
-        <select value={o.proj} onChange={(e) => setMapOpts({ proj: (e.target as HTMLSelectElement).value as MapOpts["proj"] })} title={t("Projection")}>
+        <select value={o.proj} onChange={(e) => setMapOpts({ proj: (e.target as HTMLSelectElement).value as MapOpts["proj"] })} title={t("Projection")} aria-label={t("Projection")}>
           {/* i18n: the map projection: azimuthal equidistant, centred on the receiver (great circles from it are straight lines) */}
           <option value="azim">{t("Great circle")}</option>
           <option value="globe">{t("Globe")}</option>
@@ -587,13 +588,13 @@ export function MapPanel() {
             <input type="checkbox" checked={o.layers.includes(l.id)} onChange={() => toggle(l.id)} /> {t(l.name)}
           </label>
         ))}
-        <select value={o.band} onChange={(e) => setMapOpts({ band: (e.target as HTMLSelectElement).value })} title={t("Band")}>
+        <select value={o.band} onChange={(e) => setMapOpts({ band: (e.target as HTMLSelectElement).value })} title={t("Band")} aria-label={t("Band")}>
           <option value="">{t("All bands")}</option>
           {(o.band && !bands.includes(o.band) ? [o.band, ...bands] : bands).map((b) => (
             <option value={b}>{b}</option>
           ))}
         </select>
-        <select value={o.age} onChange={(e) => setMapOpts({ age: Number((e.target as HTMLSelectElement).value) })} title={t("Show the stations heard within this time")}>
+        <select value={o.age} onChange={(e) => setMapOpts({ age: Number((e.target as HTMLSelectElement).value) })} title={t("Show the stations heard within this time")} aria-label={t("Show the stations heard within this time")}>
           {AGES.map((a) => (
             <option value={a}>{a < 60 ? t("{n} min", { n: a }) : t("{n} h", { n: a / 60 })}</option>
           ))}
@@ -607,16 +608,18 @@ export function MapPanel() {
         <span class="dim num" title={t("Stations shown")}>
           {points.length}
         </span>
-        <button onClick={home} title={t("Centre on this receiver")}>
+        <button onClick={home} title={t("Centre on this receiver")} aria-label={t("Centre on this receiver")}>
           ⌖
         </button>
-        <button class="close" onClick={() => showMap(false)} title={t("Close")}>
+        <button class="close" onClick={() => showMap(false)} title={t("Close")} aria-label={t("Close")}>
           ✕
         </button>
       </div>
       <div class="map-box" ref={box}>
         <canvas
           ref={canvas}
+          role="img"
+          aria-label={t("Map of the stations heard (also as a list below it)")}
           class={hv && (hv.p.spot || hv.p.tune) ? "pick" : ""}
           onPointerDown={onDown}
           onPointerMove={onMove}
@@ -635,6 +638,55 @@ export function MapPanel() {
         {err.value && <p class="warn map-note">{err.value}</p>}
         {info && !rx && <p class="dim map-note">{t("This receiver's locator isn't set (admin: station): no lines from it.")}</p>}
       </div>
+      {bands.length > 0 && (
+        <div class="map-legend" role="group" aria-label={t("Bands: a click shows only that band")}>
+          {bands.map((b) => (
+            <button key={b} class={o.band === b ? "on" : ""} aria-pressed={o.band === b} onClick={() => setMapOpts({ band: o.band === b ? "" : b })}>
+              <i style={{ background: bandColour(b) }} aria-hidden="true" />
+              {b}
+            </button>
+          ))}
+        </div>
+      )}
+      <StationList points={points} />
     </aside>
+  );
+}
+
+/** The stations on the map as a table (the newest first): for screen
+ * readers, and to read them without hovering. Folded until opened. */
+function StationList({ points }: { points: MapPoint[] }) {
+  const open = useSignal(false);
+  const rows = open.value ? points.slice(-200).reverse() : [];
+  return (
+    <details class="map-list" open={open.value} onToggle={(e) => (open.value = (e.currentTarget as HTMLDetailsElement).open)}>
+      <summary>{t("Stations as a list ({n})", { n: points.length })}</summary>
+      {open.value && (
+        <table>
+          <thead>
+            <tr>
+              <th>{t("call")}</th>
+              <th>{t("band")}</th>
+              <th>{t("mode")}</th>
+              <th class="r">kHz</th>
+              <th class="r">SNR</th>
+              <th>UTC</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((p, i) => (
+              <tr key={`${p.call}${p.t}${i}`} {...rowAction(p.spot || p.tune ? () => pickMapPoint(p) : undefined)}>
+                <td>{p.call}</td>
+                <td>{p.band}</td>
+                <td>{p.mode}</td>
+                <td class="r">{p.hz ? formatKhz(p.hz) : ""}</td>
+                <td class="r">{p.snr ?? ""}</td>
+                <td>{utcTime(p.t)}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+    </details>
   );
 }

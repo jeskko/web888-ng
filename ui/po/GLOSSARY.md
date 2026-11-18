@@ -92,6 +92,8 @@ The header is narrow; these are the choices so far (Suomi / Svenska / Deutsch): 
 | reverse (FSK) | mark and space swapped | käänteinen | omvänd | invertiert |
 | slant (fax, SSTV) | image skew from a clock error | vinous | snedhet | Schräglauf |
 | signal identifier | names the mode of a signal | signaalin tunnistus | signalidentifiering | Signalerkennung |
+| screen reader | software that reads the page aloud | ruudunlukija | skärmläsare | Screenreader |
+| accessibility | | saavutettavuus | tillgänglighet | Barrierefreiheit |
 
 ## Propagation
 

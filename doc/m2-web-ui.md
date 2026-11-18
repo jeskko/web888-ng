@@ -692,3 +692,54 @@ and German are the first translations.
   decoded content. Texts put into signals when an event happens (a
   recording done, the connection note) keep the language they were made
   in until the next event.
+
+## 21. Accessibility (2026-11-18)
+
+An evaluation (code review, headless Chromium's accessibility tree and
+contrast, a colour-blindness simulation of every colour scale), then the
+fixes. Helpers in `src/a11y.ts`; check script `ui/tools/cdp/a11y.mjs`.
+
+* **Screen readers and keyboard**:
+  * the dial is a button (key **g** or Enter types a frequency); list
+    rows (spots, memories, users, skimmers, CW signals, map stations)
+    take Tab and Enter (`rowAction`);
+  * toggles say whether they are on (`aria-pressed`), popup openers
+    whether they are open (`aria-expanded`), admin tabs which is
+    current; symbol buttons (◀ ▶ − + ↺ ⌖ ✕ ...) have names; sliders a
+    name and their value in words (`aria-valuetext`: dB, dB/s, %);
+  * dialogs (Keys, Config, Info, Prop, the phone's sheets) are modal:
+    the focus moves in, Tab stays in, Escape closes, the focus returns,
+    the page's shortcuts are quiet meanwhile (`useDialog`); popovers take
+    the focus too (`usePopFocus`); a drop-down's choices take the arrow
+    keys;
+  * live regions: the connection state, the queue banner, errors
+    (session ended, receiver busy, audio, login, decoders, admin saves);
+    `announce()` speaks through a polite region;
+  * the canvases have text roles; **near the dial** lists the closest
+    frequency labels and other listeners as buttons (hidden until the
+    keyboard is in it); the map has a station table; the propagation
+    table's cells carry their percentage;
+  * Config → Accessibility → **Read out decoded text** (off by default):
+    new CW, RTTY, PSK and JS8 text spoken every 4 s (`ctl/speak.ts`);
+  * admin settings fields are named by their labels and errors tied to
+    them (`aria-invalid`, `aria-describedby`); every input has a name.
+* **Colour**: the default waterfall palette got lighter at every step
+  (its orange came after the yellow: strong signals looked darker than
+  medium ones, worst with red-green colour blindness); a test checks
+  every palette for normal, protan, deutan and tritan vision. Viridis is
+  labelled colour-blind safe. The map's band colours were chosen for
+  colour blindness (neighbouring bands at least CIEDE2000 25 apart for
+  every vision type, any two at least 6; before: 3) with a legend that
+  filters by band. Active buttons have an underline, the OVL lamp turns
+  dark text on red with "!" (3.0:1 before, 6.9:1 now), the user being
+  listened to has an outlined marker, not only a yellow one.
+* **Display**: a focus ring on everything (`:focus-visible`); text sizes
+  in rem of a 14 px base that follows the browser's text size;
+  `prefers-reduced-motion`, `prefers-contrast: more` and forced colours
+  honoured; decoded text can be selected on phones.
+* Measured after (sim backend, 1400×900): no unnamed control (one
+  before), 60 Tab stops all with a focus ring (51, one without), all text
+  AA, 22 toggles with a state (0), dialogs keep the focus.
+* Not done: the frequency labels' kind colours on the spectrum (the kind
+  is also in the label's tooltip and the near-dial list's text); a
+  screen-reader test with NVDA/JAWS/VoiceOver by a real user.

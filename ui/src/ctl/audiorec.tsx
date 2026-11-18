@@ -5,6 +5,7 @@
 // saves) on a click.
 
 import { useEffect, useRef, useState } from "preact/hooks";
+import { usePopFocus } from "../a11y.ts";
 import { N_, t } from "../i18n.ts";
 import { audioRec, audioRecDone, audioRecSkip, setAudioRecSkip, st, startAudioRec, stopAudioRec } from "../state.ts";
 
@@ -33,6 +34,7 @@ export function AudioRecCtl() {
       document.removeEventListener("keydown", key);
     };
   }, [open]);
+  const pop = usePopFocus(open);
   if (!st.value) return null;
   const r = audioRec.value;
   if (r) {
@@ -42,7 +44,7 @@ export function AudioRecCtl() {
         <button class="iqrec on arec" onClick={() => stopAudioRec()} title={t("Recording the audio{skipped}: click to stop and save", { skipped })}>
           ● {mmss(r.seconds)}
         </button>
-        <button class="iqrec-x" onClick={() => stopAudioRec(false)} title={t("Stop without saving")}>
+        <button class="iqrec-x" onClick={() => stopAudioRec(false)} title={t("Stop without saving")} aria-label={t("Stop without saving")}>
           ✕
         </button>
       </div>
@@ -50,12 +52,12 @@ export function AudioRecCtl() {
   }
   return (
     <div class="group iqrec-ctl" ref={box}>
-      <button class={`iqrec${open ? " open" : ""}`} onClick={() => setOpen(!open)} title={t("Record the audio to a WAV file")}>
+      <button class={`iqrec${open ? " open" : ""}`} aria-expanded={open} onClick={() => setOpen(!open)} title={t("Record the audio to a WAV file")}>
         {/* i18n: Rec = short for Record (audio recording button) */}
         {t("Rec")} ▾
       </button>
       {open && (
-        <div class="iqrec-pop">
+        <div class="iqrec-pop" ref={pop}>
           <p class="dim">
             {/* i18n: AGC = automatic gain control; kS/s = thousand samples per second */}
             {t(

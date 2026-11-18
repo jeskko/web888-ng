@@ -16,7 +16,7 @@ export function JttyCtl() {
   const on = jttyOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setJtty(!on)} title={t("Decode JTTY (WSJT-X's keyboard mode) from this receiver's audio, in this browser")}>
+      <button class={on ? "on" : ""} aria-pressed={!!(on)} onClick={() => setJtty(!on)} title={t("Decode JTTY (WSJT-X's keyboard mode) from this receiver's audio, in this browser")}>
         JTTY
       </button>
     </div>
@@ -43,12 +43,12 @@ export function JttyPanel() {
           ))}
         </select>
         <span class="dim num">{rows.length}</span>
-        <button class="close" onClick={() => setJtty(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setJtty(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {jttyError.value && <p class="warn">{jttyError.value}</p>}
+        {jttyError.value && <p class="warn" role="alert">{jttyError.value}</p>}
         {s && s.mode !== "usb" && <p class="dim">{t("JTTY is decoded in USB.")}</p>}
         {rows.length === 0 ? (
           <p class="dim">{t("Nothing yet: messages show when they end. Signals 200–3000 Hz above the dial; JTTY has no time slots.")}</p>

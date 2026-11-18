@@ -6,6 +6,7 @@
 // about); everything rarely used is in a sheet under "More".
 
 import { useSignal, type Signal } from "@preact/signals";
+import { useDialog } from "../a11y.ts";
 import type { ComponentChildren } from "preact";
 import { useRef } from "preact/hooks";
 import { t, tc } from "../i18n.ts";
@@ -48,6 +49,7 @@ import { AfPanel } from "./afspec.tsx";
 import { AudioRecCtl } from "./audiorec.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
 import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, LookCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
+import { NearDial } from "./neardial.tsx";
 
 type SheetName = "keypad" | "bands" | "more" | null;
 
@@ -174,14 +176,14 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
       <div class="m-keys">
         <div class="m-row">
           {(["usb", "lsb", "cw"] as Mode[]).map((m) => (
-            <button key={m} class={s?.mode === m ? "on" : ""} onClick={() => setMode(m)}>
+            <button key={m} class={s?.mode === m ? "on" : ""} aria-pressed={!!(s?.mode === m)} onClick={() => setMode(m)}>
               {m.toUpperCase()}
             </button>
           ))}
-          <button class={am ? "on" : ""} onClick={cycleAm}>
+          <button class={am ? "on" : ""} aria-pressed={!!(am)} onClick={cycleAm}>
             {(am ?? "am").toUpperCase()}
           </button>
-          <button class={s?.mode === "nbfm" ? "on" : ""} onClick={() => setMode("nbfm")}>
+          <button class={s?.mode === "nbfm" ? "on" : ""} aria-pressed={!!(s?.mode === "nbfm")} onClick={() => setMode("nbfm")}>
             FM
           </button>
         </div>
@@ -221,9 +223,10 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
 }
 
 function Sheet({ title, close, children }: { title: string; close: () => void; children: ComponentChildren }) {
+  const box = useDialog(true, close);
   return (
     <div class="m-sheet-back" onClick={(e) => e.target === e.currentTarget && close()}>
-      <div class="m-sheet" role="dialog" aria-label={title}>
+      <div ref={box} class="m-sheet" role="dialog" aria-modal="true" aria-label={title}>
         <div class="m-sheet-head">
           <b>{title}</b>
           <button onClick={close} aria-label={t("Close")}>
@@ -283,7 +286,7 @@ function Bands({ close }: { close: () => void }) {
         {bands.map((b) => (
           <button
             key={b.name}
-            class={here?.name === b.name ? "on" : ""}
+            class={here?.name === b.name ? "on" : ""} aria-pressed={!!(here?.name === b.name)}
             onClick={() => {
               goBand(b);
               close();
@@ -354,6 +357,7 @@ export function MobileApp({ overlay }: { overlay: ComponentChildren }) {
       <LeaseBanner />
       <div class="m-view">
         <Pane />
+        <NearDial />
         {overlay}
       </div>
       <Dock open={open} />

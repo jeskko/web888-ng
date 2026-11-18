@@ -58,24 +58,27 @@ export interface DxMapSpot {
   de_pos: LatLon | null;
 }
 
-/** Band colours (by wavelength, warm to cold, as maps of spots use). */
+/** Band colours, chosen to stay apart with colour blindness (simulated
+ * protan, deutan and tritan vision): neighbouring bands, which a map
+ * shows together most, differ the most (CIEDE2000 >= 25 for every
+ * vision); any two at least 6. The legend under the map names them. */
 const BAND_COLOURS: Record<string, string> = {
   "2200m": "#a0a0a0",
   "630m": "#c0c0c0",
-  "160m": "#7cfc00",
-  "80m": "#e550e5",
-  "60m": "#00008b",
-  "40m": "#5959ff",
-  "30m": "#62d962",
-  "20m": "#f2c40c",
-  "17m": "#f2f261",
-  "15m": "#cca166",
-  "12m": "#b22222",
-  "10m": "#ff69b4",
-  "6m": "#ff0000",
+  "160m": "#c0a050",
+  "80m": "#80a0b0",
+  "60m": "#c06050",
+  "40m": "#f0f000",
+  "30m": "#f03000",
+  "20m": "#a0f0d0",
+  "17m": "#f0a000",
+  "15m": "#c0b0f0",
+  "12m": "#40b080",
+  "10m": "#c070f0",
+  "6m": "#c0f070",
   "4m": "#cc0044",
   "2m": "#ff1493",
-  HFDL: "#40e0d0",
+  HFDL: "#00f090",
 };
 
 export function bandColour(band: string): string {

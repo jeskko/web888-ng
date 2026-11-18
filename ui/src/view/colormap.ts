@@ -8,14 +8,18 @@
 type Stops = [number, [number, number, number]][];
 
 export const PALETTES = {
+  // dark blue, cyan, orange, yellow, white: lighter at every step, also
+  // as seen with each kind of colour blindness (simulated; until 0.16.0
+  // the orange came after the yellow and the strongest signals looked
+  // darker than medium ones)
   web888: [
     [0.0, [8, 10, 18]],
     [0.15, [16, 24, 72]],
     [0.35, [24, 80, 170]],
-    [0.55, [40, 190, 200]],
-    [0.72, [230, 220, 60]],
-    [0.87, [235, 90, 30]],
-    [1.0, [255, 245, 235]],
+    [0.55, [30, 150, 180]],
+    [0.72, [240, 160, 60]],
+    [0.87, [250, 225, 80]],
+    [1.0, [255, 250, 235]],
   ],
   // viridis at nine evenly spaced points
   viridis: [

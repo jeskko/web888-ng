@@ -3,6 +3,7 @@
 // (several may run at once; each opens its panel beside the waterfall).
 
 import { useEffect, useRef, useState } from "preact/hooks";
+import { usePopFocus } from "../a11y.ts";
 import type { Signal } from "@preact/signals";
 import { N_, t } from "../i18n.ts";
 import { cwOn, digiOn, hfdlOn, imgOn, js8On, jttyOn, pskOn, rttyOn, setCw, setDigi, setHfdl, setImg, setJs8, setJtty, setPsk, setRtty, setSig, setTc, sigOn, tcOn } from "../state.ts";
@@ -46,17 +47,19 @@ export function DecodersCtl() {
     };
   }, [open]);
   const active = DECODERS.filter((d) => d.on.value);
+  const pop = usePopFocus(open);
   return (
     <div class="group decoders-ctl" ref={box}>
       <button
         class={`decoders${active.length ? " on" : ""}${open ? " open" : ""}`}
+        aria-expanded={open}
         onClick={() => setOpen(!open)}
         title={active.length ? t("Decoding in this browser: {list}", { list: active.map((d) => t(d.label)).join(", ") }) : t("Decoders that run in this browser")}
       >
         {t("Decoders")}{active.length ? ` ${active.length}` : ""} ▾
       </button>
       {open && (
-        <div class="decoders-pop">
+        <div class="decoders-pop" ref={pop}>
           {DECODERS.map((d) => (
             <label title={t(d.hint)}>
               <input type="checkbox" data-dec={d.label} checked={d.on.value} onChange={(e) => d.set(e.currentTarget.checked)} />

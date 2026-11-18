@@ -64,12 +64,12 @@ export function HfdlPanel() {
         <button onClick={clearHfdl} title={t("Clear the list")}>
           {t("Clear")}
         </button>
-        <button class="close" onClick={() => setHfdl(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setHfdl(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {hfdlError.value && <p class="warn">{hfdlError.value}</p>}
+        {hfdlError.value && <p class="warn" role="alert">{hfdlError.value}</p>}
         {s && s.mode !== "usb" && <p class="dim">{t("HFDL is decoded in USB.")}</p>}
         {msgs.length === 0 ? (
           <p class="dim">

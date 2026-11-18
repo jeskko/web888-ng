@@ -2,7 +2,8 @@
 // Receiver controls: frequency display, mode, bandwidth, AGC/gain,
 // volume, zoom, waterfall contrast, S-meter and the status bar.
 
-import { useSignal } from "@preact/signals";
+import { signal, useSignal } from "@preact/signals";
+import { rowAction, usePopFocus } from "../a11y.ts";
 import { useEffect, useRef } from "preact/hooks";
 import { N_, t, tc, tn, tx } from "../i18n.ts";
 import { setFloor, setTop } from "../view/range.ts";
@@ -71,9 +72,12 @@ import {
   setAf,
 } from "../state.ts";
 
+/** The frequency entry is open (a click on the dial, or key g). */
+export const freqEdit = signal(false);
+
 /** Dial in kHz; wheel over a digit steps that digit, click to type. */
 export function FreqDisplay() {
-  const editing = useSignal(false);
+  const editing = freqEdit;
   const s = st.value;
   if (!s) return <div class="freq">—</div>;
   if (editing.value) {
@@ -81,6 +85,7 @@ export function FreqDisplay() {
       <input
         class="freq freq-input"
         autoFocus
+        aria-label={t("Frequency to tune, in kHz (7074) or MHz (7.074M); Enter tunes, Escape cancels")}
         placeholder={t("kHz, or 7.074M")}
         onKeyDown={(e) => {
           const el = e.currentTarget;
@@ -100,7 +105,13 @@ export function FreqDisplay() {
   const intDigits = text.replace(/\..*/, "").replace(/ /g, "").length;
   let place = 10 ** (intDigits + 2);
   return (
-    <div class="freq" title={t("Wheel over a digit to step it, click to type")} onClick={() => (editing.value = true)}>
+    <button
+      type="button"
+      class="freq"
+      title={t("Wheel over a digit to step it, click to type")}
+      aria-label={t("Frequency {f} kHz. Press to type another (key g)", { f: text })}
+      onClick={() => (editing.value = true)}
+    >
       {[...text].map((ch, i) => {
         if (ch === " " || ch === ".") return <span key={i} class="sep">{ch === "." ? "." : " "}</span>;
         const p = place;
@@ -119,7 +130,7 @@ export function FreqDisplay() {
         );
       })}
       <span class="unit">kHz</span>
-    </div>
+    </button>
   );
 }
 
@@ -131,15 +142,15 @@ export function StepCtl() {
   const step = stepOf(s.mode);
   return (
     <div class="group" title={t("Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it")}>
-      <button onClick={() => tune(stepTo(s.hz, step, -1))}>◀</button>
-      <select value={tuneStep.value} onChange={(e) => setTuneStep(Number(e.currentTarget.value))}>
+      <button onClick={() => tune(stepTo(s.hz, step, -1))} aria-label={t("Tune down one step (key ←)")}>◀</button>
+      <select aria-label={t("Tuning step")} value={tuneStep.value} onChange={(e) => setTuneStep(Number(e.currentTarget.value))}>
         {STEPS.map((v) => (
           <option key={v} value={v}>
             {v === 0 ? t("auto ({step})", { step: stepLabel(stepFor(s.mode)) }) : stepLabel(v)}
           </option>
         ))}
       </select>
-      <button onClick={() => tune(stepTo(s.hz, step, 1))}>▶</button>
+      <button onClick={() => tune(stepTo(s.hz, step, 1))} aria-label={t("Tune up one step (key →)")}>▶</button>
     </div>
   );
 }
@@ -158,26 +169,26 @@ export function ModeBar() {
   return (
     <div class="group">
       {(["usb", "lsb", "cw"] as Mode[]).map((m) => (
-        <button key={m} class={s?.mode === m ? "on" : ""} onClick={() => setMode(m)} title={t("{mode} (key {key})", { mode: m.toUpperCase(), key: m[0] })}>
+        <button key={m} class={s?.mode === m ? "on" : ""} aria-pressed={!!(s?.mode === m)} onClick={() => setMode(m)} title={t("{mode} (key {key})", { mode: m.toUpperCase(), key: m[0] })}>
           {m.toUpperCase()}
         </button>
       ))}
       <button
-        class={am ? "on am" : "am"}
+        class={am ? "on am" : "am"} aria-pressed={!!am}
         onClick={cycleAm}
         title={t("{what}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn.", { what: t(AM_TITLES[am ?? "am"]) })}
       >
         {(am ?? "am").toUpperCase()}
       </button>
       <button
-        class={s?.mode === "nbfm" ? "on" : ""}
+        class={s?.mode === "nbfm" ? "on" : ""} aria-pressed={!!(s?.mode === "nbfm")}
         onClick={() => setMode("nbfm")}
         title={t("Narrow-band FM (VHF voice; key f)")}
       >
         FM
       </button>
       <button
-        class={s?.mode === "iq" ? "on" : ""}
+        class={s?.mode === "iq" ? "on" : ""} aria-pressed={!!(s?.mode === "iq")}
         onClick={() => setMode("iq")}
         title={t("I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i")}
       >
@@ -245,7 +256,7 @@ export function CodecCtl({ drop = false }: { drop?: boolean }) {
       ) : (
         <span class="seg" title={title}>
           {shown.map((c) => (
-            <button key={c.pref} class={pref === c.pref ? "on" : ""} title={t(c.title)} onClick={() => setCodecPref(c.pref)}>
+            <button key={c.pref} class={pref === c.pref ? "on" : ""} aria-pressed={!!(pref === c.pref)} title={t(c.title)} onClick={() => setCodecPref(c.pref)}>
               {label(c)}
             </button>
           ))}
@@ -260,13 +271,13 @@ export function AudioCtl() {
   if (!s) return null;
   return (
     <div class="group">
-      <button class={s.agc ? "on" : ""} onClick={() => setAgc(!s.agc)} title={t("Automatic gain control (AM: follows the carrier)")}>
+      <button class={s.agc ? "on" : ""} aria-pressed={!!(s.agc)} onClick={() => setAgc(!s.agc)} title={t("Automatic gain control (AM: follows the carrier)")}>
         AGC
       </button>
       {s.agc && (
         <span class="seg" title={isAm(s.mode) ? t("AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay") : t("AGC recovery: fast, medium, slow, or custom (your own hang time and decay)")}>
           {(["fast", "medium", "slow", ...(s.agc_hang_ms !== undefined ? ["custom"] : [])] as AgcSpeed[]).map((v) => (
-            <button key={v} class={s.agc_speed === v ? "on" : ""} onClick={() => setAudio({ agc_speed: v })}>
+            <button key={v} class={s.agc_speed === v ? "on" : ""} aria-pressed={!!(s.agc_speed === v)} onClick={() => setAudio({ agc_speed: v })}>
               {v[0].toUpperCase()}
             </button>
           ))}
@@ -283,6 +294,7 @@ export function AudioCtl() {
               max={2000}
               step={50}
               value={s.agc_hang_ms}
+              aria-valuetext={`${(s.agc_hang_ms / 1000).toFixed(2)} s`}
               onInput={(e) => setAudio({ agc_hang_ms: Number(e.currentTarget.value) })}
             />
             <span class="num">{(s.agc_hang_ms / 1000).toFixed(2)} s</span>
@@ -297,6 +309,7 @@ export function AudioCtl() {
               step={0.01}
               // log scale, 2-100 dB/s
               value={Math.log(s.agc_decay_db_s / 2) / Math.log(50)}
+              aria-valuetext={`${s.agc_decay_db_s.toFixed(0)} dB/s`}
               onInput={(e) => setAudio({ agc_decay_db_s: Math.round(2 * 50 ** Number(e.currentTarget.value)) })}
             />
             <span class="num">{s.agc_decay_db_s.toFixed(0)} dB/s</span>
@@ -311,13 +324,14 @@ export function AudioCtl() {
           min={0}
           max={100}
           value={s.gain_db}
+          aria-valuetext={`${s.gain_db.toFixed(0)} dB`}
           onInput={(e) => setAgc(s.agc, Number(e.currentTarget.value))}
         />
         <span class="num">{s.gain_db.toFixed(0)} dB</span>
       </label>
       {!isAm(s.mode) && s.mode !== "iq" && (
         <button
-          class={stereo.value ? "on" : ""}
+          class={stereo.value ? "on" : ""} aria-pressed={!!(stereo.value)}
           onClick={() => setStereo(!stereo.value)}
           title={t("Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall")}
         >
@@ -325,7 +339,7 @@ export function AudioCtl() {
           {tc("pseudo-stereo", "Stereo")}
         </button>
       )}
-      <button class={muted.value ? "on" : ""} onClick={() => setVolume(volume.value, !muted.value)} title={t("Mute")}>
+      <button class={muted.value ? "on" : ""} aria-pressed={!!(muted.value)} onClick={() => setVolume(volume.value, !muted.value)} title={t("Mute")}>
         {/* i18n: Vol = Volume (short, on a button); Muted = the sound is muted */}
         {muted.value ? t("Muted") : tc("volume", "Vol")}
       </button>
@@ -335,6 +349,8 @@ export function AudioCtl() {
         max={1}
         step={0.01}
         value={volume.value}
+        aria-label={t("Volume")}
+        aria-valuetext={`${Math.round(volume.value * 100)} %`}
         onInput={(e) => setVolume(Number(e.currentTarget.value), false)}
         title={t("Volume")}
       />
@@ -356,7 +372,7 @@ export function DspCtl() {
   return (
     <div class="group">
       <button
-        class={s.nb > 0 ? "on" : ""}
+        class={s.nb > 0 ? "on" : ""} aria-pressed={!!(s.nb > 0)}
         onClick={() => setAudio({ nb: s.nb > 0 ? 0 : nbLevel.v })}
         title={t("Noise blanker: removes short impulses (ignition, switching noise)")}
       >
@@ -369,12 +385,14 @@ export function DspCtl() {
           max={30}
           step={0.5}
           value={33 - s.nb}
+          aria-label={t("Blanker sensitivity")}
+          aria-valuetext={t("impulses over {n} x the average", { n: s.nb.toFixed(1) })}
           onInput={(e) => setAudio({ nb: 33 - Number(e.currentTarget.value) })}
           title={t("Blanker sensitivity: impulses over {n} x the average", { n: s.nb.toFixed(1) })}
         />
       )}
       <button
-        class={s.nr > 0 ? "on" : ""}
+        class={s.nr > 0 ? "on" : ""} aria-pressed={!!(s.nr > 0)}
         onClick={() => setAudio({ nr: s.nr > 0 ? 0 : nrLevel.v })}
         title={t("Noise reduction: lowers steady background noise")}
       >
@@ -387,12 +405,14 @@ export function DspCtl() {
           max={1}
           step={0.05}
           value={s.nr}
+          aria-label={t("Noise reduction strength")}
+          aria-valuetext={`${(s.nr * 100).toFixed(0)} %`}
           onInput={(e) => setAudio({ nr: Number(e.currentTarget.value) })}
           title={t("Noise reduction strength {n} %", { n: (s.nr * 100).toFixed(0) })}
         />
       )}
       <button
-        class={s.notch ? "on" : ""}
+        class={s.notch ? "on" : ""} aria-pressed={!!(s.notch)}
         onClick={() => setAudio({ notch: !s.notch })}
         title={t("Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW")}
       >
@@ -400,7 +420,7 @@ export function DspCtl() {
         {tc("filter", "Notch")}
       </button>
       <button
-        class={s.squelch ? "on" : ""}
+        class={s.squelch ? "on" : ""} aria-pressed={!!(s.squelch)}
         onClick={() => setAudio({ squelch: !s.squelch })}
         title={t("Squelch: mute while the signal is below the threshold (marked on the S-meter)")}
       >
@@ -413,6 +433,8 @@ export function DspCtl() {
             min={-140}
             max={-20}
             value={s.squelch_db}
+            aria-label={t("Squelch threshold")}
+            aria-valuetext={`${s.squelch_db.toFixed(0)} dB`}
             onInput={(e) => setAudio({ squelch_db: Number(e.currentTarget.value) })}
             title={t("Squelch threshold")}
           />
@@ -438,13 +460,13 @@ export function ZoomCtl() {
   const span = wfSpan(r.adc_hz, s.wf.decim);
   return (
     <div class="group">
-      <button onClick={() => zoom(s.wf.decim / 2)} disabled={s.wf.decim <= r.wf_decim_min} title={t("Zoom out (wheel)")}>
+      <button onClick={() => zoom(s.wf.decim / 2)} disabled={s.wf.decim <= r.wf_decim_min} title={t("Zoom out (wheel)")} aria-label={t("Zoom out (wheel)")}>
         −
       </button>
       <span class="num" title={t("Waterfall span")}>
         {span >= 1e6 ? `${(span / 1e6).toFixed(2)} MHz` : `${(span / 1e3).toFixed(1)} kHz`}
       </span>
-      <button onClick={() => zoom(s.wf.decim * 2)} disabled={s.wf.decim >= r.wf_decim_max} title={t("Zoom in (wheel)")}>
+      <button onClick={() => zoom(s.wf.decim * 2)} disabled={s.wf.decim >= r.wf_decim_max} title={t("Zoom in (wheel)")} aria-label={t("Zoom in (wheel)")}>
         +
       </button>
       <button onClick={() => setView({ ...s.wf, center_hz: s.hz })} title={t("Centre the waterfall on the dial")}>
@@ -478,7 +500,7 @@ export function UsersCtl() {
   const others = users.value;
   return (
     <div class="group users-ctl" ref={box}>
-      <button class={open ? "on" : ""} onClick={() => (usersOpen.value = !open)} title={t("Users and background decoders")}>
+      <button class={open ? "on" : ""} aria-expanded={open} aria-haspopup="dialog" onClick={() => (usersOpen.value = !open)} title={t("Users and background decoders")}>
         {t("Users {n}", { n: others.length + 1 })}
       </button>
       {open && <UserList />}
@@ -493,8 +515,9 @@ function UserList() {
     f();
     usersOpen.value = false;
   };
+  const pop = usePopFocus(true);
   return (
-    <div class="users-pop">
+    <div class="users-pop" ref={pop}>
       <table>
         <thead>
           <tr>
@@ -518,7 +541,7 @@ function UserList() {
               <tr
                 key={u.id}
                 class={f ? "pick" : "dim"}
-                onClick={f ? pick(() => pickUser(u)) : undefined}
+                {...rowAction(f ? pick(() => pickUser(u)) : undefined)}
                 title={f ? (own ? t("Click to tune there") : t("Click to listen along")) : u.hz === undefined ? t("Their frequency is private") : t("Waiting for a receiver")}
               >
                 <td>{u.name || t("user {id}", { id: u.id })}</td>
@@ -540,7 +563,7 @@ function UserList() {
             </thead>
             <tbody>
               {skimmers.value.map((k) => (
-                <tr key={`${k.mode}${k.dial}`} class={k.on ? "pick" : "pick dim"} onClick={pick(() => pickSkimmer(k))} title={t("Click to tune there")}>
+                <tr key={`${k.mode}${k.dial}`} class={k.on ? "pick" : "pick dim"} {...rowAction(pick(() => pickSkimmer(k)))} title={t("Click to tune there")}>
                   <td>{k.mode}</td>
                   <td class="r">{formatKhz(k.dial)}</td>
                   <td>USB{!k.on && ` · ${t("waiting")}`}</td>
@@ -585,7 +608,7 @@ export function LeaseBanner() {
               { pos: l.position },
             )
           : t("All receivers are in use: you are #{pos} in the queue, waterfall only until then.", { pos: l.position })}
-        {users.value.some(followable) && ` ${t("Click a green marker on the scale to listen along with another user.")}`}
+        {users.value.some(followable) && ` ${t("Click another user's marker (▼) on the scale to listen along.")}`}
         {g > 0 && (
           <>
             {" "}
@@ -597,7 +620,7 @@ export function LeaseBanner() {
   }
   if (!body && !n) return null;
   return (
-    <div class="banner">
+    <div class="banner" role="status">
       {body}
       {n && <span class="warn">{n}</span>}
     </div>
@@ -608,7 +631,7 @@ export function ContrastCtl() {
   const r = range.value;
   return (
     <div class="group" title={t("Waterfall colour range (dBFS)")}>
-      <button class={r.auto ? "on" : ""} onClick={() => (range.value = { ...r, auto: !r.auto })}>
+      <button class={r.auto ? "on" : ""} aria-pressed={!!(r.auto)} onClick={() => (range.value = { ...r, auto: !r.auto })}>
         {/* i18n: button: choose the waterfall colour range automatically */}
         {tc("colour range", "Auto")}
       </button>
@@ -620,6 +643,7 @@ export function ContrastCtl() {
           min={-170}
           max={-20}
           value={r.min}
+          aria-valuetext={`${r.min} dBFS`}
           onInput={(e) => (range.value = { ...setFloor(r, Number(e.currentTarget.value)), auto: false })}
         />
       </label>
@@ -631,6 +655,7 @@ export function ContrastCtl() {
           min={-150}
           max={0}
           value={r.max}
+          aria-valuetext={`${r.max} dBFS`}
           onInput={(e) => (range.value = { ...setTop(r, Number(e.currentTarget.value)), auto: false })}
         />
       </label>
@@ -646,19 +671,19 @@ export function ContrastCtl() {
 export function LookCtl() {
   return (
     <div class="group look">
-      <button class={peakHold.value ? "on" : ""} onClick={() => setPeakHold(!peakHold.value)} title={t("Peak hold: the highest level each frequency reached (pink), on the spectrum")}>
+      <button class={peakHold.value ? "on" : ""} aria-pressed={!!(peakHold.value)} onClick={() => setPeakHold(!peakHold.value)} title={t("Peak hold: the highest level each frequency reached (pink), on the spectrum")}>
         {/* i18n: Peak = peak hold: the spectrum keeps the highest level each frequency reached */}
         {tc("spectrum", "Peak")}
       </button>
       {peakHold.value && (
-        <button onClick={() => paneHooks.clearPeak?.()} title={t("Clear the peaks")}>
+        <button onClick={() => paneHooks.clearPeak?.()} title={t("Clear the peaks")} aria-label={t("Clear the peaks")}>
           ↺
         </button>
       )}
       <button onClick={() => paneHooks.saveImage?.()} title={t("Save the spectrum and waterfall as a PNG image (with time marks and the frequency)")}>
         PNG
       </button>
-      <button class={afOn.value ? "on" : ""} onClick={() => setAf(!afOn.value)} title={t("Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)")}>
+      <button class={afOn.value ? "on" : ""} aria-pressed={!!(afOn.value)} onClick={() => setAf(!afOn.value)} title={t("Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)")}>
         AF
       </button>
     </div>
@@ -694,6 +719,8 @@ export function SMeter() {
       <span class={over ? "lamp lit" : "lamp"} title={t("ADC overload")}>
         {/* i18n: OVL = overload: the ADC input is too strong */}
         {t("OVL")}
+        {over ? "!" : ""}
+        <span class="sr-only">{over ? t("overloaded") : t("no overload")}</span>
       </span>
       <AttLamp />
     </div>
@@ -723,7 +750,7 @@ export function StatusBar() {
   const r = radio.value;
   return (
     <div class="status">
-      <span class={`conn ${c}`}>{t(CONN_TEXT[c])}</span>
+      <span class={`conn ${c}`} role="status">{t(CONN_TEXT[c])}</span>
       {connNote.value && <span>{connNote.value}</span>}
       {r && (
         <span>
@@ -788,42 +815,32 @@ export function StatusBar() {
       <span class="right">
         {guestOpen.value > 0 && (
           <>
-            <a
-              href="#"
-              onClick={(e) => {
-                e.preventDefault();
-                guestLogin();
-              }}
+            <button
+              type="button"
+              class="link"
+              onClick={guestLogin}
               title={t("You listen as a visitor: {n} of the receivers are open without the password. Log in for any.", { n: guestOpen.value })}
             >
               {t("visitor: log in")}
-            </a>
+            </button>
             {" · "}
           </>
         )}
         {server.value} ·{" "}
-        <a
-          href="#info"
-          class={infoOpen.value ? "on" : ""}
-          onClick={(e) => {
-            e.preventDefault();
-            infoOpen.value = !infoOpen.value;
-          }}
+        <button
+          type="button"
+          class={infoOpen.value ? "link on" : "link"}
+          aria-expanded={infoOpen.value}
+          aria-haspopup="dialog"
+          onClick={() => (infoOpen.value = !infoOpen.value)}
           title={t("About this receiver: where it is, its antenna, its limits, privacy, licences")}
         >
           {t("info")}
-        </a>{" "}
+        </button>{" "}
         ·{" "}
-        <a
-          href="#"
-          onClick={(e) => {
-            e.preventDefault();
-            helpOpen.value = true;
-          }}
-          title={t("Keys and mouse (key ?)")}
-        >
+        <button type="button" class="link" aria-haspopup="dialog" onClick={() => (helpOpen.value = true)} title={t("Keys and mouse (key ?)")}>
           {t("keys")}
-        </a>{" "}
+        </button>{" "}
         · <a href="#/admin">{t("admin")}</a>
       </span>
     </div>

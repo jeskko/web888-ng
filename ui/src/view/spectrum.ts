@@ -450,6 +450,12 @@ export class Spectrum {
       ctx.lineTo(xx, sy + m);
       ctx.closePath();
       ctx.fill();
+      // the one listened to also has an outline: not told by colour alone
+      if (u.on) {
+        ctx.strokeStyle = "#ffffff";
+        ctx.lineWidth = 1.5 * dpr;
+        ctx.stroke();
+      }
     }
   }
 }

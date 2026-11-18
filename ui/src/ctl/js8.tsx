@@ -61,12 +61,12 @@ export function Js8Panel() {
         <button onClick={clearJs8} title={t("Clear the messages")}>
           {t("Clear")}
         </button>
-        <button class="close" onClick={() => setJs8(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setJs8(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {js8Error.value && <p class="warn">{js8Error.value}</p>}
+        {js8Error.value && <p class="warn" role="alert">{js8Error.value}</p>}
         {s && s.mode !== "usb" && <p class="dim">{t("JS8 is decoded in USB.")}</p>}
         {!status.clock && <p class="dim">{t("Using this computer's clock: JS8 needs it within a second or so of UTC.")}</p>}
         {stations.length > 0 && (

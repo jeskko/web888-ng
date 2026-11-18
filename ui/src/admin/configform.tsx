@@ -58,6 +58,9 @@ function TextField({ ctx, path, s }: { ctx: Ctx; path: string[]; s: Schema }) {
     <>
       <input
         class={err ? "bad" : ""}
+        aria-labelledby={`${fieldId(path)}-l`}
+        aria-invalid={err ? true : undefined}
+        aria-describedby={err ? `${fieldId(path)}-err` : undefined}
         // secrets in the config (e.g. [mqtt] password) aren't shown
         type={(path[path.length - 1] === "password" ? "password" : "text") as "text"}
         autocomplete="off"
@@ -67,7 +70,11 @@ function TextField({ ctx, path, s }: { ctx: Ctx; path: string[]; s: Schema }) {
         spellcheck={false}
         onInput={(e) => onInput((e.target as HTMLInputElement).value)}
       />
-      {err && <span class="warn">{err}</span>}
+      {err && (
+        <span class="warn" id={`${fieldId(path)}-err`}>
+          {err}
+        </span>
+      )}
     </>
   );
 }
@@ -122,10 +129,10 @@ function Field({ ctx, path, schema }: { ctx: Ctx; path: string[]; schema: Schema
   const choiceHelp = k.kind === "choice" ? k.options.find((o) => o.value === v)?.help : undefined;
   return (
     <div class="field">
-      <label class="name" title={path.join(".")}>
+      <label class="name" id={`${fieldId(path)}-l`} title={path.join(".")}>
         {label(key)}
       </label>
-      <div class="value">
+      <div class="value" role="group" aria-labelledby={`${fieldId(path)}-l`}>
         <div class="line">
           {editor}
           <Notes ctx={ctx} path={path} />
@@ -136,6 +143,9 @@ function Field({ ctx, path, schema }: { ctx: Ctx; path: string[]; schema: Schema
     </div>
   );
 }
+
+/** An id for a settings field's elements (its label, its error). */
+const fieldId = (path: (string | number)[]) => `cfg-${path.join("-").replace(/[^\w-]/g, "_")}`;
 
 export function ConfigPage({ onRestart }: { onRestart(): void }) {
   const [schema, setSchema] = useState<Schema | null>(null);
@@ -234,17 +244,17 @@ export function ConfigPage({ onRestart }: { onRestart(): void }) {
         <button disabled={!dirty} onClick={() => void load()}>
           {t("Revert")}
         </button>
-        {hasErrors && <span class="warn">{t("Fix the marked fields first.")}</span>}
+        {hasErrors && <span class="warn" role="alert">{t("Fix the marked fields first.")}</span>}
         {!hasErrors && typeof check === "string" && <span class="warn">{check}</span>}
         {!hasErrors && check && typeof check !== "string" && <ChangeNote c={check} />}
         {saved && (
           <>
-            <span class="ok">{t("Saved.")}</span>
+            <span class="ok" role="status">{t("Saved.")}</span>
             <ChangeNote c={saved} />
             {saved.restart.length > 0 && <button onClick={onRestart}>{t("Restart now")}</button>}
           </>
         )}
-        {fail && <span class="warn">{fail}</span>}
+        {fail && <span class="warn" role="alert">{fail}</span>}
       </div>
       <div key={gen}>
         {sections.map(([name, s]) => {

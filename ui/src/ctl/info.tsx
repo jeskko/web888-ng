@@ -4,6 +4,7 @@
 // The Info button opens it, as does a link to the page with #info.
 
 import { signal } from "@preact/signals";
+import { useDialog } from "../a11y.ts";
 import { useEffect, useState } from "preact/hooks";
 import { api } from "../state.ts";
 import { Licences } from "./licences.tsx";
@@ -128,15 +129,13 @@ export function InfoPanel() {
       .then((r) => (r.ok ? (r.json() as Promise<Info>) : Promise.reject(new Error(`${r.status}`))))
       .then(setInfo)
       .catch((e: Error) => setErr(t("The info page didn't load ({msg}).", { msg: e.message })));
-    const key = (e: KeyboardEvent) => e.key === "Escape" && (infoOpen.value = false);
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
   }, [open]);
+  const box = useDialog(open, () => (infoOpen.value = false));
   if (!open) return null;
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label={t("About this receiver")} onClick={(e) => e.target === e.currentTarget && (infoOpen.value = false)}>
+    <div ref={box} class="overlay keyhelp" role="dialog" aria-modal="true" aria-label={t("About this receiver")} onClick={(e) => e.target === e.currentTarget && (infoOpen.value = false)}>
       <div class="keyhelp-box info-box">
-        <button class="info-x" onClick={() => (infoOpen.value = false)} title={t("Close (Escape)")}>
+        <button class="info-x" onClick={() => (infoOpen.value = false)} title={t("Close (Escape)")} aria-label={t("Close (Escape)")}>
           ✕
         </button>
         {!info ? <p class="dim">{err || t("Loading…")}</p> : lic ? <Licences server={info.server} /> : <Body i={info} />}
@@ -154,7 +153,7 @@ export function InfoPanel() {
 export function InfoCtl() {
   return (
     <div class="group">
-      <button class={infoOpen.value ? "on" : ""} onClick={() => (infoOpen.value = !infoOpen.value)} title={t("About this receiver: where it is, its antenna, its limits")}>
+      <button class={infoOpen.value ? "on" : ""} aria-expanded={infoOpen.value} aria-haspopup="dialog" onClick={() => (infoOpen.value = !infoOpen.value)} title={t("About this receiver: where it is, its antenna, its limits")}>
         {t("Info")}
       </button>
     </div>

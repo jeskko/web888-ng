@@ -7,6 +7,8 @@
 // inline.
 
 import { signal } from "@preact/signals";
+import { announceDecodes, setAnnounceDecodes } from "./speak.ts";
+import { useDialog } from "../a11y.ts";
 import { useEffect } from "preact/hooks";
 import { cssGradient, PALETTE_NAMES, type Palette } from "../view/colormap.ts";
 import { NAME_MAX } from "../proto.ts";
@@ -19,7 +21,8 @@ export const configOpen = signal(location.hash === "#config");
 // i18n: names of waterfall colour palettes
 export const PALETTE_LABELS: Record<Palette, string> = {
   web888: N_("Default"),
-  viridis: "Viridis",
+  // i18n: Viridis: a perceptually uniform colour scale that people with colour blindness see as well
+  viridis: N_("Viridis (colour-blind safe)"),
   heat: N_("Heat"),
   phosphor: N_("Phosphor"),
   grey: N_("Grey"),
@@ -36,7 +39,7 @@ export function ConfigBody() {
         <select class="lang" value={langPref.value} onChange={(e) => void setLanguage(e.currentTarget.value)}>
           <option value="">{t("Automatic (the browser's)")}</option>
           {languages.value.map((l) => (
-            <option key={l.code} value={l.code}>
+            <option key={l.code} value={l.code} lang={l.code}>
               {l.name}
             </option>
           ))}
@@ -78,6 +81,17 @@ export function ConfigBody() {
           </span>
         </span>
       </label>
+      <h4>{t("Accessibility")}</h4>
+      <label class="config-check">
+        <input type="checkbox" class="speak" checked={announceDecodes.value} onChange={(e) => setAnnounceDecodes(e.currentTarget.checked)} />
+        <span>
+          {t("Read out decoded text")}
+          <span class="dim">
+            {" — "}
+            {t("a screen reader speaks new CW, RTTY, PSK and JS8 text every few seconds")}
+          </span>
+        </span>
+      </label>
       <h4>{t("Waterfall")}</h4>
       <label class="config-row">
         {t("Colours")}
@@ -112,7 +126,7 @@ export function ConfigBody() {
 export function ConfigCtl() {
   return (
     <div class="group">
-      <button class={configOpen.value ? "on" : ""} onClick={() => (configOpen.value = !configOpen.value)} title={t("Your settings: language, name, sharing, data saver, waterfall colours, labels")}>
+      <button class={configOpen.value ? "on" : ""} aria-expanded={configOpen.value} aria-haspopup="dialog" onClick={() => (configOpen.value = !configOpen.value)} title={t("Your settings: language, name, sharing, data saver, waterfall colours, labels")}>
         {t("Config")}
       </button>
     </div>
@@ -122,17 +136,12 @@ export function ConfigCtl() {
 /** The settings in a box over the page; Escape or a click outside closes it. */
 export function ConfigPanel() {
   const open = configOpen.value;
-  useEffect(() => {
-    if (!open) return;
-    const key = (e: KeyboardEvent) => e.key === "Escape" && (configOpen.value = false);
-    window.addEventListener("keydown", key);
-    return () => window.removeEventListener("keydown", key);
-  }, [open]);
+  const box = useDialog(open, () => (configOpen.value = false));
   if (!open) return null;
   return (
-    <div class="overlay keyhelp" role="dialog" aria-label={t("Configuration")} onClick={(e) => e.target === e.currentTarget && (configOpen.value = false)}>
+    <div ref={box} class="overlay keyhelp" role="dialog" aria-modal="true" aria-label={t("Configuration")} onClick={(e) => e.target === e.currentTarget && (configOpen.value = false)}>
       <div class="keyhelp-box info-box config-box">
-        <button class="info-x" onClick={() => (configOpen.value = false)} title={t("Close (Escape)")}>
+        <button class="info-x" onClick={() => (configOpen.value = false)} title={t("Close (Escape)")} aria-label={t("Close (Escape)")}>
           ✕
         </button>
         <h3>{t("Configuration")}</h3>

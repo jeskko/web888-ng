@@ -19,7 +19,7 @@ export function DigiCtl() {
   const on = digiOn.value;
   return (
     <div class="group">
-      <button class={on ? "on" : ""} onClick={() => setDigi(!on)} title={t("Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)")}>
+      <button class={on ? "on" : ""} aria-pressed={!!(on)} onClick={() => setDigi(!on)} title={t("Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)")}>
         FT8/FT4/WSPR
       </button>
     </div>
@@ -89,12 +89,12 @@ export function DigiPanel() {
         <button onClick={clearDigi} title={t("Clear the list")}>
           {t("Clear")}
         </button>
-        <button class="close" onClick={() => setDigi(false)} title={t("Stop decoding")}>
+        <button class="close" onClick={() => setDigi(false)} title={t("Stop decoding")} aria-label={t("Stop decoding")}>
           ✕
         </button>
       </div>
       <div class="spots-list">
-        {digiError.value && <p class="warn">{digiError.value}</p>}
+        {digiError.value && <p class="warn" role="alert">{digiError.value}</p>}
         <StatusLine />
         {rows.length === 0 ? (
           <p class="dim">
