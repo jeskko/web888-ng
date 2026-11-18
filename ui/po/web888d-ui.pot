@@ -45,7 +45,7 @@ msgstr ""
 msgid "Restart web888d? Everyone is disconnected for a few seconds."
 msgstr ""
 
-#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1486
+#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1634
 msgid "web888d admin"
 msgstr ""
 
@@ -70,7 +70,7 @@ msgstr ""
 msgid "Back to the receiver"
 msgstr ""
 
-#: src/admin/admin.tsx:157 src/admin/admin.tsx:662 src/admin/admin.tsx:991 src/admin/admin.tsx:1477 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:157 src/admin/admin.tsx:662 src/admin/admin.tsx:1139 src/admin/admin.tsx:1625 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr ""
 
@@ -182,7 +182,7 @@ msgstr ""
 msgid "Waterfall views"
 msgstr ""
 
-#: src/admin/admin.tsx:261 src/admin/admin.tsx:482
+#: src/admin/admin.tsx:261 src/admin/admin.tsx:482 src/admin/admin.tsx:1034
 msgid "none"
 msgstr ""
 
@@ -411,7 +411,7 @@ msgctxt "skimmer state"
 msgid "waiting"
 msgstr ""
 
-#: src/admin/admin.tsx:525 src/admin/admin.tsx:1068
+#: src/admin/admin.tsx:525 src/admin/admin.tsx:1216
 #, placeholders
 msgid "{when} ago"
 msgstr ""
@@ -600,6 +600,11 @@ msgstr ""
 #. drops a/wf = dropped audio and waterfall blocks
 #: src/admin/admin.tsx:685
 msgid "drops a/wf"
+msgstr ""
+
+#: src/admin/admin.tsx:694
+#, placeholders
+msgid "{class} (token {name})"
 msgstr ""
 
 #: src/admin/admin.tsx:700
@@ -794,246 +799,378 @@ msgstr ""
 msgid "Listener password removed: the receiver is open."
 msgstr ""
 
-#: src/admin/admin.tsx:996
+#. what an API token's scope lets a program do
+#: src/admin/admin.tsx:949
+msgid "read"
+msgstr ""
+
+#. what an API token's scope lets a program do
+#: src/admin/admin.tsx:949
+msgid "spots, labels, info and propagation; no receiver"
+msgstr ""
+
+#: src/admin/admin.tsx:950
+msgid "listen"
+msgstr ""
+
+#: src/admin/admin.tsx:950
+msgid "also a receiver, as a listener"
+msgstr ""
+
+#: src/admin/admin.tsx:951 src/ctl/controls.tsx:844
+msgid "admin"
+msgstr ""
+
+#: src/admin/admin.tsx:951
+msgid "also everything the admin can do"
+msgstr ""
+
+#: src/admin/admin.tsx:989
+#, placeholders
+msgid "Revoke the token {name}? Programs using it lose access, and its sessions end."
+msgstr ""
+
+#: src/admin/admin.tsx:1002
+msgid "API tokens"
+msgstr ""
+
+#: src/admin/admin.tsx:1004
+#, placeholders
+msgid "For programs that use the receiver: they send the token as {header}. See {doc}."
+msgstr ""
+
+#: src/admin/admin.tsx:1017
+msgid "name"
+msgstr ""
+
+#. scope = what an API token may do
+#: src/admin/admin.tsx:1019
+msgctxt "token"
+msgid "scope"
+msgstr ""
+
+#: src/admin/admin.tsx:1020
+msgid "made"
+msgstr ""
+
+#: src/admin/admin.tsx:1021
+msgid "expires"
+msgstr ""
+
+#. limits = the per-address, session and idle limits
+#: src/admin/admin.tsx:1023
+msgctxt "token"
+msgid "limits"
+msgstr ""
+
+#: src/admin/admin.tsx:1033 src/admin/admin.tsx:1216
+msgid "never"
+msgstr ""
+
+#: src/admin/admin.tsx:1034
+msgid "as listeners"
+msgstr ""
+
+#: src/admin/admin.tsx:1036
+msgid "Revoke"
+msgstr ""
+
+#: src/admin/admin.tsx:1043
+msgid "No tokens."
+msgstr ""
+
+#: src/admin/admin.tsx:1050 src/admin/admin.tsx:1050
+msgid "Token name"
+msgstr ""
+
+#: src/admin/admin.tsx:1051
+msgid "Scope"
+msgstr ""
+
+#: src/admin/admin.tsx:1058
+msgid "Expires"
+msgstr ""
+
+#: src/admin/admin.tsx:1061
+#, placeholders
+msgid "expires in {n} day"
+msgid_plural "expires in {n} days"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/admin.tsx:1061
+msgid "never expires"
+msgstr ""
+
+#: src/admin/admin.tsx:1065
+msgid "Its sessions skip the per-address, session, idle and daily limits (a recorder)"
+msgstr ""
+
+#: src/admin/admin.tsx:1066
+msgid "no limits"
+msgstr ""
+
+#: src/admin/admin.tsx:1069
+msgid "Make"
+msgstr ""
+
+#: src/admin/admin.tsx:1074
+#, placeholders
+msgid "The token {name}: copy it now, it isn't shown again."
+msgstr ""
+
+#: src/admin/admin.tsx:1075
+msgid "The new token"
+msgstr ""
+
+#: src/admin/admin.tsx:1080
+msgid "Copied."
+msgstr ""
+
+#: src/admin/admin.tsx:1081
+msgid "Copying didn't work: select the text and copy it."
+msgstr ""
+
+#: src/admin/admin.tsx:1085
+msgid "Copy"
+msgstr ""
+
+#: src/admin/admin.tsx:1144
 msgid "OS updates"
 msgstr ""
 
-#: src/admin/admin.tsx:997
+#: src/admin/admin.tsx:1145
 #, placeholders
 msgid "Not available: {why}."
 msgstr ""
 
 #. root slot = one of the two A/B system partitions; the update is written to the one not running
-#: src/admin/admin.tsx:1007
+#: src/admin/admin.tsx:1155
 #, placeholders
 msgid "Install web888-ng {version} into the other root slot? The receiver keeps running; a reboot then starts the new system."
 msgstr ""
 
-#: src/admin/admin.tsx:1011
+#: src/admin/admin.tsx:1159
 msgid "Reboot the unit now? Everyone is disconnected; it is back in a minute or two."
 msgstr ""
 
-#: src/admin/admin.tsx:1023
+#: src/admin/admin.tsx:1171
 msgid "Rebooting"
 msgstr ""
 
-#: src/admin/admin.tsx:1026
+#: src/admin/admin.tsx:1174
 #, placeholders
 msgid "The unit is restarting into web888-ng {version}. This page reloads when it is back."
 msgstr ""
 
-#: src/admin/admin.tsx:1027
+#: src/admin/admin.tsx:1175
 msgid "The unit is restarting. This page reloads when it is back."
 msgstr ""
 
-#: src/admin/admin.tsx:1030
+#: src/admin/admin.tsx:1178
 msgid "If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes)."
 msgstr ""
 
-#: src/admin/admin.tsx:1039
+#: src/admin/admin.tsx:1187
 msgctxt "operating system"
 msgid "OS"
 msgstr ""
 
-#: src/admin/admin.tsx:1041
+#: src/admin/admin.tsx:1189
 msgctxt "software version"
 msgid "Running"
 msgstr ""
 
 #. slot = one of the two A/B system partitions (RAUC slots)
-#: src/admin/admin.tsx:1044
+#: src/admin/admin.tsx:1192
 #, placeholders
 msgid "web888-ng {version}, slot {slot}"
 msgstr ""
 
-#: src/admin/admin.tsx:1046
+#: src/admin/admin.tsx:1194
 msgid "Newest release"
 msgstr ""
 
-#: src/admin/admin.tsx:1055
+#: src/admin/admin.tsx:1203
 #, placeholders
 msgid "({date}, {size}, pre-release)"
 msgstr ""
 
-#: src/admin/admin.tsx:1056
+#: src/admin/admin.tsx:1204
 #, placeholders
 msgid "({date}, {size})"
 msgstr ""
 
-#: src/admin/admin.tsx:1060
+#: src/admin/admin.tsx:1208
 msgid "none found"
 msgstr ""
 
-#: src/admin/admin.tsx:1062
+#: src/admin/admin.tsx:1210
 msgid "not looked yet"
 msgstr ""
 
 #. "Looked": when the server last checked GitHub for a new release
-#: src/admin/admin.tsx:1066
+#: src/admin/admin.tsx:1214
 msgid "Looked"
 msgstr ""
 
-#: src/admin/admin.tsx:1068
-msgid "never"
-msgstr ""
-
-#: src/admin/admin.tsx:1069
+#: src/admin/admin.tsx:1217
 #, placeholders
 msgid "(by itself every {n} h)"
 msgstr ""
 
-#: src/admin/admin.tsx:1072
+#: src/admin/admin.tsx:1220
 #, placeholders
 msgid "Looking for releases failed: {error}"
 msgstr ""
 
-#: src/admin/admin.tsx:1073
+#: src/admin/admin.tsx:1221
 msgid "Updates are off (Configuration: update.enabled)."
 msgstr ""
 
-#: src/admin/admin.tsx:1076
+#: src/admin/admin.tsx:1224
 msgid "Looking…"
 msgstr ""
 
-#: src/admin/admin.tsx:1076
+#: src/admin/admin.tsx:1224
 msgid "Look for a release"
 msgstr ""
 
-#: src/admin/admin.tsx:1080 src/admin/admin.tsx:1111
+#: src/admin/admin.tsx:1228 src/admin/admin.tsx:1259
 #, placeholders
 msgid "Install {version}"
 msgstr ""
 
-#: src/admin/admin.tsx:1083
+#: src/admin/admin.tsx:1231
 msgid "Up to date."
 msgstr ""
 
-#: src/admin/admin.tsx:1087
+#: src/admin/admin.tsx:1235
 #, placeholders
 msgid "{link} (into the other slot, as an update would)."
 msgstr ""
 
-#: src/admin/admin.tsx:1096
+#: src/admin/admin.tsx:1244
 #, placeholders
 msgid "Install {version} again"
 msgstr ""
 
-#: src/admin/admin.tsx:1104
+#: src/admin/admin.tsx:1252
 msgid "Release notes"
 msgstr ""
 
-#: src/admin/admin.tsx:1118
+#: src/admin/admin.tsx:1266
 msgid "Streamed from the release and checked as it goes; the receiver keeps running."
 msgstr ""
 
-#: src/admin/admin.tsx:1125
+#: src/admin/admin.tsx:1273
 #, placeholders
 msgid "Installed in {n} min. Reboot to start it."
 msgstr ""
 
-#: src/admin/admin.tsx:1126
+#: src/admin/admin.tsx:1274
 msgid "Installed. Reboot to start it."
 msgstr ""
 
-#: src/admin/admin.tsx:1130
+#: src/admin/admin.tsx:1278
 msgid "Reboot now"
 msgstr ""
 
-#: src/admin/admin.tsx:1133
+#: src/admin/admin.tsx:1281
 msgid "The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay."
 msgstr ""
 
-#: src/admin/admin.tsx:1136
+#: src/admin/admin.tsx:1284
 #, placeholders
 msgid "Failed: {error}. The running system is unchanged."
 msgstr ""
 
 #. root slot = one of the two A/B system partitions (RAUC slots); the update goes to the one not running
-#: src/admin/admin.tsx:1147
+#: src/admin/admin.tsx:1295
 msgid "Root slots"
 msgstr ""
 
-#: src/admin/admin.tsx:1152
+#: src/admin/admin.tsx:1300
 msgid "Slot"
 msgstr ""
 
-#: src/admin/admin.tsx:1153
+#: src/admin/admin.tsx:1301
 msgid "State"
 msgstr ""
 
 #. Boot = the slot's boot status (good, bad, ...)
-#: src/admin/admin.tsx:1155
+#: src/admin/admin.tsx:1303
 msgctxt "slot"
 msgid "Boot"
 msgstr ""
 
-#: src/admin/admin.tsx:1156
+#: src/admin/admin.tsx:1304
 msgid "Version"
 msgstr ""
 
-#: src/admin/admin.tsx:1157
+#: src/admin/admin.tsx:1305
 msgid "Installed (UTC)"
 msgstr ""
 
-#: src/admin/admin.tsx:1175
+#: src/admin/admin.tsx:1323
 msgid "An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN, u-boot.img) is not part of it: see Boot loader below."
 msgstr ""
 
-#: src/admin/admin.tsx:1194
+#: src/admin/admin.tsx:1342
 #, placeholders
 msgid "{file}: not a settings backup (JSON)"
 msgstr ""
 
-#: src/admin/admin.tsx:1197
+#: src/admin/admin.tsx:1345
 #, placeholders
 msgid "Restore the settings from {file}? The configuration, the passwords and the own labels are replaced by the file's."
 msgstr ""
 
 #. the three parts are joined with "; " into one report
-#: src/admin/admin.tsx:1207
+#: src/admin/admin.tsx:1355
 #, placeholders
 msgid "Restored the settings saved by web888d {server} on {when} UTC"
 msgstr ""
 
-#: src/admin/admin.tsx:1208
+#: src/admin/admin.tsx:1356
 #, placeholders
 msgid "{n} own label"
 msgid_plural "{n} own labels"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/admin/admin.tsx:1209
+#: src/admin/admin.tsx:1357
 #, placeholders
 msgid "restart web888d for: {what}"
 msgstr ""
 
-#: src/admin/admin.tsx:1212
+#: src/admin/admin.tsx:1360
 #, placeholders
 msgid "Not restored: {error}"
 msgstr ""
 
-#: src/admin/admin.tsx:1220
+#: src/admin/admin.tsx:1368
 msgid "Backup"
 msgstr ""
 
-#: src/admin/admin.tsx:1223
+#: src/admin/admin.tsx:1371
 msgid "Download the settings"
 msgstr ""
 
-#: src/admin/admin.tsx:1227
+#: src/admin/admin.tsx:1375
 msgid "Restoring…"
 msgstr ""
 
-#: src/admin/admin.tsx:1227
+#: src/admin/admin.tsx:1375
 msgid "Restore from a file"
 msgstr ""
 
-#: src/admin/admin.tsx:1242
+#: src/admin/admin.tsx:1390
 msgid "One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's own settings (network, tunnels, SSH key) are in web888.txt on the card, not here."
 msgstr ""
 
 #. boot loader = the first software the unit runs at power-up (SPL + U-Boot on the SD card)
-#: src/admin/admin.tsx:1278
+#: src/admin/admin.tsx:1426
 msgid ""
 "Write the boot loader to the card now?\n"
 "\n"
@@ -1042,122 +1179,122 @@ msgid ""
 "The receiver keeps running; the new boot loader starts at the next reboot."
 msgstr ""
 
-#: src/admin/admin.tsx:1288
+#: src/admin/admin.tsx:1436
 msgid "done"
 msgstr ""
 
-#: src/admin/admin.tsx:1299
+#: src/admin/admin.tsx:1447
 msgid "Boot loader"
 msgstr ""
 
-#: src/admin/admin.tsx:1301
+#: src/admin/admin.tsx:1449
 #, placeholders
 msgid "Not updated from here: {reason}."
 msgstr ""
 
-#: src/admin/admin.tsx:1305
+#: src/admin/admin.tsx:1453
 msgid "On the card"
 msgstr ""
 
-#: src/admin/admin.tsx:1309
+#: src/admin/admin.tsx:1457
 #, placeholders
 msgid "this system's (web888-ng {version})"
 msgstr ""
 
-#: src/admin/admin.tsx:1309
+#: src/admin/admin.tsx:1457
 msgid "this system's"
 msgstr ""
 
-#: src/admin/admin.tsx:1312
+#: src/admin/admin.tsx:1460
 msgid "another one"
 msgstr ""
 
 #. SPL = the first-stage boot loader (secondary program loader); the values are short hashes of the two files
-#: src/admin/admin.tsx:1316 src/admin/admin.tsx:1325
+#: src/admin/admin.tsx:1464 src/admin/admin.tsx:1473
 #, placeholders
 msgid "SPL {spl}, U-Boot {uboot}"
 msgstr ""
 
-#: src/admin/admin.tsx:1321
+#: src/admin/admin.tsx:1469
 msgid "This system's"
 msgstr ""
 
-#: src/admin/admin.tsx:1332
+#: src/admin/admin.tsx:1480
 msgid "Kept"
 msgstr ""
 
-#: src/admin/admin.tsx:1333
+#: src/admin/admin.tsx:1481
 msgid "boot.bin.old, u-boot.img.old (the one before)"
 msgstr ""
 
-#: src/admin/admin.tsx:1339
+#: src/admin/admin.tsx:1487
 #, placeholders
 msgid "Not now: {reason}."
 msgstr ""
 
-#: src/admin/admin.tsx:1342
+#: src/admin/admin.tsx:1490
 msgid "Writing…"
 msgstr ""
 
-#: src/admin/admin.tsx:1342
+#: src/admin/admin.tsx:1490
 msgid "Write it to the card…"
 msgstr ""
 
-#: src/admin/admin.tsx:1346
+#: src/admin/admin.tsx:1494
 msgid "Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to re-image the card if something unexpected happens."
 msgstr ""
 
 #. log sources; "System (this boot)" = the system log since the unit last booted; Kernel = the operating system kernel's log
-#: src/admin/admin.tsx:1362
+#: src/admin/admin.tsx:1510
 msgid "System (this boot)"
 msgstr ""
 
-#: src/admin/admin.tsx:1363
+#: src/admin/admin.tsx:1511
 msgid "Kernel"
 msgstr ""
 
-#: src/admin/admin.tsx:1426
+#: src/admin/admin.tsx:1574
 msgid "not on this system"
 msgstr ""
 
-#: src/admin/admin.tsx:1433
+#: src/admin/admin.tsx:1581
 msgid "How many lines"
 msgstr ""
 
-#: src/admin/admin.tsx:1435
+#: src/admin/admin.tsx:1583
 #, placeholders
 msgid "{n} lines"
 msgstr ""
 
-#: src/admin/admin.tsx:1438
+#: src/admin/admin.tsx:1586
 msgid "Filter the lines"
 msgstr ""
 
-#: src/admin/admin.tsx:1438
+#: src/admin/admin.tsx:1586
 msgid "Filter"
 msgstr ""
 
-#: src/admin/admin.tsx:1440
+#: src/admin/admin.tsx:1588
 msgid "Follow"
 msgstr ""
 
-#: src/admin/admin.tsx:1443
+#: src/admin/admin.tsx:1591
 msgid "Download"
 msgstr ""
 
-#: src/admin/admin.tsx:1449
+#: src/admin/admin.tsx:1597
 msgid "No line matches the filter."
 msgstr ""
 
-#: src/admin/admin.tsx:1449
+#: src/admin/admin.tsx:1597
 msgid "No lines yet."
 msgstr ""
 
-#: src/admin/admin.tsx:1495
+#: src/admin/admin.tsx:1643
 msgid "Receiver"
 msgstr ""
 
-#: src/admin/admin.tsx:1496
+#: src/admin/admin.tsx:1644
 msgid "Log out"
 msgstr ""
 
@@ -1972,10 +2109,6 @@ msgstr ""
 
 #: src/ctl/controls.tsx:842
 msgid "keys"
-msgstr ""
-
-#: src/ctl/controls.tsx:844
-msgid "admin"
 msgstr ""
 
 #: src/ctl/cw.tsx:19

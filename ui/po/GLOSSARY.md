@@ -123,3 +123,6 @@ The header is narrow; these are the choices so far (Suomi / Svenska / Deutsch): 
 | backup / restore | the settings file | varmuuskopio / palautus | säkerhetskopia / återställning | Sicherung / Wiederherstellung |
 | session | one listener's connection | istunto | session | Sitzung |
 | ban | block an address | estää | spärra | sperren |
+| API token | a secret a program uses instead of a password | API-tunniste | API-token | API-Token |
+| scope (of a token) | what it may do | oikeudet | behörighet | Umfang |
+| revoke | make a token stop working | perua | återkalla | widerrufen |

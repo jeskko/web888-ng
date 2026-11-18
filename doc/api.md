@@ -326,7 +326,7 @@ it (`state`, `error`, `pong`, `spots`, ...), also into the `error` for
 a message it couldn't parse. Without it, a program
 can't tell which of several requests an `error` was about.
 
-### 8.3 Tokens (**built**; the admin page's part proposed)
+### 8.3 Tokens (**built**)
 
 A browser login is awkward for programs (a password in a script, a
 cookie jar, 12 h expiry), so:
@@ -349,8 +349,8 @@ cookie jar, 12 h expiry), so:
   list with the token's name (`token`). A token made `unlimited` (a
   recorder) is spared the per-address, session, idle and daily limits,
   as an admin is.
-* **Proposed:** a Tokens section in the admin page (until then, the
-  calls above, e.g. with `curl` and the admin's token or cookie).
+* The admin page's Passwords tab has an **API tokens** card for all of
+  this (`ui/tools/cdp/tokens.mjs` checks it).
 * Kiwi and HPSDR stay as they are (Kiwi has its own password; HPSDR is
   for the local network).
 

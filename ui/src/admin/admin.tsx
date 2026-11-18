@@ -7,7 +7,7 @@ import { signal } from "@preact/signals";
 import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
 import { N_, t, tc, tn, tx } from "../i18n.ts";
-import { call, get, href, loggedOut, putText, type Auth, type Changes, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
+import { call, get, href, loggedOut, putText, type ApiToken, type Auth, type Changes, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
 import { ConfigPage } from "./configform.tsx";
 
 type Tab = "status" | "sessions" | "config" | "labels" | "info" | "passwords" | "update" | "logs";
@@ -691,7 +691,7 @@ function SessionsPage() {
               <tr key={s.id}>
                 <td>{s.id}</td>
                 <td>{s.ip}</td>
-                <td>{s.class}</td>
+                <td>{s.token ? t("{class} (token {name})", { class: s.class, name: s.token }) : s.class}</td>
                 <td>{ago(s.since)}</td>
                 <td class="r">{khz(s.hz)}</td>
                 <td>{s.mode ?? "–"}</td>
@@ -939,7 +939,155 @@ function PasswordsPage() {
         </form>
       </section>
       {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+      <TokensCard />
     </div>
+  );
+}
+
+// i18n: what an API token's scope lets a program do
+const SCOPES: { id: ApiToken["scope"]; name: string; what: string }[] = [
+  { id: "read", name: N_("read"), what: N_("spots, labels, info and propagation; no receiver") },
+  { id: "listen", name: N_("listen"), what: N_("also a receiver, as a listener") },
+  { id: "admin", name: N_("admin"), what: N_("also everything the admin can do") },
+];
+const EXPIRY_DAYS = [0, 30, 90, 365];
+
+const utcDay = (s: number) => new Date(s * 1000).toISOString().slice(0, 10);
+
+/** API tokens for programs (doc/api.md §8.3): made here, the
+ * secret shown once; listed and revoked. */
+function TokensCard() {
+  const [list, setList] = useState<ApiToken[] | null>(null);
+  const [name, setName] = useState("");
+  const [scope, setScope] = useState<ApiToken["scope"]>("listen");
+  const [days, setDays] = useState(0);
+  const [unlimited, setUnlimited] = useState(false);
+  const [made, setMade] = useState<{ name: string; token: string } | null>(null);
+  const [msg, setMsg] = useState<{ ok: boolean; text: string } | null>(null);
+  const load = () =>
+    get<{ tokens: ApiToken[] }>("api/admin/tokens")
+      .then((r) => setList(r.tokens))
+      .catch((e: Error) => setMsg({ ok: false, text: e.message }));
+  useEffect(() => void load(), []);
+  const create = async () => {
+    setMsg(null);
+    try {
+      const r = await call<{ token: string; name: string }>("POST", "api/admin/tokens", {
+        name: name.trim(),
+        scope,
+        expires_days: days || null,
+        unlimited,
+      });
+      setMade({ name: r.name, token: r.token });
+      setName("");
+      await load();
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    }
+  };
+  const revoke = async (tk: ApiToken) => {
+    if (!confirm(t("Revoke the token {name}? Programs using it lose access, and its sessions end.", { name: tk.name }))) return;
+    setMsg(null);
+    try {
+      await call("DELETE", `api/admin/tokens/${encodeURIComponent(tk.name)}`);
+      if (made?.name === tk.name) setMade(null);
+      await load();
+    } catch (e) {
+      setMsg({ ok: false, text: (e as Error).message });
+    }
+  };
+  const scopeName = (id: string) => t(SCOPES.find((x) => x.id === id)?.name ?? id);
+  return (
+    <section class="card tokens">
+      <h3>{t("API tokens")}</h3>
+      <p class="dim">
+        {tx("For programs that use the receiver: they send the token as {header}. See {doc}.", {
+          header: <code>Authorization: Bearer &lt;token&gt;</code>,
+          doc: (
+            <a href="https://github.com/jeskko/web888-ng/blob/main/doc/api.md" target="_blank" rel="noopener">
+              doc/api.md
+            </a>
+          ),
+        })}
+      </p>
+      {list && list.length > 0 && (
+        <table class="wide">
+          <thead>
+            <tr>
+              <th>{t("name")}</th>
+              {/* i18n: scope = what an API token may do */}
+              <th>{tc("token", "scope")}</th>
+              <th>{t("made")}</th>
+              <th>{t("expires")}</th>
+              {/* i18n: limits = the per-address, session and idle limits */}
+              <th>{tc("token", "limits")}</th>
+              <th></th>
+            </tr>
+          </thead>
+          <tbody>
+            {list.map((tk) => (
+              <tr key={tk.name}>
+                <td>{tk.name}</td>
+                <td>{scopeName(tk.scope)}</td>
+                <td>{utcDay(tk.created)}</td>
+                <td>{tk.expires ? utcDay(tk.expires) : t("never")}</td>
+                <td>{tk.unlimited ? t("none") : t("as listeners")}</td>
+                <td>
+                  <button onClick={() => void revoke(tk)}>{t("Revoke")}</button>
+                </td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      )}
+      {list && list.length === 0 && <p class="dim">{t("No tokens.")}</p>}
+      <form
+        onSubmit={(e) => {
+          e.preventDefault();
+          void create();
+        }}
+      >
+        <input aria-label={t("Token name")} placeholder={t("Token name")} maxLength={32} value={name} onInput={(e) => setName((e.target as HTMLInputElement).value)} />
+        <select aria-label={t("Scope")} value={scope} onChange={(e) => setScope((e.target as HTMLSelectElement).value as ApiToken["scope"])}>
+          {SCOPES.map((x) => (
+            <option key={x.id} value={x.id}>
+              {t(x.name)}: {t(x.what)}
+            </option>
+          ))}
+        </select>
+        <select aria-label={t("Expires")} value={days} onChange={(e) => setDays(Number((e.target as HTMLSelectElement).value))}>
+          {EXPIRY_DAYS.map((d) => (
+            <option key={d} value={d}>
+              {d ? tn("expires in {n} day", "expires in {n} days", d) : t("never expires")}
+            </option>
+          ))}
+        </select>
+        <label title={t("Its sessions skip the per-address, session, idle and daily limits (a recorder)")}>
+          <input type="checkbox" checked={unlimited} onChange={(e) => setUnlimited((e.target as HTMLInputElement).checked)} /> {t("no limits")}
+        </label>
+        <button type="submit" disabled={!name.trim()}>
+          {t("Make")}
+        </button>
+      </form>
+      {made && (
+        <div class="token-made" role="status">
+          <p>{t("The token {name}: copy it now, it isn't shown again.", { name: made.name })}</p>
+          <input readOnly aria-label={t("The new token")} value={made.token} onFocus={(e) => (e.target as HTMLInputElement).select()} data-autofocus />
+          <button
+            type="button"
+            onClick={() => {
+              void navigator.clipboard?.writeText(made.token).then(
+                () => setMsg({ ok: true, text: t("Copied.") }),
+                () => setMsg({ ok: false, text: t("Copying didn't work: select the text and copy it.") }),
+              );
+            }}
+          >
+            {t("Copy")}
+          </button>
+        </div>
+      )}
+      {msg && <p class={msg.ok ? "ok" : "warn"}>{msg.text}</p>}
+    </section>
   );
 }
 

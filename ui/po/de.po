@@ -47,7 +47,7 @@ msgstr "Protokolle"
 msgid "Restart web888d? Everyone is disconnected for a few seconds."
 msgstr "web888d neu starten? Alle Verbindungen werden für einige Sekunden getrennt."
 
-#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1486
+#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1634
 msgid "web888d admin"
 msgstr "web888d-Verwaltung"
 
@@ -71,7 +71,7 @@ msgstr "Anmelden"
 msgid "Back to the receiver"
 msgstr "Zurück zum Empfänger"
 
-#: src/admin/admin.tsx:157 src/admin/admin.tsx:662 src/admin/admin.tsx:991 src/admin/admin.tsx:1477 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:157 src/admin/admin.tsx:662 src/admin/admin.tsx:1139 src/admin/admin.tsx:1625 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr "Wird geladen …"
 
@@ -179,7 +179,7 @@ msgstr "Verluste RX/WF"
 msgid "Waterfall views"
 msgstr "Wasserfall-Ansichten"
 
-#: src/admin/admin.tsx:261 src/admin/admin.tsx:482
+#: src/admin/admin.tsx:261 src/admin/admin.tsx:482 src/admin/admin.tsx:1034
 msgid "none"
 msgstr "keine"
 
@@ -396,7 +396,7 @@ msgctxt "skimmer state"
 msgid "waiting"
 msgstr "wartet"
 
-#: src/admin/admin.tsx:525 src/admin/admin.tsx:1068
+#: src/admin/admin.tsx:525 src/admin/admin.tsx:1216
 msgid "{when} ago"
 msgstr "vor {when}"
 
@@ -572,6 +572,10 @@ msgstr "geteilt"
 #: src/admin/admin.tsx:685
 msgid "drops a/wf"
 msgstr "Verluste A/WF"
+
+#: src/admin/admin.tsx:694
+msgid "{class} (token {name})"
+msgstr "{class} (Token {name})"
 
 #: src/admin/admin.tsx:700
 msgid "{rx}, listening to #{n}"
@@ -756,227 +760,355 @@ msgstr "Setzen"
 msgid "Listener password removed: the receiver is open."
 msgstr "Hörer-Passwort entfernt: Der Empfänger ist offen."
 
-#: src/admin/admin.tsx:996
+#. what an API token's scope lets a program do
+#: src/admin/admin.tsx:949
+msgid "read"
+msgstr "lesen"
+
+#. what an API token's scope lets a program do
+#: src/admin/admin.tsx:949
+msgid "spots, labels, info and propagation; no receiver"
+msgstr "Spots, Beschriftungen, Info und Ausbreitung; kein Empfänger"
+
+#: src/admin/admin.tsx:950
+msgid "listen"
+msgstr "hören"
+
+#: src/admin/admin.tsx:950
+msgid "also a receiver, as a listener"
+msgstr "auch ein Empfänger, wie für Hörer"
+
+#: src/admin/admin.tsx:951 src/ctl/controls.tsx:844
+msgid "admin"
+msgstr "Verwaltung"
+
+#: src/admin/admin.tsx:951
+msgid "also everything the admin can do"
+msgstr "auch alles, was der Admin darf"
+
+#: src/admin/admin.tsx:989
+msgid "Revoke the token {name}? Programs using it lose access, and its sessions end."
+msgstr "Token {name} widerrufen? Programme, die ihn nutzen, verlieren den Zugang, und seine Sitzungen enden."
+
+#: src/admin/admin.tsx:1002
+msgid "API tokens"
+msgstr "API-Tokens"
+
+#: src/admin/admin.tsx:1004
+msgid "For programs that use the receiver: they send the token as {header}. See {doc}."
+msgstr "Für Programme, die den Empfänger nutzen: Sie senden den Token als {header}. Siehe {doc}."
+
+#: src/admin/admin.tsx:1017
+msgid "name"
+msgstr "Name"
+
+#. scope = what an API token may do
+#: src/admin/admin.tsx:1019
+msgctxt "token"
+msgid "scope"
+msgstr "Umfang"
+
+#: src/admin/admin.tsx:1020
+msgid "made"
+msgstr "erstellt"
+
+#: src/admin/admin.tsx:1021
+msgid "expires"
+msgstr "läuft ab"
+
+#. limits = the per-address, session and idle limits
+#: src/admin/admin.tsx:1023
+msgctxt "token"
+msgid "limits"
+msgstr "Grenzen"
+
+#: src/admin/admin.tsx:1033 src/admin/admin.tsx:1216
+msgid "never"
+msgstr "nie"
+
+#: src/admin/admin.tsx:1034
+msgid "as listeners"
+msgstr "wie für Hörer"
+
+#: src/admin/admin.tsx:1036
+msgid "Revoke"
+msgstr "Widerrufen"
+
+#: src/admin/admin.tsx:1043
+msgid "No tokens."
+msgstr "Keine Tokens."
+
+#: src/admin/admin.tsx:1050 src/admin/admin.tsx:1050
+msgid "Token name"
+msgstr "Name des Tokens"
+
+#: src/admin/admin.tsx:1051
+msgid "Scope"
+msgstr "Umfang"
+
+#: src/admin/admin.tsx:1058
+msgid "Expires"
+msgstr "Läuft ab"
+
+#: src/admin/admin.tsx:1061
+msgid "expires in {n} day"
+msgid_plural "expires in {n} days"
+msgstr[0] "läuft in {n} Tag ab"
+msgstr[1] "läuft in {n} Tagen ab"
+
+#: src/admin/admin.tsx:1061
+msgid "never expires"
+msgstr "läuft nie ab"
+
+#: src/admin/admin.tsx:1065
+msgid "Its sessions skip the per-address, session, idle and daily limits (a recorder)"
+msgstr "Seine Sitzungen sind von den Grenzen pro Adresse, für Sitzung, Leerlauf und Tag ausgenommen (ein Rekorder)"
+
+#: src/admin/admin.tsx:1066
+msgid "no limits"
+msgstr "keine Grenzen"
+
+#: src/admin/admin.tsx:1069
+msgid "Make"
+msgstr "Erstellen"
+
+#: src/admin/admin.tsx:1074
+msgid "The token {name}: copy it now, it isn't shown again."
+msgstr "Der Token {name}: jetzt kopieren, er wird nicht wieder angezeigt."
+
+#: src/admin/admin.tsx:1075
+msgid "The new token"
+msgstr "Der neue Token"
+
+#: src/admin/admin.tsx:1080
+msgid "Copied."
+msgstr "Kopiert."
+
+#: src/admin/admin.tsx:1081
+msgid "Copying didn't work: select the text and copy it."
+msgstr "Kopieren hat nicht geklappt: Text markieren und kopieren."
+
+#: src/admin/admin.tsx:1085
+msgid "Copy"
+msgstr "Kopieren"
+
+#: src/admin/admin.tsx:1144
 msgid "OS updates"
 msgstr "Betriebssystem-Aktualisierungen"
 
-#: src/admin/admin.tsx:997
+#: src/admin/admin.tsx:1145
 msgid "Not available: {why}."
 msgstr "Nicht verfügbar: {why}."
 
 #. root slot = one of the two A/B system partitions; the update is written to the one not running
-#: src/admin/admin.tsx:1007
+#: src/admin/admin.tsx:1155
 msgid "Install web888-ng {version} into the other root slot? The receiver keeps running; a reboot then starts the new system."
 msgstr "web888-ng {version} in den anderen Root-Slot installieren? Der Empfänger läuft weiter; ein Neustart startet dann das neue System."
 
-#: src/admin/admin.tsx:1011
+#: src/admin/admin.tsx:1159
 msgid "Reboot the unit now? Everyone is disconnected; it is back in a minute or two."
 msgstr "Das Gerät jetzt neu starten? Alle Verbindungen werden getrennt; nach ein bis zwei Minuten ist es wieder da."
 
-#: src/admin/admin.tsx:1023
+#: src/admin/admin.tsx:1171
 msgid "Rebooting"
 msgstr "Neustart"
 
-#: src/admin/admin.tsx:1026
+#: src/admin/admin.tsx:1174
 msgid "The unit is restarting into web888-ng {version}. This page reloads when it is back."
 msgstr "Das Gerät startet mit web888-ng {version} neu. Diese Seite lädt neu, sobald es wieder da ist."
 
-#: src/admin/admin.tsx:1027
+#: src/admin/admin.tsx:1175
 msgid "The unit is restarting. This page reloads when it is back."
 msgstr "Das Gerät startet neu. Diese Seite lädt neu, sobald es wieder da ist."
 
-#: src/admin/admin.tsx:1030
+#: src/admin/admin.tsx:1178
 msgid "If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes)."
 msgstr "Startet das neue System nicht, kehrt das Gerät nach drei Versuchen (einige Minuten) selbst zum alten zurück."
 
-#: src/admin/admin.tsx:1039
+#: src/admin/admin.tsx:1187
 msgctxt "operating system"
 msgid "OS"
 msgstr "Betriebssystem"
 
-#: src/admin/admin.tsx:1041
+#: src/admin/admin.tsx:1189
 msgctxt "software version"
 msgid "Running"
 msgstr "Läuft"
 
 #. slot = one of the two A/B system partitions (RAUC slots)
-#: src/admin/admin.tsx:1044
+#: src/admin/admin.tsx:1192
 msgid "web888-ng {version}, slot {slot}"
 msgstr "web888-ng {version}, Slot {slot}"
 
-#: src/admin/admin.tsx:1046
+#: src/admin/admin.tsx:1194
 msgid "Newest release"
 msgstr "Neueste Version"
 
-#: src/admin/admin.tsx:1055
+#: src/admin/admin.tsx:1203
 msgid "({date}, {size}, pre-release)"
 msgstr "({date}, {size}, Vorabversion)"
 
-#: src/admin/admin.tsx:1056
+#: src/admin/admin.tsx:1204
 msgid "({date}, {size})"
 msgstr "({date}, {size})"
 
-#: src/admin/admin.tsx:1060
+#: src/admin/admin.tsx:1208
 msgid "none found"
 msgstr "keine gefunden"
 
-#: src/admin/admin.tsx:1062
+#: src/admin/admin.tsx:1210
 msgid "not looked yet"
 msgstr "noch nicht geprüft"
 
 #. "Looked": when the server last checked GitHub for a new release
-#: src/admin/admin.tsx:1066
+#: src/admin/admin.tsx:1214
 msgid "Looked"
 msgstr "Zuletzt geprüft"
 
-#: src/admin/admin.tsx:1068
-msgid "never"
-msgstr "nie"
-
-#: src/admin/admin.tsx:1069
+#: src/admin/admin.tsx:1217
 msgid "(by itself every {n} h)"
 msgstr "(automatisch alle {n} h)"
 
-#: src/admin/admin.tsx:1072
+#: src/admin/admin.tsx:1220
 msgid "Looking for releases failed: {error}"
 msgstr "Suche nach Versionen fehlgeschlagen: {error}"
 
-#: src/admin/admin.tsx:1073
+#: src/admin/admin.tsx:1221
 msgid "Updates are off (Configuration: update.enabled)."
 msgstr "Aktualisierungen sind aus (Konfiguration: update.enabled)."
 
-#: src/admin/admin.tsx:1076
+#: src/admin/admin.tsx:1224
 msgid "Looking…"
 msgstr "Suche …"
 
-#: src/admin/admin.tsx:1076
+#: src/admin/admin.tsx:1224
 msgid "Look for a release"
 msgstr "Nach Version suchen"
 
-#: src/admin/admin.tsx:1080 src/admin/admin.tsx:1111
+#: src/admin/admin.tsx:1228 src/admin/admin.tsx:1259
 msgid "Install {version}"
 msgstr "{version} installieren"
 
-#: src/admin/admin.tsx:1083
+#: src/admin/admin.tsx:1231
 msgid "Up to date."
 msgstr "Aktuell."
 
-#: src/admin/admin.tsx:1087
+#: src/admin/admin.tsx:1235
 msgid "{link} (into the other slot, as an update would)."
 msgstr "{link} (in den anderen Slot, wie eine Aktualisierung)."
 
-#: src/admin/admin.tsx:1096
+#: src/admin/admin.tsx:1244
 msgid "Install {version} again"
 msgstr "{version} erneut installieren"
 
-#: src/admin/admin.tsx:1104
+#: src/admin/admin.tsx:1252
 msgid "Release notes"
 msgstr "Versionshinweise"
 
-#: src/admin/admin.tsx:1118
+#: src/admin/admin.tsx:1266
 msgid "Streamed from the release and checked as it goes; the receiver keeps running."
 msgstr "Direkt aus dem Release geladen und dabei geprüft; der Empfänger läuft weiter."
 
-#: src/admin/admin.tsx:1125
+#: src/admin/admin.tsx:1273
 msgid "Installed in {n} min. Reboot to start it."
 msgstr "In {n} min installiert. Starten Sie neu, um es zu aktivieren."
 
-#: src/admin/admin.tsx:1126
+#: src/admin/admin.tsx:1274
 msgid "Installed. Reboot to start it."
 msgstr "Installiert. Starten Sie neu, um es zu aktivieren."
 
-#: src/admin/admin.tsx:1130
+#: src/admin/admin.tsx:1278
 msgid "Reboot now"
 msgstr "Jetzt neu starten"
 
-#: src/admin/admin.tsx:1133
+#: src/admin/admin.tsx:1281
 msgid "The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay."
 msgstr "Das neue System startet zuerst, mit drei Versuchen; läuft web888d eine Minute lang, wird es beibehalten. Die Einstellungen bleiben erhalten."
 
-#: src/admin/admin.tsx:1136
+#: src/admin/admin.tsx:1284
 msgid "Failed: {error}. The running system is unchanged."
 msgstr "Fehlgeschlagen: {error}. Das laufende System ist unverändert."
 
 #. root slot = one of the two A/B system partitions (RAUC slots); the update goes to the one not running
-#: src/admin/admin.tsx:1147
+#: src/admin/admin.tsx:1295
 msgid "Root slots"
 msgstr "Root-Slots"
 
-#: src/admin/admin.tsx:1152
+#: src/admin/admin.tsx:1300
 msgid "Slot"
 msgstr "Slot"
 
-#: src/admin/admin.tsx:1153
+#: src/admin/admin.tsx:1301
 msgid "State"
 msgstr "Zustand"
 
 #. Boot = the slot's boot status (good, bad, ...)
-#: src/admin/admin.tsx:1155
+#: src/admin/admin.tsx:1303
 msgctxt "slot"
 msgid "Boot"
 msgstr "Boot"
 
-#: src/admin/admin.tsx:1156
+#: src/admin/admin.tsx:1304
 msgid "Version"
 msgstr "Version"
 
-#: src/admin/admin.tsx:1157
+#: src/admin/admin.tsx:1305
 msgid "Installed (UTC)"
 msgstr "Installiert (UTC)"
 
-#: src/admin/admin.tsx:1175
+#: src/admin/admin.tsx:1323
 msgid "An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN, u-boot.img) is not part of it: see Boot loader below."
 msgstr "Eine Aktualisierung kommt in den Slot, der nicht läuft; der alte bleibt unverändert, um zu ihm zurückzukehren. Der Bootloader auf der Karte (BOOT.BIN, u-boot.img) gehört nicht dazu: siehe Bootloader unten."
 
-#: src/admin/admin.tsx:1194
+#: src/admin/admin.tsx:1342
 msgid "{file}: not a settings backup (JSON)"
 msgstr "{file}: keine Sicherung der Einstellungen (JSON)"
 
-#: src/admin/admin.tsx:1197
+#: src/admin/admin.tsx:1345
 msgid "Restore the settings from {file}? The configuration, the passwords and the own labels are replaced by the file's."
 msgstr "Die Einstellungen aus {file} wiederherstellen? Die Konfiguration, die Passwörter und die eigenen Beschriftungen werden durch die der Datei ersetzt."
 
 #. the three parts are joined with "; " into one report
-#: src/admin/admin.tsx:1207
+#: src/admin/admin.tsx:1355
 msgid "Restored the settings saved by web888d {server} on {when} UTC"
 msgstr "Einstellungen wiederhergestellt, gespeichert von web888d {server} am {when} UTC"
 
-#: src/admin/admin.tsx:1208
+#: src/admin/admin.tsx:1356
 msgid "{n} own label"
 msgid_plural "{n} own labels"
 msgstr[0] "{n} eigene Beschriftung"
 msgstr[1] "{n} eigene Beschriftungen"
 
-#: src/admin/admin.tsx:1209
+#: src/admin/admin.tsx:1357
 msgid "restart web888d for: {what}"
 msgstr "web888d neu starten für: {what}"
 
-#: src/admin/admin.tsx:1212
+#: src/admin/admin.tsx:1360
 msgid "Not restored: {error}"
 msgstr "Nicht wiederhergestellt: {error}"
 
-#: src/admin/admin.tsx:1220
+#: src/admin/admin.tsx:1368
 msgid "Backup"
 msgstr "Sicherung"
 
-#: src/admin/admin.tsx:1223
+#: src/admin/admin.tsx:1371
 msgid "Download the settings"
 msgstr "Einstellungen herunterladen"
 
-#: src/admin/admin.tsx:1227
+#: src/admin/admin.tsx:1375
 msgid "Restoring…"
 msgstr "Wird wiederhergestellt …"
 
-#: src/admin/admin.tsx:1227
+#: src/admin/admin.tsx:1375
 msgid "Restore from a file"
 msgstr "Aus Datei wiederherstellen"
 
-#: src/admin/admin.tsx:1242
+#: src/admin/admin.tsx:1390
 msgid "One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's own settings (network, tunnels, SSH key) are in web888.txt on the card, not here."
 msgstr "Eine Datei mit der Konfiguration dieser Seite, den Passwörtern (als Hashes: halten Sie die Datei vertraulich) und den eigenen Beschriftungen. Die Einstellungen der Karte selbst (Netzwerk, Tunnel, SSH-Schlüssel) stehen in web888.txt auf der Karte, nicht hier."
 
 #. boot loader = the first software the unit runs at power-up (SPL + U-Boot on the SD card)
-#: src/admin/admin.tsx:1278
+#: src/admin/admin.tsx:1426
 msgid ""
 "Write the boot loader to the card now?\n"
 "\n"
@@ -990,117 +1122,117 @@ msgstr ""
 "\n"
 "Der Empfänger läuft weiter; der neue Bootloader startet beim nächsten Neustart."
 
-#: src/admin/admin.tsx:1288
+#: src/admin/admin.tsx:1436
 msgid "done"
 msgstr "erledigt"
 
-#: src/admin/admin.tsx:1299
+#: src/admin/admin.tsx:1447
 msgid "Boot loader"
 msgstr "Bootloader"
 
-#: src/admin/admin.tsx:1301
+#: src/admin/admin.tsx:1449
 msgid "Not updated from here: {reason}."
 msgstr "Nicht von hier aus aktualisierbar: {reason}."
 
-#: src/admin/admin.tsx:1305
+#: src/admin/admin.tsx:1453
 msgid "On the card"
 msgstr "Auf der Karte"
 
-#: src/admin/admin.tsx:1309
+#: src/admin/admin.tsx:1457
 msgid "this system's (web888-ng {version})"
 msgstr "der dieses Systems (web888-ng {version})"
 
-#: src/admin/admin.tsx:1309
+#: src/admin/admin.tsx:1457
 msgid "this system's"
 msgstr "der dieses Systems"
 
-#: src/admin/admin.tsx:1312
+#: src/admin/admin.tsx:1460
 msgid "another one"
 msgstr "ein anderer"
 
 #. SPL = the first-stage boot loader (secondary program loader); the values are short hashes of the two files
-#: src/admin/admin.tsx:1316 src/admin/admin.tsx:1325
+#: src/admin/admin.tsx:1464 src/admin/admin.tsx:1473
 msgid "SPL {spl}, U-Boot {uboot}"
 msgstr "SPL {spl}, U-Boot {uboot}"
 
-#: src/admin/admin.tsx:1321
+#: src/admin/admin.tsx:1469
 msgid "This system's"
 msgstr "Der dieses Systems"
 
-#: src/admin/admin.tsx:1332
+#: src/admin/admin.tsx:1480
 msgid "Kept"
 msgstr "Aufbewahrt"
 
-#: src/admin/admin.tsx:1333
+#: src/admin/admin.tsx:1481
 msgid "boot.bin.old, u-boot.img.old (the one before)"
 msgstr "boot.bin.old, u-boot.img.old (der vorherige)"
 
-#: src/admin/admin.tsx:1339
+#: src/admin/admin.tsx:1487
 msgid "Not now: {reason}."
 msgstr "Jetzt nicht: {reason}."
 
-#: src/admin/admin.tsx:1342
+#: src/admin/admin.tsx:1490
 msgid "Writing…"
 msgstr "Wird geschrieben …"
 
-#: src/admin/admin.tsx:1342
+#: src/admin/admin.tsx:1490
 msgid "Write it to the card…"
 msgstr "Auf die Karte schreiben …"
 
-#: src/admin/admin.tsx:1346
+#: src/admin/admin.tsx:1494
 msgid "Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to re-image the card if something unexpected happens."
 msgstr "Für den Betrieb des Systems nicht nötig: Manche Versionen bringen einen neueren Bootloader mit (ihre Hinweise sagen, warum). Seien Sie darauf vorbereitet, die Karte neu zu bespielen, falls etwas Unerwartetes passiert."
 
 #. log sources; "System (this boot)" = the system log since the unit last booted; Kernel = the operating system kernel's log
-#: src/admin/admin.tsx:1362
+#: src/admin/admin.tsx:1510
 msgid "System (this boot)"
 msgstr "System (dieser Start)"
 
-#: src/admin/admin.tsx:1363
+#: src/admin/admin.tsx:1511
 msgid "Kernel"
 msgstr "Kernel"
 
-#: src/admin/admin.tsx:1426
+#: src/admin/admin.tsx:1574
 msgid "not on this system"
 msgstr "nicht auf diesem System"
 
-#: src/admin/admin.tsx:1433
+#: src/admin/admin.tsx:1581
 msgid "How many lines"
 msgstr "Anzahl der Zeilen"
 
-#: src/admin/admin.tsx:1435
+#: src/admin/admin.tsx:1583
 msgid "{n} lines"
 msgstr "{n} Zeilen"
 
-#: src/admin/admin.tsx:1438
+#: src/admin/admin.tsx:1586
 msgid "Filter the lines"
 msgstr "Zeilen filtern"
 
-#: src/admin/admin.tsx:1438
+#: src/admin/admin.tsx:1586
 msgid "Filter"
 msgstr "Filter"
 
-#: src/admin/admin.tsx:1440
+#: src/admin/admin.tsx:1588
 msgid "Follow"
 msgstr "Mitlaufen"
 
-#: src/admin/admin.tsx:1443
+#: src/admin/admin.tsx:1591
 msgid "Download"
 msgstr "Herunterladen"
 
-#: src/admin/admin.tsx:1449
+#: src/admin/admin.tsx:1597
 msgid "No line matches the filter."
 msgstr "Keine Zeile passt zum Filter."
 
-#: src/admin/admin.tsx:1449
+#: src/admin/admin.tsx:1597
 msgid "No lines yet."
 msgstr "Noch keine Zeilen."
 
-#: src/admin/admin.tsx:1495
+#: src/admin/admin.tsx:1643
 msgid "Receiver"
 msgstr "Empfänger"
 
-#: src/admin/admin.tsx:1496
+#: src/admin/admin.tsx:1644
 msgid "Log out"
 msgstr "Abmelden"
 
@@ -1886,10 +2018,6 @@ msgstr "Tasten und Maus (Taste ?)"
 #: src/ctl/controls.tsx:842
 msgid "keys"
 msgstr "Tasten"
-
-#: src/ctl/controls.tsx:844
-msgid "admin"
-msgstr "Verwaltung"
 
 #: src/ctl/cw.tsx:19
 msgid "Decode CW (Morse) from this receiver's audio, in this browser: every keyed signal in the passband"

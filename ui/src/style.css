@@ -208,6 +208,11 @@ pre { background: var(--panel); padding: 6px 12px; border-radius: 4px; }
 .card dl { display: grid; grid-template-columns: auto 1fr; gap: 4px 12px; margin: 0 0 10px; }
 .card dt { color: var(--dim); }
 .card dd { margin: 0; font-variant-numeric: tabular-nums; }
+.card.tokens { grid-column: 1 / -1; }
+.card.tokens select { max-width: 100%; }
+.token-made { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
+.token-made p { flex-basis: 100%; margin: 0; }
+.token-made input { flex: 1; min-width: 0; font-family: monospace; }
 table { border-collapse: collapse; font-variant-numeric: tabular-nums; }
 th { text-align: left; color: var(--dim); font-weight: 400; }
 th, td { padding: 2px 10px 2px 0; white-space: nowrap; }

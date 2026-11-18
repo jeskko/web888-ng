@@ -75,6 +75,17 @@ export interface Session {
   listen: number | null;
   audio_drops: number;
   wf_drops: number;
+  /** The API token it came with (its name). */
+  token?: string | null;
+}
+
+/** An API token, as the admin API lists it (never the secret). */
+export interface ApiToken {
+  name: string;
+  scope: "read" | "listen" | "admin";
+  created: number;
+  expires: number | null;
+  unlimited: boolean;
 }
 
 export interface LeaseRow {

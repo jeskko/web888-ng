@@ -47,7 +47,7 @@ msgstr "Lokit"
 msgid "Restart web888d? Everyone is disconnected for a few seconds."
 msgstr "Käynnistetäänkö web888d uudelleen? Kaikkien yhteydet katkeavat muutamaksi sekunniksi."
 
-#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1486
+#: src/admin/admin.tsx:85 src/admin/admin.tsx:106 src/admin/admin.tsx:1634
 msgid "web888d admin"
 msgstr "web888d – ylläpito"
 
@@ -71,7 +71,7 @@ msgstr "Kirjaudu"
 msgid "Back to the receiver"
 msgstr "Takaisin vastaanottimeen"
 
-#: src/admin/admin.tsx:157 src/admin/admin.tsx:662 src/admin/admin.tsx:991 src/admin/admin.tsx:1477 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:157 src/admin/admin.tsx:662 src/admin/admin.tsx:1139 src/admin/admin.tsx:1625 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr "Ladataan…"
 
@@ -179,7 +179,7 @@ msgstr "pudotetut rx/vp"
 msgid "Waterfall views"
 msgstr "Vesiputousnäkymät"
 
-#: src/admin/admin.tsx:261 src/admin/admin.tsx:482
+#: src/admin/admin.tsx:261 src/admin/admin.tsx:482 src/admin/admin.tsx:1034
 msgid "none"
 msgstr "ei yhtään"
 
@@ -396,7 +396,7 @@ msgctxt "skimmer state"
 msgid "waiting"
 msgstr "odottaa"
 
-#: src/admin/admin.tsx:525 src/admin/admin.tsx:1068
+#: src/admin/admin.tsx:525 src/admin/admin.tsx:1216
 msgid "{when} ago"
 msgstr "{when} sitten"
 
@@ -572,6 +572,10 @@ msgstr "jaettu"
 #: src/admin/admin.tsx:685
 msgid "drops a/wf"
 msgstr "pudotetut ääni/vp"
+
+#: src/admin/admin.tsx:694
+msgid "{class} (token {name})"
+msgstr "{class} (tunniste {name})"
 
 #: src/admin/admin.tsx:700
 msgid "{rx}, listening to #{n}"
@@ -756,227 +760,355 @@ msgstr "Aseta"
 msgid "Listener password removed: the receiver is open."
 msgstr "Kuuntelijan salasana poistettu: vastaanotin on avoin."
 
-#: src/admin/admin.tsx:996
+#. what an API token's scope lets a program do
+#: src/admin/admin.tsx:949
+msgid "read"
+msgstr "luku"
+
+#. what an API token's scope lets a program do
+#: src/admin/admin.tsx:949
+msgid "spots, labels, info and propagation; no receiver"
+msgstr "spotit, merkinnät, tiedot ja kelivennuste; ei vastaanotinta"
+
+#: src/admin/admin.tsx:950
+msgid "listen"
+msgstr "kuuntelu"
+
+#: src/admin/admin.tsx:950
+msgid "also a receiver, as a listener"
+msgstr "myös vastaanotin, kuten kuuntelijalla"
+
+#: src/admin/admin.tsx:951 src/ctl/controls.tsx:844
+msgid "admin"
+msgstr "ylläpito"
+
+#: src/admin/admin.tsx:951
+msgid "also everything the admin can do"
+msgstr "myös kaikki, mitä ylläpitäjä voi tehdä"
+
+#: src/admin/admin.tsx:989
+msgid "Revoke the token {name}? Programs using it lose access, and its sessions end."
+msgstr "Perutaanko tunniste {name}? Sitä käyttävät ohjelmat menettävät pääsyn, ja sen istunnot päättyvät."
+
+#: src/admin/admin.tsx:1002
+msgid "API tokens"
+msgstr "API-tunnisteet"
+
+#: src/admin/admin.tsx:1004
+msgid "For programs that use the receiver: they send the token as {header}. See {doc}."
+msgstr "Vastaanotinta käyttäville ohjelmille: ne lähettävät tunnisteen muodossa {header}. Katso {doc}."
+
+#: src/admin/admin.tsx:1017
+msgid "name"
+msgstr "nimi"
+
+#. scope = what an API token may do
+#: src/admin/admin.tsx:1019
+msgctxt "token"
+msgid "scope"
+msgstr "oikeudet"
+
+#: src/admin/admin.tsx:1020
+msgid "made"
+msgstr "luotu"
+
+#: src/admin/admin.tsx:1021
+msgid "expires"
+msgstr "vanhenee"
+
+#. limits = the per-address, session and idle limits
+#: src/admin/admin.tsx:1023
+msgctxt "token"
+msgid "limits"
+msgstr "rajat"
+
+#: src/admin/admin.tsx:1033 src/admin/admin.tsx:1216
+msgid "never"
+msgstr "ei koskaan"
+
+#: src/admin/admin.tsx:1034
+msgid "as listeners"
+msgstr "kuten kuuntelijoilla"
+
+#: src/admin/admin.tsx:1036
+msgid "Revoke"
+msgstr "Peru"
+
+#: src/admin/admin.tsx:1043
+msgid "No tokens."
+msgstr "Ei tunnisteita."
+
+#: src/admin/admin.tsx:1050 src/admin/admin.tsx:1050
+msgid "Token name"
+msgstr "Tunnisteen nimi"
+
+#: src/admin/admin.tsx:1051
+msgid "Scope"
+msgstr "Oikeudet"
+
+#: src/admin/admin.tsx:1058
+msgid "Expires"
+msgstr "Vanhenee"
+
+#: src/admin/admin.tsx:1061
+msgid "expires in {n} day"
+msgid_plural "expires in {n} days"
+msgstr[0] "vanhenee {n} päivässä"
+msgstr[1] "vanhenee {n} päivässä"
+
+#: src/admin/admin.tsx:1061
+msgid "never expires"
+msgstr "ei vanhene"
+
+#: src/admin/admin.tsx:1065
+msgid "Its sessions skip the per-address, session, idle and daily limits (a recorder)"
+msgstr "Sen istuntoihin eivät päde osoite-, istunto-, joutokäynti- eivätkä päivärajat (tallennin)"
+
+#: src/admin/admin.tsx:1066
+msgid "no limits"
+msgstr "ei rajoja"
+
+#: src/admin/admin.tsx:1069
+msgid "Make"
+msgstr "Luo"
+
+#: src/admin/admin.tsx:1074
+msgid "The token {name}: copy it now, it isn't shown again."
+msgstr "Tunniste {name}: kopioi se nyt, sitä ei näytetä uudelleen."
+
+#: src/admin/admin.tsx:1075
+msgid "The new token"
+msgstr "Uusi tunniste"
+
+#: src/admin/admin.tsx:1080
+msgid "Copied."
+msgstr "Kopioitu."
+
+#: src/admin/admin.tsx:1081
+msgid "Copying didn't work: select the text and copy it."
+msgstr "Kopiointi ei onnistunut: valitse teksti ja kopioi se."
+
+#: src/admin/admin.tsx:1085
+msgid "Copy"
+msgstr "Kopioi"
+
+#: src/admin/admin.tsx:1144
 msgid "OS updates"
 msgstr "Käyttöjärjestelmän päivitykset"
 
-#: src/admin/admin.tsx:997
+#: src/admin/admin.tsx:1145
 msgid "Not available: {why}."
 msgstr "Ei käytettävissä: {why}."
 
 #. root slot = one of the two A/B system partitions; the update is written to the one not running
-#: src/admin/admin.tsx:1007
+#: src/admin/admin.tsx:1155
 msgid "Install web888-ng {version} into the other root slot? The receiver keeps running; a reboot then starts the new system."
 msgstr "Asennetaanko web888-ng {version} toiseen juuriosioon? Vastaanotin pysyy käynnissä; uudelleenkäynnistys ottaa sitten uuden järjestelmän käyttöön."
 
-#: src/admin/admin.tsx:1011
+#: src/admin/admin.tsx:1159
 msgid "Reboot the unit now? Everyone is disconnected; it is back in a minute or two."
 msgstr "Käynnistetäänkö laite uudelleen nyt? Kaikkien yhteydet katkeavat; laite palaa minuutin tai kahden kuluttua."
 
-#: src/admin/admin.tsx:1023
+#: src/admin/admin.tsx:1171
 msgid "Rebooting"
 msgstr "Käynnistyy uudelleen"
 
-#: src/admin/admin.tsx:1026
+#: src/admin/admin.tsx:1174
 msgid "The unit is restarting into web888-ng {version}. This page reloads when it is back."
 msgstr "Laite käynnistyy uudelleen versioon web888-ng {version}. Tämä sivu latautuu uudelleen, kun laite on taas käytettävissä."
 
-#: src/admin/admin.tsx:1027
+#: src/admin/admin.tsx:1175
 msgid "The unit is restarting. This page reloads when it is back."
 msgstr "Laite käynnistyy uudelleen. Tämä sivu latautuu uudelleen, kun laite on taas käytettävissä."
 
-#: src/admin/admin.tsx:1030
+#: src/admin/admin.tsx:1178
 msgid "If the new system doesn't come up, the unit goes back to the old one by itself after three tries (a few minutes)."
 msgstr "Jos uusi järjestelmä ei käynnisty, laite palaa vanhaan itsestään kolmen yrityksen jälkeen (muutama minuutti)."
 
-#: src/admin/admin.tsx:1039
+#: src/admin/admin.tsx:1187
 msgctxt "operating system"
 msgid "OS"
 msgstr "Käyttöjärjestelmä"
 
-#: src/admin/admin.tsx:1041
+#: src/admin/admin.tsx:1189
 msgctxt "software version"
 msgid "Running"
 msgstr "Käytössä"
 
 #. slot = one of the two A/B system partitions (RAUC slots)
-#: src/admin/admin.tsx:1044
+#: src/admin/admin.tsx:1192
 msgid "web888-ng {version}, slot {slot}"
 msgstr "web888-ng {version}, osio {slot}"
 
-#: src/admin/admin.tsx:1046
+#: src/admin/admin.tsx:1194
 msgid "Newest release"
 msgstr "Uusin julkaisu"
 
-#: src/admin/admin.tsx:1055
+#: src/admin/admin.tsx:1203
 msgid "({date}, {size}, pre-release)"
 msgstr "({date}, {size}, esijulkaisu)"
 
-#: src/admin/admin.tsx:1056
+#: src/admin/admin.tsx:1204
 msgid "({date}, {size})"
 msgstr "({date}, {size})"
 
-#: src/admin/admin.tsx:1060
+#: src/admin/admin.tsx:1208
 msgid "none found"
 msgstr "ei löytynyt"
 
-#: src/admin/admin.tsx:1062
+#: src/admin/admin.tsx:1210
 msgid "not looked yet"
 msgstr "ei vielä tarkistettu"
 
 #. "Looked": when the server last checked GitHub for a new release
-#: src/admin/admin.tsx:1066
+#: src/admin/admin.tsx:1214
 msgid "Looked"
 msgstr "Tarkistettu"
 
-#: src/admin/admin.tsx:1068
-msgid "never"
-msgstr "ei koskaan"
-
-#: src/admin/admin.tsx:1069
+#: src/admin/admin.tsx:1217
 msgid "(by itself every {n} h)"
 msgstr "(automaattisesti {n} h välein)"
 
-#: src/admin/admin.tsx:1072
+#: src/admin/admin.tsx:1220
 msgid "Looking for releases failed: {error}"
 msgstr "Julkaisujen haku epäonnistui: {error}"
 
-#: src/admin/admin.tsx:1073
+#: src/admin/admin.tsx:1221
 msgid "Updates are off (Configuration: update.enabled)."
 msgstr "Päivitykset ovat pois käytöstä (Asetukset: update.enabled)."
 
-#: src/admin/admin.tsx:1076
+#: src/admin/admin.tsx:1224
 msgid "Looking…"
 msgstr "Haetaan…"
 
-#: src/admin/admin.tsx:1076
+#: src/admin/admin.tsx:1224
 msgid "Look for a release"
 msgstr "Hae julkaisua"
 
-#: src/admin/admin.tsx:1080 src/admin/admin.tsx:1111
+#: src/admin/admin.tsx:1228 src/admin/admin.tsx:1259
 msgid "Install {version}"
 msgstr "Asenna {version}"
 
-#: src/admin/admin.tsx:1083
+#: src/admin/admin.tsx:1231
 msgid "Up to date."
 msgstr "Ajan tasalla."
 
-#: src/admin/admin.tsx:1087
+#: src/admin/admin.tsx:1235
 msgid "{link} (into the other slot, as an update would)."
 msgstr "{link} (toiseen osioon, kuten päivityskin)."
 
-#: src/admin/admin.tsx:1096
+#: src/admin/admin.tsx:1244
 msgid "Install {version} again"
 msgstr "Asenna {version} uudelleen"
 
-#: src/admin/admin.tsx:1104
+#: src/admin/admin.tsx:1252
 msgid "Release notes"
 msgstr "Julkaisutiedot"
 
-#: src/admin/admin.tsx:1118
+#: src/admin/admin.tsx:1266
 msgid "Streamed from the release and checked as it goes; the receiver keeps running."
 msgstr "Ladataan suoraan julkaisusta ja tarkistetaan samalla; vastaanotin pysyy käynnissä."
 
-#: src/admin/admin.tsx:1125
+#: src/admin/admin.tsx:1273
 msgid "Installed in {n} min. Reboot to start it."
 msgstr "Asennettu (kesto {n} min). Käynnistä uudelleen ottaaksesi sen käyttöön."
 
-#: src/admin/admin.tsx:1126
+#: src/admin/admin.tsx:1274
 msgid "Installed. Reboot to start it."
 msgstr "Asennettu. Käynnistä uudelleen ottaaksesi sen käyttöön."
 
-#: src/admin/admin.tsx:1130
+#: src/admin/admin.tsx:1278
 msgid "Reboot now"
 msgstr "Käynnistä uudelleen nyt"
 
-#: src/admin/admin.tsx:1133
+#: src/admin/admin.tsx:1281
 msgid "The new system boots first, with three tries; once web888d runs for a minute it is kept. Settings stay."
 msgstr "Uusi järjestelmä käynnistetään ensin, kolmella yrityksellä; kun web888d on toiminut minuutin, se jää käyttöön. Asetukset säilyvät."
 
-#: src/admin/admin.tsx:1136
+#: src/admin/admin.tsx:1284
 msgid "Failed: {error}. The running system is unchanged."
 msgstr "Epäonnistui: {error}. Käynnissä oleva järjestelmä on ennallaan."
 
 #. root slot = one of the two A/B system partitions (RAUC slots); the update goes to the one not running
-#: src/admin/admin.tsx:1147
+#: src/admin/admin.tsx:1295
 msgid "Root slots"
 msgstr "Juuriosiot"
 
-#: src/admin/admin.tsx:1152
+#: src/admin/admin.tsx:1300
 msgid "Slot"
 msgstr "Osio"
 
-#: src/admin/admin.tsx:1153
+#: src/admin/admin.tsx:1301
 msgid "State"
 msgstr "Tila"
 
 #. Boot = the slot's boot status (good, bad, ...)
-#: src/admin/admin.tsx:1155
+#: src/admin/admin.tsx:1303
 msgctxt "slot"
 msgid "Boot"
 msgstr "Käynnistys"
 
-#: src/admin/admin.tsx:1156
+#: src/admin/admin.tsx:1304
 msgid "Version"
 msgstr "Versio"
 
-#: src/admin/admin.tsx:1157
+#: src/admin/admin.tsx:1305
 msgid "Installed (UTC)"
 msgstr "Asennettu (UTC)"
 
-#: src/admin/admin.tsx:1175
+#: src/admin/admin.tsx:1323
 msgid "An update goes into the slot not running; the old one stays as it was, to go back to. The boot loader on the card (BOOT.BIN, u-boot.img) is not part of it: see Boot loader below."
 msgstr "Päivitys asennetaan osioon, joka ei ole käynnissä; vanha jää ennalleen, jotta siihen voi palata. Kortin käynnistyslatain (BOOT.BIN, u-boot.img) ei kuulu päivitykseen: katso Käynnistyslatain alempana."
 
-#: src/admin/admin.tsx:1194
+#: src/admin/admin.tsx:1342
 msgid "{file}: not a settings backup (JSON)"
 msgstr "{file}: ei asetusten varmuuskopio (JSON)"
 
-#: src/admin/admin.tsx:1197
+#: src/admin/admin.tsx:1345
 msgid "Restore the settings from {file}? The configuration, the passwords and the own labels are replaced by the file's."
 msgstr "Palautetaanko asetukset tiedostosta {file}? Asetukset, salasanat ja omat nimiöt korvataan tiedoston sisällöllä."
 
 #. the three parts are joined with "; " into one report
-#: src/admin/admin.tsx:1207
+#: src/admin/admin.tsx:1355
 msgid "Restored the settings saved by web888d {server} on {when} UTC"
 msgstr "Palautettu asetukset, jotka web888d {server} tallensi {when} UTC"
 
-#: src/admin/admin.tsx:1208
+#: src/admin/admin.tsx:1356
 msgid "{n} own label"
 msgid_plural "{n} own labels"
 msgstr[0] "{n} oma nimiö"
 msgstr[1] "{n} omaa nimiötä"
 
-#: src/admin/admin.tsx:1209
+#: src/admin/admin.tsx:1357
 msgid "restart web888d for: {what}"
 msgstr "vaatii web888d:n uudelleenkäynnistyksen: {what}"
 
-#: src/admin/admin.tsx:1212
+#: src/admin/admin.tsx:1360
 msgid "Not restored: {error}"
 msgstr "Ei palautettu: {error}"
 
-#: src/admin/admin.tsx:1220
+#: src/admin/admin.tsx:1368
 msgid "Backup"
 msgstr "Varmuuskopio"
 
-#: src/admin/admin.tsx:1223
+#: src/admin/admin.tsx:1371
 msgid "Download the settings"
 msgstr "Lataa asetukset"
 
-#: src/admin/admin.tsx:1227
+#: src/admin/admin.tsx:1375
 msgid "Restoring…"
 msgstr "Palautetaan…"
 
-#: src/admin/admin.tsx:1227
+#: src/admin/admin.tsx:1375
 msgid "Restore from a file"
 msgstr "Palauta tiedostosta"
 
-#: src/admin/admin.tsx:1242
+#: src/admin/admin.tsx:1390
 msgid "One file with this page's configuration, the passwords (as hashes: keep the file private) and the own labels. The card's own settings (network, tunnels, SSH key) are in web888.txt on the card, not here."
 msgstr "Yksi tiedosto, jossa ovat tämän sivun asetukset, salasanat (tiivisteinä: pidä tiedosto yksityisenä) ja omat nimiöt. Kortin omat asetukset (verkko, tunnelit, SSH-avain) ovat kortilla tiedostossa web888.txt, eivät täällä."
 
 #. boot loader = the first software the unit runs at power-up (SPL + U-Boot on the SD card)
-#: src/admin/admin.tsx:1278
+#: src/admin/admin.tsx:1426
 msgid ""
 "Write the boot loader to the card now?\n"
 "\n"
@@ -990,117 +1122,117 @@ msgstr ""
 "\n"
 "Vastaanotin pysyy käynnissä; uusi käynnistyslatain otetaan käyttöön seuraavassa uudelleenkäynnistyksessä."
 
-#: src/admin/admin.tsx:1288
+#: src/admin/admin.tsx:1436
 msgid "done"
 msgstr "valmis"
 
-#: src/admin/admin.tsx:1299
+#: src/admin/admin.tsx:1447
 msgid "Boot loader"
 msgstr "Käynnistyslatain"
 
-#: src/admin/admin.tsx:1301
+#: src/admin/admin.tsx:1449
 msgid "Not updated from here: {reason}."
 msgstr "Ei päivitetä täältä: {reason}."
 
-#: src/admin/admin.tsx:1305
+#: src/admin/admin.tsx:1453
 msgid "On the card"
 msgstr "Kortilla"
 
-#: src/admin/admin.tsx:1309
+#: src/admin/admin.tsx:1457
 msgid "this system's (web888-ng {version})"
 msgstr "tämän järjestelmän oma (web888-ng {version})"
 
-#: src/admin/admin.tsx:1309
+#: src/admin/admin.tsx:1457
 msgid "this system's"
 msgstr "tämän järjestelmän oma"
 
-#: src/admin/admin.tsx:1312
+#: src/admin/admin.tsx:1460
 msgid "another one"
 msgstr "jokin muu"
 
 #. SPL = the first-stage boot loader (secondary program loader); the values are short hashes of the two files
-#: src/admin/admin.tsx:1316 src/admin/admin.tsx:1325
+#: src/admin/admin.tsx:1464 src/admin/admin.tsx:1473
 msgid "SPL {spl}, U-Boot {uboot}"
 msgstr "SPL {spl}, U-Boot {uboot}"
 
-#: src/admin/admin.tsx:1321
+#: src/admin/admin.tsx:1469
 msgid "This system's"
 msgstr "Tämän järjestelmän oma"
 
-#: src/admin/admin.tsx:1332
+#: src/admin/admin.tsx:1480
 msgid "Kept"
 msgstr "Säilytetty"
 
-#: src/admin/admin.tsx:1333
+#: src/admin/admin.tsx:1481
 msgid "boot.bin.old, u-boot.img.old (the one before)"
 msgstr "boot.bin.old, u-boot.img.old (edellinen)"
 
-#: src/admin/admin.tsx:1339
+#: src/admin/admin.tsx:1487
 msgid "Not now: {reason}."
 msgstr "Ei nyt: {reason}."
 
-#: src/admin/admin.tsx:1342
+#: src/admin/admin.tsx:1490
 msgid "Writing…"
 msgstr "Kirjoitetaan…"
 
-#: src/admin/admin.tsx:1342
+#: src/admin/admin.tsx:1490
 msgid "Write it to the card…"
 msgstr "Kirjoita kortille…"
 
-#: src/admin/admin.tsx:1346
+#: src/admin/admin.tsx:1494
 msgid "Not needed for the system to run: a newer boot loader comes with some releases (their notes say why). Be prepared to re-image the card if something unexpected happens."
 msgstr "Ei tarvita järjestelmän toimintaan: uudempi käynnistyslatain tulee joidenkin julkaisujen mukana (niiden julkaisutiedot kertovat miksi). Varaudu kirjoittamaan kortti uudelleen levykuvasta, jos jotain odottamatonta tapahtuu."
 
 #. log sources; "System (this boot)" = the system log since the unit last booted; Kernel = the operating system kernel's log
-#: src/admin/admin.tsx:1362
+#: src/admin/admin.tsx:1510
 msgid "System (this boot)"
 msgstr "Järjestelmä (tämä käynnistys)"
 
-#: src/admin/admin.tsx:1363
+#: src/admin/admin.tsx:1511
 msgid "Kernel"
 msgstr "Ydin"
 
-#: src/admin/admin.tsx:1426
+#: src/admin/admin.tsx:1574
 msgid "not on this system"
 msgstr "ei tässä järjestelmässä"
 
-#: src/admin/admin.tsx:1433
+#: src/admin/admin.tsx:1581
 msgid "How many lines"
 msgstr "Rivien määrä"
 
-#: src/admin/admin.tsx:1435
+#: src/admin/admin.tsx:1583
 msgid "{n} lines"
 msgstr "rivejä: {n}"
 
-#: src/admin/admin.tsx:1438
+#: src/admin/admin.tsx:1586
 msgid "Filter the lines"
 msgstr "Suodata rivejä"
 
-#: src/admin/admin.tsx:1438
+#: src/admin/admin.tsx:1586
 msgid "Filter"
 msgstr "Suodata"
 
-#: src/admin/admin.tsx:1440
+#: src/admin/admin.tsx:1588
 msgid "Follow"
 msgstr "Seuraa"
 
-#: src/admin/admin.tsx:1443
+#: src/admin/admin.tsx:1591
 msgid "Download"
 msgstr "Lataa"
 
-#: src/admin/admin.tsx:1449
+#: src/admin/admin.tsx:1597
 msgid "No line matches the filter."
 msgstr "Mikään rivi ei vastaa suodatinta."
 
-#: src/admin/admin.tsx:1449
+#: src/admin/admin.tsx:1597
 msgid "No lines yet."
 msgstr "Ei vielä rivejä."
 
-#: src/admin/admin.tsx:1495
+#: src/admin/admin.tsx:1643
 msgid "Receiver"
 msgstr "Vastaanotin"
 
-#: src/admin/admin.tsx:1496
+#: src/admin/admin.tsx:1644
 msgid "Log out"
 msgstr "Kirjaudu ulos"
 
@@ -1886,10 +2018,6 @@ msgstr "Näppäimet ja hiiri (näppäin ?)"
 #: src/ctl/controls.tsx:842
 msgid "keys"
 msgstr "näppäimet"
-
-#: src/ctl/controls.tsx:844
-msgid "admin"
-msgstr "ylläpito"
 
 #: src/ctl/cw.tsx:19
 msgid "Decode CW (Morse) from this receiver's audio, in this browser: every keyed signal in the passband"

@@ -38,6 +38,7 @@ kill $P
 | `shot.mjs` | one screenshot at a size, canvas sizes, horizontal scroll | — |
 | `login.mjs` | listener-password form, wrong then right | `web888d passwd --listener`; `LISTENER_PW` |
 | `admin.mjs` | admin pages, config form, phone layout | an admin password; `ADMIN_PW` |
+| `tokens.mjs` | API tokens in the admin page: make one (shown once), a request with it, the list, revoking it; the phone layout | an admin password; `ADMIN_PW`, `OUT` |
 | `phone.mjs` | the phone layout's panels with touch: More, Spots, Map (tap, tap again to tune), FT8/FT4/WSPR, Labels, status | a running server; `OUT` dir as the 2nd argument |
 | `ops.mjs` | Logs (each source, the filter), Configuration's Backup (download, then restore it through the file input), Update's Boot loader card, the phone layout | an admin password; `ADMIN_PW`, `OUT` |
 | `update.mjs` | the Update tab: look for an OS release; `ACT=install` installs it into the other slot, `ACT=reboot` reboots | the OS image with RAUC (the emulator); `ADMIN_PW` |
