@@ -370,12 +370,101 @@ cookie jar, 12 h expiry), so:
   "this receiver is too old"): `{server, version, proto, proto_min,
   features}`.
 
+### 8.5 Sample timestamps and the receiver's clock (**proposed**)
+
+Programs and the page's own decoders want to know when a sample was
+received at the antenna, not when it reached them: a time-code decoder
+can then compare the station's time with the reception time, without
+the network's and the buffers' delays. TDoA needs GPS (µs); for the
+rest a clock disciplined by NTP or a time-code station is enough, and a
+time-code station also serves air-gapped receivers.
+
+**Two oscillators.** The ADC clock (122.88 MHz, the samples' rate and
+every frequency the receiver shows) and the CPU's (the system clock,
+which NTP or chrony steers). They are measured apart:
+
+* the ADC clock against a reference: GPS PPS (the FPGA latches the
+  sample counter at each pulse; `clock_ppm` today), or an LF time-code
+  carrier measured in the samples themselves (their carriers come from
+  atomic clocks; a minute of DCF77 at night gave the remote unit's
+  ADC clock as +0.31 ppm, ±0.05 ppm per 10 s);
+* the system clock against the ADC clock through the timebase below,
+  hence against whatever disciplines that.
+
+Both are logged with the board temperature (`temp_c`), so their
+temperature dependence can be learned and used in holdover.
+
+**The timebase.** Each hardware block has a continuous sample counter
+(`first_frame`) and the system time it was read at. A smoothed fit of
+counter against time (rate: the ADC clock as disciplined) gives every
+sample a UTC time, without the read jitter, with:
+
+* `source`: `gps`, `timecode` (which station), `ntp` (the system clock,
+  disciplined), `holdover` (no reference now: the last rate and
+  offset carried on), or `none` (never had one);
+* `uncertainty` (s): from the source, and in holdover growing with the
+  time since the last reference (the last rate's uncertainty times the
+  elapsed time, plus a temperature term once learned).
+
+**References come and go.** Time-code stations aren't heard around the
+clock (LF sky wave at night and absorption by day, HF stations with
+propagation; scheduled maintenance; local noise such as power-line
+meter traffic, which buries DCF77 at the remote unit while it lasts),
+and NTP needs a network. The receiver keeps time on its
+own oscillators meanwhile:
+
+* in order of preference: GPS, then a time-code station heard well
+  enough (its quality measured, bursts of local noise skipped), then
+  NTP; any of them can be absent;
+* without any, `holdover`: the ADC rate learned last (with its
+  temperature model) carries the timebase, and chrony's own holdover
+  (its drift file) carries the system clock; the uncertainty grows
+  until a reference returns, which then pulls the clock in by slewing,
+  not by a step (a step only at start, when the error is large);
+* a reference that disagrees with the others beyond its uncertainty is
+  dropped (a wrong station, a bad decode).
+
+**In the protocol** (feature `timestamps`):
+
+* `audio {timestamps: true}`: audio frames carry flag 32 and 8 more
+  header bytes, an f64 at offset 16: the UTC of the frame's first
+  sample at the antenna (the receive chain's known delay subtracted);
+  the payload follows at 24. Clients that don't ask see no change;
+* a `timebase` message, when asked for and when it changes (source,
+  uncertainty): `{source, uncertainty, adc_ppm, station?}`; for wide IQ
+  also the mapping of its frame numbers to UTC (`offset`, `rate`);
+* the waterfall's line times come from the same timebase.
+
+**Time-code stations on the unit.** The time-code decoder
+(`crates/timecode`) runs on the unit as well as in the page, watching
+one channelizer bin (about 1 % of a core). A bin centred at 60 kHz
+covers MSF (60 kHz), RBU (66.67 kHz) and DCF77 (77.5 kHz) at once;
+which serve best (day, night, local noise) is to be measured with a
+day-long recording first. From them: the ADC rate (the carrier's phase),
+and the epoch (the second markers, ~1 ms; DCF77's phase code, perhaps
+10-100 µs), corrected for the path from the station (from the
+receiver's locator).
+
+**The system clock: chrony.** The OS changes from systemd-timesyncd to
+chrony: several NTP servers combined and cross-checked, a drift file
+for holdover, a quick and safe start without a battery-backed clock,
+and reference clocks. web888d hands chrony its time-code (and later
+GPS-derived) time over chrony's socket reference-clock interface, as
+gpsd does, so an air-gapped receiver's system clock follows the
+station too.
+
+**The page.** Its time-code panel compares each minute's time with the
+antenna time of its first sample: what is left is the path from the
+station and the receiver clock's error, a check on the clock; with the
+browser's own clock it also shows how far the listener's computer is
+off.
+
 ## 9. Reference client and adapters (proposed)
 
 * **Reference client** (`tools/web888-client`, Python, no dependencies
   beyond `websockets`): connect, tune, record audio (WAV) and wide IQ
-  (cs16), dump waterfall lines with absolute levels, follow spots as
-  JSON lines. It is the test of this document: if it needs something
+  (cs16, with SigMF metadata from the timestamps of §8.5), dump
+  waterfall lines with absolute levels, follow spots as JSON lines. It is the test of this document: if it needs something
   the document doesn't say, the document is wrong. CI runs it against
   the simulator (`--backend sim`).
 * **Hamlib `rigctld` adapter**: a small program (or a web888d option)
