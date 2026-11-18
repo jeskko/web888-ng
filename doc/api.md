@@ -374,7 +374,8 @@ cookie jar, 12 h expiry), so:
 
 Built: the timebase with the host clock as its reference (`ntp`,
 `holdover`, `none`), timestamps on audio frames and the `timebase`
-message. Not yet: time-code stations and GPS as references, wide IQ's
+message; the page's time-code, FT8/FT4/WSPR and JS8 decoders use them
+(and RBU decodes). Not yet: time-code stations and GPS as references, wide IQ's
 mapping, the waterfall's times from the timebase, chrony.
 
 Programs and the page's own decoders want to know when a sample was
@@ -450,7 +451,9 @@ own oscillators meanwhile:
 **Time-code stations on the unit.** The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching
 one channelizer bin (about 1 % of a core). A bin centred at 60 kHz
-covers MSF (60 kHz), RBU (66.67 kHz) and DCF77 (77.5 kHz) at once;
+covers MSF (60 kHz), RBU (66.67 kHz, phase-modulated: 10 bits a second,
+each on the tenth of a second after a 5 ms gap in the carrier) and
+DCF77 (77.5 kHz) at once;
 which serve best (day, night, local noise) is to be measured with a
 day-long recording first. From them: the ADC rate (the carrier's phase),
 and the epoch (the second markers, ~1 ms; DCF77's phase code, perhaps
@@ -465,11 +468,15 @@ GPS-derived) time over chrony's socket reference-clock interface, as
 gpsd does, so an air-gapped receiver's system clock follows the
 station too.
 
-**The page.** Its time-code panel compares each minute's time with the
+**The page** (**built**). While its time-code, FT8/FT4/WSPR or JS8
+decoders run it asks for timed audio, and their sample clocks take the
+frames' antenna times instead of estimating them from when the audio
+arrived. The time-code panel compares each minute's time with the
 antenna time of its first sample: what is left is the path from the
-station and the receiver clock's error, a check on the clock; with the
-browser's own clock it also shows how far the listener's computer is
-off.
+station and the receiver clock's error, a check on the clock; it also
+shows the receiver's clock (source, uncertainty, ADC ppm). How far the
+listener's own computer is off isn't shown: the network delay can't be
+told apart from that offset without more (a measured round trip).
 
 ## 9. Reference client and adapters (proposed)
 
