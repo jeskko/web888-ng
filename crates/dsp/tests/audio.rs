@@ -497,3 +497,70 @@ fn nbfm_squelch_closes_on_noise() {
     assert!(chain.squelched());
     assert!(out[out.len() - 6000..].iter().all(|&v| v == 0.0));
 }
+
+/// `delay_s` is how late the audio comes out: a tone switched on at a
+/// known input sample is half up in the output that much later (the
+/// filters are linear-phase: their step responses are half up at their
+/// group delays). Timestamps of audio frames rest on this
+/// (`doc/api.md` §8.5).
+#[test]
+fn the_chain_says_its_own_delay() {
+    let fs = 48_000.0;
+    for (name, spec) in [
+        ("usb 12k", fixed(Mode::Usb)),
+        (
+            "usb 24k",
+            AudioSpec {
+                rate: 24_000.0,
+                ..fixed(Mode::Usb)
+            },
+        ),
+        (
+            "usb nr",
+            AudioSpec {
+                nr: 0.05,
+                ..fixed(Mode::Usb)
+            },
+        ),
+        (
+            "usb wide",
+            AudioSpec {
+                lo_hz: 50.0,
+                hi_hz: 5000.0,
+                ..fixed(Mode::Usb)
+            },
+        ),
+    ] {
+        let mut chain = AudioChain::new(spec, fs, Droop::None);
+        let rate = chain.spec().rate;
+        let on = 24_000usize; // the tone starts at 0.5 s
+        let x: Vec<web888_dsp::C32> = (0..96_000)
+            .map(|k| {
+                if k < on {
+                    web888_dsp::C32::new(0.0, 0.0)
+                } else {
+                    let p = 2.0 * std::f64::consts::PI * 1000.0 * k as f64 / fs;
+                    web888_dsp::C32::new((0.1 * p.cos()) as f32, (0.1 * p.sin()) as f32)
+                }
+            })
+            .collect();
+        let mut out = Vec::new();
+        chain.process_c32(x, &mut out);
+        // the envelope: the largest |sample| over each 1 ms
+        let w = (rate / 1000.0) as usize;
+        let env: Vec<f32> = out
+            .windows(w)
+            .map(|v| v.iter().fold(0.0f32, |m, s| m.max(s.abs())))
+            .collect();
+        let full = env[env.len() - 1000];
+        let half = env.iter().position(|&e| e >= full / 2.0).unwrap() as f64 + w as f64 / 2.0;
+        let got = half / rate - on as f64 / fs;
+        let want = chain.delay_s();
+        assert!(
+            (got - want).abs() < 0.6e-3,
+            "{name}: half up {:.2} ms after the step, delay_s {:.2} ms",
+            got * 1e3,
+            want * 1e3
+        );
+    }
+}

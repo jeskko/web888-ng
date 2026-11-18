@@ -370,7 +370,12 @@ cookie jar, 12 h expiry), so:
   "this receiver is too old"): `{server, version, proto, proto_min,
   features}`.
 
-### 8.5 Sample timestamps and the receiver's clock (**proposed**)
+### 8.5 Sample timestamps and the receiver's clock (**partly built**)
+
+Built: the timebase with the host clock as its reference (`ntp`,
+`holdover`, `none`), timestamps on audio frames and the `timebase`
+message. Not yet: time-code stations and GPS as references, wide IQ's
+mapping, the waterfall's times from the timebase, chrony.
 
 Programs and the page's own decoders want to know when a sample was
 received at the antenna, not when it reached them: a time-code decoder
@@ -426,14 +431,21 @@ own oscillators meanwhile:
 
 **In the protocol** (feature `timestamps`):
 
-* `audio {timestamps: true}`: audio frames carry flag 32 and 8 more
-  header bytes, an f64 at offset 16: the UTC of the frame's first
-  sample at the antenna (the receive chain's known delay subtracted);
-  the payload follows at 24. Clients that don't ask see no change;
-* a `timebase` message, when asked for and when it changes (source,
-  uncertainty): `{source, uncertainty, adc_ppm, station?}`; for wide IQ
-  also the mapping of its frame numbers to UTC (`offset`, `rate`);
-* the waterfall's line times come from the same timebase.
+* **Built:** `audio {timestamps: true}` (in `state` as `timestamps`):
+  audio frames carry flag 32 and an f64 at offset 16, the UTC (s) of
+  the frame's first sample at the antenna (the audio chain's filter,
+  notch and NR delays subtracted, `AudioChain::delay_s`); the payload
+  follows at 24. Clients that don't ask see no change. The FPGA's own
+  channel filter and the transfer's least delay aren't subtracted yet
+  (covered by the uncertainty until a time station or GPS measures
+  them).
+* **Built:** a `timebase` message when timestamps are turned on and
+  every 10 s while they are: `{source, uncertainty?, adc_ppm?}`
+  (`uncertainty` in s, absent with `source` "none"; `adc_ppm` once the
+  fit spans a minute).
+* **Proposed:** `station` in `timebase` for a time-code reference; for
+  wide IQ the mapping of its frame numbers to UTC (`offset`, `rate`);
+  the waterfall's line times from the same timebase.
 
 **Time-code stations on the unit.** The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching

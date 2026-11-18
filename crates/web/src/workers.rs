@@ -14,6 +14,7 @@ use crate::proto::{
 };
 use crate::wideaudio::{self, BinSource};
 use crossbeam_channel::{Receiver as CbReceiver, TryRecvError};
+use std::collections::VecDeque;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicU32, AtomicU64, Ordering};
 use std::time::{Duration, Instant, SystemTime, UNIX_EPOCH};
@@ -179,6 +180,8 @@ pub enum AudioCmd {
     Dial(f64),
     /// How web frames carry the audio (`codec`).
     Codec(crate::codec::Codec),
+    /// Frames carry their time (`FLAG_TIME`).
+    Timestamps(bool),
 }
 
 /// How a job packs its audio.
@@ -215,6 +218,52 @@ pub struct AudioJob {
     asked: AudioSpec,
     src: Option<BinSource>,
     wide: Vec<C32>,
+    /// The frames' times: the RX stream's timebase, and where the chain's
+    /// samples came from.
+    clock: Option<Arc<web888_hw::HwStatus>>,
+    times: Option<Times>,
+}
+
+/// Which input sample was when, for the chain's output (`doc/api.md`
+/// §8.5): the chain makes output sample `j` from input sample
+/// `j * input_rate / rate`, `delay_s` earlier.
+#[derive(Default)]
+struct Times {
+    /// Input samples since the chain (re)started.
+    inputs: u64,
+    /// Output samples (per channel) since then.
+    outputs: i64,
+    /// Runs of input: (first input index, its UTC, samples per second).
+    runs: VecDeque<(u64, f64, f64)>,
+}
+
+impl Times {
+    fn add(&mut self, n: usize, utc: Option<f64>, rate: f64) {
+        if let Some(t) = utc {
+            self.runs.push_back((self.inputs, t, rate));
+        }
+        self.inputs += n as u64;
+    }
+
+    /// UTC of output sample `j` (per channel) at the antenna.
+    fn utc(&self, j: i64, chain: &AudioChain) -> Option<f64> {
+        let x = j as f64 * chain.input_rate() / chain.spec().rate;
+        let run = self
+            .runs
+            .iter()
+            .rev()
+            .find(|r| r.0 as f64 <= x)
+            .or(self.runs.front())?;
+        Some(run.1 + (x - run.0 as f64) / run.2 - chain.delay_s())
+    }
+
+    /// Forget runs before output sample `j`.
+    fn keep_from(&mut self, j: i64, chain: &AudioChain) {
+        let x = j as f64 * chain.input_rate() / chain.spec().rate;
+        while self.runs.len() > 1 && self.runs[1].0 as f64 <= x {
+            self.runs.pop_front();
+        }
+    }
 }
 
 impl AudioJob {
@@ -247,6 +296,23 @@ impl AudioJob {
             asked: spec,
             src: None,
             wide: Vec::new(),
+            clock: None,
+            times: None,
+        }
+    }
+
+    /// Where the RX frames' times are kept (for timestamps).
+    pub fn with_clock(mut self, status: Arc<web888_hw::HwStatus>) -> Self {
+        self.clock = Some(status);
+        self
+    }
+
+    /// The chain starts over: its samples' times too (the pending
+    /// audio counts as just before).
+    fn restart_times(&mut self) {
+        // pcm[0] becomes output -(its length): before the new count
+        if let Some(t) = &mut self.times {
+            *t = Times::default();
         }
     }
 
@@ -287,6 +353,7 @@ impl AudioJob {
             self.chain = self.make_chain();
             self.pcm.clear();
             self.flags |= FLAG_GAP;
+            self.restart_times();
         }
     }
 
@@ -345,6 +412,8 @@ impl AudioJob {
                         // mono and stereo samples don't mix
                         self.pcm.clear();
                     }
+                    // the rate may have changed: count anew
+                    self.restart_times();
                 }
                 Ok(AudioCmd::Channel(c)) if c != self.ch => {
                     // another channel's history: start over
@@ -352,6 +421,7 @@ impl AudioJob {
                     self.sync_src();
                     self.chain = self.make_chain();
                     self.pcm.clear();
+                    self.restart_times();
                     self.next_frame = None;
                     self.flags |= FLAG_GAP;
                     if let Some(w) = &mut self.wf {
@@ -368,6 +438,10 @@ impl AudioJob {
                     if let Framing::Web(e) = &mut self.framing {
                         e.set_codec(c);
                     }
+                }
+                Ok(AudioCmd::Timestamps(on)) => {
+                    self.times = on.then(Times::default);
+                    self.restart_times();
                 }
                 Ok(AudioCmd::Kiwi(k)) => {
                     if let Framing::Kiwi(e) = &mut self.framing {
@@ -405,19 +479,48 @@ impl Job for AudioJob {
             w.engine.push_rx(b.channel(ch), w.contiguous && contiguous);
             w.contiguous = true;
         }
+        let had = self.pcm.len();
+        let tb = match (&self.times, &self.clock) {
+            (Some(_), Some(c)) => {
+                let tb = c.timebase.lock().unwrap();
+                Some((
+                    tb.utc(b.first_frame as f64),
+                    tb.utc(b.end_frame() as f64),
+                    tb.rate(),
+                ))
+            }
+            _ => None,
+        };
         match &mut self.src {
             Some(s) => {
                 self.wide.clear();
                 if s.read(&mut self.wide) {
                     self.flags |= FLAG_GAP;
                 }
+                if let (Some(t), Some((_, end, _))) = (&mut self.times, tb) {
+                    // the bins' newest samples: about when the block came
+                    let n = self.wide.len();
+                    t.add(
+                        n,
+                        end.map(|e| e - n as f64 / wideaudio::RATE),
+                        wideaudio::RATE,
+                    );
+                }
                 self.chain.process_c32(self.wide.drain(..), &mut self.pcm);
             }
-            None => self.chain.process(b.channel(ch), &mut self.pcm),
+            None => {
+                if let (Some(t), Some((first, _, rate))) = (&mut self.times, tb) {
+                    t.add(b.frames(), first, rate.unwrap_or(self.rx_rate));
+                }
+                self.chain.process(b.channel(ch), &mut self.pcm)
+            }
         }
         // frames of AUDIO_FRAME sample times (Kiwi: its packet), of every
         // channel
         let chans = self.chain.channels();
+        if let Some(t) = &mut self.times {
+            t.outputs += ((self.pcm.len() - had) / chans.max(1)) as i64;
+        }
         let per_12k = (self.chain.spec().rate / web888_dsp::audio::AUDIO_RATE).round() as usize;
         let len = chans
             * match &self.framing {
@@ -431,6 +534,11 @@ impl Job for AudioJob {
             // a block may finish several frames: they share its reading
             self.rssi = self.chain.take_power_db().unwrap_or(self.rssi);
             let pcm = &self.pcm[used..used + len];
+            // this frame's first sample, counted as the chain's outputs
+            let utc = self.times.as_ref().and_then(|t| {
+                let j = t.outputs - ((self.pcm.len() - used) / chans.max(1)) as i64;
+                t.utc(j, &self.chain)
+            });
             let f = match &mut self.framing {
                 Framing::Web(e) => e.frame(
                     self.flags | stereo,
@@ -449,6 +557,10 @@ impl Job for AudioJob {
                     chans,
                 ),
             };
+            let f = match (utc, &self.framing) {
+                (Some(t), Framing::Web(_)) => proto::timed(f, t),
+                _ => f,
+            };
             if !self.out.send(f) {
                 return false;
             }
@@ -457,6 +569,10 @@ impl Job for AudioJob {
             used += len;
         }
         self.pcm.drain(..used);
+        if let Some(t) = &mut self.times {
+            let j = t.outputs - (self.pcm.len() / chans.max(1)) as i64;
+            t.keep_from(j, &self.chain);
+        }
         true
     }
 

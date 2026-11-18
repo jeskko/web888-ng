@@ -8,6 +8,7 @@
     {"type": "audio", "agc": true, "gain_db": 80},
     {"type": "audio", "agc": true, "gain_db": 80, "agc_speed": "slow", "nb": 8, "nr": 0.5, "notch": true, "squelch": true, "squelch_db": -95, "audio_rate": 24000, "codec": "opus"},
     {"type": "audio", "agc_speed": "custom", "agc_hang_ms": 1200, "agc_decay_db_s": 6},
+    {"type": "audio", "timestamps": true},
     {"type": "wf", "center_hz": 8600000, "decim": 16, "bins": 1024, "fps": 20, "pack": true},
     {"type": "ping", "t": 1234.5},
     {"type": "share", "on": false},
@@ -42,6 +43,8 @@
       {"t": 1792789920, "mode": "WSPR", "band": "40m", "dial": 7038600, "hz": 7040012, "snr": -12, "dt": 0.5,
        "msg": "DL1STF JN58 37", "call": "DL1STF", "grid": "JN58", "drift": -1, "dbm": 37}]},
     {"type": "pong", "t": 1234.5},
+    {"type": "timebase", "source": "ntp", "uncertainty": 0.0052, "adc_ppm": 0.312},
+    {"type": "timebase", "source": "none"},
     {"type": "busy", "msg": "too many sessions from your address (at most 4)"},
     {"type": "error", "msg": "bad message"}
   ]

@@ -309,6 +309,27 @@ impl AudioChain {
         10f32.powf(spec.gain_db / 20.0)
     }
 
+    /// The rate the chain takes samples at.
+    pub fn input_rate(&self) -> f64 {
+        self.rx_rate
+    }
+
+    /// How late the audio comes out against the input (s): the filters'
+    /// group delays and the notch's and NR's frames. Output sample `j`
+    /// counts as input sample `j * input_rate / rate`, this much earlier.
+    pub fn delay_s(&self) -> f64 {
+        let fs = self.spec.rate;
+        let mut d =
+            (self.decim.taps() as f64 - 1.0) / 2.0 / self.rx_rate + self.filter.delay() as f64 / fs;
+        if self.notch.is_some() {
+            d += AutoNotch::DELAY as f64 / 12_000.0;
+        }
+        if self.nr.is_some() {
+            d += NoiseReduction::DELAY as f64 / 12_000.0;
+        }
+        d
+    }
+
     pub fn spec(&self) -> &AudioSpec {
         &self.spec
     }

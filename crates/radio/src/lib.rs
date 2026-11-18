@@ -13,6 +13,7 @@ pub mod bins;
 pub mod block;
 pub mod chan;
 pub mod clock;
+pub mod timebase;
 
 pub use block::*;
 pub use chan::*;

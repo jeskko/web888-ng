@@ -298,6 +298,24 @@ impl Shared {
         self.waterfalls.tap().is_some()
     }
 
+    /// The receiver's clock, as `timebase` tells it (`doc/api.md` §8.5),
+    /// after taking the kernel clock's state into the timebase.
+    pub fn timebase_msg(&self) -> ServerMsg {
+        let mut tb = self.status.timebase.lock().unwrap();
+        if let Some((synced, err)) = crate::sysstat::kernel_clock() {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0.0, |d| d.as_secs_f64());
+            tb.set_system(synced, err, now);
+        }
+        let i = tb.info();
+        ServerMsg::Timebase {
+            source: i.source.name().into(),
+            uncertainty: i.uncertainty.is_finite().then_some(i.uncertainty),
+            adc_ppm: i.adc_ppm.map(|p| (p * 1000.0).round() / 1000.0),
+        }
+    }
+
     /// What this server can do, for `hello` and `/api/version`
     /// (`doc/api.md` §8.1).
     pub fn features(&self) -> Vec<String> {
@@ -310,6 +328,7 @@ impl Shared {
             "agc-custom",
             "notch",
             "squelch",
+            "timestamps",
         ];
         f.extend(crate::codec::Codec::ALL.iter().map(|c| c.name()));
         if self.audio_rates().len() > 1 {
@@ -747,7 +766,18 @@ impl Session<'_> {
                 squelch_db,
                 audio_rate,
                 codec,
+                timestamps,
             } => {
+                let mut extra = vec![];
+                if let Some(on) = timestamps
+                    && on != self.st.timestamps
+                {
+                    self.st.timestamps = on;
+                    let _ = self.audio.send(AudioCmd::Timestamps(on));
+                    if on {
+                        extra.push(self.sh.timebase_msg());
+                    }
+                }
                 if let Some(c) = codec.as_deref().and_then(crate::codec::Codec::parse) {
                     self.st.codec = c.name().into();
                     let _ = self.audio.send(AudioCmd::Codec(c));
@@ -781,7 +811,9 @@ impl Session<'_> {
                 let a = audio_spec(&self.st);
                 sync_state(&mut self.st, &a);
                 let _ = self.audio.send(AudioCmd::Spec(a));
-                vec![st(self)]
+                let mut r = vec![st(self)];
+                r.append(&mut extra);
+                r
             }
             ClientMsg::Wf(w) => {
                 self.st.wf = self.sh.clamp_wf(w);
@@ -927,6 +959,7 @@ pub async fn run(
         share: sh.live.borrow().limits.share_default,
         listen: None,
         name: String::new(),
+        timestamps: false,
     };
     let spec = audio_spec(&st);
     sync_state(&mut st, &spec);
@@ -968,7 +1001,8 @@ pub async fn run(
         },
         sink.clone(),
     )
-    .with_tap(sh.waterfalls.tap().cloned());
+    .with_tap(sh.waterfalls.tap().cloned())
+    .with_clock(sh.status.clone());
     let placed = sh.pool.add(Box::new(job));
     // the worker's losses count from here
     let rx_lost0 = placed.rx_dropped.load(Ordering::Relaxed);
@@ -1027,6 +1061,7 @@ pub async fn run(
     }
 
     let mut tick = tokio::time::interval(Duration::from_secs(1));
+    let mut ticks = 0u64;
     let mut users_sent: Option<Vec<UserMark>> = None;
     let mut skims_sent: Option<Vec<proto::SkimMark>> = None;
     let started = std::time::Instant::now();
@@ -1168,6 +1203,10 @@ pub async fn run(
                 let spots = s.new_spots();
                 if !spots.is_empty() {
                     r.push(ServerMsg::Spots { spots });
+                }
+                ticks += 1;
+                if s.st.timestamps && ticks.is_multiple_of(10) {
+                    r.push(sh.timebase_msg());
                 }
                 r
             }

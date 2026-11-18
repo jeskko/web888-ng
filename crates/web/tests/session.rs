@@ -1030,3 +1030,67 @@ async fn protocol_3_ids_features_and_versions() {
     assert_eq!(u16::from(close.unwrap().code), 4004);
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
 }
+
+/// Timestamps (`doc/api.md` §8.5): asked for, audio frames carry the
+/// UTC of their first sample (FLAG_TIME, an f64 after the header), one
+/// frame's length apart, a little before they arrive; a `timebase`
+/// message tells the clock's source.
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn audio_frames_carry_their_time() {
+    let (addr, stop) = start().await;
+    let (mut ws, _) = tokio_tungstenite::connect_async(format!("ws://{addr}/ws"))
+        .await
+        .unwrap();
+    for m in [
+        r#"{"type":"mode","mode":"usb"}"#,
+        r#"{"type":"tune","hz":7074000}"#,
+        r#"{"type":"audio","timestamps":true}"#,
+    ] {
+        ws.send(Message::Text(m.into())).await.unwrap();
+    }
+    let now = || {
+        std::time::SystemTime::now()
+            .duration_since(std::time::UNIX_EPOCH)
+            .unwrap()
+            .as_secs_f64()
+    };
+    let mut timebase = None;
+    let mut times: Vec<(f64, f64, usize)> = vec![];
+    let deadline = tokio::time::Instant::now() + Duration::from_secs(15);
+    while times.len() < 150 && tokio::time::Instant::now() < deadline {
+        let m = ws.next().await.unwrap().unwrap();
+        if let Some(ServerMsg::Timebase { source, .. }) = json(&m) {
+            timebase = Some(source);
+            continue;
+        }
+        let Message::Binary(b) = m else { continue };
+        if b[0] != proto::KIND_AUDIO || b[1] & proto::FLAG_TIME == 0 {
+            continue;
+        }
+        let t = f64::from_le_bytes(b[16..24].try_into().unwrap());
+        let n = u16::from_le_bytes([b[2], b[3]]) as usize;
+        let rate = u32::from_le_bytes(b[8..12].try_into().unwrap()) as f64;
+        times.push((t, now(), (n as f64 / rate * 1e6) as usize));
+        // the PCM payload starts after the time
+        assert_eq!(b.len(), 24 + 2 * n);
+    }
+    assert!(timebase.is_some(), "no timebase message");
+    assert!(times.len() >= 150, "{} timed frames", times.len());
+    // after the first second (the fit settles): a frame's length apart,
+    // and received a little after their time
+    for w in times[50..].windows(2) {
+        let step = (w[1].0 - w[0].0) * 1e6;
+        assert!(
+            (step - w[0].2 as f64).abs() < 300.0,
+            "frames {step:.0} us apart"
+        );
+    }
+    for &(t, got, _) in &times[50..] {
+        let late = got - t;
+        assert!(
+            (0.0..0.5).contains(&late),
+            "received {late:.3} s after its time"
+        );
+    }
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}

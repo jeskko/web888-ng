@@ -14,6 +14,9 @@ pub struct SysStat {
     pub cpu: Option<f32>,
     /// SoC temperature, °C.
     pub temp_c: Option<f32>,
+    /// The kernel's clock: synchronised (NTP, chrony), and its estimated
+    /// error (s).
+    pub clock: Option<(bool, f64)>,
 }
 
 static LATEST: OnceLock<Mutex<SysStat>> = OnceLock::new();
@@ -41,12 +44,26 @@ fn sample_loop() {
                 _ => None,
             },
             temp_c: temperature(),
+            clock: kernel_clock(),
         };
         prev = now;
         if let Some(m) = LATEST.get() {
             *m.lock().unwrap() = s;
         }
     }
+}
+
+/// Whether the kernel's clock is synchronised, and its estimated error
+/// (s), as the NTP daemon told it (`adjtimex`, read only).
+pub fn kernel_clock() -> Option<(bool, f64)> {
+    // SAFETY: a zeroed timex with modes 0 only reads the state.
+    let mut t: libc::timex = unsafe { std::mem::zeroed() };
+    let r = unsafe { libc::adjtimex(&mut t) };
+    if r < 0 {
+        return None;
+    }
+    let synced = r != libc::TIME_ERROR && t.status & libc::STA_UNSYNC == 0;
+    Some((synced, t.esterror as f64 * 1e-6))
 }
 
 /// (busy, total) clock ticks of all CPUs since boot (the metrics).

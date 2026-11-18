@@ -215,6 +215,8 @@ pub struct HwStatus {
     pub rx_lost_frames: AtomicU64,
     /// The RF attenuator as set, in 0.5 dB steps.
     pub atten_half_db: std::sync::atomic::AtomicU32,
+    /// The RX frames' times (`doc/api.md` §8.5).
+    pub timebase: std::sync::Mutex<web888_radio::timebase::Timebase>,
 }
 
 impl HwStatus {
@@ -538,14 +540,23 @@ impl HwLoop {
                 self.status
                     .rx_frames
                     .fetch_add(got as u64, Ordering::Relaxed);
+                let arrived = std::time::SystemTime::now()
+                    .duration_since(std::time::UNIX_EPOCH)
+                    .map_or(0.0, |d| d.as_secs_f64());
+                // before the block goes out: its readers find its time
+                self.status.timebase.lock().unwrap().observe(
+                    frames + got as u64,
+                    arrived,
+                    // nominal: the fit learns the real rate (a PPS
+                    // correction mustn't move the frames' times)
+                    web888_radio::chan::rx_rate(caps.adc_hz, self.radio.rx_r2()),
+                );
                 rx_out.send(RxBlock {
                     first_frame: frames,
                     nch: n,
                     iq: buf[..got * n].to_vec(),
                     overload,
-                    arrived: std::time::SystemTime::now()
-                        .duration_since(std::time::UNIX_EPOCH)
-                        .map_or(0.0, |d| d.as_secs_f64()),
+                    arrived,
                 });
                 frames += got as u64;
             }

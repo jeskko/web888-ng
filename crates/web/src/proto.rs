@@ -158,6 +158,11 @@ pub enum ClientMsg {
         /// (`Hello::codecs`).
         #[serde(default, skip_serializing_if = "Option::is_none")]
         codec: Option<String>,
+        /// Audio frames carry the UTC of their first sample at the
+        /// antenna (`FLAG_TIME`), and `timebase` messages come
+        /// (`doc/api.md` §8.5).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        timestamps: Option<bool>,
     },
     Wf(WfReq),
     Ping {
@@ -312,6 +317,9 @@ pub struct State {
     /// Callsign or nickname, as others see it.
     #[serde(default)]
     pub name: String,
+    /// Audio frames carry their time (`FLAG_TIME`).
+    #[serde(default, skip_serializing_if = "std::ops::Not::not")]
+    pub timestamps: bool,
 }
 
 fn default_codec() -> String {
@@ -497,6 +505,20 @@ pub enum ServerMsg {
     Pong {
         t: f64,
     },
+    /// What the receiver's clock is worth (`doc/api.md` §8.5): with
+    /// `timestamps` on, at first and every 10 s.
+    Timebase {
+        /// "ntp", "holdover", "none" (later "timecode", "gps").
+        source: String,
+        /// One standard uncertainty of the timestamps (s); absent: none
+        /// to speak of (`source` "none").
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        uncertainty: Option<f64>,
+        /// The RX stream's rate against the host clock, ppm (the ADC
+        /// clock's error when the host clock is good).
+        #[serde(default, skip_serializing_if = "Option::is_none")]
+        adc_ppm: Option<f64>,
+    },
     Busy {
         msg: String,
     },
@@ -518,6 +540,9 @@ pub const FLAG_MULAW: u8 = 8;
 /// Audio: the payload is one Opus packet (20 ms) decoding to the count's
 /// samples (`codec`).
 pub const FLAG_OPUS: u8 = 16;
+/// Audio: an f64 follows the header (offset 16): the UTC (s) of the
+/// frame's first sample at the antenna; the payload starts at 24.
+pub const FLAG_TIME: u8 = 32;
 /// Waterfall: first line of a new tuning/zoom.
 pub const FLAG_NEW_GEN: u8 = 2;
 /// Waterfall: no new samples since the previous line (it repeats the
@@ -543,6 +568,14 @@ pub fn audio_frame(flags: u8, seq: u32, rate: u32, rssi_db: f32, pcm: &[f32]) ->
         b.extend_from_slice(&v.to_le_bytes());
     }
     b
+}
+
+/// An audio frame with its first sample's UTC (`FLAG_TIME`: an f64 at
+/// offset 16, the payload after it).
+pub fn timed(mut f: Vec<u8>, utc: f64) -> Vec<u8> {
+    f[1] |= FLAG_TIME;
+    f.splice(AUDIO_HEADER..AUDIO_HEADER, utc.to_le_bytes());
+    f
 }
 
 /// Waterfall line frame: header + u8 levels (`db0 + v * db_step`).

@@ -26,6 +26,15 @@ test("audio frame", () => {
   assert.deepEqual([...a.pcm], f.pcm);
 });
 
+test("audio frame with its time", () => {
+  const f = frames.audio_time;
+  const a = parseFrame(buf(f.hex)) as AudioFrame;
+  assert.equal(a.flags, f.flags);
+  assert.equal(a.time, f.time);
+  assert.deepEqual([...a.pcm], f.pcm);
+  assert.equal((parseFrame(buf(frames.audio.hex)) as AudioFrame).time, undefined);
+});
+
 test("waterfall frame", () => {
   const f = frames.wf;
   const l = parseFrame(buf(f.hex)) as WfLine;

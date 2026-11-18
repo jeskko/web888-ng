@@ -60,6 +60,8 @@ fn frame_fixtures_match_the_encoders() {
         &[0.25, -0.5, 1.0],
     );
     assert_eq!(f["audio"]["hex"], hex(&a));
+    let t = web888_web::proto::timed(a.clone(), 1_700_000_000.25);
+    assert_eq!(f["audio_time"]["hex"], hex(&t));
     let w = wf_frame(
         FLAG_NEW_GEN,
         70_000,

@@ -82,6 +82,8 @@ export interface State {
   listen: number | null;
   /** Callsign or nickname, as others see it. */
   name: string;
+  /** Audio frames carry their time. */
+  timestamps?: boolean;
 }
 
 /** Audio settings to change (the others stay). */
@@ -101,6 +103,9 @@ export interface AudioReq {
   audio_rate?: number;
   /** One of the hello's `codecs`. */
   codec?: Codec;
+  /** Audio frames carry their time (FLAG_TIME), and `timebase` messages
+   * come (protocol 3, feature "timestamps"). */
+  timestamps?: boolean;
 }
 
 /** Another user: in the user list, and (sharing, with a receiver) a
@@ -197,6 +202,7 @@ export type ServerMsg =
   | { type: "spots"; spots: Spot[] }
   | ({ type: "status" } & Status)
   | { type: "pong"; t: number }
+  | { type: "timebase"; source: string; uncertainty?: number; adc_ppm?: number }
   | { type: "busy"; msg: string }
   | { type: "error"; msg: string };
 
@@ -229,6 +235,9 @@ export const FLAG_STEREO = 4;
 export const FLAG_MULAW = 8;
 /** Audio: one Opus packet (`packet`), decoded by the page. */
 export const FLAG_OPUS = 16;
+/** Audio: the UTC (s) of the first sample at the antenna follows the
+ * header (an f64); the payload after it. */
+export const FLAG_TIME = 32;
 
 /** How the server sends the audio. */
 export type Codec = "pcm16" | "mulaw" | "opus";
@@ -257,6 +266,8 @@ export interface AudioFrame {
   samples: number;
   /** The frame's size on the wire (bytes). */
   bytes: number;
+  /** UTC (s) of the first sample at the antenna (FLAG_TIME). */
+  time?: number;
 }
 
 export interface WfLine {
@@ -300,16 +311,20 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
   if (kind === KIND_AUDIO) {
     let pcm: Float32Array;
     let packet: Uint8Array | undefined;
+    const timed = (flags & FLAG_TIME) !== 0;
+    if (timed && buf.byteLength < AUDIO_HEADER + 8) return null;
+    const time = timed ? v.getFloat64(AUDIO_HEADER, true) : undefined;
+    const at = AUDIO_HEADER + (timed ? 8 : 0);
     if (flags & FLAG_OPUS) {
-      packet = new Uint8Array(buf, AUDIO_HEADER);
+      packet = new Uint8Array(buf, at);
       pcm = new Float32Array(0);
     } else if (flags & FLAG_MULAW) {
-      if (buf.byteLength < AUDIO_HEADER + n) return null;
-      pcm = mulawDecode(new Uint8Array(buf, AUDIO_HEADER, n));
+      if (buf.byteLength < at + n) return null;
+      pcm = mulawDecode(new Uint8Array(buf, at, n));
     } else {
-      if (buf.byteLength < AUDIO_HEADER + 2 * n) return null;
+      if (buf.byteLength < at + 2 * n) return null;
       pcm = new Float32Array(n);
-      for (let k = 0; k < n; k++) pcm[k] = v.getInt16(AUDIO_HEADER + 2 * k, true) / 32768;
+      for (let k = 0; k < n; k++) pcm[k] = v.getInt16(at + 2 * k, true) / 32768;
     }
     return {
       kind,
@@ -322,6 +337,7 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
       packet,
       samples: n,
       bytes: buf.byteLength,
+      time,
     };
   }
   if (kind === KIND_WF) {
