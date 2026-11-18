@@ -1,0 +1,405 @@
+# web888d API for external applications
+
+Status: **draft for review** (2026-11-19). Sections 2-7 describe what
+web888d does today (WebSocket protocol 2, server 0.16.0); everything
+marked **Proposed** is not built yet. When the proposals are settled
+this becomes the reference, and the protocol becomes version 3.
+
+## 1. Why
+
+Programs other than the web page can use the receiver today only
+through compatibility protocols: Kiwi (`doc/m5-kiwi.md`: kiwirecorder,
+wsprdaemon) and HPSDR Protocol 1 (`crates/hpsdr`). They work, but they
+are other projects' designs, and nothing web888-specific fits in them:
+the skimmers' spots, frequency labels, listening along with another
+user, the queue for a receiver, the channelizer's wide IQ, propagation,
+the overload and status figures.
+
+The web page itself talks to web888d over a small WebSocket protocol
+and a set of JSON endpoints. That protocol already has a TypeScript
+and a Rust side checked against the same fixtures
+(`crates/web/tests/proto/`), so the plan is not a new API but making
+the existing one public:
+
+* document it (this file), version it, and say which parts are stable;
+* let programs authenticate without a browser login (tokens, §8);
+* keep it honest with a reference client (§9) and the shared fixtures.
+
+The page stays an ordinary client of the same protocol: anything it can
+do, a program can do, except what the page does locally (§7).
+
+## 2. Interfaces at a glance
+
+| interface | where | for | stability (proposed) |
+|---|---|---|---|
+| Listener protocol | WebSocket `/ws` | tuning, audio, waterfall, wide IQ, users, spots, status | **stable** from v3 (§4-6) |
+| Public JSON | `GET /api/...` | spots, labels, band plan, info, propagation, map, status | **stable** where marked (§7.1) |
+| Admin JSON | `/api/admin/...` | config, sessions, logs, updates | documented, **unstable** (§7.2) |
+| Metrics | `GET /metrics` | Prometheus text (`doc/metrics.md`) | metric names stable, additions any time |
+| Kiwi | `/<ts>/SND`, `/<ts>/W/F`, `/status`, `/VER` | Kiwi clients | as Kiwi's (`doc/m5-kiwi.md`) |
+| HPSDR P1 | UDP 1024 | SDR programs (up to 7 receivers, 48 kS/s) | as the protocol's |
+
+HTTP and HTTPS share one port (a TLS handshake is told apart by its first
+byte); behind a reverse proxy `[web] trusted_proxies` makes the limits
+see the real client.
+
+## 3. Conventions
+
+* JSON in WebSocket text frames, binary data (audio, waterfall, IQ) in
+  binary frames, **little endian**.
+* Frequencies are **Hz** as JSON numbers (floats allowed), times are
+  **UTC**: seconds since 1970 in JSON (`t`), milliseconds in binary
+  headers. Levels are dB; `dBFS` is relative to the ADC's full scale.
+* Frequencies are the receiver's own. With a converter
+  (`radio.freq_offset_hz` in `hello`), the frequency on the air is the
+  receiver's plus the offset; clients show that, and tune with the
+  receiver's.
+* Unknown fields in a message are ignored on both sides; a client must
+  ignore unknown message `type`s and unknown binary `kind`s (§8 makes
+  this the rule for additions).
+
+## 4. Session
+
+```mermaid
+sequenceDiagram
+    participant C as client
+    participant S as web888d
+    C->>S: GET /ws upgrade, with a login cookie or a token
+    alt refused (address limit, blocked, daily time)
+        S-->>C: busy {msg}, close
+    else admitted
+        S-->>C: hello {proto, radio, limits, codecs, session, ...}
+        S-->>C: state {hz, mode, wf, ...}
+        S-->>C: lease {granted, position}
+        C->>S: hello {proto: 2, codecs}
+        C->>S: tune / mode / audio / wf ...
+        S-->>C: state (after each change)
+        loop every second
+            S-->>C: status, and users / skimmers / spots when changed
+        end
+        S-->>C: binary audio, waterfall, wide IQ frames
+    end
+```
+
+* The server speaks first: `hello`, the session's `state` (defaults:
+  the receiver's default frequency and mode), then `lease`.
+* The client's `hello` names the protocol it speaks; a different
+  number gets an `error` (today the session goes on regardless;
+  **proposed**: close with 4004, §8).
+* **Receivers are leased.** A session gets an RX channel when one is
+  free; otherwise it waits in a queue (`lease {granted: false,
+  position: n}`, 1 = next) and can meanwhile listen along with another
+  user (`listen`). Audio flows only with a lease or while listening
+  along. The waterfall doesn't need a lease.
+* Every change the client asks for is answered with the whole new
+  `state`, after the server has clamped it to what the receiver can do
+  (frequency inside `rf_lo..rf_hi`, waterfall limits, rates). The client
+  takes `state` as the truth, not its own request.
+* **Limits** (`[limits]`, shown in `GET /api/info`): sessions per
+  address, a session time limit, an idle limit (pings don't count as
+  activity), daily minutes per address. A minute before a limit the
+  server sends an `error` as a warning; at the limit it closes with a
+  code from §6.3. Admin sessions have no time limits.
+
+## 5. Messages (protocol 2)
+
+### 5.1 Client to server
+
+| type | fields | what it does |
+|---|---|---|
+| `hello` | `proto` (2), `codecs` (list, informative) | the protocol the client speaks |
+| `tune` | `hz` | dial (the carrier); stops listening along |
+| `mode` | `mode`, `lo`, `hi`, `pitch` (all but `mode` optional) | demodulator and passband relative to the dial (Hz; missing: the mode's defaults, which `state` then reports); `pitch`: CW tone |
+| `audio` | any of: `agc`, `gain_db`, `agc_speed`, `agc_hang_ms`, `agc_decay_db_s`, `nb`, `nr`, `notch`, `squelch`, `squelch_db`, `audio_rate`, `codec` | audio chain; only the fields given change (below) |
+| `wf` | `center_hz`, `decim`, `bins`, `fps`, `pack` | the waterfall view (§6.2) |
+| `ping` | `t` | answered with `pong {t}` (round-trip time) |
+| `share` | `on` | show my frequency to others and let them listen along (default on) |
+| `listen` | `user` (a session id, or `null`) | listen along to another user's receiver, or stop |
+| `spots` | `on` | the skimmers' spots: the last 30 min (at most 1000), then new ones |
+| `name` | `name` | callsign or nickname others see (at most 8 characters; `""`: none) |
+| `wide` | `on`, `hz` (default: the dial), `bits` (8 default, or 16) | wide IQ: the channelizer bin nearest `hz` (§6.4), when `hello.wide` |
+
+Modes: `usb`, `lsb`, `cw`, `am`, `sam` (synchronous AM), `sal`, `sar`
+(lower, upper sideband), `sas` (stereo: lower left, upper right), `iq`
+(the channel's I/Q as stereo audio), `nbfm`.
+
+`audio` fields:
+
+| field | values |
+|---|---|
+| `agc` | on/off |
+| `gain_db` | without AGC the fixed gain; with it the maximum gain |
+| `agc_speed` | `fast`, `medium`, `slow`, `custom` |
+| `agc_hang_ms`, `agc_decay_db_s` | with `custom`: hang 0-5000 ms, recovery 1-200 dB/s |
+| `nb` | noise blanker threshold (impulse / mean level); 0: off |
+| `nr` | noise reduction 0..1; 0: off |
+| `notch` | automatic notch (steady carriers out) |
+| `squelch`, `squelch_db` | squelch on/off and threshold (channel power, dBFS) |
+| `audio_rate` | one of `hello.audio_rates` (12000 default, 24000 where the receiver allows); another value gives the default |
+| `codec` | one of `hello.codecs`: `pcm16` (default), `mulaw`, `opus` |
+
+### 5.2 Server to client
+
+| type | fields | when |
+|---|---|---|
+| `hello` | `proto`, `server` (name and version), `codec`, `audio_rate`, `audio_rates`, `codecs`, `radio`, `limits`, `session`, `class`, `spots`, `wide` | first |
+| `state` | `hz`, `mode`, `lo`, `hi`, `pitch`, `agc`, `gain_db`, `agc_speed`, `agc_hang_ms`, `agc_decay_db_s`, `nb`, `nr`, `notch`, `squelch`, `squelch_db`, `audio_rate`, `codec`, `wf`, `share`, `listen`, `name` | after connecting and every change, also one the server makes (listening along, a followed user's move) |
+| `lease` | `granted`, `position` | after connecting and when it changes |
+| `users` | `users`: `[{id, name?, hz?, mode?, rx}]` | when the list changes: others who share (`hz`, `mode` when they do; `rx`: they have a receiver) |
+| `skimmers` | `skimmers`: `[{mode, dial, lo, hi, on}]` | when changed: the background decoders and the RF range each decodes (`on`: it has a channel) |
+| `spots` | `spots`: `[{t, mode, band, dial, hz, snr, dt, msg, call?, grid?, drift?, dbm?, uncertain?}]` | after `spots {on: true}` and with each new batch, oldest first |
+| `status` | `adc_overloads`, `clock_ppm`, `audio_drops`, `wf_drops`, `hw_rate_ok`, `cpu?`, `temp_c?`, `rf_atten_db?` | every second |
+| `pong` | `t` | after `ping` |
+| `busy` | `msg` | admission refused, before the close |
+| `error` | `msg` | a bad message, a refused request, a limit's warning, a kick |
+
+`hello` details:
+
+* `radio`: `backend`, `variant` (`hf`, `vhf`), `adc_hz`, `rx_rate`,
+  `rf_lo`, `rf_hi` (the tunable range), `wf_decim_min`, `wf_decim_max`,
+  `freq_offset_hz` (absent: 0).
+* `limits`: `bins_max`, `fps_max` for the waterfall.
+* `session`: this session's id, as others see it in `users`.
+* `class`: `web`, `guest` (a visitor on a receiver that leaves channels
+  open without the listener password) or `admin`.
+* `spots`, `wide`: the server runs skimmers / can give wide IQ.
+
+`spots` fields: `t` slot start; `band` such as `"40m"` (`""` outside
+the amateur bands); `dial` the skimmer's USB dial; `hz` the signal (its
+lowest tone); `snr` dB in 2.5 kHz; `dt` s; `msg` the decoded text;
+`call`, `grid` when the message has them; WSPR's `drift` (Hz) and
+`dbm`; `uncertain`: possibly a false decode.
+
+## 6. Binary frames
+
+Each starts with `kind` (u8) and `flags` (u8). A client ignores kinds it
+doesn't know.
+
+### 6.1 Audio (`kind` 1)
+
+| offset | type | |
+|---|---|---|
+| 0 | u8 | kind = 1 |
+| 1 | u8 | flags: 1 overload (ADC), 2 gap (samples lost before), 4 stereo, 8 mu-law, 16 Opus |
+| 2 | u16 | count: samples (both channels' when stereo) |
+| 4 | u32 | seq |
+| 8 | u32 | sample rate |
+| 12 | f32 | channel power before AGC (dBFS): an S-meter |
+| 16 | | payload |
+
+Payload: PCM16 (`count` × i16), mu-law (`count` bytes, G.711), or one
+Opus packet of 20 ms that decodes to `count` samples. Stereo is
+interleaved, left first (modes `sas`, `iq`).
+
+### 6.2 Waterfall line (`kind` 2)
+
+| offset | type | |
+|---|---|---|
+| 0 | u8 | kind = 2 |
+| 1 | u8 | flags: 1 overload, 2 first line of a new view, 4 stale (no new samples since the last line), 8 packed |
+| 2 | u16 | bins |
+| 4 | u32 | seq |
+| 8 | f64 | centre of the first bin (Hz) |
+| 16 | f64 | bin width (Hz) |
+| 24 | f32 | `db0`: the level of value 0 (dBFS) |
+| 28 | f32 | `db_step`: dB per value |
+| 32 | f64 | UTC ms of the end of the line's interval |
+| 40 | | `bins` × u8 levels, or packed |
+
+A level is `db0 + v × db_step`. The levels are **absolute**: the page's
+automatic levelling is done in the page, so a program can compare lines
+across time (the antenna checks in `STATUS.md` were made this way).
+
+The view (`wf`): `decim` is rounded up to a power of two within
+`wf_decim_min..wf_decim_max`, and the span is `adc_hz / decim`;
+`center_hz` is moved so the span stays inside the range; `bins` is a
+power of two, 256-4096; `fps` 1-30. The applied view is in `state.wf`.
+
+Packed lines (`pack: true` asked, flag 8; `crates/web/src/wfpack.rs`):
+bits most significant first; per block of 64 bins, a 3-bit Rice
+parameter k, then per bin the zig-zagged difference from the previous
+bin (the first from 128; 0, -1, 1, -2 ... → 0, 1, 2, 3 ...) as
+`u >> k` ones, a zero, and `u`'s low k bits; padded to a byte. A line
+that wouldn't shrink is sent unpacked.
+
+### 6.3 Close codes
+
+| code | why |
+|---|---|
+| 1008 | kicked by the admin |
+| 4001 | session time limit |
+| 4002 | idle limit |
+| 4003 | daily minutes used |
+| 4004 | **proposed**: protocol version not supported |
+
+HTTP 401 `login required` before the upgrade: a listener password is
+set and the request has no login.
+
+### 6.4 Wide IQ (`kind` 3)
+
+One channelizer bin: 60 kS/s complex, clean within ±21 kHz of its
+centre. At most 4 streams on the receiver at a time (about 1 Mbit/s
+each with 8-bit samples).
+
+| offset | type | |
+|---|---|---|
+| 0 | u8 | kind = 3 |
+| 1 | u8 | flags: 2 gap, 4 i16 samples (else i8) |
+| 2 | u16 | count: complex samples (2048 a frame) |
+| 4 | u32 | seq |
+| 8 | u64 | the first sample's frame number (continuous across frames) |
+| 16 | f64 | the bin's centre (Hz) |
+| 24 | f32 | sample rate |
+| 28 | f32 | scale: a sample is v × scale (1.0: a full-scale sine) |
+| 32 | | `count` × (I, Q) |
+
+Each frame is scaled by its own peak; use `scale` on every frame.
+
+## 7. JSON endpoints
+
+With a listener password set, the public ones need a login as `/ws`
+does (unless the receiver leaves channels open). Errors are an HTTP
+status with a short text or `{"error": "..."}`.
+
+### 7.1 Public
+
+| endpoint | returns | stable (proposed) |
+|---|---|---|
+| `GET /api/status` | `radio`, `sessions`, `adc_overloads`, `clock_ppm`, `hw_rate_ok`, `rx_frames`, `rx_lost_frames` | yes |
+| `GET /api/spots?since=&mode=&band=` | `{spots: [...]}` as §5.2, oldest first; `since` UTC s (default: 30 min ago) | yes |
+| `GET /api/markers?lo=&hi=&src=&region=` | frequency labels in `lo..hi` Hz; `src` any of `eibi,utility,amateur,own,dx` | yes |
+| `GET /api/markers/info` | the label sources, region, EiBi season | yes |
+| `GET /api/bandplan?region=` | a region's amateur band plan and other services' bands | yes |
+| `GET /api/info` | name, location, station, description, privacy, the visitor rules | yes |
+| `GET /api/info/photo`, `/api/info/licences` | the photo; the third-party licences | yes |
+| `GET /api/propagation` | the VOACAP forecast and its inputs | experimental |
+| `GET /api/map/info`, `/api/map/dx` | the receiver's locator; live DX spots with places | experimental |
+| `GET /api/safe` | whether the receiver runs in safe mode | yes |
+| `GET /api/auth` | the caller's role and which passwords are set | yes |
+| `POST /api/login {password, admin}`, `POST /api/logout` | a login cookie (`web888d`, 12 h) | yes |
+
+### 7.2 Admin
+
+`/api/admin/...` with an admin login: `sessions` (list, kick, ban),
+`leases`, `config` (get, validate, put; `schema`), `password`, `stats`,
+`restart`, `atten`, `adc`, `skimmers`, `ovl` (the overload log), `logs`,
+`markers` (own labels as CSV), `info/photo`, `backup`, `restore`,
+`update` (status, check, install, reboot), `bootloader`, `safe/leave`.
+They take JSON bodies only (the cookie is SameSite=Strict, so other
+sites can't drive a logged-in browser).
+
+These are the admin page's API. **Proposed:** documented here as they
+are, but marked unstable: their shapes follow the admin page and may
+change in any release. The few worth automating (sessions, stats, the
+overload log, update status) can be promoted to stable on request.
+
+## 8. Proposed for version 3
+
+### 8.1 Versioning and compatibility
+
+* `proto` becomes 3. The server accepts 2 and 3 for at least two
+  releases after 3 ships, so the page and programs needn't change at
+  once.
+* `hello` (server) gains `features`: a list of names for what this
+  server can do (`spots`, `wide`, `opus`, `listen`, `wfpack`, ...),
+  replacing the separate booleans over time. A client checks a feature
+  before using it, not the version number.
+* **Additions don't change the version**: new optional fields, new
+  message types, new binary kinds and flags, new features. Clients
+  must ignore what they don't know (§3). **Changes and removals do**,
+  with the old form kept for two releases and listed in the release
+  notes.
+* Every message and field in §5-6 is **stable** unless marked
+  **experimental** here; experimental ones can change in any release.
+  Proposed experimental at the start: `wide`, `listen`, the
+  `skimmers` list.
+* A client `hello` with an unsupported `proto` gets `error` and close
+  4004, instead of a session that goes on misunderstanding each other.
+
+### 8.2 Request ids
+
+A client may put `id` (a string) in any message; the server copies it
+into the `state` or `error` that answers it. Without it, a program
+can't tell which of several requests an `error` was about.
+
+### 8.3 Tokens
+
+A browser login is awkward for programs (a password in a script, a
+cookie jar, 12 h expiry). Proposed:
+
+* The admin creates **API tokens** in the admin page: a name, a scope
+  and an optional expiry. The token (random 256 bit, shown once) is
+  kept server side as a hash.
+* Scopes: `listen` (`/ws` and the public JSON), `spots` (only
+  `/api/spots` and `spots` over `/ws`, no receiver), `admin` (the admin
+  API).
+* Sent as `Authorization: Bearer <token>` on HTTP and on the WebSocket
+  upgrade (programs can set the header; browsers can't, so the page
+  keeps the cookie).
+* A token session is an ordinary listener for the limits: it takes a
+  lease from the same pool, counts against the per-address limit and
+  shows in the admin's session list with the token's name. The admin
+  can give a token its own limits (for example no idle limit for a
+  recorder), and revoke it.
+* Kiwi and HPSDR stay as they are (Kiwi has its own password; HPSDR is
+  for the local network).
+
+### 8.4 Other changes
+
+* `Origin` check on `/ws` for cookie sessions, as defence in depth:
+  SameSite=Strict already keeps the cookie out of a WebSocket that
+  another site opens, but an open receiver (no listener password)
+  accepts such sessions today, which lets another site's page use the
+  receiver's channels from its visitors' browsers. Token sessions
+  don't need the check (no browser opens them).
+* `GET /api/openapi.json`: the JSON endpoints as an OpenAPI 3.1
+  description, checked against the handlers in CI.
+* `GET /api/version`: server version, protocol versions and features,
+  without a login (for a client to say "this receiver is too old").
+
+## 9. Reference client and adapters (proposed)
+
+* **Reference client** (`tools/web888-client`, Python, no dependencies
+  beyond `websockets`): connect, tune, record audio (WAV) and wide IQ
+  (cs16), dump waterfall lines with absolute levels, follow spots as
+  JSON lines. It is the test of this document: if it needs something
+  the document doesn't say, the document is wrong. CI runs it against
+  the simulator (`--backend sim`).
+* **Hamlib `rigctld` adapter**: a small program (or a web888d option)
+  that speaks rigctld's TCP protocol and drives one `/ws` session, so
+  WSJT-X, fldigi and loggers can tune web888 and take its audio (with
+  a virtual audio device). The most useful single addition for
+  amateur software.
+* **rtl_tcp / SpyServer**: already planned (`doc/design.md` §7,
+  `doc/feature-gap.md`); they would sit on the same lease and wide IQ
+  paths as §6.4.
+
+## 10. What the API doesn't do
+
+* **The page's own decoders** (CW, RTTY, PSK, JS8, HFDL, SSTV, NAVTEX,
+  DSC, the time codes) run in the browser as WebAssembly
+  (`doc/m8-browser-decoders.md`). A program gets the audio or wide IQ
+  and decodes it itself; the server doesn't decode for clients. Running
+  them on the unit for every client would cost the A9 more than it has
+  (the skimmers already use about a core). The decoder crates are
+  plain Rust and could be published as a library for clients.
+* **Server-side skimmers** (FT8, FT4, WSPR) *are* available:
+  `/api/spots` and `spots` over `/ws`.
+* **Receiver settings** that affect every listener (attenuator, ADC,
+  skimmer bands) stay admin-only.
+
+## 11. Open questions
+
+1. Token scopes: are `listen`, `spots`, `admin` enough, or should
+   `admin` be split (read-only status vs changes)?
+2. Should a token session be able to keep a receiver without any idle
+   limit (recorders, wsprdaemon-like use), or always within an
+   admin-set maximum?
+3. The rigctld adapter: a separate program (any machine, many
+   receivers) or built into web888d (one port per receiver, nothing to
+   install)?
+4. Reference client language: Python (most users of such tools) or Rust
+   (shares `proto.rs`, one binary)?
+5. How long to keep protocol 2: two releases, or until the page's
+   cached copies are surely gone (the page revalidates on every load,
+   so one release would do for the page itself)?
