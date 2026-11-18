@@ -1825,7 +1825,7 @@ msgstr "Wechseln"
 msgid "Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue)."
 msgstr "Sie hören bei Nutzer {id} mit (warten auf einen eigenen Empfänger, Platz {pos} in der Warteschlange)."
 
-#: src/ctl/controls.tsx:596 src/ctl/timecode.tsx:54 src/ctl/timecode.tsx:54
+#: src/ctl/controls.tsx:596 src/ctl/timecode.tsx:73 src/ctl/timecode.tsx:73
 msgid "Stop"
 msgstr "Beenden"
 
@@ -2046,7 +2046,7 @@ msgstr "Neuronal"
 msgid "Clear the text"
 msgstr "Den Text löschen"
 
-#: src/ctl/cw.tsx:52 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:52
+#: src/ctl/cw.tsx:52 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
 msgid "Clear"
 msgstr "Löschen"
 
@@ -2107,7 +2107,7 @@ msgstr "KW-Datenfunk der Luftfahrt: Positionsmeldungen und ACARS (USB)"
 msgid "HF weather charts and SSTV pictures (USB)"
 msgstr "KW-Wetterkarten und SSTV-Bilder (USB)"
 
-#: src/ctl/decoders.tsx:27 src/ctl/timecode.tsx:25
+#: src/ctl/decoders.tsx:27 src/ctl/timecode.tsx:44
 msgid "Time"
 msgstr "Zeit"
 
@@ -3413,65 +3413,97 @@ msgstr "Alle Betriebsarten"
 msgid "Filter by call or text"
 msgstr "Nach Rufzeichen oder Text filtern"
 
-#: src/ctl/timecode.tsx:26
+#. the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+#: src/ctl/timecode.tsx:23
+msgid "NTP"
+msgstr "NTP"
+
+#. the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+#: src/ctl/timecode.tsx:23
+msgid "holdover"
+msgstr "Eigenlauf"
+
+#. the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+#: src/ctl/timecode.tsx:23
+msgid "not set"
+msgstr "nicht gestellt"
+
+#. ADC = the receiver's sampling clock; ppm = parts per million, its frequency error
+#: src/ctl/timecode.tsx:27
+msgid "ADC {ppm} ppm"
+msgstr "ADC {ppm} ppm"
+
+#: src/ctl/timecode.tsx:29
+msgid "Where the receiver's clock gets its time, how far it may be off, and its sampling clock's error against it"
+msgstr "Woher die Uhr des Empfängers ihre Zeit nimmt, wie weit sie abweichen kann, und der Fehler des Abtasttakts dagegen"
+
+#: src/ctl/timecode.tsx:30
+msgid "Receiver clock: {what}"
+msgstr "Uhr des Empfängers: {what}"
+
+#: src/ctl/timecode.tsx:45
 msgid "The station to read (Auto: whichever the tuning hears)"
 msgstr "Die zu lesende Station (Auto: die Station, die auf der eingestellten Frequenz zu hören ist)"
 
-#: src/ctl/timecode.tsx:27
+#: src/ctl/timecode.tsx:46
 msgid "Auto"
 msgstr "Auto"
 
-#: src/ctl/timecode.tsx:38
+#: src/ctl/timecode.tsx:57
 msgid "Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
 msgstr "Auf eine Station abstimmen (USB mit ihrem Träger bei 1 kHz; AM bei WWV)"
 
-#: src/ctl/timecode.tsx:41
+#: src/ctl/timecode.tsx:60
 msgid "Tune…"
 msgstr "Abstimmen …"
 
-#: src/ctl/timecode.tsx:51
+#: src/ctl/timecode.tsx:70
 msgid "Clear the minutes"
 msgstr "Die Minuten löschen"
 
 #. time code = the station's slowly keyed time signal; carrier = its unmodulated radio signal; keying = the depth of its on/off or high/low modulation
-#: src/ctl/timecode.tsx:67
+#: src/ctl/timecode.tsx:86
 msgid "{name} on {carrier}: its 100 Hz time code"
 msgstr "{name} auf {carrier}: sein 100-Hz-Zeitcode"
 
-#: src/ctl/timecode.tsx:68
+#: src/ctl/timecode.tsx:87
 msgid "{name} on {carrier}: the carrier at {hz} Hz"
 msgstr "{name} auf {carrier}: der Träger bei {hz} Hz"
 
-#: src/ctl/timecode.tsx:69
+#: src/ctl/timecode.tsx:88
 msgid "keying {db} dB (weak: a narrow passband and slow AGC help)"
 msgstr "Tastung {db} dB (schwach: ein schmaler Durchlassbereich und langsame AGC helfen)"
 
-#: src/ctl/timecode.tsx:69
+#: src/ctl/timecode.tsx:88
 msgid "keying {db} dB"
 msgstr "Tastung {db} dB"
 
 #. marker = the position-marker second of the time code; hole = WWV's silent second (no tick); MSF bits A and B = the two data bits sent each second
-#: src/ctl/timecode.tsx:74
-msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)"
-msgstr "Die Sekunden dieser Minute, wie gelesen (blass: unsicher; M eine Marke, H das Loch von WWV, ? ungelesen; MSF: 0–3 = Bits A + 2B)"
+#: src/ctl/timecode.tsx:93
+msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF and RBU: 0-3 = their two bits, the first + 2 × the second)"
+msgstr "Die Sekunden dieser Minute wie gelesen (blass: unsicher; M eine Marke, H die Lücke von WWV, ? ungelesen; MSF und RBU: 0-3 = ihre zwei Bits, das erste + 2 × das zweite)"
 
-#: src/ctl/timecode.tsx:87
+#: src/ctl/timecode.tsx:107
 msgid "No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more."
 msgstr "Noch keine Minute gelesen: Das Sekundentiming dauert ~10 s, eine ganze Minute (ab ihrer Marke) bis zu zwei weitere."
 
-#: src/ctl/timecode.tsx:95
+#: src/ctl/timecode.tsx:115
 msgid "Its checks passed, and its time agrees with an earlier minute's"
 msgstr "Prüfungen bestanden, und die Zeit stimmt mit der einer früheren Minute überein"
 
-#: src/ctl/timecode.tsx:95
+#: src/ctl/timecode.tsx:115
 msgid "Its checks passed (not yet agreed by another minute)"
 msgstr "Prüfungen bestanden (noch nicht von einer weiteren Minute bestätigt)"
 
-#: src/ctl/timecode.tsx:95
+#: src/ctl/timecode.tsx:115
 msgid "A check failed: a bit read wrong"
 msgstr "Eine Prüfung schlug fehl: ein Bit falsch gelesen"
 
-#: src/ctl/timecode.tsx:98
+#: src/ctl/timecode.tsx:122
+msgid "When this minute began at the antenna by the receiver's clock, less the time it says: the way from the station and the receiver clock's error"
+msgstr "Wann diese Minute an der Antenne nach der Uhr des Empfängers begann, abzüglich der Zeit, die sie angibt: der Weg vom Sender und der Fehler der Empfängeruhr"
+
+#: src/ctl/timecode.tsx:123
 msgid "When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error"
 msgstr "Wann diese Minute nach der Serveruhr begann, abzüglich der von ihr angegebenen Zeit: der Weg von der Station, der Empfänger und der Fehler der Serveruhr"
 
@@ -3960,69 +3992,73 @@ msgstr "Passwort erforderlich"
 msgid "login failed ({status})"
 msgstr "Anmeldung fehlgeschlagen ({status})"
 
-#: src/state.ts:712 src/state.ts:2142
+#: src/state.ts:717 src/state.ts:2174
 msgid "nothing was received"
 msgstr "es wurde nichts empfangen"
 
-#: src/state.ts:722
+#: src/state.ts:727
 msgid ", {s} s lost (zeros)"
 msgstr ", {s} s verloren (Nullen)"
 
-#: src/state.ts:723
+#: src/state.ts:728
 msgid "{name} ({s} s{lost})"
 msgstr "{name} ({s} s{lost})"
 
-#: src/state.ts:2142
+#: src/state.ts:2174
 msgid "only silence was heard"
 msgstr "es war nur Stille zu hören"
 
-#: src/state.ts:2152
+#: src/state.ts:2184
 msgid ", {s} s of silence left out"
 msgstr ", {s} s Stille ausgelassen"
 
-#: src/state.ts:2153
+#: src/state.ts:2185
 msgid "; ended when the audio format changed"
 msgstr "; beendet, als sich das Audioformat änderte"
 
-#: src/state.ts:2154
+#: src/state.ts:2186
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
 #. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
-#: src/timecode.ts:25
+#: src/timecode.ts:28
 msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
 msgstr "Mainflingen, Deutschland: Träger je Sekunde 0,1 s (0) oder 0,2 s (1) abgesenkt, keine Absenkung in Sekunde 59; MEZ/MESZ"
 
-#: src/timecode.ts:26
+#: src/timecode.ts:29
 msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
 msgstr "Anthorn, Großbritannien: Träger 0,1 s aus, dann Bits A und B; 0,5 s zur vollen Minute; GMT/BST"
 
-#: src/timecode.ts:27
+#: src/timecode.ts:30
 msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
 msgstr "Fort Collins, USA: Träger 0,2 s (0), 0,5 s (1), 0,8 s (Marke) abgesenkt; UTC"
 
-#: src/timecode.ts:28
+#: src/timecode.ts:31
 msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
 msgstr "Japan: Träger 0,8 s (0), 0,5 s (1), 0,2 s (Marke) ein; JST"
 
-#: src/timecode.ts:29
+#: src/timecode.ts:32
+msgid "Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time"
+msgstr "Taldom bei Moskau: alle 0,1 s ein Bit, der Träger mit 100 Hz (0) oder 312,5 Hz (1) phasenmoduliert; Moskauer Zeit"
+
+#: src/timecode.ts:33
 msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC"
 msgstr "Fort Collins und Hawaii: der 100-Hz-Hilfsträger 0,17 s (0), 0,47 s (1), 0,77 s (Marke), in AM zu hören; UTC"
 
-#: src/timecode.ts:71
+#: src/timecode.ts:76
 msgid "no station {name}"
 msgstr "keine Station {name}"
 
 #. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
-#: src/timecode.ts:75
+#: src/timecode.ts:80
 msgid "{name}: tune AM to {mhz} MHz"
 msgstr "{name}: in AM auf {mhz} MHz abstimmen"
 
-#: src/timecode.ts:76
+#: src/timecode.ts:81
 msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
 msgstr "{name}: seinen Träger ({khz} kHz) in USB, LSB oder CW in den Durchlassbereich legen"
 
-#: src/timecode.ts:79
+#: src/timecode.ts:84
 msgid "No time station in the passband: pick one to tune to."
 msgstr "Keine Zeitzeichenstation im Durchlassbereich: Wählen Sie eine zum Abstimmen."
 
@@ -4069,3 +4105,6 @@ msgstr "Wasserfall: Signalstärke über Frequenz und Zeit"
 
 #~ msgid "Click a green marker on the scale to listen along with another user."
 #~ msgstr "Klicken Sie auf eine grüne Markierung auf der Skala, um bei einem anderen Nutzer mitzuhören."
+
+#~ msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)"
+#~ msgstr "Die Sekunden dieser Minute, wie gelesen (blass: unsicher; M eine Marke, H das Loch von WWV, ? ungelesen; MSF: 0–3 = Bits A + 2B)"

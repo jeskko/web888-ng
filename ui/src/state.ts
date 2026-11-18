@@ -215,6 +215,8 @@ export function connect(): void {
             sessionId.value = m.session;
             spotsAvail.value = !!m.spots;
             wideAvail.value = !!m.wide;
+            serverFeatures.value = m.features ?? [];
+            timebase.value = null;
           });
           wideAsked = null; // a new session: ask again
           wideSync();
@@ -262,6 +264,9 @@ export function connect(): void {
         }
         case "busy":
           connNote.value = m.msg;
+          break;
+        case "timebase":
+          timebase.value = { source: m.source, uncertainty: m.uncertainty, adc_ppm: m.adc_ppm };
           break;
         case "error":
           console.warn("web888d:", m.msg);
@@ -977,7 +982,16 @@ function tcStart(): Worker {
         const add: TcMinute[] = run.min.map((m) => {
           // when the minute began by the server's clock, less what it says
           const heard = tcClock.utc(tcBase + m.t * DIGI_RATE);
-          return { station: tcName, utc: m.utc, local: m.local, ok: m.ok, confirmed: m.confirmed, notes: m.notes, late: heard === null ? null : heard - m.utc };
+          return {
+            station: tcName,
+            utc: m.utc,
+            local: m.local,
+            ok: m.ok,
+            confirmed: m.confirmed,
+            notes: m.notes,
+            late: heard === null ? null : heard - m.utc,
+            timed: tcClock.timed,
+          };
         });
         tcMinutes.value = [...add.reverse(), ...tcMinutes.value].slice(0, TC_KEEP);
       }
@@ -1008,6 +1022,7 @@ function tcAudio(f: AudioFrame): void {
     tcWorker.postMessage({ start: [plan.station.id, plan.tone] });
   }
   if (pcm.length === 0) return;
+  if (f.time !== undefined) tcClock.stamp(tcIndex, f.time);
   tcIndex += pcm.length;
   tcClock.observe(tcIndex, serverClock.now(Date.now() / 1000));
   tcWorker.postMessage({ pcm, gen: tcGen }, [pcm.buffer]);
@@ -1179,6 +1194,7 @@ function js8Audio(f: AudioFrame): void {
   const pcm = js8Feed.push(f.pcm, f.rate, f.stereo);
   if (pcm.length === 0) return;
   const first = js8Index;
+  if (f.time !== undefined) js8Clock.stamp(first, f.time);
   js8Index += pcm.length;
   js8Clock.observe(js8Index, serverClock.now(Date.now() / 1000));
   let pending = js8Status.value.pending;
@@ -1393,6 +1409,7 @@ function digiAudio(f: AudioFrame): void {
   const pcm = digiFeed.push(f.pcm, f.rate, f.stereo);
   if (pcm.length === 0) return;
   const first = digiIndex;
+  if (f.time !== undefined) digiClock.stamp(first, f.time);
   digiIndex += pcm.length;
   digiClock.observe(digiIndex, serverClock.now(Date.now() / 1000));
   const slots = digiSlotter.push(first, pcm, digiClock);
@@ -1920,6 +1937,21 @@ export function setCodecPref(p: CodecPref): void {
 
 /** The codecs the server sends (its hello). */
 export const serverCodecs = signal<string[]>(["pcm16"]);
+/** What the server can do (protocol 3's hello). */
+export const serverFeatures = signal<string[]>([]);
+/** The receiver's clock, as its last timebase message said. */
+export const timebase = signal<{ source: string; uncertainty?: number; adc_ppm?: number } | null>(null);
+
+/** Audio frames with their times: for the decoders that care when a
+ * signal came (the time codes, FT8/FT4/WSPR, JS8). */
+export const timedAudio = computed(() => serverFeatures.value.includes("timestamps") && (tcOn.value || digiOn.value || js8On.value));
+
+// ask until the session's state says it
+effect(() => {
+  const want = timedAudio.value;
+  const have = st.value?.timestamps ?? false;
+  if (st.value && want !== have) link?.send({ type: "audio", timestamps: want });
+});
 /** The Opus decoder (opus.wasm), once loaded; null when it can't load. */
 export const opusDec = signal<OpusDec | null>(null);
 void OpusDec.load("opus.wasm").then((d) => (opusDec.value = d));

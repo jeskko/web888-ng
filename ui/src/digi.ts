@@ -133,12 +133,16 @@ export class ServerClock {
  * second is a new time base. */
 export class SampleClock {
   private offset: number | null = null;
+  /** The offset came from the server's timestamps (exact, not estimated
+   * from arrivals). */
+  private stamped = false;
   private rate: number;
   constructor(rate: number) {
     this.rate = rate;
   }
 
   observe(end: number, now: number): void {
+    if (this.stamped) return;
     const o = now - end / this.rate;
     if (this.offset === null || o >= this.offset + 1) this.offset = o;
     else this.offset = Math.min(o, this.offset + 1e-5);
@@ -154,6 +158,19 @@ export class SampleClock {
 
   reset(): void {
     this.offset = null;
+    this.stamped = false;
+  }
+
+  /** Sample `index` was received at the antenna at `utc` (a timed audio
+   * frame's first sample: the server's timestamp, doc/api.md §8.5). */
+  stamp(index: number, utc: number): void {
+    this.offset = utc - index / this.rate;
+    this.stamped = true;
+  }
+
+  /** The times are the server's timestamps. */
+  get timed(): boolean {
+    return this.stamped;
   }
 }
 

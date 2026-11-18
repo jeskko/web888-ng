@@ -21,6 +21,8 @@
 //!   [`Minute`]: the UTC the minute starts at, with the stream time it
 //!   was heard at, and whether an earlier minute agrees.
 
+pub mod rbu;
+
 use num_complex::Complex32;
 use std::f64::consts::PI;
 
@@ -38,6 +40,8 @@ pub enum Station {
     Jjy,
     /// WWV and WWVH (the same code).
     Wwv,
+    /// Phase-modulated, not keyed: its own receiver ([`rbu`]).
+    Rbu,
 }
 
 /// Each symbol's mean level (0 keyed down / off, 1 up / on) in the
@@ -45,7 +49,18 @@ pub enum Station {
 type Templates = &'static [(char, &'static [f32])];
 
 impl Station {
-    pub const ALL: [Station; 5] = [
+    /// In the page's order (its station numbers).
+    pub const ALL: [Station; 6] = [
+        Station::Dcf77,
+        Station::Msf,
+        Station::Wwvb,
+        Station::Jjy,
+        Station::Wwv,
+        Station::Rbu,
+    ];
+
+    /// The keyed carriers (the envelope receiver's).
+    pub const KEYED: [Station; 5] = [
         Station::Dcf77,
         Station::Msf,
         Station::Wwvb,
@@ -60,6 +75,7 @@ impl Station {
             Station::Wwvb => "WWVB",
             Station::Jjy => "JJY",
             Station::Wwv => "WWV/WWVH",
+            Station::Rbu => "RBU",
         }
     }
 
@@ -78,6 +94,7 @@ impl Station {
             Station::Wwvb => &[60_000.0],
             Station::Jjy => &[40_000.0, 60_000.0],
             Station::Wwv => &[2.5e6, 5e6, 10e6, 15e6, 20e6, 25e6],
+            Station::Rbu => &[200_000.0 / 3.0],
         }
     }
 
@@ -148,6 +165,7 @@ impl Station {
                     ('H', &[0.0, 0.0, 0.0, 0.0]),
                 ],
             ),
+            Station::Rbu => (&[], &[]),
         }
     }
 
@@ -213,6 +231,7 @@ impl Station {
                         0.0
                     }
                 }
+                Station::Rbu => 1.0,
             };
         }
         p
@@ -239,6 +258,7 @@ impl Station {
             Station::Wwvb => &[22..=33, 45..=53],
             Station::Jjy => &[22..=33, 41..=48, 50..=52],
             Station::Wwv => &[4..=7, 30..=41, 51..=54],
+            Station::Rbu => &[],
         }
     }
 
@@ -249,6 +269,7 @@ impl Station {
             Station::Msf => 0.25,
             Station::Wwvb | Station::Jjy => 0.5,
             Station::Wwv => 0.65,
+            Station::Rbu => 0.05,
         }
     }
 
@@ -343,6 +364,8 @@ pub struct Receiver {
     /// that passed (stream time, UTC).
     frames: std::collections::VecDeque<Vec<Second>>,
     passed: Vec<(f64, i64)>,
+    /// RBU: its own receiver does the work.
+    rbu: Option<Box<rbu::Rbu>>,
 }
 
 impl Receiver {
@@ -376,6 +399,7 @@ impl Receiver {
             bad: 0,
             frames: std::collections::VecDeque::new(),
             passed: Vec::new(),
+            rbu: (station == Station::Rbu).then(|| Box::new(rbu::Rbu::new(fs, tone, t0))),
         }
     }
 
@@ -385,6 +409,9 @@ impl Receiver {
 
     /// Retune the tone (Hz).
     pub fn set_tone(&mut self, tone: f64) {
+        if let Some(r) = &mut self.rbu {
+            r.set_tone(tone);
+        }
         self.dph = 2.0 * PI * tone / self.fs;
     }
 
@@ -394,6 +421,11 @@ impl Receiver {
     }
 
     pub fn push(&mut self, x: &[f32]) {
+        if let Some(r) = &mut self.rbu {
+            r.push(x);
+            self.level = r.level;
+            return;
+        }
         let w = self.ring.len();
         // the blanker: an impulse (|x| over 6 times the average) is zeroed
         let a_ema = 1.0 / (0.2 * self.fs);
@@ -457,6 +489,9 @@ impl Receiver {
     }
 
     pub fn poll(&mut self) -> Vec<Event> {
+        if let Some(r) = &mut self.rbu {
+            return r.poll();
+        }
         std::mem::take(&mut self.out)
     }
 
@@ -772,6 +807,8 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
     let mut notes = Vec::new();
     let (mut ok, t, y, mo, d, h, mi, zone, zname): (bool, f64, i64, i64, i64, i64, i64, i64, &str);
     match station {
+        // its own receiver decodes it
+        Station::Rbu => return None,
         Station::Dcf77 => {
             let b = b?;
             // the time of the minute that follows
@@ -1092,6 +1129,7 @@ pub fn keying(station: Station, start: i64, minutes: usize) -> Vec<f32> {
 
 fn level(station: Station, s: char, t: f64) -> f32 {
     let on = match station {
+        Station::Rbu => true,
         Station::Dcf77 => match s {
             '0' => t >= 0.1,
             '1' => t >= 0.2,
@@ -1166,6 +1204,8 @@ pub fn encode(station: Station, utc: i64) -> Vec<char> {
     };
     let mut syms = vec!['0'; 60];
     match station {
+        // its own encoder: rbu::encode
+        Station::Rbu => {}
         Station::Dcf77 => {
             // the next minute, CET (no summer time in tests)
             let (y, m, d, h, mi, _, wd) = civil(utc + 60 + 3600);

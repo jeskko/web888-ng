@@ -1906,7 +1906,7 @@ msgstr ""
 msgid "Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue)."
 msgstr ""
 
-#: src/ctl/controls.tsx:596 src/ctl/timecode.tsx:54 src/ctl/timecode.tsx:54
+#: src/ctl/controls.tsx:596 src/ctl/timecode.tsx:73 src/ctl/timecode.tsx:73
 msgid "Stop"
 msgstr ""
 
@@ -2138,7 +2138,7 @@ msgstr ""
 msgid "Clear the text"
 msgstr ""
 
-#: src/ctl/cw.tsx:52 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:52
+#: src/ctl/cw.tsx:52 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
 msgid "Clear"
 msgstr ""
 
@@ -2201,7 +2201,7 @@ msgstr ""
 msgid "HF weather charts and SSTV pictures (USB)"
 msgstr ""
 
-#: src/ctl/decoders.tsx:27 src/ctl/timecode.tsx:25
+#: src/ctl/decoders.tsx:27 src/ctl/timecode.tsx:44
 msgid "Time"
 msgstr ""
 
@@ -3577,69 +3577,103 @@ msgstr ""
 msgid "Filter by call or text"
 msgstr ""
 
-#: src/ctl/timecode.tsx:26
+#. the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+#: src/ctl/timecode.tsx:23
+msgid "NTP"
+msgstr ""
+
+#. the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+#: src/ctl/timecode.tsx:23
+msgid "holdover"
+msgstr ""
+
+#. the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+#: src/ctl/timecode.tsx:23
+msgid "not set"
+msgstr ""
+
+#. ADC = the receiver's sampling clock; ppm = parts per million, its frequency error
+#: src/ctl/timecode.tsx:27
+#, placeholders
+msgid "ADC {ppm} ppm"
+msgstr ""
+
+#: src/ctl/timecode.tsx:29
+msgid "Where the receiver's clock gets its time, how far it may be off, and its sampling clock's error against it"
+msgstr ""
+
+#: src/ctl/timecode.tsx:30
+#, placeholders
+msgid "Receiver clock: {what}"
+msgstr ""
+
+#: src/ctl/timecode.tsx:45
 msgid "The station to read (Auto: whichever the tuning hears)"
 msgstr ""
 
-#: src/ctl/timecode.tsx:27
+#: src/ctl/timecode.tsx:46
 msgid "Auto"
 msgstr ""
 
-#: src/ctl/timecode.tsx:38
+#: src/ctl/timecode.tsx:57
 msgid "Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
 msgstr ""
 
-#: src/ctl/timecode.tsx:41
+#: src/ctl/timecode.tsx:60
 msgid "Tune…"
 msgstr ""
 
-#: src/ctl/timecode.tsx:51
+#: src/ctl/timecode.tsx:70
 msgid "Clear the minutes"
 msgstr ""
 
 #. time code = the station's slowly keyed time signal; carrier = its unmodulated radio signal; keying = the depth of its on/off or high/low modulation
-#: src/ctl/timecode.tsx:67
+#: src/ctl/timecode.tsx:86
 #, placeholders
 msgid "{name} on {carrier}: its 100 Hz time code"
 msgstr ""
 
-#: src/ctl/timecode.tsx:68
+#: src/ctl/timecode.tsx:87
 #, placeholders
 msgid "{name} on {carrier}: the carrier at {hz} Hz"
 msgstr ""
 
-#: src/ctl/timecode.tsx:69
+#: src/ctl/timecode.tsx:88
 #, placeholders
 msgid "keying {db} dB (weak: a narrow passband and slow AGC help)"
 msgstr ""
 
-#: src/ctl/timecode.tsx:69
+#: src/ctl/timecode.tsx:88
 #, placeholders
 msgid "keying {db} dB"
 msgstr ""
 
 #. marker = the position-marker second of the time code; hole = WWV's silent second (no tick); MSF bits A and B = the two data bits sent each second
-#: src/ctl/timecode.tsx:74
-msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)"
+#: src/ctl/timecode.tsx:93
+msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF and RBU: 0-3 = their two bits, the first + 2 × the second)"
 msgstr ""
 
-#: src/ctl/timecode.tsx:87
+#: src/ctl/timecode.tsx:107
 msgid "No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more."
 msgstr ""
 
-#: src/ctl/timecode.tsx:95
+#: src/ctl/timecode.tsx:115
 msgid "Its checks passed, and its time agrees with an earlier minute's"
 msgstr ""
 
-#: src/ctl/timecode.tsx:95
+#: src/ctl/timecode.tsx:115
 msgid "Its checks passed (not yet agreed by another minute)"
 msgstr ""
 
-#: src/ctl/timecode.tsx:95
+#: src/ctl/timecode.tsx:115
 msgid "A check failed: a bit read wrong"
 msgstr ""
 
-#: src/ctl/timecode.tsx:98
+#: src/ctl/timecode.tsx:122
+msgid "When this minute began at the antenna by the receiver's clock, less the time it says: the way from the station and the receiver clock's error"
+msgstr ""
+
+#: src/ctl/timecode.tsx:123
 msgid "When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error"
 msgstr ""
 
@@ -4154,76 +4188,80 @@ msgstr ""
 msgid "login failed ({status})"
 msgstr ""
 
-#: src/state.ts:712 src/state.ts:2142
+#: src/state.ts:717 src/state.ts:2174
 msgid "nothing was received"
 msgstr ""
 
-#: src/state.ts:722
+#: src/state.ts:727
 #, placeholders
 msgid ", {s} s lost (zeros)"
 msgstr ""
 
-#: src/state.ts:723
+#: src/state.ts:728
 #, placeholders
 msgid "{name} ({s} s{lost})"
 msgstr ""
 
-#: src/state.ts:2142
+#: src/state.ts:2174
 msgid "only silence was heard"
 msgstr ""
 
-#: src/state.ts:2152
+#: src/state.ts:2184
 #, placeholders
 msgid ", {s} s of silence left out"
 msgstr ""
 
-#: src/state.ts:2153
+#: src/state.ts:2185
 msgid "; ended when the audio format changed"
 msgstr ""
 
-#: src/state.ts:2154
+#: src/state.ts:2186
 #, placeholders
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr ""
 
 #. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
-#: src/timecode.ts:25
+#: src/timecode.ts:28
 msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
 msgstr ""
 
-#: src/timecode.ts:26
+#: src/timecode.ts:29
 msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
 msgstr ""
 
-#: src/timecode.ts:27
+#: src/timecode.ts:30
 msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
 msgstr ""
 
-#: src/timecode.ts:28
+#: src/timecode.ts:31
 msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
 msgstr ""
 
-#: src/timecode.ts:29
+#: src/timecode.ts:32
+msgid "Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time"
+msgstr ""
+
+#: src/timecode.ts:33
 msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC"
 msgstr ""
 
-#: src/timecode.ts:71
+#: src/timecode.ts:76
 #, placeholders
 msgid "no station {name}"
 msgstr ""
 
 #. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
-#: src/timecode.ts:75
+#: src/timecode.ts:80
 #, placeholders
 msgid "{name}: tune AM to {mhz} MHz"
 msgstr ""
 
-#: src/timecode.ts:76
+#: src/timecode.ts:81
 #, placeholders
 msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
 msgstr ""
 
-#: src/timecode.ts:79
+#: src/timecode.ts:84
 msgid "No time station in the passband: pick one to tune to."
 msgstr ""
 

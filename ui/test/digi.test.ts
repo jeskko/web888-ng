@@ -99,3 +99,17 @@ test("modes, dials and budgets", () => {
   assert.equal(MODES.wspr.dials.find((d) => d.band === "30m")!.hz, 10_138_700);
   assert.equal(budgetMs("ft4"), 6500);
 });
+
+test("a timed frame sets the sample clock exactly", () => {
+  const c = new SampleClock(12_000);
+  c.observe(12_000, 1000.5); // arrived 0.5 s late by the estimate
+  assert.equal(c.timed, false);
+  c.stamp(12_000, 1000.0);
+  assert.ok(c.timed);
+  assert.equal(c.utc(24_000), 1001.0);
+  // arrivals no longer move it
+  c.observe(36_000, 1003.0);
+  assert.equal(c.utc(24_000), 1001.0);
+  c.reset();
+  assert.equal(c.timed, false);
+});

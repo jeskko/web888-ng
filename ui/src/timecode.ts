@@ -18,6 +18,9 @@ export interface TcStation {
   am: boolean;
   /** What it sends, for the panel. */
   about: string;
+  /** Room its sidebands need around the carrier in the passband (Hz;
+   * default 50: a keyed carrier). */
+  margin?: number;
 }
 
 // i18n: about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
@@ -26,6 +29,7 @@ export const TC_STATIONS: TcStation[] = [
   { id: 1, name: "MSF", carriers: [60_000], am: false, about: N_("Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST") },
   { id: 2, name: "WWVB", carriers: [60_000], am: false, about: N_("Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC") },
   { id: 3, name: "JJY", carriers: [40_000, 60_000], am: false, about: N_("Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST") },
+  { id: 5, name: "RBU", carriers: [200_000 / 3], am: false, margin: 350, about: N_("Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time") },
   { id: 4, name: "WWV/WWVH", carriers: [2_500_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000], am: true, about: N_("Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC") },
 ];
 
@@ -63,7 +67,8 @@ export function tcPlan(
       const a = audioOf(mode, dial, pitch, c);
       // in the passband (as audio: LSB's mirrored, CW's at its pitch), clear of its edges
       const [blo, bhi] = mode === "lsb" ? [-hi, -lo] : mode === "cw" ? [lo + pitch, hi + pitch] : [lo, hi];
-      if (a !== null && a >= Math.max(blo, 0) + 50 && a <= bhi - 50 && a >= 100) return { station: s, tone: a, carrier: c };
+      const room = s.margin ?? 50;
+      if (a !== null && a >= Math.max(blo, 0) + room && a <= bhi - room && a >= 100) return { station: s, tone: a, carrier: c };
     }
   }
   if (want !== "auto") {
@@ -83,7 +88,9 @@ export function tcPlan(
  * passband, or AM on WWV. */
 export function tcTuning(s: TcStation, carrier = s.carriers[0]): { dial: number; mode: Mode; lo: number; hi: number } {
   if (s.am) return { dial: carrier, mode: "am", lo: -5000, hi: 5000 };
-  return { dial: carrier - 1000, mode: "usb", lo: 600, hi: 1400 };
+  // the sidebands as well (RBU's at ±312.5 Hz)
+  const half = Math.max(400, (s.margin ?? 0) + 150);
+  return { dial: carrier - 1000, mode: "usb", lo: 1000 - half, hi: 1000 + half };
 }
 
 /** What the worker posts. */
@@ -106,6 +113,9 @@ export interface TcMinute {
   /** When it was heard by the server's clock, less the time it says (s);
    * null without a clock. */
   late: number | null;
+  /** `late` from the server's timestamps (antenna time), not estimated
+   * from when the audio arrived. */
+  timed?: boolean;
 }
 
 /** The minutes kept. */

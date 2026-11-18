@@ -68,7 +68,7 @@ fn run(station: Station, sigma: f64) -> Vec<(f64, i64, bool, String)> {
 
 #[test]
 fn every_station_decodes() {
-    for st in Station::ALL {
+    for st in Station::KEYED {
         let mins = run(st, 0.3);
         let good = mins.iter().filter(|m| m.2).count();
         assert!(good >= 3, "{st:?}: {mins:?}");

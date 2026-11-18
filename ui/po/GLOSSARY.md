@@ -126,3 +126,4 @@ The header is narrow; these are the choices so far (Suomi / Svenska / Deutsch): 
 | API token | a secret a program uses instead of a password | API-tunniste | API-token | API-Token |
 | scope (of a token) | what it may do | oikeudet | behörighet | Umfang |
 | revoke | make a token stop working | perua | återkalla | widerrufen |
+| holdover | the clock kept by its own oscillator, no time source now | oma kello | egen klocka | Eigenlauf |

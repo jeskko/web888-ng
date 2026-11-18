@@ -36,6 +36,13 @@ test("tuning a station puts its tone where the plan finds it", () => {
   }
 });
 
+test("RBU needs room for its sidebands", () => {
+  // USB with its carrier at 1 kHz: in a 500-1500 Hz passband, not in 700-1300
+  const p = tcPlan("RBU", "usb", 200_000 / 3 - 1000, 500, 1500, 600);
+  assert.ok("station" in p && Math.abs(p.tone - 1000) < 1e-6);
+  assert.ok("error" in tcPlan("RBU", "usb", 200_000 / 3 - 1000, 700, 1300, 600));
+});
+
 test("the current minute's seconds", () => {
   const run = (sec: TcRun["sec"]): TcRun => ({ sec, min: [], level: 10, now: 0 });
   let cur = applySeconds([], run([{ t: 1, s: "0", q: 0.9, i: -1 }]));

@@ -3,14 +3,33 @@
 // beside the waterfall, the station heard (or how to tune one), the
 // current minute's seconds as they come, and the minutes read: the
 // station's time, UTC, whether its checks passed and agreed with an
-// earlier minute, and when it was heard by the server's clock.
+// earlier minute, and when it was heard by the receiver's clock (from the
+// audio's timestamps where the server gives them: doc/api.md §8.5).
 
 import { t } from "../i18n.ts";
 import { TC_STATIONS, utcText } from "../timecode.ts";
-import { clearTc, pickTc, setTc, setTcWant, tcError, tcLevel, tcMinutes, tcNow, tcOn, tcSeconds, tcWant } from "../state.ts";
+import { clearTc, pickTc, setTc, setTcWant, tcError, tcLevel, tcMinutes, tcNow, tcOn, tcSeconds, tcWant, timebase } from "../state.ts";
 
 function carrierText(hz: number): string {
-  return hz >= 1e6 ? `${hz / 1e6} MHz` : `${hz / 1e3} kHz`;
+  // RBU's 66 2/3 kHz to three decimals
+  return hz >= 1e6 ? `${hz / 1e6} MHz` : `${+(hz / 1e3).toFixed(3)} kHz`;
+}
+
+/** The receiver's clock, as the server tells it. */
+function ClockLine() {
+  const tb = timebase.value;
+  if (!tb) return null;
+  // i18n: the receiver's clock: where its time comes from (NTP: the internet's time servers; holdover: no source now, kept by its own oscillator; none: never set)
+  const src = { ntp: t("NTP"), holdover: t("holdover"), none: t("not set") }[tb.source] ?? tb.source;
+  const parts = [src];
+  if (tb.uncertainty !== undefined) parts.push(`±${tb.uncertainty < 0.01 ? (tb.uncertainty * 1000).toFixed(1) : Math.round(tb.uncertainty * 1000)} ms`);
+  // i18n: ADC = the receiver's sampling clock; ppm = parts per million, its frequency error
+  if (tb.adc_ppm !== undefined) parts.push(t("ADC {ppm} ppm", { ppm: `${tb.adc_ppm >= 0 ? "+" : ""}${tb.adc_ppm.toFixed(2)}` }));
+  return (
+    <p class="dim" title={t("Where the receiver's clock gets its time, how far it may be off, and its sampling clock's error against it")}>
+      {t("Receiver clock: {what}", { what: parts.join(" · ") })}
+    </p>
+  );
 }
 
 export function TcPanel() {
@@ -71,7 +90,7 @@ export function TcPanel() {
             <pre
               class="tc-secs"
               // i18n: marker = the position-marker second of the time code; hole = WWV's silent second (no tick); MSF bits A and B = the two data bits sent each second
-              title={t("This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)")}>
+              title={t("This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF and RBU: 0-3 = their two bits, the first + 2 × the second)")}>
               {Array.from({ length: Math.ceil(Math.max(secs.length, 1) / 10) }, (_, g) => (
                 <span>
                   {g > 0 ? " " : ""}
@@ -83,6 +102,7 @@ export function TcPanel() {
             </pre>
           </>
         )}
+        <ClockLine />
         {mins.length === 0 ? (
           <p class="dim">{t("No minute read yet: the second's timing takes ~10 s, a whole minute (from its marker) up to two more.")}</p>
         ) : (
@@ -95,7 +115,14 @@ export function TcPanel() {
                   <td title={m.confirmed ? t("Its checks passed, and its time agrees with an earlier minute's") : m.ok ? t("Its checks passed (not yet agreed by another minute)") : t("A check failed: a bit read wrong")}>
                     {m.confirmed ? "✓✓" : m.ok ? "✓" : "✗"}
                   </td>
-                  <td class="num" title={t("When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error")}>
+                  <td
+                    class="num"
+                    title={
+                      m.timed
+                        ? t("When this minute began at the antenna by the receiver's clock, less the time it says: the way from the station and the receiver clock's error")
+                        : t("When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error")
+                    }
+                  >
                     {m.late === null ? "" : `${m.late >= 0 ? "+" : ""}${Math.round(m.late * 1000)} ms`}
                   </td>
                   <td class="dim">
