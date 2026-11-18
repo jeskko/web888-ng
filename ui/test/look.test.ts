@@ -5,7 +5,7 @@ import { colormap, cssColor, isPalette, PALETTE_NAMES } from "../src/view/colorm
 import { pickInterval, timeTicks, utcLabel } from "../src/view/wfticks.ts";
 
 test("every palette runs from its first stop to its last, opaque", () => {
-  assert.deepEqual(PALETTE_NAMES, ["web888", "viridis", "heat", "phosphor", "grey"]);
+  assert.deepEqual(PALETTE_NAMES, ["web888", "even", "viridis", "heat", "phosphor", "grey"]);
   for (const p of PALETTE_NAMES) {
     const m = colormap(p);
     assert.equal(m.length, 1024);

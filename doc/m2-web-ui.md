@@ -723,11 +723,13 @@ fixes. Helpers in `src/a11y.ts`; check script `ui/tools/cdp/a11y.mjs`.
     new CW, RTTY, PSK and JS8 text spoken every 4 s (`ctl/speak.ts`);
   * admin settings fields are named by their labels and errors tied to
     them (`aria-invalid`, `aria-describedby`); every input has a name.
-* **Colour**: the default waterfall palette got lighter at every step
-  (its orange came after the yellow: strong signals looked darker than
-  medium ones, worst with red-green colour blindness); a test checks
-  every palette for normal, protan, deutan and tritan vision. Viridis is
-  labelled colour-blind safe. The map's band colours were chosen for
+* **Colour**: the default waterfall palette's orange comes after its
+  yellow, so strong signals look darker than medium ones, worst with
+  red-green colour blindness. The owner preferred its look, so it stays
+  the default and **Even brightness** is the same colours lighter at
+  every step; a test checks every other palette for normal, protan,
+  deutan and tritan vision. It and Viridis are labelled colour-blind
+  safe. The map's band colours were chosen for
   colour blindness (neighbouring bands at least CIEDE2000 25 apart for
   every vision type, any two at least 6; before: 3) with a legend that
   filters by band. Active buttons have an underline, the OVL lamp turns

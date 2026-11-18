@@ -21,6 +21,8 @@ export const configOpen = signal(location.hash === "#config");
 // i18n: names of waterfall colour palettes
 export const PALETTE_LABELS: Record<Palette, string> = {
   web888: N_("Default"),
+  // i18n: the default colours, but brighter at every step for stronger signals (also with colour blindness)
+  even: N_("Even brightness (colour-blind safe)"),
   // i18n: Viridis: a perceptually uniform colour scale that people with colour blindness see as well
   viridis: N_("Viridis (colour-blind safe)"),
   heat: N_("Heat"),

@@ -19,11 +19,11 @@ msgstr "Tila"
 msgid "Sessions"
 msgstr "Istunnot"
 
-#: src/admin/admin.tsx:18 src/admin/admin.tsx:867 src/ctl/config.tsx:142 src/ctl/config.tsx:147 src/ctl/mobile.tsx:320
+#: src/admin/admin.tsx:18 src/admin/admin.tsx:867 src/ctl/config.tsx:144 src/ctl/config.tsx:149 src/ctl/mobile.tsx:320
 msgid "Configuration"
 msgstr "Asetukset"
 
-#: src/admin/admin.tsx:19 src/ctl/config.tsx:119
+#: src/admin/admin.tsx:19 src/ctl/config.tsx:121
 msgid "Labels"
 msgstr "Nimiöt"
 
@@ -1248,112 +1248,117 @@ msgstr "Viimeisin: {what}"
 msgid "Default"
 msgstr "Oletus"
 
-#. Viridis: a perceptually uniform colour scale that people with colour blindness see as well
+#. the default colours, but brighter at every step for stronger signals (also with colour blindness)
 #: src/ctl/config.tsx:25
+msgid "Even brightness (colour-blind safe)"
+msgstr "Tasainen kirkkaus (sopii värisokeille)"
+
+#. Viridis: a perceptually uniform colour scale that people with colour blindness see as well
+#: src/ctl/config.tsx:27
 msgid "Viridis (colour-blind safe)"
 msgstr "Viridis (sopii värisokeille)"
 
-#: src/ctl/config.tsx:26
+#: src/ctl/config.tsx:28
 msgid "Heat"
 msgstr "Lämpö"
 
-#: src/ctl/config.tsx:27
+#: src/ctl/config.tsx:29
 msgid "Phosphor"
 msgstr "Fosfori"
 
-#: src/ctl/config.tsx:28
+#: src/ctl/config.tsx:30
 msgid "Grey"
 msgstr "Harmaa"
 
-#: src/ctl/config.tsx:38
+#: src/ctl/config.tsx:40
 msgid "Language"
 msgstr "Kieli"
 
-#: src/ctl/config.tsx:40
+#: src/ctl/config.tsx:42
 msgid "Automatic (the browser's)"
 msgstr "Automaattinen (selaimen kieli)"
 
-#: src/ctl/config.tsx:48
+#: src/ctl/config.tsx:50
 msgid "You"
 msgstr "Sinä"
 
-#: src/ctl/config.tsx:49
+#: src/ctl/config.tsx:51
 msgid "Shown to the other listeners (at most {n} characters)"
 msgstr "Näytetään muille kuuntelijoille (enintään {n} merkkiä)"
 
-#: src/ctl/config.tsx:50
+#: src/ctl/config.tsx:52
 msgid "Callsign or nickname"
 msgstr "Kutsu tai nimimerkki"
 
-#: src/ctl/config.tsx:55
+#: src/ctl/config.tsx:57
 msgid "callsign"
 msgstr "kutsu"
 
-#: src/ctl/config.tsx:65
+#: src/ctl/config.tsx:67
 msgid "Share my frequency"
 msgstr "Jaa taajuuteni"
 
-#: src/ctl/config.tsx:68
+#: src/ctl/config.tsx:70
 msgid "others see it on their scale and may listen along while they wait for a receiver"
 msgstr "muut näkevät sen asteikollaan ja voivat kuunnella mukana odottaessaan vastaanotinta"
 
-#: src/ctl/config.tsx:68
+#: src/ctl/config.tsx:70
 msgid "private: others see that you are here, not where"
 msgstr "yksityinen: muut näkevät, että olet täällä, mutta eivät missä"
 
-#: src/ctl/config.tsx:73 src/ctl/licences.tsx:154
+#: src/ctl/config.tsx:75 src/ctl/licences.tsx:154
 msgid "Data"
 msgstr "Tiedonsiirto"
 
-#: src/ctl/config.tsx:77
+#: src/ctl/config.tsx:79
 msgid "Data saver"
 msgstr "Datansäästö"
 
-#: src/ctl/config.tsx:80
+#: src/ctl/config.tsx:82
 msgid "half the waterfall lines a second and a bin for every two pixels (about a quarter of its data)"
 msgstr "puolet vesiputousriveistä sekunnissa ja yksi taajuuspiste kahta pikseliä kohti (noin neljännes datasta)"
 
-#: src/ctl/config.tsx:84
+#: src/ctl/config.tsx:86
 msgid "Accessibility"
 msgstr "Saavutettavuus"
 
-#: src/ctl/config.tsx:88
+#: src/ctl/config.tsx:90
 msgid "Read out decoded text"
 msgstr "Lue dekoodattu teksti ääneen"
 
-#: src/ctl/config.tsx:91
+#: src/ctl/config.tsx:93
 msgid "a screen reader speaks new CW, RTTY, PSK and JS8 text every few seconds"
 msgstr "ruudunlukija lukee uuden CW-, RTTY-, PSK- ja JS8-tekstin muutaman sekunnin välein"
 
-#: src/ctl/config.tsx:95 src/ctl/mobile.tsx:314
+#: src/ctl/config.tsx:97 src/ctl/mobile.tsx:314
 msgid "Waterfall"
 msgstr "Vesiputous"
 
-#: src/ctl/config.tsx:97
+#: src/ctl/config.tsx:99
 msgid "Colours"
 msgstr "Värit"
 
-#: src/ctl/config.tsx:112
+#: src/ctl/config.tsx:114
 msgid "Time marks"
 msgstr "Aikamerkit"
 
-#: src/ctl/config.tsx:115
+#: src/ctl/config.tsx:117
 msgid "UTC down the waterfall's left edge"
 msgstr "UTC-aika vesiputouksen vasempaan reunaan"
 
-#: src/ctl/config.tsx:129
+#: src/ctl/config.tsx:131
 msgid "Your settings: language, name, sharing, data saver, waterfall colours, labels"
 msgstr "Omat asetuksesi: kieli, nimi, jakaminen, datansäästö, vesiputouksen värit, nimiöt"
 
-#: src/ctl/config.tsx:130
+#: src/ctl/config.tsx:132
 msgid "Config"
 msgstr "Asetukset"
 
-#: src/ctl/config.tsx:144 src/ctl/config.tsx:144 src/ctl/info.tsx:138 src/ctl/info.tsx:138 src/ctl/prop.tsx:220 src/ctl/prop.tsx:220
+#: src/ctl/config.tsx:146 src/ctl/config.tsx:146 src/ctl/info.tsx:138 src/ctl/info.tsx:138 src/ctl/prop.tsx:220 src/ctl/prop.tsx:220
 msgid "Close (Escape)"
 msgstr "Sulje (Escape)"
 
-#: src/ctl/config.tsx:149
+#: src/ctl/config.tsx:151
 msgid "Kept in this browser."
 msgstr "Säilytetään tässä selaimessa."
 
