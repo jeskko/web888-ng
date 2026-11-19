@@ -468,8 +468,10 @@ own oscillators meanwhile:
 **Time-code stations on the unit.** **Built (measuring):** with
 `[timecode] enabled`, web888d watches the bin nearest `centre_hz` (60 kHz:
 MSF, RBU, DCF77) and reports each station's minute: carrier level and
-SNR, keying depth, decoded or not, how late the decoded minute's start
-is by the timebase, the ADC clock's error from the carrier's frequency
+SNR, keying depth, decoded or not and confirmed by the minute before or
+not (the checks alone pass some wrong times: on the unit, about one DCF77 minute
+in 40 came out hours off), how late a confirmed minute's start is by the
+timebase, the ADC clock's error from the carrier's frequency
 (`adc_ppm`, next to the timebase's own `tb_ppm` against NTP), and the
 bin's noise floor (median and 90th percentile of the seconds). As
 metrics (`timecode_*`, `doc/metrics.md`) and a JSON line per station and
@@ -478,7 +480,7 @@ from a synthetic test: MSF about 0 ms, DCF77 about +4.6 ms.
 
 The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching
-one channelizer bin (about 1 % of a core). A bin centred at 60 kHz
+one channelizer bin (about 9 % of the A9's core for three stations). A bin centred at 60 kHz
 covers MSF (60 kHz), RBU (66.67 kHz, phase-modulated: 10 bits a second,
 each on the tenth of a second after a 5 ms gap in the carrier) and
 DCF77 (77.5 kHz) at once;

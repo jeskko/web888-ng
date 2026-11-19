@@ -151,13 +151,13 @@ fn timecode(o: &mut Out) {
     o.put(
         "timecode_decoded",
         "gauge",
-        "The last minute decoded and checked (1) or not (0)",
-        &rows(&|r| Some(flag(r.ok))),
+        "The last minute decoded and confirmed (1) or not (0)",
+        &rows(&|r| Some(flag(r.confirmed))),
     );
     o.put(
         "timecode_late_seconds",
         "gauge",
-        "The last decoded minute's start, late by the receiver's clock (s)",
+        "The last confirmed minute's start, late by the receiver's clock (s)",
         &rows(&|r| r.late_ms.map(|v| v / 1e3)),
     );
     o.put(
@@ -170,23 +170,22 @@ fn timecode(o: &mut Out) {
         .reports
         .iter()
         .zip(&st.counts)
-        .flat_map(|(r, &(ok, bad))| {
-            [
-                (
-                    labels(&[("station", &r.station), ("result", "ok")]),
-                    ok as f64,
-                ),
-                (
-                    labels(&[("station", &r.station), ("result", "failed")]),
-                    bad as f64,
-                ),
-            ]
+        .flat_map(|(r, c)| {
+            ["ok", "unconfirmed", "failed"]
+                .into_iter()
+                .zip(c)
+                .map(|(res, &n)| {
+                    (
+                        labels(&[("station", &r.station), ("result", res)]),
+                        n as f64,
+                    )
+                })
         })
         .collect();
     o.put(
         "timecode_minutes_total",
         "counter",
-        "Time-code minutes, decoded or not",
+        "Time-code minutes: confirmed (ok), decoded but not confirmed, failed",
         &counts,
     );
     if let Some(r) = st.reports.first() {

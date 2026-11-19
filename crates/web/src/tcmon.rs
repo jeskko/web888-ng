@@ -64,11 +64,13 @@ pub struct Report {
     /// The keying's depth (dB), as the page shows it.
     pub keying_db: f64,
     /// A minute decoded and its checks passed; confirmed by an earlier one.
+    /// Only a confirmed minute counts: the checks alone pass wrong times
+    /// (DCF77's parity, hours off, seen on the unit).
     pub ok: bool,
     pub confirmed: bool,
     /// Seconds not read in the decoded minute.
     pub unread: Option<usize>,
-    /// The decoded minute's start, late by the receiver's clock (ms).
+    /// The confirmed minute's start, late by the receiver's clock (ms).
     pub late_ms: Option<f64>,
     /// The ADC clock's error (ppm, + fast) from the carrier's frequency
     /// over the last minute.
@@ -85,8 +87,9 @@ pub struct Report {
 #[derive(Clone, Debug, Default)]
 pub struct State {
     pub reports: Vec<Report>,
-    /// Per station: minutes decoded, minutes not.
-    pub counts: Vec<(u64, u64)>,
+    /// Per station: minutes confirmed, decoded but not confirmed, not
+    /// decoded.
+    pub counts: Vec<[u64; 3]>,
 }
 
 static STATE: Mutex<Option<State>> = Mutex::new(None);
@@ -301,7 +304,7 @@ pub struct Monitor {
     floors: Vec<f64>,
     since_fft: u64,
     minute: Option<i64>,
-    pub counts: Vec<(u64, u64)>,
+    pub counts: Vec<[u64; 3]>,
 }
 
 impl Monitor {
@@ -332,7 +335,7 @@ impl Monitor {
             .map(|i| (0.5 - 0.5 * (2.0 * PI * i as f64 / FFT_N as f64).cos()) as f32)
             .collect();
         Ok(Monitor {
-            counts: vec![(0, 0); chains.len()],
+            counts: vec![[0; 3]; chains.len()],
             chains,
             centre,
             rate,
@@ -452,19 +455,25 @@ impl Monitor {
                 20.0 * (a / RX_SINE_FULL_SCALE).max(1e-15).log10()
             });
             let minutes = std::mem::take(&mut c.minutes);
-            let best = minutes.iter().rev().find(|m| m.ok).or(minutes.last());
+            let best = minutes
+                .iter()
+                .rev()
+                .find(|m| m.ok && m.confirmed)
+                .or_else(|| minutes.iter().rev().find(|m| m.ok))
+                .or(minutes.last());
             let ok = best.is_some_and(|m| m.ok);
-            let late_ms = best.filter(|m| m.ok).and_then(|m| {
+            let confirmed = best.is_some_and(|m| m.ok && m.confirmed);
+            let late_ms = best.filter(|_| confirmed).and_then(|m| {
                 // its first sample's bin frame: the decimated sample, back
                 // by the filter's delay
                 let f = self.frame0 as f64 + m.t * FS * self.decim as f64 - (TAPS - 1) as f64 / 2.0;
                 utc(f).map(|u| ((u - m.utc as f64) * 1e3 * 100.0).round() / 100.0)
             });
-            if ok {
-                self.counts[i].0 += 1;
-            } else {
-                self.counts[i].1 += 1;
-            }
+            self.counts[i][match (ok, confirmed) {
+                (true, true) => 0,
+                (true, false) => 1,
+                _ => 2,
+            }] += 1;
             let r3 = |v: f64| (v * 1e3).round() / 1e3;
             let r1 = |v: f64| (v * 10.0).round() / 10.0;
             out.push(Report {
@@ -474,7 +483,7 @@ impl Monitor {
                 snr_db_hz: carrier.zip(floor).map(|(c, f)| r1(c - f)),
                 keying_db: r1(c.rx.level as f64),
                 ok,
-                confirmed: best.is_some_and(|m| m.confirmed),
+                confirmed,
                 unread: best.map(|m| m.symbols.chars().filter(|&s| s == '?').count()),
                 late_ms,
                 // a carrier well above the floor only (else its phase is noise)
@@ -633,7 +642,7 @@ mod tests {
             .collect();
         assert_eq!(last.len(), 2, "{reports:#?}");
         for r in last {
-            assert!(r.ok, "{r:?}");
+            assert!(r.ok && r.confirmed, "{r:?}");
             let late = r.late_ms.unwrap();
             // the decoders' own offsets: MSF ~0, DCF77 ~+4.6 ms (its keying)
             assert!(late.abs() < 6.0, "{} {late} ms late", r.station);
@@ -645,10 +654,6 @@ mod tests {
             );
             assert!(r.snr_db_hz.unwrap() > 20.0, "{r:?}");
         }
-        assert!(
-            mon.counts.iter().all(|&(ok, _)| ok >= 2),
-            "{:?}",
-            mon.counts
-        );
+        assert!(mon.counts.iter().all(|c| c[0] >= 2), "{:?}", mon.counts);
     }
 }
