@@ -20,7 +20,7 @@ python3 $c spots http://receiver:8073/ > spots.jsonl
 |---|---|
 | `info` | `/api/version`, then the session's `hello`: protocol, features, the receiver, the lease |
 | `audio` | tunes (`--hz`, `--mode`, `--lo`/`--hi`, `--rate`, `--gain`, `--no-agc`), waits for a receiver, records PCM16 to a WAV (`--out`) and/or SigMF (`--sigmf BASE`): `ri16_le`, or `ci16_le` in mode `iq` |
-| `wide` | one channelizer bin (60 kS/s complex, clean within ±21 kHz of its centre) as SigMF `cf32_le`, each frame's scale applied |
+| `wide` | one channelizer bin (60 kS/s complex, clean within ±21 kHz of its centre) as SigMF `cf32_le`, each frame's scale applied; `--split S`: a file every S seconds, named by its first sample's UTC; `--reconnect`: a lost session (or 30 s without data) is opened again, a new capture |
 | `waterfall` | lines as JSON: `t` (UTC s, the end of the line), `f0` (first bin's centre, Hz), `df`, `db` (absolute dBFS) |
 | `spots` | the skimmers' spots as JSON lines: the last 30 min, then new ones |
 

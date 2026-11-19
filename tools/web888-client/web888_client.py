@@ -324,14 +324,19 @@ class Session:
             log(f"error: {m.get('msg')}" + (f" (request {m['id']})" if "id" in m else ""))
         return m
 
-    def messages(self, seconds=None):
-        """Messages until `seconds` have passed (None: until closed)."""
+    def messages(self, seconds=None, idle=None):
+        """Messages until `seconds` have passed (None: until closed);
+        `idle`: nothing for that long is a lost connection."""
         end = None if seconds is None else time.monotonic() + seconds
         while end is None or time.monotonic() < end:
-            self.ws.sock.settimeout(None if end is None else max(0.1, end - time.monotonic()))
+            left = None if end is None else max(0.1, end - time.monotonic())
+            wait = idle if left is None else (left if idle is None else min(left, idle))
+            self.ws.sock.settimeout(wait)
             try:
                 m = self.ws.recv()
             except socket.timeout:
+                if wait == idle:
+                    raise ConnectionError(f"nothing for {idle:.0f} s")
                 return
             yield self._handle(m)
 
@@ -525,7 +530,7 @@ def cmd_audio(a):
         + (f"; clock: {clock(s.timebase)}" if s.timebase else ""))
 
 
-def cmd_wide(a):
+def wide_session(a):
     s = Session(a.url, a.token)
     if not s.hello.get("wide"):
         sys.exit("this receiver has no wide IQ (no channelizer bins)")
@@ -534,28 +539,64 @@ def cmd_wide(a):
     if timed:
         # the timebase messages come with audio timestamps on
         s.send({"type": "audio", "timestamps": True})
+    return s
+
+
+def cmd_wide(a):
+    """One bin to SigMF; with --split, a file every that many seconds
+    (named by its first sample's time); with --reconnect, a lost session
+    is opened again (a gap: a new capture)."""
+    end = time.monotonic() + a.seconds
     rec = None
     expect = None
     frames = gaps = 0
-    for m in s.messages(a.seconds):
-        if not isinstance(m, bytes) or m[0] != KIND_IQ:
-            continue
-        f = parse_iq(m)
-        gap = expect is not None and (bool(f["flags"] & F_GAP) or f["frame"] != expect)
-        gaps += gap
-        expect = f["frame"] + f["count"]
-        if rec is None:
-            rec = SigMF(a.sigmf, "cf32_le", f["rate"],
-                        f"web888 wide IQ: one channelizer bin, clean within ±21 kHz of its centre", hw_name(s))
-            log(f"bin at {f['centre']:.0f} Hz, {f['rate']:.0f} S/s{', timed' if f['time'] else ''}")
-        rec.write(f["count"], struct.pack(f"<{len(f['iq'])}f", *f["iq"]), f["centre"], f["time"], gap)
-        frames += 1
-    s.send({"type": "wide", "on": False})
+    s = None
+    tb = None
+    while time.monotonic() < end:
+        try:
+            if s is None:
+                s = wide_session(a)
+            for m in s.messages(end - time.monotonic(), idle=30):
+                if not isinstance(m, bytes) or m[0] != KIND_IQ:
+                    continue
+                f = parse_iq(m)
+                gap = expect is not None and (bool(f["flags"] & F_GAP) or f["frame"] != expect)
+                gaps += gap
+                expect = f["frame"] + f["count"]
+                if rec is not None and a.split and rec.n >= a.split * rec.rate:
+                    rec.timebase = s.timebase or tb
+                    rec.close()
+                    rec = None
+                if rec is None:
+                    base = a.sigmf
+                    if a.split:
+                        t = f["time"] or time.time()
+                        base += "-" + datetime.datetime.fromtimestamp(t, datetime.timezone.utc).strftime("%Y%m%dT%H%M%SZ")
+                    rec = SigMF(base, "cf32_le", f["rate"],
+                                "web888 wide IQ: one channelizer bin, clean within ±21 kHz of its centre", hw_name(s))
+                    log(f"{base}: bin at {f['centre']:.0f} Hz, {f['rate']:.0f} S/s{', timed' if f['time'] else ''}")
+                rec.write(f["count"], struct.pack(f"<{len(f['iq'])}f", *f["iq"]), f["centre"], f["time"], gap)
+                frames += 1
+            tb = s.timebase or tb
+        except (Closed, ConnectionError, OSError) as e:
+            if not a.reconnect:
+                raise
+            log(f"{time.strftime('%H:%M:%S')} lost: {e}; again in 10 s")
+            if s is not None:
+                tb = s.timebase or tb
+            s = None
+            time.sleep(10)
+    if s is not None:
+        tb = s.timebase or tb
+        try:
+            s.send({"type": "wide", "on": False})
+            s.close()
+        except OSError:
+            pass
     if rec:
-        rec.timebase = s.timebase
+        rec.timebase = tb
         rec.close()
-    s.close()
-    log(f"{frames} frames, {gaps} gaps" + (f"; clock: {clock(s.timebase)}" if s.timebase else ""))
+    log(f"{frames} frames, {gaps} gaps" + (f"; clock: {clock(tb)}" if tb else ""))
 
 
 def cmd_waterfall(a):
@@ -612,6 +653,8 @@ def main():
     c.add_argument("--hz", type=float, required=True, help="the bin nearest this (Hz)")
     c.add_argument("--seconds", type=float, default=10)
     c.add_argument("--sigmf", required=True, help="recording BASE")
+    c.add_argument("--split", type=float, help="a new file every this many seconds")
+    c.add_argument("--reconnect", action="store_true", help="open the session again if it is lost")
     c.set_defaults(fn=cmd_wide)
 
     c = sub.add_parser("waterfall", help="waterfall lines as JSON lines (absolute dB)")
