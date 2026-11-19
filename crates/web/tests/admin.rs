@@ -1247,3 +1247,201 @@ async fn api_tokens() {
     stop.store(true, std::sync::atomic::Ordering::Relaxed);
     let _ = std::fs::remove_dir_all(path.parent().unwrap());
 }
+
+/// The routes in the source (`.route("PATH", get(..).post(..))`), less
+/// Kiwi's: (method, path).
+fn source_routes() -> std::collections::BTreeSet<(String, String)> {
+    let dir = std::path::Path::new(env!("CARGO_MANIFEST_DIR")).join("src");
+    let mut out = std::collections::BTreeSet::new();
+    for e in std::fs::read_dir(dir).unwrap() {
+        let p = e.unwrap().path();
+        if p.extension().is_none_or(|x| x != "rs") || p.ends_with("kiwi.rs") {
+            continue;
+        }
+        let src = std::fs::read_to_string(&p).unwrap();
+        for (i, _) in src.match_indices(".route(") {
+            let rest = &src[i + 7..];
+            let Some(r) = rest.trim_start().strip_prefix('"') else {
+                continue; // not a router's route
+            };
+            let path = &r[..r.find('"').unwrap()];
+            // the call's text, to its closing parenthesis
+            let mut depth = 1;
+            let end = rest
+                .char_indices()
+                .find(|&(_, c)| {
+                    depth += match c {
+                        '(' => 1,
+                        ')' => -1,
+                        _ => 0,
+                    };
+                    depth == 0
+                })
+                .unwrap()
+                .0;
+            let call = &rest[..end];
+            for m in ["get", "post", "put", "delete"] {
+                let used = call.match_indices(&format!("{m}(")).any(|(k, _)| {
+                    k == 0
+                        || !call.as_bytes()[k - 1].is_ascii_alphanumeric()
+                            && call.as_bytes()[k - 1] != b'_'
+                });
+                if used {
+                    out.insert((m.to_string(), path.to_string()));
+                }
+            }
+        }
+    }
+    out
+}
+
+fn openapi() -> Value {
+    serde_json::from_str(web888_web::OPENAPI).unwrap()
+}
+
+#[test]
+fn openapi_lists_every_route() {
+    let doc = openapi();
+    let mut described = std::collections::BTreeSet::new();
+    for (path, ops) in doc["paths"].as_object().unwrap() {
+        for m in ops.as_object().unwrap().keys() {
+            described.insert((m.clone(), path.clone()));
+        }
+    }
+    let routes = source_routes();
+    assert!(routes.len() > 40, "{} routes found", routes.len());
+    let missing: Vec<_> = routes.difference(&described).collect();
+    let extra: Vec<_> = described.difference(&routes).collect();
+    assert!(
+        missing.is_empty() && extra.is_empty(),
+        "crates/web/src/openapi.json: not described {missing:?}; not served {extra:?}"
+    );
+}
+
+/// `v` against the schema `s` of `doc`, strictly: an object's fields must
+/// be declared (unless `additionalProperties` allows more).
+fn conforms(doc: &Value, s: &Value, v: &Value, at: &str) -> Result<(), String> {
+    if let Some(r) = s["$ref"].as_str() {
+        let name = r.rsplit('/').next().unwrap();
+        return conforms(doc, &doc["components"]["schemas"][name], v, at);
+    }
+    let types: Vec<&str> = match &s["type"] {
+        Value::String(t) => vec![t.as_str()],
+        Value::Array(t) => t.iter().filter_map(Value::as_str).collect(),
+        _ => return Ok(()), // any
+    };
+    let is = match v {
+        Value::Null => "null",
+        Value::Bool(_) => "boolean",
+        Value::Number(n) if n.is_f64() => "number",
+        Value::Number(_) => "integer",
+        Value::String(_) => "string",
+        Value::Array(_) => "array",
+        Value::Object(_) => "object",
+    };
+    if !types.contains(&is) && !(is == "integer" && types.contains(&"number")) {
+        return Err(format!("{at}: {is}, not {types:?}"));
+    }
+    if let Some(e) = s["enum"].as_array()
+        && !e.contains(v)
+    {
+        return Err(format!("{at}: {v} not in {e:?}"));
+    }
+    match v {
+        Value::Object(o) => {
+            for r in s["required"].as_array().into_iter().flatten() {
+                let r = r.as_str().unwrap();
+                if !o.contains_key(r) {
+                    return Err(format!("{at}: no {r}"));
+                }
+            }
+            for (k, x) in o {
+                match s["properties"].get(k) {
+                    Some(p) => conforms(doc, p, x, &format!("{at}.{k}"))?,
+                    None if s["additionalProperties"] == false => {
+                        return Err(format!("{at}.{k}: not described"));
+                    }
+                    None => {}
+                }
+            }
+        }
+        Value::Array(a) => {
+            for (i, x) in a.iter().enumerate() {
+                conforms(doc, &s["items"], x, &format!("{at}[{i}]"))?;
+            }
+        }
+        _ => {}
+    }
+    Ok(())
+}
+
+#[tokio::test(flavor = "multi_thread", worker_threads = 2)]
+async fn openapi_describes_the_answers() {
+    let path = temp("openapi");
+    let mut c = Config::default();
+    c.auth.admin_hash = Some(auth::hash(ADMIN_PW));
+    c.station.locator = "FN42aa".into();
+    c.station.callsign = "N0CALL".into();
+    let (addr, stop) = start(c, path).await;
+    let login = http(
+        addr,
+        "POST",
+        "/api/login",
+        None,
+        Some(json!({"password": ADMIN_PW, "admin": true})),
+    )
+    .await;
+    assert!(
+        conforms(
+            &openapi(),
+            &json!({"type": "object"}),
+            &login.json(),
+            "login"
+        )
+        .is_ok()
+    );
+    let token = login.token();
+
+    // what's served is this file, with the version
+    let served = http(addr, "GET", "/api/openapi.json", None, None)
+        .await
+        .json();
+    assert_eq!(served["info"]["version"], env!("CARGO_PKG_VERSION"));
+    assert_eq!(served["paths"], openapi()["paths"]);
+
+    let doc = openapi();
+    let mut checked = 0;
+    for (p, ops) in doc["paths"].as_object().unwrap() {
+        let Some(op) = ops.get("get") else { continue };
+        // not JSON, or not here (a photo, the hardware's)
+        if p.contains('{')
+            || [
+                "/ws",
+                "/metrics",
+                "/api/info/photo",
+                "/api/admin/backup",
+                "/api/admin/markers",
+            ]
+            .contains(&p.as_str())
+        {
+            continue;
+        }
+        let url = match p.as_str() {
+            "/api/markers" => format!("{p}?lo=7000000&hi=7300000"),
+            "/api/bandplan" => format!("{p}?region=1"),
+            _ => p.clone(),
+        };
+        let r = http(addr, "GET", &url, Some(&token), None).await;
+        if op["tags"][0] == "admin" && r.status == 501 {
+            continue; // the OS's parts (updates, the boot loader) aren't here
+        }
+        assert_eq!(r.status, 200, "{url}: {}", r.body);
+        let schema = &op["responses"]["200"]["content"]["application/json"]["schema"];
+        if let Err(e) = conforms(&doc, schema, &r.json(), p) {
+            panic!("{e}\n{}", r.body);
+        }
+        checked += 1;
+    }
+    assert!(checked >= 15, "{checked} answers checked");
+    stop.store(true, std::sync::atomic::Ordering::Relaxed);
+}

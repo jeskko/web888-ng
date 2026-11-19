@@ -68,6 +68,7 @@ pub fn router(shared: Arc<Shared>, ui_dir: PathBuf) -> Router {
         .route("/ws", get(ws))
         .route("/api/status", get(status))
         .route("/api/version", get(version))
+        .route("/api/openapi.json", get(openapi))
         .route("/api/spots", get(spots))
         .merge(admin::routes())
         .merge(markers::routes())
@@ -201,6 +202,20 @@ async fn version(State(sh): State<Arc<Shared>>) -> impl IntoResponse {
         "proto_min": proto::PROTO_MIN,
         "features": sh.features(),
     }))
+}
+
+/// The JSON endpoints' description (OpenAPI 3.1; `doc/api.md` §7), with
+/// this server's version. `tests/admin.rs` keeps it in step with the
+/// routes and the answers.
+pub const OPENAPI: &str = include_str!("openapi.json");
+
+async fn openapi() -> impl IntoResponse {
+    static DOC: std::sync::LazyLock<serde_json::Value> = std::sync::LazyLock::new(|| {
+        let mut d: serde_json::Value = serde_json::from_str(OPENAPI).expect("openapi.json");
+        d["info"]["version"] = env!("CARGO_PKG_VERSION").into();
+        d
+    });
+    Json(&*DOC)
 }
 
 /// Whether a WebSocket's Origin may open a session: none (a program),

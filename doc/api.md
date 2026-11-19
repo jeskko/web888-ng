@@ -264,10 +264,14 @@ With a listener password set, the public ones need a login as `/ws`
 does (unless the receiver leaves channels open). Errors are an HTTP
 status with a short text or `{"error": "..."}`.
 
+The machine-readable form is `GET /api/openapi.json` (§8.4).
+
 ### 7.1 Public
 
 | endpoint | returns | stable (proposed) |
 |---|---|---|
+| `GET /api/version` | `server`, `version`, `proto`, `proto_min`, `features` (no login) | yes |
+| `GET /api/openapi.json` | this section as OpenAPI 3.1 (no login) | yes |
 | `GET /api/status` | `radio`, `sessions`, `adc_overloads`, `clock_ppm`, `hw_rate_ok`, `rx_frames`, `rx_lost_frames` | yes |
 | `GET /api/spots?since=&mode=&band=` | `{spots: [...]}` as §5.2, oldest first; `since` UTC s (default: 30 min ago) | yes |
 | `GET /api/markers?lo=&hi=&src=&region=` | frequency labels in `lo..hi` Hz; `src` any of `eibi,utility,amateur,own,dx` | yes |
@@ -366,8 +370,14 @@ cookie jar, 12 h expiry), so:
   name this receiver's host (the Host or X-Forwarded-Host name, any
   port) or be in `[web] allowed_origins` (`"*"`: any). Programs send no
   Origin and aren't affected. Kiwi's endpoints aren't checked.
-* **Proposed:** `GET /api/openapi.json`: the JSON endpoints as an OpenAPI 3.1
-  description, checked against the handlers in CI.
+* **Built:** `GET /api/openapi.json`, without a login: the JSON
+  endpoints as an OpenAPI 3.1 description (`crates/web/src/openapi.json`,
+  with the server's version), each operation marked `x-stability`
+  (`stable`, `experimental`, `unstable`). CI checks it both ways: every
+  route in the source is described and nothing else is, and the public
+  and admin GET answers of a test server match their schemas strictly
+  (a field not described fails, as does a required one missing). The
+  admin answers' schemas are open (`unstable`).
 * **Built:** `GET /api/version`, without a login (for a client to say
   "this receiver is too old"): `{server, version, proto, proto_min,
   features}`.

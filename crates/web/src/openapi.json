@@ -1,0 +1,2684 @@
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "web888d",
+    "version": "0.0.0",
+    "description": "The JSON endpoints of web888d. The listener protocol on /ws (WebSocket) is described in doc/api.md; this file lists it without its messages. `x-stability`: stable (kept across releases), experimental (may change), unstable (the admin page's own API: may change in any release).",
+    "license": {
+      "name": "GPL-3.0-or-later",
+      "identifier": "GPL-3.0-or-later"
+    }
+  },
+  "tags": [
+    {
+      "name": "public",
+      "description": "for anyone who may read (doc/api.md §7.1)"
+    },
+    {
+      "name": "admin",
+      "description": "the admin page's API (doc/api.md §7.2)"
+    }
+  ],
+  "components": {
+    "securitySchemes": {
+      "cookie": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "web888d",
+        "description": "from POST /api/login"
+      },
+      "token": {
+        "type": "http",
+        "scheme": "bearer",
+        "description": "an API token (w888_...), made in the admin page"
+      }
+    },
+    "schemas": {
+      "Error": {
+        "type": "object",
+        "properties": {
+          "error": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "error"
+        ],
+        "additionalProperties": false,
+        "description": "An error's reason. Some errors are plain text instead."
+      },
+      "Radio": {
+        "type": "object",
+        "properties": {
+          "backend": {
+            "type": "string",
+            "description": "sim, zynqsdr, iq"
+          },
+          "variant": {
+            "type": "string",
+            "enum": [
+              "hf",
+              "vhf"
+            ]
+          },
+          "adc_hz": {
+            "type": "number"
+          },
+          "rx_rate": {
+            "type": "number",
+            "description": "RX channel rate (S/s)"
+          },
+          "rf_lo": {
+            "type": "number",
+            "description": "tunable range (Hz)"
+          },
+          "rf_hi": {
+            "type": "number"
+          },
+          "wf_decim_min": {
+            "type": "integer"
+          },
+          "wf_decim_max": {
+            "type": "integer"
+          },
+          "freq_offset_hz": {
+            "type": "number",
+            "description": "converter offset: on-air = receiver + offset (absent: 0)"
+          }
+        },
+        "required": [
+          "backend",
+          "variant",
+          "adc_hz",
+          "rx_rate",
+          "rf_lo",
+          "rf_hi",
+          "wf_decim_min",
+          "wf_decim_max"
+        ],
+        "additionalProperties": false
+      },
+      "Status": {
+        "type": "object",
+        "properties": {
+          "radio": {
+            "$ref": "#/components/schemas/Radio"
+          },
+          "sessions": {
+            "type": "integer",
+            "description": "listeners connected"
+          },
+          "adc_overloads": {
+            "type": "integer"
+          },
+          "clock_ppm": {
+            "type": "number",
+            "description": "ADC clock error against GPS (0 without)"
+          },
+          "hw_rate_ok": {
+            "type": "boolean",
+            "description": "the hardware delivers samples at the expected rate"
+          },
+          "rx_frames": {
+            "type": "integer"
+          },
+          "rx_lost_frames": {
+            "type": "integer"
+          }
+        },
+        "required": [
+          "radio",
+          "sessions",
+          "adc_overloads",
+          "clock_ppm",
+          "hw_rate_ok",
+          "rx_frames",
+          "rx_lost_frames"
+        ],
+        "additionalProperties": false
+      },
+      "Version": {
+        "type": "object",
+        "properties": {
+          "server": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "proto": {
+            "type": "integer",
+            "description": "the /ws protocol it speaks"
+          },
+          "proto_min": {
+            "type": "integer",
+            "description": "the oldest /ws protocol it still accepts"
+          },
+          "features": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "what the server can do (doc/api.md §8.1)"
+          }
+        },
+        "required": [
+          "server",
+          "version",
+          "proto",
+          "proto_min",
+          "features"
+        ],
+        "additionalProperties": false
+      },
+      "Spot": {
+        "type": "object",
+        "properties": {
+          "t": {
+            "type": "number",
+            "description": "slot start, UTC s"
+          },
+          "mode": {
+            "type": "string",
+            "description": "FT8, FT4, WSPR"
+          },
+          "band": {
+            "type": "string",
+            "description": "such as 40m; empty outside the amateur bands"
+          },
+          "dial": {
+            "type": "number",
+            "description": "the skimmer's USB dial (Hz)"
+          },
+          "hz": {
+            "type": "number",
+            "description": "the signal's lowest tone (Hz)"
+          },
+          "snr": {
+            "type": "number",
+            "description": "dB in 2.5 kHz"
+          },
+          "dt": {
+            "type": "number",
+            "description": "s"
+          },
+          "msg": {
+            "type": "string",
+            "description": "the decoded text"
+          },
+          "call": {
+            "type": "string"
+          },
+          "grid": {
+            "type": "string"
+          },
+          "drift": {
+            "type": "number",
+            "description": "WSPR: Hz"
+          },
+          "dbm": {
+            "type": "integer",
+            "description": "WSPR: power"
+          },
+          "uncertain": {
+            "type": "boolean",
+            "description": "possibly a false decode"
+          }
+        },
+        "required": [
+          "t",
+          "mode",
+          "band",
+          "dial",
+          "hz",
+          "snr",
+          "dt",
+          "msg"
+        ],
+        "additionalProperties": false
+      },
+      "Spots": {
+        "type": "object",
+        "properties": {
+          "spots": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Spot"
+            },
+            "description": "oldest first"
+          }
+        },
+        "required": [
+          "spots"
+        ],
+        "additionalProperties": false
+      },
+      "Marker": {
+        "type": "object",
+        "properties": {
+          "hz": {
+            "type": "number",
+            "description": "carrier (Hz)"
+          },
+          "dial": {
+            "type": "number",
+            "description": "where to put the dial if not on hz"
+          },
+          "name": {
+            "type": "string"
+          },
+          "mode": {
+            "type": "string",
+            "description": "demodulator to tune with"
+          },
+          "emission": {
+            "type": "string",
+            "description": "am, cw, rtty, fax, ft8, ..."
+          },
+          "category": {
+            "type": "string",
+            "description": "broadcast, time, marine, ..."
+          },
+          "params": {
+            "type": "object",
+            "description": "published signal parameters"
+          },
+          "note": {
+            "type": "string"
+          },
+          "schedule": {
+            "type": "string",
+            "description": "UTC, as published"
+          },
+          "src": {
+            "type": "string",
+            "description": "eibi, utility, amateur, own, dx"
+          }
+        },
+        "required": [
+          "hz",
+          "name",
+          "mode",
+          "src"
+        ],
+        "additionalProperties": false
+      },
+      "Markers": {
+        "type": "object",
+        "properties": {
+          "markers": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Marker"
+            }
+          }
+        },
+        "required": [
+          "markers"
+        ],
+        "additionalProperties": false
+      },
+      "MarkersInfo": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "integer",
+            "description": "IARU region"
+          },
+          "eibi_season": {
+            "type": "string"
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "id": {
+                  "type": "string"
+                },
+                "count": {
+                  "type": "integer"
+                },
+                "enabled": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "id",
+                "count"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "region",
+          "sources"
+        ],
+        "additionalProperties": false
+      },
+      "BandPlan": {
+        "type": "object",
+        "properties": {
+          "region": {
+            "type": "integer"
+          },
+          "title": {
+            "type": "string"
+          },
+          "amateur": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "lo": {
+                  "type": "number"
+                },
+                "hi": {
+                  "type": "number"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "segments": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "lo": {
+                        "type": "number"
+                      },
+                      "hi": {
+                        "type": "number"
+                      },
+                      "use": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": "string"
+                      },
+                      "modes": {
+                        "type": "array",
+                        "items": {
+                          "type": "string"
+                        }
+                      }
+                    },
+                    "required": [
+                      "lo",
+                      "hi",
+                      "use"
+                    ],
+                    "additionalProperties": false
+                  }
+                },
+                "centres": {
+                  "type": "array",
+                  "items": {
+                    "type": "object",
+                    "properties": {
+                      "hz": {
+                        "type": "number"
+                      },
+                      "name": {
+                        "type": "string"
+                      },
+                      "mode": {
+                        "type": "string"
+                      },
+                      "emission": {
+                        "type": "string"
+                      },
+                      "note": {
+                        "type": "string"
+                      }
+                    },
+                    "required": [
+                      "hz",
+                      "name"
+                    ],
+                    "additionalProperties": false
+                  }
+                }
+              },
+              "required": [
+                "name",
+                "lo",
+                "hi"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "services": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": {
+                  "type": "string"
+                },
+                "service": {
+                  "type": "string"
+                },
+                "lo": {
+                  "type": "number"
+                },
+                "hi": {
+                  "type": "number"
+                },
+                "regions": {
+                  "type": "array",
+                  "items": {
+                    "type": "integer"
+                  }
+                },
+                "note": {
+                  "type": "string"
+                },
+                "sub": {
+                  "type": "boolean"
+                }
+              },
+              "required": [
+                "name",
+                "service",
+                "lo",
+                "hi"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "sources": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "title": {
+                  "type": "string"
+                },
+                "version": {
+                  "type": "string"
+                },
+                "url": {
+                  "type": "string"
+                }
+              },
+              "required": [
+                "title"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "region",
+          "title",
+          "amateur"
+        ],
+        "additionalProperties": false
+      },
+      "Info": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "location": {
+            "type": "string"
+          },
+          "callsign": {
+            "type": "string"
+          },
+          "locator": {
+            "type": "string"
+          },
+          "antenna": {
+            "type": "string"
+          },
+          "description": {
+            "type": "string"
+          },
+          "contact": {
+            "type": "string"
+          },
+          "photo": {
+            "type": "boolean",
+            "description": "GET /api/info/photo has one"
+          },
+          "server": {
+            "type": "string"
+          },
+          "privacy": {
+            "type": "object",
+            "properties": {
+              "per_ip": {
+                "type": "boolean"
+              },
+              "daily": {
+                "type": "boolean"
+              },
+              "blocked": {
+                "type": "boolean"
+              },
+              "proxy": {
+                "type": "boolean"
+              },
+              "contact": {
+                "type": "string"
+              },
+              "text": {
+                "type": "string"
+              },
+              "services": {
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "name": {
+                      "type": "string"
+                    },
+                    "what": {
+                      "type": "string"
+                    }
+                  },
+                  "required": [
+                    "name",
+                    "what"
+                  ],
+                  "additionalProperties": false
+                }
+              }
+            },
+            "required": [
+              "per_ip",
+              "daily",
+              "blocked",
+              "proxy",
+              "contact",
+              "text",
+              "services"
+            ],
+            "additionalProperties": false
+          },
+          "reception_notice": {
+            "type": "boolean"
+          },
+          "rules": {
+            "type": "object",
+            "properties": {
+              "receivers": {
+                "type": "integer"
+              },
+              "password": {
+                "type": "boolean",
+                "description": "a listener password is set"
+              },
+              "open_receivers": {
+                "type": "integer"
+              },
+              "per_ip": {
+                "type": "integer"
+              },
+              "session_minutes": {
+                "type": "integer"
+              },
+              "idle_minutes": {
+                "type": "integer"
+              },
+              "daily_minutes": {
+                "type": "integer"
+              }
+            },
+            "required": [
+              "receivers",
+              "password",
+              "open_receivers",
+              "per_ip",
+              "session_minutes",
+              "idle_minutes",
+              "daily_minutes"
+            ],
+            "additionalProperties": false,
+            "description": "limits: 0 is none"
+          }
+        },
+        "required": [
+          "name",
+          "location",
+          "callsign",
+          "locator",
+          "antenna",
+          "description",
+          "contact",
+          "photo",
+          "server",
+          "privacy",
+          "reception_notice",
+          "rules"
+        ],
+        "additionalProperties": false
+      },
+      "Licences": {
+        "type": "object",
+        "properties": {
+          "rust": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Package"
+            }
+          },
+          "npm": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/Package"
+            }
+          }
+        },
+        "required": [
+          "rust",
+          "npm"
+        ],
+        "additionalProperties": false
+      },
+      "Package": {
+        "type": "object",
+        "properties": {
+          "name": {
+            "type": "string"
+          },
+          "version": {
+            "type": "string"
+          },
+          "license": {
+            "type": "string"
+          },
+          "url": {
+            "type": "string"
+          }
+        },
+        "required": [
+          "name",
+          "version",
+          "license",
+          "url"
+        ],
+        "additionalProperties": false
+      },
+      "Safe": {
+        "type": "object",
+        "properties": {
+          "safe": {
+            "type": "boolean",
+            "description": "running in safe mode (after repeated failed starts)"
+          }
+        },
+        "required": [
+          "safe"
+        ],
+        "additionalProperties": false
+      },
+      "Auth": {
+        "type": "object",
+        "properties": {
+          "role": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "enum": [
+              "reader",
+              "listener",
+              "admin",
+              null
+            ]
+          },
+          "listener_password": {
+            "type": "boolean"
+          },
+          "admin_password": {
+            "type": "boolean"
+          },
+          "open_channels": {
+            "type": "integer",
+            "description": "receivers left open without the listener password"
+          }
+        },
+        "required": [
+          "role",
+          "listener_password",
+          "admin_password",
+          "open_channels"
+        ],
+        "additionalProperties": false
+      },
+      "MapInfo": {
+        "type": "object",
+        "properties": {
+          "locator": {
+            "type": "string"
+          },
+          "call": {
+            "type": "string"
+          },
+          "gps": {
+            "type": "boolean"
+          }
+        },
+        "required": [
+          "locator",
+          "call",
+          "gps"
+        ],
+        "additionalProperties": false
+      },
+      "MapDx": {
+        "type": "object",
+        "properties": {
+          "spots": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "t": {
+                  "type": "number"
+                },
+                "hz": {
+                  "type": "number"
+                },
+                "band": {
+                  "type": "string"
+                },
+                "mode": {
+                  "type": "string"
+                },
+                "tune": {
+                  "type": "string",
+                  "description": "demodulator to tune with"
+                },
+                "dx": {
+                  "type": "string"
+                },
+                "de": {
+                  "type": "string"
+                },
+                "note": {
+                  "type": "string"
+                },
+                "dx_pos": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  },
+                  "description": "[lat, lon]"
+                },
+                "de_pos": {
+                  "type": [
+                    "array",
+                    "null"
+                  ],
+                  "items": {
+                    "type": "number"
+                  },
+                  "description": "[lat, lon]"
+                }
+              },
+              "required": [
+                "t",
+                "hz",
+                "band",
+                "mode",
+                "tune",
+                "dx",
+                "de",
+                "note",
+                "dx_pos",
+                "de_pos"
+              ],
+              "additionalProperties": false
+            }
+          }
+        },
+        "required": [
+          "spots"
+        ],
+        "additionalProperties": false
+      },
+      "Propagation": {
+        "type": "object",
+        "description": "the VOACAP forecast and its inputs (experimental: the shape may change)",
+        "properties": {
+          "enabled": {
+            "type": "boolean"
+          },
+          "forecast": {
+            "type": [
+              "object",
+              "null"
+            ]
+          }
+        },
+        "required": [
+          "enabled"
+        ]
+      },
+      "LoginReq": {
+        "type": "object",
+        "properties": {
+          "password": {
+            "type": "string"
+          },
+          "admin": {
+            "type": "boolean",
+            "description": "log in as the admin (else as a listener)"
+          }
+        },
+        "required": [
+          "password"
+        ],
+        "additionalProperties": false
+      },
+      "Any": {
+        "description": "JSON; the admin page's shape (unstable)"
+      }
+    }
+  },
+  "security": [
+    {},
+    {
+      "cookie": []
+    },
+    {
+      "token": []
+    }
+  ],
+  "paths": {
+    "/ws": {
+      "get": {
+        "summary": "The listener protocol (WebSocket)",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "description": "Upgrade to a WebSocket: JSON messages and binary audio, waterfall and wide IQ frames, as in doc/api.md §4-6. A token may come as `Authorization: Bearer`. A page from another site gets 403 (`[web] allowed_origins`).",
+        "responses": {
+          "101": {
+            "description": "switching protocols"
+          },
+          "401": {
+            "description": "login required"
+          },
+          "403": {
+            "description": "origin not allowed"
+          }
+        }
+      }
+    },
+    "/api/version": {
+      "get": {
+        "summary": "Server, protocol versions and features",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Version"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/openapi.json": {
+      "get": {
+        "summary": "This description",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/status": {
+      "get": {
+        "summary": "The receiver and its health",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Status"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        }
+      }
+    },
+    "/api/spots": {
+      "get": {
+        "summary": "The skimmers' spots",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Spots"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        },
+        "parameters": [
+          {
+            "name": "since",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "number"
+            },
+            "description": "UTC s (default: 30 min ago)"
+          },
+          {
+            "name": "mode",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "FT8, FT4 or WSPR"
+          },
+          {
+            "name": "band",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "such as 40m"
+          }
+        ]
+      }
+    },
+    "/api/markers": {
+      "get": {
+        "summary": "Frequency labels in a range",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Markers"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        },
+        "parameters": [
+          {
+            "name": "lo",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            },
+            "description": "Hz"
+          },
+          {
+            "name": "hi",
+            "in": "query",
+            "required": true,
+            "schema": {
+              "type": "number"
+            },
+            "description": "Hz"
+          },
+          {
+            "name": "src",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "comma-separated: eibi, utility, amateur, own, dx (default all)"
+          },
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "IARU region (default the receiver's)"
+          },
+          {
+            "name": "t",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "UTC s to filter schedules at (default now)"
+          }
+        ]
+      }
+    },
+    "/api/markers/info": {
+      "get": {
+        "summary": "The label sources, region, EiBi season",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MarkersInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        }
+      }
+    },
+    "/api/bandplan": {
+      "get": {
+        "summary": "A region's amateur band plan and other services' bands",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/BandPlan"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        },
+        "parameters": [
+          {
+            "name": "region",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "IARU region 1-3 (default the receiver's)"
+          }
+        ]
+      }
+    },
+    "/api/info": {
+      "get": {
+        "summary": "About the receiver: name, location, privacy, the visitor rules",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Info"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/info/photo": {
+      "get": {
+        "summary": "The receiver's photo",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "the image",
+            "content": {
+              "image/*": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "404": {
+            "description": "no photo"
+          }
+        }
+      }
+    },
+    "/api/info/licences": {
+      "get": {
+        "summary": "The third-party packages and their licences",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Licences"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/propagation": {
+      "get": {
+        "summary": "The VOACAP forecast and its inputs",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "experimental",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Propagation"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        }
+      }
+    },
+    "/api/map/info": {
+      "get": {
+        "summary": "The receiver's locator, for the map",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "experimental",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapInfo"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        }
+      }
+    },
+    "/api/map/dx": {
+      "get": {
+        "summary": "Live DX spots with places",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "experimental",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/MapDx"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "a listener password is set and the request may not read"
+          }
+        }
+      }
+    },
+    "/api/safe": {
+      "get": {
+        "summary": "Whether the receiver runs in safe mode",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Safe"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/auth": {
+      "get": {
+        "summary": "The caller's role and which passwords are set",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Auth"
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/login": {
+      "post": {
+        "summary": "Log in: a cookie (`web888d`, 12 h)",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/LoginReq"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "logged in; Set-Cookie",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "wrong password",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Error"
+                }
+              }
+            }
+          },
+          "429": {
+            "description": "too many failed logins"
+          }
+        }
+      }
+    },
+    "/api/logout": {
+      "post": {
+        "summary": "Log out",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "responses": {
+          "200": {
+            "description": "logged out"
+          }
+        }
+      }
+    },
+    "/metrics": {
+      "get": {
+        "summary": "Prometheus metrics (doc/metrics.md)",
+        "tags": [
+          "public"
+        ],
+        "x-stability": "stable",
+        "description": "Only from `[web] metrics_allow` networks.",
+        "responses": {
+          "200": {
+            "description": "Prometheus text",
+            "content": {
+              "text/plain": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "403": {
+            "description": "not from an allowed network"
+          }
+        }
+      }
+    },
+    "/api/admin/sessions": {
+      "get": {
+        "summary": "Sessions: who listens where",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/sessions/{id}/kick": {
+      "post": {
+        "summary": "End a session (close 1008)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "session id"
+          }
+        ]
+      }
+    },
+    "/api/admin/sessions/{id}/ban": {
+      "post": {
+        "summary": "Block a session's address",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "parameters": [
+          {
+            "name": "id",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "session id"
+          }
+        ]
+      }
+    },
+    "/api/admin/leases": {
+      "get": {
+        "summary": "The receivers' leases and queue",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/config": {
+      "get": {
+        "summary": "The configuration",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "description": "Shaped as GET /api/admin/schema says."
+      },
+      "put": {
+        "summary": "Save and apply the configuration",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/config/validate": {
+      "post": {
+        "summary": "Check a configuration without saving it",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/schema": {
+      "get": {
+        "summary": "The configuration's JSON Schema",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/password": {
+      "post": {
+        "summary": "Set or remove a password",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "role": {
+                    "type": "string",
+                    "enum": [
+                      "listener",
+                      "admin"
+                    ]
+                  },
+                  "password": {
+                    "type": [
+                      "string",
+                      "null"
+                    ],
+                    "description": "null: remove the listener password"
+                  }
+                },
+                "required": [
+                  "role"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/tokens": {
+      "get": {
+        "summary": "API tokens (names, scopes; never the tokens)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      },
+      "post": {
+        "summary": "Make an API token: the token is in this answer only",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "name": {
+                    "type": "string",
+                    "description": "at most 32 characters"
+                  },
+                  "scope": {
+                    "type": "string",
+                    "enum": [
+                      "read",
+                      "listen",
+                      "admin"
+                    ]
+                  },
+                  "expires_days": {
+                    "type": "integer",
+                    "description": "none: never"
+                  },
+                  "unlimited": {
+                    "type": "boolean",
+                    "description": "exempt from the per-address, session, idle and daily limits"
+                  }
+                },
+                "required": [
+                  "name",
+                  "scope"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/tokens/{name}": {
+      "delete": {
+        "summary": "Revoke a token (its sessions end)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "parameters": [
+          {
+            "name": "name",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string"
+            },
+            "description": "token name"
+          }
+        ]
+      }
+    },
+    "/api/admin/stats": {
+      "get": {
+        "summary": "CPU per thread, memory, load",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/restart": {
+      "post": {
+        "summary": "Restart web888d",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/atten": {
+      "post": {
+        "summary": "Set the RF attenuator (every listener)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "db": {
+                    "type": "number",
+                    "description": "0-31.5 in 0.5 dB steps"
+                  }
+                },
+                "required": [
+                  "db"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/adc": {
+      "post": {
+        "summary": "Set the ADC's dither and PGA (every listener)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "dither": {
+                    "type": "boolean"
+                  },
+                  "pga": {
+                    "type": "boolean"
+                  }
+                },
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/skimmers": {
+      "get": {
+        "summary": "The skimmers' bands and decode counts",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/ovl": {
+      "get": {
+        "summary": "The ADC overload log",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/logs": {
+      "get": {
+        "summary": "Log lines",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "parameters": [
+          {
+            "name": "source",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "string"
+            },
+            "description": "web888d (default), system, kernel, ..."
+          },
+          {
+            "name": "lines",
+            "in": "query",
+            "required": false,
+            "schema": {
+              "type": "integer"
+            },
+            "description": "how many, newest last"
+          }
+        ]
+      }
+    },
+    "/api/admin/markers": {
+      "get": {
+        "summary": "Own labels as CSV",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      },
+      "put": {
+        "summary": "Replace own labels (CSV)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "text/csv": {
+              "schema": {
+                "type": "string"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/info/photo": {
+      "put": {
+        "summary": "Set the receiver's photo",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "image/*": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      },
+      "delete": {
+        "summary": "Remove the receiver's photo",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/backup": {
+      "get": {
+        "summary": "Download the settings (a tar file)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "string",
+                  "format": "binary"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/restore": {
+      "post": {
+        "summary": "Restore settings from a backup",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/x-tar": {
+              "schema": {
+                "type": "string",
+                "format": "binary"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/update": {
+      "get": {
+        "summary": "OS update status and releases",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/update/check": {
+      "post": {
+        "summary": "Look for releases now",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/update/install": {
+      "post": {
+        "summary": "Install a release into the other slot",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "version": {
+                    "type": "string"
+                  }
+                },
+                "required": [
+                  "version"
+                ],
+                "additionalProperties": false
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/admin/update/reboot": {
+      "post": {
+        "summary": "Reboot into the installed release",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/bootloader": {
+      "get": {
+        "summary": "The boot loader's version and whether it can be updated",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/bootloader/install": {
+      "post": {
+        "summary": "Write the boot loader",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
+    "/api/admin/safe/leave": {
+      "post": {
+        "summary": "Leave safe mode (restart normally)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    }
+  }
+}
