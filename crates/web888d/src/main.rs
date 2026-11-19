@@ -1144,7 +1144,8 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         // LF time-code stations (`[timecode]`)
         {
             let c = shared.live.borrow().clone();
-            web888_web::tcmon::spawn(&shared, c.timecode.clone(), c.web.state_dir.clone())?;
+            // the state directory as given (`--state-dir` over the file's)
+            web888_web::tcmon::spawn(&shared, c.timecode.clone(), w.state_dir.clone())?;
         }
         // HF propagation forecasts (`[propagation]`)
         let gps = shared.skim.as_ref().and_then(|s| s.gpsd.clone());

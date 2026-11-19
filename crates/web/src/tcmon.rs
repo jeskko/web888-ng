@@ -3,8 +3,9 @@
 //! `doc/api.md` §8.5): one channelizer bin (60 kS/s complex) holds several
 //! (at 60 kHz: MSF, RBU and DCF77). Per station:
 //!
-//! * a mixer puts its carrier at 0 Hz, a 48-tap filter and decimation by
-//!   5 give 12 kS/s, shifted up 1 kHz as USB audio for the same decoder
+//! * a mixer puts its carrier at 0 Hz, a 128-tap filter (1 kHz) and
+//!   decimation by 15 give 4 kS/s, shifted up 1 kHz as USB audio for the
+//!   same decoder
 //!   the page runs (`web888_timecode::Receiver`);
 //! * each second's mean of the baseband: the carrier's level (dBFS in
 //!   ~1 Hz) and phase; the phase's slope over the last minute is the
@@ -36,13 +37,16 @@ use web888_radio::chan::RX_SINE_FULL_SCALE;
 use web888_timecode::{Event, Minute, Receiver, Station};
 
 /// The decoders' audio rate and the carrier's tone in it.
-const FS: f64 = 12_000.0;
+const FS: f64 = 4_000.0;
 const TONE: f64 = 1000.0;
-const TAPS: usize = 48;
+const TAPS: usize = 128;
 /// The bin's clean half-width (Hz).
 const CLEAN_HZ: f64 = 21_000.0;
 const FFT_N: usize = 4096;
 const LOG_MAX: u64 = 10 << 20;
+/// Audio handed to a decoder at a time (1 s: each push sorts its last
+/// 30 s of envelope, so pushes cost by their number).
+const CHUNK: usize = FS as usize;
 /// The carrier over the floor (dB in 1 Hz) for its frequency to count.
 const MIN_SNR: f64 = 20.0;
 
@@ -98,6 +102,11 @@ struct Chain {
     fc: f64,
     rot: Complex64,
     step: Complex64,
+    /// The mixer as a table when its frequency repeats within a few
+    /// hundred samples (a bin at 60 kHz: MSF 1, RBU 9, DCF77 24 samples),
+    /// exact with no drift; else the rotator.
+    table: Vec<Complex32>,
+    ti: usize,
     /// The filter's history, twice (a contiguous window at `pos + 1`).
     hist: Vec<Complex32>,
     pos: usize,
@@ -126,6 +135,21 @@ impl Chain {
             fc,
             rot: Complex64::new(1.0, 0.0),
             step: Complex64::new(w.cos(), w.sin()),
+            table: (1..=512)
+                .find(|&p| {
+                    let c = (fc - centre) * p as f64 / rate;
+                    (c - c.round()).abs() < 1e-9
+                })
+                .map(|p| {
+                    (0..p)
+                        .map(|k| {
+                            let a = w * k as f64;
+                            Complex32::new(a.cos() as f32, a.sin() as f32)
+                        })
+                        .collect()
+                })
+                .unwrap_or_default(),
+            ti: 0,
             hist: vec![Complex32::default(); 2 * TAPS],
             pos: 0,
             k: 0,
@@ -133,7 +157,7 @@ impl Chain {
             up: Complex64::new(1.0, 0.0),
             up_step: Complex64::new(u.cos(), u.sin()),
             rx: Receiver::new(station, FS, TONE, 0.0),
-            audio: Vec::with_capacity(4096),
+            audio: Vec::with_capacity(CHUNK + 4096),
             sec: (Complex64::default(), 0),
             secs: Default::default(),
             amps: Vec::new(),
@@ -143,9 +167,18 @@ impl Chain {
 
     fn push(&mut self, iq: &[Complex32], decim: usize, taps: &[f32]) {
         for &x in iq {
-            let r = Complex32::new(self.rot.re as f32, self.rot.im as f32);
-            self.rot *= self.step;
-            let z = x * r;
+            let z = if self.table.is_empty() {
+                let r = Complex32::new(self.rot.re as f32, self.rot.im as f32);
+                self.rot *= self.step;
+                x * r
+            } else {
+                let r = self.table[self.ti];
+                self.ti += 1;
+                if self.ti == self.table.len() {
+                    self.ti = 0;
+                }
+                x * r
+            };
             self.hist[self.pos] = z;
             self.hist[self.pos + TAPS] = z;
             self.pos = (self.pos + 1) % TAPS;
@@ -180,10 +213,13 @@ impl Chain {
         // back on the unit circle
         self.rot /= self.rot.norm();
         self.up /= self.up.norm();
-        if !self.audio.is_empty() {
-            self.rx.push(&self.audio);
-            self.audio.clear();
+        // the decoder in chunks (`CHUNK`): the bin comes in runs of a few
+        // dozen samples
+        if self.audio.len() < CHUNK {
+            return;
         }
+        self.rx.push(&self.audio);
+        self.audio.clear();
         for e in self.rx.poll() {
             if let Event::Minute(m) = e {
                 self.minutes.push(m);
@@ -225,10 +261,10 @@ impl Chain {
     }
 }
 
-/// The decimating filter: windowed sinc (Blackman), 2 kHz cut-off at
+/// The decimating filter: windowed sinc (Blackman), 1 kHz cut-off at
 /// `rate`, unity gain.
 fn lowpass(rate: f64) -> Vec<f32> {
-    let fc = 2000.0 / rate;
+    let fc = 1000.0 / rate;
     let m = (TAPS - 1) as f64;
     let mut h: Vec<f64> = (0..TAPS)
         .map(|i| {
@@ -569,7 +605,8 @@ mod tests {
         let utc = |f: f64| Some(start as f64 + f / rate);
         let a = RX_SINE_FULL_SCALE * 1e-3;
         let n = minutes * 60 * rate as usize;
-        let block = 2048;
+        // runs as small as the unit's (the decoders must not cost by them)
+        let block = 128;
         let mut reports = Vec::new();
         let mut buf = Vec::with_capacity(block);
         for b0 in (0..n).step_by(block) {
