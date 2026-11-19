@@ -87,6 +87,7 @@ fn frame_fixtures_match_the_encoders() {
             web888_radio::Iq32 { i: 0, q: 1 << 27 },
         ],
         false,
+        None,
     );
     assert_eq!(f["iq"]["hex"], hex(&iq));
     let iq16 = web888_web::wideiq::iq_frame(
@@ -103,6 +104,24 @@ fn frame_fixtures_match_the_encoders() {
             web888_radio::Iq32 { i: 0, q: 1 << 27 },
         ],
         true,
+        None,
     );
     assert_eq!(f["iq16"]["hex"], hex(&iq16));
+    let iq16t = web888_web::wideiq::iq_frame(
+        FLAG_GAP,
+        7,
+        1234,
+        7.02e6,
+        60_000.0,
+        &[
+            web888_radio::Iq32 {
+                i: 1 << 29,
+                q: -(1 << 28),
+            },
+            web888_radio::Iq32 { i: 0, q: 1 << 27 },
+        ],
+        true,
+        Some(1_700_000_000.25),
+    );
+    assert_eq!(f["iq16_time"]["hex"], hex(&iq16t));
 }

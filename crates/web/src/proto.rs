@@ -190,13 +190,16 @@ pub enum ClientMsg {
     },
     /// Wide IQ (`wideiq`): the channelizer bin nearest `hz` (default: the
     /// dial) as binary `KIND_IQ` frames, or stop. `bits`: 8 (default) or 16
-    /// (recording).
+    /// (recording). `timestamps`: each frame carries its first sample's
+    /// UTC (`FLAG_TIME`, protocol 3).
     Wide {
         on: bool,
         #[serde(default)]
         hz: Option<f64>,
         #[serde(default)]
         bits: Option<u8>,
+        #[serde(default)]
+        timestamps: Option<bool>,
     },
 }
 

@@ -217,7 +217,7 @@ export type ClientMsg =
   | { type: "listen"; user: number | null }
   | { type: "spots"; on: boolean }
   | { type: "name"; name: string }
-  | { type: "wide"; on: boolean; hz?: number; bits?: 8 | 16 };
+  | { type: "wide"; on: boolean; hz?: number; bits?: 8 | 16; timestamps?: boolean };
 
 export const KIND_AUDIO = 1;
 export const KIND_WF = 2;
@@ -297,6 +297,8 @@ export interface IqFrame {
   /** The bin's centre (Hz) and sample rate. */
   centre: number;
   rate: number;
+  /** The first sample's UTC (s), when asked for (`timestamps`). */
+  time?: number;
   /** I, Q interleaved, scaled (1.0: a full-scale sine). */
   iq: Float32Array;
 }
@@ -360,12 +362,14 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
   }
   if (kind === KIND_IQ) {
     const i16 = (flags & FLAG_I16) !== 0;
-    if (buf.byteLength < IQ_HEADER + (i16 ? 4 : 2) * n) return null;
+    const timed = (flags & FLAG_TIME) !== 0;
+    const at = IQ_HEADER + (timed ? 8 : 0);
+    if (buf.byteLength < at + (i16 ? 4 : 2) * n) return null;
     const scale = v.getFloat32(28, true);
     const iq = new Float32Array(2 * n);
-    if (i16) for (let k = 0; k < 2 * n; k++) iq[k] = v.getInt16(IQ_HEADER + 2 * k, true) * scale;
+    if (i16) for (let k = 0; k < 2 * n; k++) iq[k] = v.getInt16(at + 2 * k, true) * scale;
     else {
-      const raw = new Int8Array(buf, IQ_HEADER, 2 * n);
+      const raw = new Int8Array(buf, at, 2 * n);
       for (let k = 0; k < 2 * n; k++) iq[k] = raw[k] * scale;
     }
     return {
@@ -375,6 +379,7 @@ export function parseFrame(buf: ArrayBuffer): AudioFrame | WfLine | IqFrame | nu
       frame: Number(v.getBigUint64(8, true)),
       centre: v.getFloat64(16, true),
       rate: v.getFloat32(24, true),
+      ...(timed ? { time: v.getFloat64(IQ_HEADER, true) } : {}),
       iq,
     };
   }

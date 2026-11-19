@@ -90,6 +90,8 @@ struct Tap {
     subs: Mutex<TapSubs>,
     changed: AtomicBool,
     zoom: Option<Mutex<ZoomTap>>,
+    /// The bins' frames against the host clock (`doc/api.md` §8.5).
+    timebase: Mutex<web888_radio::timebase::Timebase>,
 }
 
 /// A tag in use: its subscriber (none: gone, the result is dropped) and
@@ -185,6 +187,7 @@ impl BinTap {
             caps,
             subs: Mutex::default(),
             changed: AtomicBool::new(false),
+            timebase: Mutex::default(),
             zoom: zoom.map(|caps| {
                 Mutex::new(ZoomTap {
                     caps,
@@ -201,6 +204,11 @@ impl BinTap {
 
     pub fn caps(&self) -> BinCaps {
         self.0.caps
+    }
+
+    /// The bin frames' times: frame numbers (as in [`BinFrames`]) to UTC.
+    pub fn timebase(&self) -> std::sync::MutexGuard<'_, web888_radio::timebase::Timebase> {
+        self.0.timebase.lock().unwrap()
     }
 
     /// The zoom engine's limits, if views may use it.
@@ -799,6 +807,13 @@ impl<R: Radio + BinRadio> BinRx<R> {
         }
         if self.frames.is_empty() {
             return Ok(());
+        }
+        if let Some(end) = self.frames.last().map(BinFrames::end) {
+            let now = std::time::SystemTime::now()
+                .duration_since(std::time::UNIX_EPOCH)
+                .map_or(0.0, |d| d.as_secs_f64());
+            // before the frames go out: their readers find their time
+            t.timebase().observe(end, now, self.bins.frame_rate);
         }
         // the bursts end after their last frames went out
         let frames = Arc::new(std::mem::take(&mut self.frames));

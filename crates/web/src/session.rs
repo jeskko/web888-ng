@@ -307,6 +307,9 @@ impl Shared {
                 .duration_since(std::time::UNIX_EPOCH)
                 .map_or(0.0, |d| d.as_secs_f64());
             tb.set_system(synced, err, now);
+            if let Some(t) = self.waterfalls.tap() {
+                t.timebase().set_system(synced, err, now);
+            }
         }
         let i = tb.info();
         ServerMsg::Timebase {
@@ -838,7 +841,12 @@ impl Session<'_> {
                 self.wide = None;
                 vec![]
             }
-            ClientMsg::Wide { on: true, hz, bits } => {
+            ClientMsg::Wide {
+                on: true,
+                hz,
+                bits,
+                timestamps,
+            } => {
                 self.wide = None; // one at a time
                 let Some(tap) = self.sh.waterfalls.tap() else {
                     return vec![ServerMsg::Error {
@@ -850,6 +858,7 @@ impl Session<'_> {
                     hz.unwrap_or(self.st.hz),
                     self.wide_out.clone(),
                     bits == Some(16),
+                    timestamps == Some(true),
                 ) {
                     Ok(w) => {
                         self.wide = Some(w);

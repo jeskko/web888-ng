@@ -116,7 +116,7 @@ sequenceDiagram
 | `listen` | `user` (a session id, or `null`) | listen along to another user's receiver, or stop |
 | `spots` | `on` | the skimmers' spots: the last 30 min (at most 1000), then new ones |
 | `name` | `name` | callsign or nickname others see (at most 8 characters; `""`: none) |
-| `wide` | `on`, `hz` (default: the dial), `bits` (8 default, or 16) | wide IQ: the channelizer bin nearest `hz` (§6.4), when `hello.wide` |
+| `wide` | `on`, `hz` (default: the dial), `bits` (8 default, or 16), `timestamps` (v3) | wide IQ: the channelizer bin nearest `hz` (§6.4), when `hello.wide` |
 
 Modes: `usb`, `lsb`, `cw`, `am`, `sam` (synchronous AM), `sal`, `sar`
 (lower, upper sideband), `sas` (stereo: lower left, upper right), `iq`
@@ -245,7 +245,7 @@ each with 8-bit samples).
 | offset | type | |
 |---|---|---|
 | 0 | u8 | kind = 3 |
-| 1 | u8 | flags: 2 gap, 4 i16 samples (else i8) |
+| 1 | u8 | flags: 2 gap, 4 i16 samples (else i8), 32 time (§8.5) |
 | 2 | u16 | count: complex samples (2048 a frame) |
 | 4 | u32 | seq |
 | 8 | u64 | the first sample's frame number (continuous across frames) |
@@ -254,7 +254,9 @@ each with 8-bit samples).
 | 28 | f32 | scale: a sample is v × scale (1.0: a full-scale sine) |
 | 32 | | `count` × (I, Q) |
 
-Each frame is scaled by its own peak; use `scale` on every frame.
+Each frame is scaled by its own peak; use `scale` on every frame. With
+flag 32 (asked for with `timestamps: true`) an f64 at 32 is the first
+sample's UTC (s), and the samples start at 40.
 
 ## 7. JSON endpoints
 
@@ -375,8 +377,8 @@ cookie jar, 12 h expiry), so:
 Built: the timebase with the host clock as its reference (`ntp`,
 `holdover`, `none`), timestamps on audio frames and the `timebase`
 message; the page's time-code, FT8/FT4/WSPR and JS8 decoders use them
-(and RBU decodes). Not yet: time-code stations and GPS as references, wide IQ's
-mapping, the waterfall's times from the timebase, chrony.
+(and RBU decodes); wide IQ frames' times. Not yet: time-code stations
+and GPS as references, the waterfall's times from the timebase, chrony.
 
 Programs and the page's own decoders want to know when a sample was
 received at the antenna, not when it reached them: a time-code decoder
@@ -444,9 +446,12 @@ own oscillators meanwhile:
   every 10 s while they are: `{source, uncertainty?, adc_ppm?}`
   (`uncertainty` in s, absent with `source` "none"; `adc_ppm` once the
   fit spans a minute).
-* **Proposed:** `station` in `timebase` for a time-code reference; for
-  wide IQ the mapping of its frame numbers to UTC (`offset`, `rate`);
-  the waterfall's line times from the same timebase.
+* **Built:** `wide {timestamps: true}`: wide IQ frames carry flag 32
+  and an f64 at offset 32, the UTC (s) of the frame's first sample
+  (§6.4); the bins have their own timebase, fitted the same way to
+  their frame counter. The bin's own filter delay isn't subtracted yet.
+* **Proposed:** `station` in `timebase` for a time-code reference; the
+  waterfall's line times from the same timebase.
 
 **Time-code stations on the unit.** The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching
@@ -478,14 +483,15 @@ shows the receiver's clock (source, uncertainty, ADC ppm). How far the
 listener's own computer is off isn't shown: the network delay can't be
 told apart from that offset without more (a measured round trip).
 
-## 9. Reference client and adapters (proposed)
+## 9. Reference client and adapters
 
-* **Reference client** (`tools/web888-client`, Python, no dependencies
-  beyond `websockets`): connect, tune, record audio (WAV) and wide IQ
-  (cs16, with SigMF metadata from the timestamps of §8.5), dump
-  waterfall lines with absolute levels, follow spots as JSON lines. It is the test of this document: if it needs something
+* **Reference client** (**built**; `tools/web888-client`, one Python
+  file, standard library only): connect, tune, record audio (WAV, or
+  SigMF with the antenna times of §8.5) and wide IQ (SigMF `cf32_le`,
+  timed), dump waterfall lines with absolute levels, follow spots as
+  JSON lines. It is the test of this document: if it needs something
   the document doesn't say, the document is wrong. CI runs it against
-  the simulator (`--backend sim`).
+  the simulator (`--backend sim`) and the iq backend's bins.
 * **Hamlib `rigctld` adapter**: a small program (or a web888d option)
   that speaks rigctld's TCP protocol and drives one `/ws` session, so
   WSJT-X, fldigi and loggers can tune web888 and take its audio (with
@@ -518,8 +524,8 @@ told apart from that offset without more (a measured round trip).
 3. The rigctld adapter: a separate program (any machine, many
    receivers) or built into web888d (one port per receiver, nothing to
    install)?
-4. Reference client language: Python (most users of such tools) or Rust
-   (shares `proto.rs`, one binary)?
+4. Settled: the reference client is Python (most users of such tools),
+   standard library only.
 5. How long to keep protocol 2: two releases, or until the page's
    cached copies are surely gone (the page revalidates on every load,
    so one release would do for the page itself)?

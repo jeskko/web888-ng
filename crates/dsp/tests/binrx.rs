@@ -301,6 +301,13 @@ fn the_tap_gets_frames_and_power_lines() {
         }
     }
     assert_eq!((frames, lines), (300, 1));
+    // the frames have times: the last one read just now
+    let now = std::time::SystemTime::now()
+        .duration_since(std::time::UNIX_EPOCH)
+        .unwrap()
+        .as_secs_f64();
+    let t = tap.timebase().utc(300.0).expect("a time for the frames");
+    assert!((now - t).abs() < 1.0, "{} s off", now - t);
     // the RX channels still right
     assert!(buf[..2 * 200].iter().any(|s| s.i != 0));
 

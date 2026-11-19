@@ -19,8 +19,12 @@
 //! | 16 | f64 | the bin's centre (Hz) |
 //! | 24 | f32 | sample rate |
 //! | 28 | f32 | scale: a sample is v × scale (1.0: a full-scale sine) |
+//!
+//! With `FLAG_TIME` (asked for with `timestamps: true`) an f64 follows:
+//! the first sample's UTC (s) at the antenna, from the bins' timebase;
+//! the samples then start at 40.
 
-use crate::proto::FLAG_GAP;
+use crate::proto::{FLAG_GAP, FLAG_TIME};
 use crate::workers::Out;
 use std::sync::Arc;
 use std::sync::atomic::{AtomicBool, AtomicUsize, Ordering};
@@ -54,7 +58,9 @@ pub fn nearest_bin(caps: &BinCaps, hz: f64) -> usize {
         .unwrap_or(0)
 }
 
-/// A wide IQ frame (`i16`: 16-bit samples, `FLAG_I16` set).
+/// A wide IQ frame (`i16`: 16-bit samples, `FLAG_I16` set; `utc`: the
+/// first sample's time, `FLAG_TIME` set).
+#[allow(clippy::too_many_arguments)]
 pub fn iq_frame(
     flags: u8,
     seq: u32,
@@ -63,6 +69,7 @@ pub fn iq_frame(
     rate: f32,
     iq: &[Iq32],
     i16: bool,
+    utc: Option<f64>,
 ) -> Vec<u8> {
     let peak = iq
         .iter()
@@ -72,15 +79,23 @@ pub fn iq_frame(
         .max(1) as f64;
     let top = if i16 { 32767.0 } else { 127.0 };
     let step = peak / top;
-    let mut b = Vec::with_capacity(IQ_HEADER + if i16 { 4 } else { 2 } * iq.len());
+    let mut b = Vec::with_capacity(IQ_HEADER + 8 + if i16 { 4 } else { 2 } * iq.len());
+    let flags = if i16 { flags | FLAG_I16 } else { flags };
     b.push(KIND_IQ);
-    b.push(if i16 { flags | FLAG_I16 } else { flags });
+    b.push(if utc.is_some() {
+        flags | FLAG_TIME
+    } else {
+        flags
+    });
     b.extend_from_slice(&(iq.len() as u16).to_le_bytes());
     b.extend_from_slice(&seq.to_le_bytes());
     b.extend_from_slice(&frame.to_le_bytes());
     b.extend_from_slice(&centre_hz.to_le_bytes());
     b.extend_from_slice(&rate.to_le_bytes());
     b.extend_from_slice(&((step / RX_SINE_FULL_SCALE) as f32).to_le_bytes());
+    if let Some(t) = utc {
+        b.extend_from_slice(&t.to_le_bytes());
+    }
     for s in iq {
         let i = (s.i as f64 / step).round().clamp(-top, top);
         let q = (s.q as f64 / step).round().clamp(-top, top);
@@ -107,8 +122,9 @@ impl Drop for Stream {
     }
 }
 
-/// Start streaming the bin nearest `hz` to `out` (`i16`: 16-bit samples).
-pub fn start(tap: &BinTap, hz: f64, out: Out, i16: bool) -> Result<Stream, String> {
+/// Start streaming the bin nearest `hz` to `out` (`i16`: 16-bit samples;
+/// `timed`: frames carry their time).
+pub fn start(tap: &BinTap, hz: f64, out: Out, i16: bool, timed: bool) -> Result<Stream, String> {
     if ACTIVE.fetch_add(1, Ordering::SeqCst) >= MAX_STREAMS {
         ACTIVE.fetch_sub(1, Ordering::SeqCst);
         return Err(format!(
@@ -123,6 +139,7 @@ pub fn start(tap: &BinTap, hz: f64, out: Out, i16: bool) -> Result<Stream, Strin
     let (handle, rx) = tap.subscribe();
     handle.want(vec![bin], 0.0);
     let st = stop.clone();
+    let tap = tap.clone();
     let spawned = std::thread::Builder::new()
         .name("wide-iq".into())
         .spawn(move || {
@@ -158,7 +175,13 @@ pub fn start(tap: &BinTap, hz: f64, out: Out, i16: bool) -> Result<Stream, Strin
                         if buf.len() == BLOCK {
                             let flags = if gap { FLAG_GAP } else { 0 };
                             gap = false;
-                            if !out.send(iq_frame(flags, seq, buf_frame, centre, rate, &buf, i16)) {
+                            let utc = if timed {
+                                tap.timebase().utc(buf_frame as f64)
+                            } else {
+                                None
+                            };
+                            let f = iq_frame(flags, seq, buf_frame, centre, rate, &buf, i16, utc);
+                            if !out.send(f) {
                                 return ACTIVE.fetch_sub(1, Ordering::SeqCst);
                             }
                             seq = seq.wrapping_add(1);
@@ -193,7 +216,7 @@ mod tests {
             },
             Iq32 { i: 0, q: 1 << 27 },
         ];
-        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq, false);
+        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq, false, None);
         assert_eq!(f.len(), IQ_HEADER + 4);
         assert_eq!((f[0], f[1]), (KIND_IQ, FLAG_GAP));
         assert_eq!(u16::from_le_bytes([f[2], f[3]]), 2);
@@ -218,7 +241,7 @@ mod tests {
             },
             Iq32 { i: 0, q: 1 << 27 },
         ];
-        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq, true);
+        let f = iq_frame(FLAG_GAP, 7, 1234, 7.02e6, 60_000.0, &iq, true, None);
         assert_eq!(f.len(), IQ_HEADER + 8);
         assert_eq!(f[1], FLAG_GAP | FLAG_I16);
         let scale = f32::from_le_bytes(f[28..32].try_into().unwrap());
