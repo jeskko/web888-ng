@@ -83,6 +83,8 @@ Prometheus); `$__rate_interval` then follows it.
 | `timecode_adc_ppm` | gauge | `station` | the ADC clock's error from the carrier's frequency over the last minute (ppm, + fast) |
 | `timecode_minutes_total` | counter | `station`, `result` (ok, unconfirmed, failed) | minutes confirmed, decoded but not confirmed (a first minute, or a wrong time), or not decoded |
 | `timecode_floor_dbfs_hz` | gauge | `q` (median, p90) | the bin's noise floor over the last minute's seconds (dBFS/Hz); p90 rises with local bursts |
+| `timecode_system_clock_ppm` | gauge | `clock` (raw, realtime) | the system's clocks over the last minute against the ADC clock (ppm, + fast; add `timecode_adc_ppm` for the error against UTC): `raw` is the PS crystal as it runs (`CLOCK_MONOTONIC_RAW`, what the clock would do without NTP but for the kernel's correction), `realtime` the clock NTP steers |
+| `kernel_clock_freq_ppm` | gauge | | the kernel's frequency correction of the system clock (set by the NTP daemon, ppm) |
 | `system_cpu_seconds_total` | counter | `mode` (busy, idle) | all CPUs |
 | `temperature_celsius` | gauge | | the SoC's |
 | `load_average` | gauge | `period` (1m, 5m, 15m) | |

@@ -199,6 +199,24 @@ fn timecode(o: &mut Out) {
             "The time-code bin's noise floor over the last minute's seconds (dBFS/Hz)",
             &fl,
         );
+        let ck: Vec<(String, f64)> = [("raw", r.raw_ppm), ("realtime", r.sys_ppm)]
+            .into_iter()
+            .filter_map(|(c, v)| v.map(|v| (labels(&[("clock", c)]), v)))
+            .collect();
+        o.put(
+            "timecode_system_clock_ppm",
+            "gauge",
+            "The system's clocks against the ADC clock over the last minute (ppm, + fast)",
+            &ck,
+        );
+        if let Some(v) = r.kernel_freq_ppm {
+            o.put(
+                "kernel_clock_freq_ppm",
+                "gauge",
+                "The kernel's frequency correction of the system clock (NTP's, ppm)",
+                &[(String::new(), v)],
+            );
+        }
     }
 }
 

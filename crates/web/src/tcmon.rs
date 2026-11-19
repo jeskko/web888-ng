@@ -20,6 +20,13 @@
 //! and 90th percentile over the seconds (local bursts, such as power-line
 //! meter traffic, raise the latter).
 //!
+//! The system's clocks against the ADC's (a few ppb, by the carriers):
+//! each minute the bin's frame count against `CLOCK_MONOTONIC_RAW` (the
+//! PS crystal as it runs, no NTP) and `CLOCK_REALTIME` (as NTP steers
+//! it), each at the run that arrived soonest (least scheduling delay);
+//! with the kernel's frequency correction and the SoC's temperature: how
+//! the system clock would drift without NTP.
+//!
 //! At each UTC minute: a [`Report`] per station, to the metrics
 //! ([`snapshot`]) and, with `log`, a JSON line to `timecode.log`.
 
@@ -80,6 +87,54 @@ pub struct Report {
     /// The bin's noise floor over the minute (dBFS/Hz).
     pub floor_dbfs_hz: Option<f64>,
     pub floor_p90_dbfs_hz: Option<f64>,
+    /// The system's clocks over the last minute against the ADC clock
+    /// (ppm, + fast; add `adc_ppm` for their error against UTC): the PS
+    /// crystal as it runs (`CLOCK_MONOTONIC_RAW`) and the clock NTP
+    /// steers (`CLOCK_REALTIME`).
+    pub raw_ppm: Option<f64>,
+    pub sys_ppm: Option<f64>,
+    /// The kernel's frequency correction (NTP's: ppm) and the SoC's
+    /// temperature (°C).
+    pub kernel_freq_ppm: Option<f64>,
+    pub temp_c: Option<f64>,
+}
+
+/// The system's clocks against the bin's frame count, a minute at a time.
+#[derive(Default)]
+struct ClockMeter {
+    /// This minute's soonest run: its offset (raw s − frames / rate), end
+    /// frame, raw and real time.
+    best: Option<(f64, u64, f64, f64)>,
+    prev: Option<(u64, f64, f64)>,
+}
+
+impl ClockMeter {
+    fn run(&mut self, end: u64, rate: f64) {
+        let raw = crate::sysstat::clock_s(libc::CLOCK_MONOTONIC_RAW);
+        let rt = crate::sysstat::clock_s(libc::CLOCK_REALTIME);
+        let off = raw - end as f64 / rate;
+        if self.best.is_none_or(|b| off < b.0) {
+            self.best = Some((off, end, raw, rt));
+        }
+    }
+
+    /// The minute's (raw, real) ppm against the ADC clock.
+    fn minute(&mut self, rate: f64) -> (Option<f64>, Option<f64>) {
+        let Some((_, f, raw, rt)) = self.best.take() else {
+            return (None, None);
+        };
+        let prev = self.prev.replace((f, raw, rt));
+        let Some((f0, raw0, rt0)) = prev else {
+            return (None, None);
+        };
+        let adc = (f - f0) as f64 / rate;
+        // at least half a minute (else a restart's first minute)
+        if !(30.0..200.0).contains(&adc) {
+            return (None, None);
+        }
+        let r = |v: f64| ((v / adc - 1.0) * 1e6 * 1e4).round() / 1e4;
+        (Some(r(raw - raw0)), Some(r(rt - rt0)))
+    }
 }
 
 /// What the metrics show: the last report per station, and the minute
@@ -494,6 +549,10 @@ impl Monitor {
                 tb_ppm: tb_ppm.map(r3),
                 floor_dbfs_hz: floor.map(r1),
                 floor_p90_dbfs_hz: p90.map(r1),
+                raw_ppm: None,
+                sys_ppm: None,
+                kernel_freq_ppm: None,
+                temp_c: None,
             });
         }
         out
@@ -536,6 +595,8 @@ fn run(tap: BinTap, bin: usize, mon: &mut Monitor, log: Option<PathBuf>) {
     let (handle, rx) = tap.subscribe();
     handle.want(vec![bin], 0.0);
     let mut iq: Vec<Iq32> = Vec::new();
+    let mut clocks = ClockMeter::default();
+    let rate = tap.caps().frame_rate;
     loop {
         let m = match rx.recv_timeout(Duration::from_secs(5)) {
             Ok(m) => m,
@@ -551,9 +612,16 @@ fn run(tap: BinTap, bin: usize, mon: &mut Monitor, log: Option<PathBuf>) {
             iq.extend((0..f.count).map(|k| f.frame(k)[idx]));
             // the lock only for each look-up: the bin reader takes it too
             let ppm = tap.timebase().info().adc_ppm;
-            let reports = mon.push(f.first, &iq, |fr| tap.timebase().utc(fr), ppm);
+            clocks.run(f.first + f.count as u64, rate);
+            let mut reports = mon.push(f.first, &iq, |fr| tap.timebase().utc(fr), ppm);
             if reports.is_empty() {
                 continue;
+            }
+            let (raw, sys) = clocks.minute(rate);
+            let kf = crate::sysstat::kernel_freq_ppm().map(|v| (v * 1e3).round() / 1e3);
+            let temp = crate::sysstat::temperature().map(|t| (t as f64 * 10.0).round() / 10.0);
+            for r in &mut reports {
+                (r.raw_ppm, r.sys_ppm, r.kernel_freq_ppm, r.temp_c) = (raw, sys, kf, temp);
             }
             if let Some(p) = &log {
                 write_log(p, &reports);

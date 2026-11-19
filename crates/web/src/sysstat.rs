@@ -66,6 +66,23 @@ pub fn kernel_clock() -> Option<(bool, f64)> {
     Some((synced, t.esterror as f64 * 1e-6))
 }
 
+/// The kernel's frequency correction of the system clock (ppm, + speeds
+/// it up), as the NTP daemon set it (`adjtimex`, read only).
+pub fn kernel_freq_ppm() -> Option<f64> {
+    // SAFETY: a zeroed timex with modes 0 only reads the state.
+    let mut t: libc::timex = unsafe { std::mem::zeroed() };
+    let r = unsafe { libc::adjtimex(&mut t) };
+    (r >= 0).then(|| t.freq as f64 / 65536.0)
+}
+
+/// Seconds of `clock` (`CLOCK_MONOTONIC_RAW`, `CLOCK_REALTIME`).
+pub fn clock_s(clock: libc::clockid_t) -> f64 {
+    // SAFETY: clock_gettime fills the timespec.
+    let mut t: libc::timespec = unsafe { std::mem::zeroed() };
+    unsafe { libc::clock_gettime(clock, &mut t) };
+    t.tv_sec as f64 + t.tv_nsec as f64 * 1e-9
+}
+
 /// (busy, total) clock ticks of all CPUs since boot (the metrics).
 pub(crate) fn cpu_jiffies() -> Option<(u64, u64)> {
     cpu_times()

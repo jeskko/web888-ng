@@ -473,7 +473,10 @@ not (the checks alone pass some wrong times: on the unit, about one DCF77 minute
 in 40 came out hours off), how late a confirmed minute's start is by the
 timebase, the ADC clock's error from the carrier's frequency
 (`adc_ppm`, next to the timebase's own `tb_ppm` against NTP), and the
-bin's noise floor (median and 90th percentile of the seconds). As
+bin's noise floor (median and 90th percentile of the seconds). With them, each minute, the system's clocks against the ADC clock: the
+PS crystal as it runs (`raw_ppm`, `CLOCK_MONOTONIC_RAW`) and as NTP steers
+it (`sys_ppm`), the kernel's frequency correction and the SoC's
+temperature: how far the system clock would drift without NTP. As
 metrics (`timecode_*`, `doc/metrics.md`) and a JSON line per station and
 minute in `timecode.log` (state directory). The decoders' own offsets,
 from a synthetic test: MSF about 0 ms, DCF77 about +4.6 ms.
