@@ -387,8 +387,10 @@ cookie jar, 12 h expiry), so:
 Built: the timebase with the host clock as its reference (`ntp`,
 `holdover`, `none`), timestamps on audio frames and the `timebase`
 message; the page's time-code, FT8/FT4/WSPR and JS8 decoders use them
-(and RBU decodes); wide IQ frames' times. Not yet: time-code stations
-and GPS as references, the waterfall's times from the timebase, chrony.
+(and RBU decodes); wide IQ frames' times; the time-code monitor on the
+unit (`[timecode]`: measures, doesn't steer yet). Not yet: time-code
+stations and GPS as references, the waterfall's times from the
+timebase, chrony.
 
 Programs and the page's own decoders want to know when a sample was
 received at the antenna, not when it reached them: a time-code decoder
@@ -463,7 +465,18 @@ own oscillators meanwhile:
 * **Proposed:** `station` in `timebase` for a time-code reference; the
   waterfall's line times from the same timebase.
 
-**Time-code stations on the unit.** The time-code decoder
+**Time-code stations on the unit.** **Built (measuring):** with
+`[timecode] enabled`, web888d watches the bin nearest `centre_hz` (60 kHz:
+MSF, RBU, DCF77) and reports each station's minute: carrier level and
+SNR, keying depth, decoded or not, how late the decoded minute's start
+is by the timebase, the ADC clock's error from the carrier's frequency
+(`adc_ppm`, next to the timebase's own `tb_ppm` against NTP), and the
+bin's noise floor (median and 90th percentile of the seconds). As
+metrics (`timecode_*`, `doc/metrics.md`) and a JSON line per station and
+minute in `timecode.log` (state directory). The decoders' own offsets,
+from a synthetic test: MSF about 0 ms, DCF77 about +4.6 ms.
+
+The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching
 one channelizer bin (about 1 % of a core). A bin centred at 60 kHz
 covers MSF (60 kHz), RBU (66.67 kHz, phase-modulated: 10 bits a second,

@@ -2088,6 +2088,7 @@ dependencies = [
  "web888-config",
  "web888-core",
  "web888-dsp",
+ "web888-fft",
  "web888-hw",
  "web888-iq",
  "web888-markers",
@@ -2095,6 +2096,7 @@ dependencies = [
  "web888-radio",
  "web888-sim",
  "web888-skim",
+ "web888-timecode",
 ]
 
 [[package]]

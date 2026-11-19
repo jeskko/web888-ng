@@ -23,6 +23,9 @@ web888-config.workspace = true
 web888-core.workspace = true
 web888-skim.workspace = true
 web888-markers.workspace = true
+web888-timecode.workspace = true
+web888-fft.workspace = true
+num-complex.workspace = true
 web888-prop.workspace = true
 rustfft.workspace = true
 tower = { version = "0.5.3", features = ["util"] }

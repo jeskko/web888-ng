@@ -1141,6 +1141,11 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         ));
         // ADC overload events, with the channelizer's spectrum when there is one
         web888_web::ovl::spawn(shared.status.clone(), shared.waterfalls.tap().cloned())?;
+        // LF time-code stations (`[timecode]`)
+        {
+            let c = shared.live.borrow().clone();
+            web888_web::tcmon::spawn(&shared, c.timecode.clone(), c.web.state_dir.clone())?;
+        }
         // HF propagation forecasts (`[propagation]`)
         let gps = shared.skim.as_ref().and_then(|s| s.gpsd.clone());
         rt.spawn(web888_web::prop::run(shared.live.clone(), gps));

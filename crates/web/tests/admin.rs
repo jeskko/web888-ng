@@ -390,7 +390,8 @@ async fn admin_api() {
             "update",
             "kiwi",
             "info",
-            "propagation"
+            "propagation",
+            "timecode"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());

@@ -22,6 +22,7 @@ pub mod proto;
 pub mod safe;
 pub mod session;
 pub mod sysstat;
+pub mod tcmon;
 pub mod tls;
 pub mod update;
 pub mod users;

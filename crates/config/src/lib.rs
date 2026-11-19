@@ -103,6 +103,43 @@ pub struct Config {
     pub info: Info,
     /// HF propagation forecasts for listeners (apply at once).
     pub propagation: Propagation,
+    /// LF time-code stations watched on the receiver (changes need a
+    /// restart).
+    pub timecode: Timecode,
+}
+
+/// LF time-code stations decoded on the receiver, from one channelizer
+/// bin (`doc/api.md` §8.5): each minute's carrier level, keying, decode,
+/// lateness against the receiver's clock and the ADC clock's error
+/// measured on the carrier, as metrics and a log. Needs the channelizer's
+/// bins.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Timecode {
+    /// Watch the stations.
+    pub enabled: bool,
+    /// The bin nearest this frequency (Hz) is watched; each station's
+    /// carrier must be within 21 kHz of the bin's centre.
+    #[schemars(range(min = 0.0, max = 1000000.0))]
+    pub centre_hz: f64,
+    /// The stations: DCF77, MSF, RBU, WWVB, JJY (JJY's 40 or 60 kHz,
+    /// whichever is in the bin).
+    pub stations: Vec<String>,
+    /// A line per station and minute (JSON) to `timecode.log` in the
+    /// state directory (kept under 10 MB, the older half in
+    /// `timecode.log.1`).
+    pub log: bool,
+}
+
+impl Default for Timecode {
+    fn default() -> Self {
+        Timecode {
+            enabled: false,
+            centre_hz: 60_000.0,
+            stations: vec!["MSF".into(), "RBU".into(), "DCF77".into()],
+            log: true,
+        }
+    }
 }
 
 /// What the receiver's info page tells listeners, beside the name and

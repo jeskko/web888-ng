@@ -257,6 +257,20 @@
           }
         ]
       }
+    },
+    "timecode": {
+      "description": "LF time-code stations watched on the receiver (changes need a\nrestart).",
+      "$ref": "#/$defs/Timecode",
+      "default": {
+        "enabled": false,
+        "centre_hz": 60000.0,
+        "stations": [
+          "MSF",
+          "RBU",
+          "DCF77"
+        ],
+        "log": true
+      }
     }
   },
   "additionalProperties": false,
@@ -1229,6 +1243,43 @@
         "lat",
         "lon"
       ]
+    },
+    "Timecode": {
+      "description": "LF time-code stations decoded on the receiver, from one channelizer\nbin (`doc/api.md` §8.5): each minute's carrier level, keying, decode,\nlateness against the receiver's clock and the ADC clock's error\nmeasured on the carrier, as metrics and a log. Needs the channelizer's\nbins.",
+      "type": "object",
+      "properties": {
+        "enabled": {
+          "description": "Watch the stations.",
+          "type": "boolean",
+          "default": false
+        },
+        "centre_hz": {
+          "description": "The bin nearest this frequency (Hz) is watched; each station's\ncarrier must be within 21 kHz of the bin's centre.",
+          "type": "number",
+          "format": "double",
+          "minimum": 0.0,
+          "maximum": 1000000.0,
+          "default": 60000.0
+        },
+        "stations": {
+          "description": "The stations: DCF77, MSF, RBU, WWVB, JJY (JJY's 40 or 60 kHz,\nwhichever is in the bin).",
+          "type": "array",
+          "items": {
+            "type": "string"
+          },
+          "default": [
+            "MSF",
+            "RBU",
+            "DCF77"
+          ]
+        },
+        "log": {
+          "description": "A line per station and minute (JSON) to `timecode.log` in the\nstate directory (kept under 10 MB, the older half in\n`timecode.log.1`).",
+          "type": "boolean",
+          "default": true
+        }
+      },
+      "additionalProperties": false
     }
   }
 }

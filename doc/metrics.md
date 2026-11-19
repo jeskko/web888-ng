@@ -78,6 +78,11 @@ Prometheus); `$__rate_interval` then follows it.
 | `dxspots_received_total`, `dxspots_errors_total` | counter | | spots taken in; failed connections |
 | `log_sink_configured`, `log_sink_connected` | gauge | `sink` (mqtt, syslog) | a server is set; connected |
 | `log_sink_messages_total`, `_dropped_total`, `_errors_total` | counter | `sink` | messages sent and dropped; failed connects and sends |
+| `timecode_carrier_dbfs`, `timecode_snr_db_hz`, `timecode_keying_db` | gauge | `station` | time-code stations watched (`[timecode]`), the last minute: the carrier (dBFS in ~1 Hz; over the noise floor, dB in 1 Hz), the keying's depth |
+| `timecode_decoded`, `timecode_late_seconds` | gauge | `station` | the last minute decoded (1/0); the last decoded minute's start, late by the receiver's clock (s: the path, the receiver's delays, the decoder's own offset, the clock's error) |
+| `timecode_adc_ppm` | gauge | `station` | the ADC clock's error from the carrier's frequency over the last minute (ppm, + fast) |
+| `timecode_minutes_total` | counter | `station`, `result` (ok, failed) | minutes decoded or not |
+| `timecode_floor_dbfs_hz` | gauge | `q` (median, p90) | the bin's noise floor over the last minute's seconds (dBFS/Hz); p90 rises with local bursts |
 | `system_cpu_seconds_total` | counter | `mode` (busy, idle) | all CPUs |
 | `temperature_celsius` | gauge | | the SoC's |
 | `load_average` | gauge | `period` (1m, 5m, 15m) | |
@@ -114,6 +119,10 @@ rate(web888d_audio_frames_dropped_total[5m])
 # listeners by protocol, HPSDR receivers
 web888d_sessions
 web888d_channels_in_use{class="protocol"}
+
+# time-code stations: decoded share per hour, and the ADC clock by carrier vs NTP
+sum by (station) (increase(web888d_timecode_minutes_total{result="ok"}[1h])) / 60
+web888d_timecode_adc_ppm
 
 # uptime
 time() - web888d_start_time_seconds

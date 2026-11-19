@@ -112,8 +112,95 @@ pub fn render(sh: &Shared) -> String {
     waterfalls(&mut o, sh);
     skimmers(&mut o, sh);
     uploaders(&mut o, sh);
+    timecode(&mut o);
     system(&mut o);
     o.0
+}
+
+/// The time-code stations watched (`[timecode]`, `crate::tcmon`): the
+/// last minute's report per station.
+fn timecode(o: &mut Out) {
+    let Some(st) = crate::tcmon::snapshot() else {
+        return;
+    };
+    let l = |r: &crate::tcmon::Report| labels(&[("station", &r.station)]);
+    let rows = |f: &dyn Fn(&crate::tcmon::Report) -> Option<f64>| -> Vec<(String, f64)> {
+        st.reports
+            .iter()
+            .filter_map(|r| f(r).map(|v| (l(r), v)))
+            .collect()
+    };
+    o.put(
+        "timecode_carrier_dbfs",
+        "gauge",
+        "Time-code carrier level over the last minute (dBFS in ~1 Hz)",
+        &rows(&|r| r.carrier_dbfs),
+    );
+    o.put(
+        "timecode_snr_db_hz",
+        "gauge",
+        "Time-code carrier over the bin's noise floor (dB in 1 Hz)",
+        &rows(&|r| r.snr_db_hz),
+    );
+    o.put(
+        "timecode_keying_db",
+        "gauge",
+        "Time-code keying depth (dB)",
+        &rows(&|r| Some(r.keying_db)),
+    );
+    o.put(
+        "timecode_decoded",
+        "gauge",
+        "The last minute decoded and checked (1) or not (0)",
+        &rows(&|r| Some(flag(r.ok))),
+    );
+    o.put(
+        "timecode_late_seconds",
+        "gauge",
+        "The last decoded minute's start, late by the receiver's clock (s)",
+        &rows(&|r| r.late_ms.map(|v| v / 1e3)),
+    );
+    o.put(
+        "timecode_adc_ppm",
+        "gauge",
+        "ADC clock error from the carrier's frequency over the last minute (ppm, + fast)",
+        &rows(&|r| r.adc_ppm),
+    );
+    let counts: Vec<(String, f64)> = st
+        .reports
+        .iter()
+        .zip(&st.counts)
+        .flat_map(|(r, &(ok, bad))| {
+            [
+                (
+                    labels(&[("station", &r.station), ("result", "ok")]),
+                    ok as f64,
+                ),
+                (
+                    labels(&[("station", &r.station), ("result", "failed")]),
+                    bad as f64,
+                ),
+            ]
+        })
+        .collect();
+    o.put(
+        "timecode_minutes_total",
+        "counter",
+        "Time-code minutes, decoded or not",
+        &counts,
+    );
+    if let Some(r) = st.reports.first() {
+        let fl: Vec<(String, f64)> = [("median", r.floor_dbfs_hz), ("p90", r.floor_p90_dbfs_hz)]
+            .into_iter()
+            .filter_map(|(q, v)| v.map(|v| (labels(&[("q", q)]), v)))
+            .collect();
+        o.put(
+            "timecode_floor_dbfs_hz",
+            "gauge",
+            "The time-code bin's noise floor over the last minute's seconds (dBFS/Hz)",
+            &fl,
+        );
+    }
 }
 
 fn build(o: &mut Out, sh: &Shared) {
