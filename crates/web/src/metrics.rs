@@ -113,6 +113,7 @@ pub fn render(sh: &Shared) -> String {
     skimmers(&mut o, sh);
     uploaders(&mut o, sh);
     timecode(&mut o);
+    timesync(&mut o);
     system(&mut o);
     o.0
 }
@@ -159,6 +160,24 @@ fn timecode(o: &mut Out) {
         "gauge",
         "The last confirmed minute's start, late by the receiver's clock (s)",
         &rows(&|r| r.late_ms.map(|v| v / 1e3)),
+    );
+    o.put(
+        "timecode_offset_seconds",
+        "gauge",
+        "The system clock's error by the station's last confirmed minute (s, true minus system)",
+        &rows(&|r| r.offset_ms.map(|v| v / 1e3)),
+    );
+    o.put(
+        "timecode_offset_sigma_seconds",
+        "gauge",
+        "The station's offsets' scatter over its last minutes (s, a standard deviation)",
+        &rows(&|r| r.sigma_ms.map(|v| v / 1e3)),
+    );
+    o.put(
+        "timecode_shed",
+        "gauge",
+        "The station is shed for now (1): the monitor short of CPU",
+        &rows(&|r| Some(flag(r.shed))),
     );
     o.put(
         "timecode_adc_ppm",
@@ -217,7 +236,85 @@ fn timecode(o: &mut Out) {
                 &[(String::new(), v)],
             );
         }
+        if let Some(v) = r.cpu_pct {
+            o.put(
+                "timecode_cpu_percent",
+                "gauge",
+                "The time-code monitor's CPU over the last minute (% of a core)",
+                &[(String::new(), v)],
+            );
+        }
     }
+}
+
+/// The time sources to chrony (`[timesync]`, `crate::timesync`).
+fn timesync(o: &mut Out) {
+    let Some(st) = crate::timesync::snapshot() else {
+        return;
+    };
+    let per = |f: &dyn Fn(&crate::timesync::SourceState) -> Option<f64>| -> Vec<(String, f64)> {
+        st.sources
+            .iter()
+            .filter_map(|(k, v)| f(v).map(|x| (labels(&[("source", k)]), x)))
+            .collect()
+    };
+    o.put(
+        "timesync_source_offset_seconds",
+        "gauge",
+        "A source's last offset of the system clock as combined (s, true minus system; trims applied)",
+        &per(&|s| s.offset),
+    );
+    o.put(
+        "timesync_source_sigma_seconds",
+        "gauge",
+        "A source's last standard error (s)",
+        &per(&|s| s.sigma),
+    );
+    let res: Vec<(String, f64)> = st
+        .sources
+        .iter()
+        .flat_map(|(k, v)| {
+            [("used", v.used), ("rejected", v.rejected)]
+                .into_iter()
+                .map(move |(r, n)| (labels(&[("source", k), ("result", r)]), n as f64))
+        })
+        .collect();
+    o.put(
+        "timesync_source_minutes_total",
+        "counter",
+        "Minutes a source took part in the combined sample, or was left out of",
+        &res,
+    );
+    if let (Some(off), Some(sg)) = (st.offset, st.sigma) {
+        o.put(
+            "timesync_offset_seconds",
+            "gauge",
+            "The last combined offset of the system clock (s, true minus system)",
+            &[(String::new(), off)],
+        );
+        o.put(
+            "timesync_sigma_seconds",
+            "gauge",
+            "The last combined sample's standard error (s)",
+            &[(String::new(), sg)],
+        );
+        o.put(
+            "timesync_sources",
+            "gauge",
+            "Sources in the last combined sample",
+            &[(String::new(), st.n as f64)],
+        );
+    }
+    o.put(
+        "timesync_samples_total",
+        "counter",
+        "Combined samples: sent to chrony, failed to send (no chrony), none usable",
+        &[
+            (labels(&[("result", "sent")]), st.sent as f64),
+            (labels(&[("result", "error")]), st.send_errors as f64),
+            (labels(&[("result", "rejected")]), st.rejected as f64),
+        ],
+    );
 }
 
 fn build(o: &mut Out, sh: &Shared) {

@@ -106,6 +106,36 @@ pub struct Config {
     /// LF time-code stations watched on the receiver (changes need a
     /// restart).
     pub timecode: Timecode,
+    /// The system clock fed from the receiver's own time sources (the
+    /// time-code stations) through chrony (changes need a restart).
+    pub timesync: Timesync,
+}
+
+/// The receiver's time sources (today the `[timecode]` stations) as a
+/// reference clock for chrony (`doc/api.md` §8.5): each minute one
+/// sample, the sources' offsets of the system clock combined by their
+/// scatter, to chrony's SOCK socket (`refclock SOCK PATH` in
+/// chrony.conf; the OS image has it). chrony weighs it against its NTP
+/// servers and keeps the clock with it when they are gone.
+#[derive(Clone, Debug, PartialEq, Serialize, Deserialize, JsonSchema)]
+#[serde(default, deny_unknown_fields)]
+pub struct Timesync {
+    /// chrony's socket (empty: no samples to chrony; the sources are
+    /// still measured and shown).
+    pub chrony_socket: String,
+    /// Per source (station name, e.g. `RBU`), milliseconds added to its
+    /// offsets: a calibration beyond the built-in one (the path from the
+    /// transmitter by `[station] locator`, the decoder's own delay).
+    pub trim_ms: BTreeMap<String, f64>,
+}
+
+impl Default for Timesync {
+    fn default() -> Self {
+        Timesync {
+            chrony_socket: "/run/chrony.web888.sock".into(),
+            trim_ms: Default::default(),
+        }
+    }
 }
 
 /// LF time-code stations decoded on the receiver, from one channelizer

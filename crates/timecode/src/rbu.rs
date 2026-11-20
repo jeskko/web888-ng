@@ -31,13 +31,34 @@ const SLOT: usize = 200;
 /// Kept: 40 s.
 const KEEP: usize = 40 * 2000;
 
+/// `slot_bit`'s window (Hann over its 152 samples) and, per sample, the
+/// unit phasors at -100 and -312.5 Hz.
+fn slot_table() -> &'static [(f64, [Complex64; 2])] {
+    static T: std::sync::OnceLock<Vec<(f64, [Complex64; 2])>> = std::sync::OnceLock::new();
+    T.get_or_init(|| {
+        let n = 176 - 24;
+        (0..n)
+            .map(|i| {
+                let w = 0.5 - 0.5 * (2.0 * PI * i as f64 / (n - 1) as f64).cos();
+                let t = i as f64 / FS2;
+                let r = |f: f64| {
+                    let th = -2.0 * PI * f * t;
+                    Complex64::new(th.cos(), th.sin())
+                };
+                (w, [r(100.0), r(312.5)])
+            })
+            .collect()
+    })
+}
+
 pub struct Rbu {
     fs: f64,
     t0: f64,
     dec: usize,
     /// Mixer.
-    ph: f64,
-    dph: f64,
+    /// Mixer: e^{-jφ} as a rotator, and its step per sample.
+    lo: Complex64,
+    lo_step: Complex64,
     /// Boxcar over `dec * 2` input samples (1 ms at 12 kS/s), decimated.
     box_: VecDeque<Complex64>,
     box_sum: Complex64,
@@ -71,8 +92,8 @@ impl Rbu {
             fs,
             t0,
             dec,
-            ph: 0.0,
-            dph: 2.0 * PI * tone / fs,
+            lo: Complex64::new(1.0, 0.0),
+            lo_step: Complex64::from_polar(1.0, -2.0 * PI * tone / fs),
             box_: VecDeque::new(),
             box_sum: Complex64::new(0.0, 0.0),
             n_in: 0,
@@ -92,7 +113,7 @@ impl Rbu {
     }
 
     pub fn set_tone(&mut self, tone: f64) {
-        self.dph = 2.0 * PI * tone / self.fs;
+        self.lo_step = Complex64::from_polar(1.0, -2.0 * PI * tone / self.fs);
     }
 
     /// Stream time of decimated sample k: the boxcar's centre.
@@ -104,8 +125,8 @@ impl Rbu {
     pub fn push(&mut self, x: &[f32]) {
         let w = 2 * self.dec;
         for &v in x {
-            let z = Complex64::from_polar(v as f64, -self.ph);
-            self.ph = (self.ph + self.dph) % (2.0 * PI);
+            let z = self.lo * v as f64;
+            self.lo *= self.lo_step;
             self.box_.push_back(z);
             self.box_sum += z;
             if self.box_.len() > w {
@@ -120,6 +141,7 @@ impl Rbu {
                 self.box_sum = self.box_.iter().sum();
             }
         }
+        self.lo /= self.lo.norm();
         self.read();
         if self.z.len() > KEEP + 2 * FS2 as usize {
             let d = self.z.len() - KEEP;
@@ -165,16 +187,17 @@ impl Rbu {
     /// slot's mean carrier, its power at 100 and 312.5 Hz (Hann window
     /// over 12-88 ms). Quality: their difference over their sum.
     fn slot_bit(z: &[Complex32]) -> (u8, f32) {
+        let tab = slot_table();
         let (a, b) = (24, 176);
         let c: Complex32 = z[a..b].iter().sum();
-        let n = b - a;
         let mut e = [Complex64::new(0.0, 0.0); 2];
-        for (i, s) in z[a..b].iter().enumerate() {
+        for (s, (w, r)) in z[a..b].iter().zip(tab) {
             let p = (s * c.conj()).arg() as f64;
-            let w = 0.5 - 0.5 * (2.0 * PI * i as f64 / (n - 1) as f64).cos();
-            let t = i as f64 / FS2;
-            for (k, f) in [100.0, 312.5].into_iter().enumerate() {
-                e[k] += Complex64::from_polar(p * w, -2.0 * PI * f * t);
+            // Complex64::from_polar(p * w, θ), with θ's cosine and sine
+            // from the table (the same values: no sine or cosine per
+            // sample)
+            for (k, r) in r.iter().enumerate() {
+                e[k] += Complex64::new(p * w * r.re, p * w * r.im);
             }
         }
         let (p0, p1) = (e[0].norm_sqr(), e[1].norm_sqr());

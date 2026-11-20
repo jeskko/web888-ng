@@ -271,6 +271,14 @@
         ],
         "log": true
       }
+    },
+    "timesync": {
+      "description": "The system clock fed from the receiver's own time sources (the\ntime-code stations) through chrony (changes need a restart).",
+      "$ref": "#/$defs/Timesync",
+      "default": {
+        "chrony_socket": "/run/chrony.web888.sock",
+        "trim_ms": {}
+      }
     }
   },
   "additionalProperties": false,
@@ -1277,6 +1285,27 @@
           "description": "A line per station and minute (JSON) to `timecode.log` in the\nstate directory (kept under 10 MB, the older half in\n`timecode.log.1`).",
           "type": "boolean",
           "default": true
+        }
+      },
+      "additionalProperties": false
+    },
+    "Timesync": {
+      "description": "The receiver's time sources (today the `[timecode]` stations) as a\nreference clock for chrony (`doc/api.md` §8.5): each minute one\nsample, the sources' offsets of the system clock combined by their\nscatter, to chrony's SOCK socket (`refclock SOCK PATH` in\nchrony.conf; the OS image has it). chrony weighs it against its NTP\nservers and keeps the clock with it when they are gone.",
+      "type": "object",
+      "properties": {
+        "chrony_socket": {
+          "description": "chrony's socket (empty: no samples to chrony; the sources are\nstill measured and shown).",
+          "type": "string",
+          "default": "/run/chrony.web888.sock"
+        },
+        "trim_ms": {
+          "description": "Per source (station name, e.g. `RBU`), milliseconds added to its\noffsets: a calibration beyond the built-in one (the path from the\ntransmitter by `[station] locator`, the decoder's own delay).",
+          "type": "object",
+          "additionalProperties": {
+            "type": "number",
+            "format": "double"
+          },
+          "default": {}
         }
       },
       "additionalProperties": false

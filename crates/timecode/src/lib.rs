@@ -86,6 +86,25 @@ impl Station {
         })
     }
 
+    /// The transmitter sending `carrier` (Hz): latitude, longitude (°;
+    /// none for WWV/WWVH, two sites on one code).
+    pub fn site(self, carrier: f64) -> Option<(f64, f64)> {
+        match self {
+            // Mainflingen
+            Station::Dcf77 => Some((50.0156, 9.0108)),
+            // Anthorn
+            Station::Msf => Some((54.9116, -3.2785)),
+            // Fort Collins
+            Station::Wwvb => Some((40.6781, -105.0472)),
+            // Otakadoya-yama (40 kHz), Hagane-yama (60 kHz)
+            Station::Jjy if carrier < 50_000.0 => Some((37.3725, 140.8489)),
+            Station::Jjy => Some((33.4653, 130.1753)),
+            Station::Wwv => None,
+            // Taldom
+            Station::Rbu => Some((56.7333, 37.6633)),
+        }
+    }
+
     /// Carrier frequencies (Hz).
     pub fn carriers(self) -> &'static [f64] {
         match self {
@@ -329,9 +348,10 @@ pub struct Receiver {
     station: Station,
     fs: f64,
     t0: f64,
-    /// Mixer.
-    ph: f64,
-    dph: f64,
+    /// Mixer: e^{-jφ} and its step per sample (a rotator: no sine or
+    /// cosine per sample, back on the unit circle after each push).
+    lo: num_complex::Complex64,
+    lo_step: num_complex::Complex64,
     /// The boxcar: the last WIN of mixed samples, and their sum.
     ring: Vec<Complex32>,
     pos: usize,
@@ -346,6 +366,12 @@ pub struct Receiver {
     raw: Vec<f32>,
     env: Vec<f32>,
     env_base: u64,
+    /// The normalising window's values, sorted, and its span of `raw`
+    /// (absolute frames: start, end): it slides a frame at a time, so one
+    /// value leaves and one enters (an order statistic of 400 values per
+    /// frame was most of the decoder's time on the unit).
+    sorted: Vec<f32>,
+    win: (u64, u64),
     /// The second's phase (frame index mod FPS) and when it was set.
     phase: Option<usize>,
     phase_at: u64,
@@ -377,8 +403,8 @@ impl Receiver {
             station,
             fs,
             t0,
-            ph: 0.0,
-            dph: 2.0 * PI * tone / fs,
+            lo: num_complex::Complex64::new(1.0, 0.0),
+            lo_step: num_complex::Complex64::from_polar(1.0, -2.0 * PI * tone / fs),
             ring: vec![Complex32::new(0.0, 0.0); w],
             pos: 0,
             sum: num_complex::Complex64::new(0.0, 0.0),
@@ -388,6 +414,8 @@ impl Receiver {
             raw: Vec::new(),
             env: Vec::new(),
             env_base: 0,
+            sorted: Vec::new(),
+            win: (0, 0),
             phase: None,
             phase_at: 0,
             next: None,
@@ -412,7 +440,7 @@ impl Receiver {
         if let Some(r) = &mut self.rbu {
             r.set_tone(tone);
         }
-        self.dph = 2.0 * PI * tone / self.fs;
+        self.lo_step = num_complex::Complex64::from_polar(1.0, -2.0 * PI * tone / self.fs);
     }
 
     /// Stream time of envelope frame k (the boxcar's centre).
@@ -438,10 +466,10 @@ impl Receiver {
                 v
             };
             let z = Complex32::new(
-                (v as f64 * self.ph.cos()) as f32,
-                (-(v as f64) * self.ph.sin()) as f32,
+                (v as f64 * self.lo.re) as f32,
+                (v as f64 * self.lo.im) as f32,
             );
-            self.ph = (self.ph + self.dph) % (2.0 * PI);
+            self.lo *= self.lo_step;
             let old = self.ring[self.pos];
             self.ring[self.pos] = z;
             self.pos = (self.pos + 1) % w;
@@ -453,6 +481,7 @@ impl Receiver {
                 self.raw.push((self.sum.norm() / w as f64) as f32);
             }
         }
+        self.lo /= self.lo.norm();
         // re-sum now and then (rounding)
         if self.n % (self.fs as u64 * 10) < x.len() as u64 {
             self.sum = self
@@ -463,18 +492,30 @@ impl Receiver {
         }
         // normalise: frames with a second of envelope after them
         let h = FPS;
-        let mut buf: Vec<f32> = Vec::with_capacity(2 * h);
+        let base = self.env_base;
         while self.env.len() + h < self.raw.len() {
             let k = self.env.len();
             let a = k.saturating_sub(h);
-            buf.clear();
-            buf.extend_from_slice(&self.raw[a..k + h]);
+            // the window raw[a..k + h], sorted
+            let (a_abs, b_abs) = (base + a as u64, base + (k + h) as u64);
+            while self.win.1 < b_abs {
+                let v = self.raw[(self.win.1 - base) as usize];
+                let i = self.sorted.partition_point(|x| x.total_cmp(&v).is_le());
+                self.sorted.insert(i, v);
+                self.win.1 += 1;
+            }
+            while self.win.0 < a_abs {
+                let v = self.raw[(self.win.0 - base) as usize];
+                let i = self.sorted.partition_point(|x| x.total_cmp(&v).is_lt());
+                self.sorted.remove(i);
+                self.win.0 += 1;
+            }
             // the up level: the station's percentile (DCF77's carrier is up
             // 85 % of the time, WWVB's about half)
+            let n = self.sorted.len();
             let dn = self.station.down();
-            let q = ((dn + (1.0 - dn) / 2.0) * buf.len() as f32) as usize;
-            let q = q.min(buf.len() - 1);
-            let up = *buf.select_nth_unstable_by(q, f32::total_cmp).1;
+            let q = (((dn + (1.0 - dn) / 2.0) * n as f32) as usize).min(n - 1);
+            let up = self.sorted[q];
             self.env.push(self.raw[k] / up.max(1e-30));
         }
         self.read();
@@ -502,11 +543,20 @@ impl Receiver {
         if n < 5 * FPS {
             return None;
         }
+        // two order statistics (no sort: once a second over 30 s)
         let mut v: Vec<f32> = self.env[self.env.len() - n..].to_vec();
-        v.sort_by(f32::total_cmp);
         let dn = self.station.down();
-        let lo = v[((dn / 2.0) * n as f32) as usize];
-        let hi = v[(((dn + (1.0 - dn) / 2.0) * n as f32) as usize).min(n - 1)];
+        let (il, ih) = (
+            ((dn / 2.0) * n as f32) as usize,
+            (((dn + (1.0 - dn) / 2.0) * n as f32) as usize).min(n - 1),
+        );
+        let hi = *v.select_nth_unstable_by(ih, f32::total_cmp).1;
+        // the low one lies below
+        let lo = if il < ih {
+            *v[..ih].select_nth_unstable_by(il, f32::total_cmp).1
+        } else {
+            hi
+        };
         (hi > lo * 1.2).then_some((lo, hi))
     }
 

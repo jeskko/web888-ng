@@ -84,6 +84,13 @@ Prometheus); `$__rate_interval` then follows it.
 | `timecode_minutes_total` | counter | `station`, `result` (ok, unconfirmed, failed) | minutes confirmed, decoded but not confirmed (a first minute, or a wrong time), or not decoded |
 | `timecode_floor_dbfs_hz` | gauge | `q` (median, p90) | the bin's noise floor over the last minute's seconds (dBFS/Hz); p90 rises with local bursts |
 | `timecode_system_clock_ppm` | gauge | `clock` (raw, realtime) | the system's clocks over the last minute against the ADC clock (ppm, + fast; add `timecode_adc_ppm` for the error against UTC): `raw` is the PS crystal as it runs (`CLOCK_MONOTONIC_RAW`, what the clock would do without NTP but for the kernel's correction), `realtime` the clock NTP steers |
+| `timecode_offset_seconds`, `timecode_offset_sigma_seconds` | gauge | `station` | the system clock's error by the station's last confirmed minute (s, true minus system: the lateness less the path and the decoder's calibrated delay); the scatter of its last 15 minutes (s) |
+| `timecode_shed` | gauge | `station` | the station is shed for now (1: the monitor short of CPU with the skimmers' bands all shed) |
+| `timecode_cpu_percent` | gauge | | the time-code monitor's CPU over the last minute (% of a core) |
+| `timesync_source_offset_seconds`, `timesync_source_sigma_seconds` | gauge | `source` | a time source's last offset of the system clock (s, true minus system, `[timesync] trim_ms` applied) and standard error, as combined for chrony (`[timesync]`) |
+| `timesync_source_minutes_total` | counter | `source`, `result` (used, rejected) | minutes a source was in the combined sample, or left out (an outlier, or a large offset no other source agreed with) |
+| `timesync_offset_seconds`, `timesync_sigma_seconds`, `timesync_sources` | gauge | | the last combined sample sent toward chrony: offset (s), standard error (s), sources in it |
+| `timesync_samples_total` | counter | `result` (sent, error, rejected) | combined samples sent to chrony's socket; sends failed (no chrony); minutes with samples but none usable |
 | `kernel_clock_freq_ppm` | gauge | | the kernel's frequency correction of the system clock (set by the NTP daemon, ppm) |
 | `system_cpu_seconds_total` | counter | `mode` (busy, idle) | all CPUs |
 | `temperature_celsius` | gauge | | the SoC's |

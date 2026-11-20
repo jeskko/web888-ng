@@ -12,7 +12,9 @@
 //! the deadline, each gets a share of it in proportion to what its band
 //! cost last time, so the busy bands keep more of their decodes. When
 //! they keep running out of time anyway (the CPU goes to listeners), the
-//! bands with the fewest recent decodes are shed one by one ([`shed`]).
+//! bands with the fewest recent decodes are shed one by one ([`shed`]),
+//! as they are when work ranking above them (the time-code monitor) runs
+//! short.
 //! [`Skimmers`] starts and stops bands as the config and the hours of the
 //! day say.
 
@@ -157,6 +159,16 @@ impl Queue {
     /// A slot decoded (`cut`: short of time) or dropped.
     fn observe(&self, cut: bool) {
         let change = self.shedder.lock().unwrap().observe(cut, Instant::now());
+        Self::report(change);
+    }
+
+    /// A shed band's slot went by.
+    fn tick(&self) {
+        let change = self.shedder.lock().unwrap().tick(Instant::now());
+        Self::report(change);
+    }
+
+    fn report(change: Option<shed::Change>) {
         let msg = match change {
             Some(shed::Change::Shed(b)) => format!("shed {b}: the decoders are short of time"),
             Some(shed::Change::Resumed(b)) => format!("resume {b}"),
@@ -217,6 +229,8 @@ pub struct BandJob {
     queue: Arc<Queue>,
     live: bool,
     stop: Arc<AtomicBool>,
+    /// While shed: the slot (UTC / period) the last block was in.
+    shed_slot: Option<i64>,
 }
 
 /// Slots allowed to wait in all: a band whose earlier slot still waits
@@ -253,6 +267,25 @@ impl Job for BandJob {
             unix_now()
         };
         self.clock.observe(b.end_frame(), now);
+        if self.band.status.shed.load(Ordering::Relaxed) {
+            // shed: no DSP either (the CPU is wanted elsewhere); its slots
+            // are counted by the clock, and the audio starts over on resume
+            self.next_frame = None;
+            let period = timing(self.band.cfg.mode).period;
+            if let Some(k) = self
+                .clock
+                .utc(b.end_frame() as f64)
+                .map(|u| (u / period).floor() as i64)
+            {
+                if self.shed_slot.is_some_and(|p| p != k) {
+                    self.band.status.shed_slots.fetch_add(1, Ordering::Relaxed);
+                    self.queue.tick();
+                }
+                self.shed_slot = Some(k);
+            }
+            return true;
+        }
+        self.shed_slot = None;
         self.audio.clear();
         self.usb
             .process(b.channel(ch).map(web888_dsp::rx_to_c32), &mut self.audio);
@@ -579,6 +612,7 @@ impl Skimmers {
                 queue: self.queue.clone(),
                 live: self.live,
                 stop: stop.clone(),
+                shed_slot: None,
             }));
             running.push(Running { band, stop });
         }

@@ -1145,7 +1145,16 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         {
             let c = shared.live.borrow().clone();
             // the state directory as given (`--state-dir` over the file's)
-            web888_web::tcmon::spawn(&shared, c.timecode.clone(), w.state_dir.clone())?;
+            web888_web::tcmon::spawn(
+                &shared,
+                c.timecode.clone(),
+                &c.station.locator,
+                w.state_dir.clone(),
+            )?;
+            // their offsets to chrony (`[timesync]`)
+            if c.timecode.enabled {
+                web888_web::timesync::spawn(c.timesync.clone())?;
+            }
         }
         // HF propagation forecasts (`[propagation]`)
         let gps = shared.skim.as_ref().and_then(|s| s.gpsd.clone());

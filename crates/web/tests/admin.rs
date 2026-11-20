@@ -391,7 +391,8 @@ async fn admin_api() {
             "kiwi",
             "info",
             "propagation",
-            "timecode"
+            "timecode",
+            "timesync"
         ]
     );
     assert!(sc["$defs"].get("Auth").is_none());

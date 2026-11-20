@@ -97,6 +97,18 @@ pub struct Report {
     /// temperature (°C).
     pub kernel_freq_ppm: Option<f64>,
     pub temp_c: Option<f64>,
+    /// The system clock's error by this station (ms, true minus system
+    /// time: the confirmed minute's lateness less the path from the
+    /// transmitter and the decoder's own delay) and its scatter over the
+    /// last minutes (ms, a standard deviation from their median absolute
+    /// deviation): what goes to [`crate::timesync`].
+    pub offset_ms: Option<f64>,
+    pub sigma_ms: Option<f64>,
+    /// The station is shed (the monitor short of CPU, the skimmers already
+    /// all shed): not decoded for now.
+    pub shed: bool,
+    /// The monitor's CPU over the last minute (% of a core).
+    pub cpu_pct: Option<f64>,
 }
 
 /// The system's clocks against the bin's frame count, a minute at a time.
@@ -165,10 +177,11 @@ struct Chain {
     /// exact with no drift; else the rotator.
     table: Vec<Complex32>,
     ti: usize,
-    /// The filter's history, twice (a contiguous window at `pos + 1`).
-    hist: Vec<Complex32>,
-    pos: usize,
-    k: usize,
+    /// The mixed samples: the filter's history and the run's (linear, so
+    /// each output's window is a slice); `next`: the index of the next
+    /// output's newest sample.
+    buf: Vec<Complex32>,
+    next: usize,
     /// Decimated samples so far.
     n: u64,
     up: Complex64,
@@ -182,6 +195,13 @@ struct Chain {
     /// decoded.
     amps: Vec<f64>,
     minutes: Vec<Minute>,
+    /// The path from the transmitter and the decoder's own delay (ms;
+    /// none: no site or no receiver locator).
+    delay_ms: Option<f64>,
+    /// The last confirmed minutes' lateness (ms), for the scatter.
+    lates: std::collections::VecDeque<f64>,
+    /// Not decoded for now (shedding).
+    shed: bool,
 }
 
 impl Chain {
@@ -208,9 +228,9 @@ impl Chain {
                 })
                 .unwrap_or_default(),
             ti: 0,
-            hist: vec![Complex32::default(); 2 * TAPS],
-            pos: 0,
-            k: 0,
+            buf: vec![Complex32::default(); TAPS - 1],
+            // the first output at the decimation's last input
+            next: TAPS - 2 + (rate / FS).round() as usize,
             n: 0,
             up: Complex64::new(1.0, 0.0),
             up_step: Complex64::new(u.cos(), u.sin()),
@@ -220,36 +240,41 @@ impl Chain {
             secs: Default::default(),
             amps: Vec::new(),
             minutes: Vec::new(),
+            delay_ms: None,
+            lates: Default::default(),
+            shed: false,
         }
     }
 
     fn push(&mut self, iq: &[Complex32], decim: usize, taps: &[f32]) {
-        for &x in iq {
-            let z = if self.table.is_empty() {
-                let r = Complex32::new(self.rot.re as f32, self.rot.im as f32);
-                self.rot *= self.step;
-                x * r
-            } else {
-                let r = self.table[self.ti];
-                self.ti += 1;
-                if self.ti == self.table.len() {
-                    self.ti = 0;
+        // the mixer over the run, in a loop of its own (locals: the
+        // per-sample cost on the A9 was in the bookkeeping, not the maths)
+        let start = self.buf.len();
+        self.buf.resize(start + iq.len(), Complex32::default());
+        let out = &mut self.buf[start..];
+        if self.table.is_empty() {
+            let (mut rot, step) = (self.rot, self.step);
+            for (o, &x) in out.iter_mut().zip(iq) {
+                *o = x * Complex32::new(rot.re as f32, rot.im as f32);
+                rot *= step;
+            }
+            self.rot = rot;
+        } else {
+            let t = &self.table;
+            let mut ti = self.ti;
+            for (o, &x) in out.iter_mut().zip(iq) {
+                *o = x * t[ti];
+                ti += 1;
+                if ti == t.len() {
+                    ti = 0;
                 }
-                x * r
-            };
-            self.hist[self.pos] = z;
-            self.hist[self.pos + TAPS] = z;
-            self.pos = (self.pos + 1) % TAPS;
-            self.k += 1;
-            if self.k < decim {
-                continue;
             }
-            self.k = 0;
-            let w = &self.hist[self.pos..self.pos + TAPS];
-            let mut acc = Complex32::default();
-            for (h, t) in w.iter().zip(taps) {
-                acc += h * t;
-            }
+            self.ti = ti;
+        }
+        while self.next < self.buf.len() {
+            let w0 = self.next + 1 - TAPS;
+            self.next += decim;
+            let acc = web888_dsp::fir::dot_real(&self.buf[w0..w0 + TAPS], taps);
             let y = Complex64::new(acc.re as f64, acc.im as f64);
             self.n += 1;
             self.sec.0 += y;
@@ -267,6 +292,12 @@ impl Chain {
             self.audio
                 .push(((y * self.up).re / RX_SINE_FULL_SCALE) as f32);
             self.up *= self.up_step;
+        }
+        // keep the history only (now and then: the copy costs by its size)
+        let keep = self.next + 1 - TAPS;
+        if keep >= 4096 {
+            self.buf.drain(..keep);
+            self.next -= keep;
         }
         // back on the unit circle
         self.rot /= self.rot.norm();
@@ -342,6 +373,54 @@ fn lowpass(rate: f64) -> Vec<f32> {
     h.into_iter().map(|v| v as f32).collect()
 }
 
+/// Confirmed minutes kept per station for its scatter.
+const LATES: usize = 15;
+/// A station's scatter before it has `LATES / 3` minutes (ms): little
+/// weight until it shows its own.
+const SCATTER_PRIOR_MS: f64 = 3.0;
+/// The least scatter assumed (ms).
+const SCATTER_MIN_MS: f64 = 0.1;
+
+/// The decoders' own delay per station plus the receiver's (ms): the
+/// lateness of the confirmed minutes over the path from the transmitter,
+/// medians over 2026-11-19/20 on the remote unit against its NTP-steered
+/// clock (time3.google.com; so its error is in them too). RBU 3.88 ms
+/// late on a 3.65 ms path, MSF 7.95 on 6.89, DCF77 9.78 on 6.82 (each
+/// ±2-3 ms by the minute: their keying's 5 ms steps). Others: unmeasured.
+fn decoder_ms(s: Station) -> f64 {
+    match s {
+        Station::Rbu => 0.23,
+        Station::Msf => 1.06,
+        Station::Dcf77 => 2.96,
+        _ => 0.0,
+    }
+}
+
+/// The time from a transmitter at `site` to `rx` (lat, lon °): the
+/// great-circle distance at the ground wave's speed (ms).
+fn path_ms(site: (f64, f64), rx: (f64, f64)) -> f64 {
+    let r = |d: f64| d.to_radians();
+    let (la1, lo1, la2, lo2) = (r(site.0), r(site.1), r(rx.0), r(rx.1));
+    let h = ((la2 - la1) / 2.0).sin().powi(2)
+        + la1.cos() * la2.cos() * ((lo2 - lo1) / 2.0).sin().powi(2);
+    let km = 2.0 * h.sqrt().asin() * 6371.0;
+    // c, slowed ~0.03 % over ground
+    km / 299.792_458 / 0.9997
+}
+
+/// A standard deviation from the median absolute deviation (ms).
+fn scatter(v: &std::collections::VecDeque<f64>) -> f64 {
+    if v.len() < LATES / 3 {
+        return SCATTER_PRIOR_MS;
+    }
+    let mut a: Vec<f64> = v.iter().copied().collect();
+    let mid = a.len() / 2;
+    let med = *a.select_nth_unstable_by(mid, f64::total_cmp).1;
+    let mut d: Vec<f64> = a.iter().map(|x| (x - med).abs()).collect();
+    let mad = *d.select_nth_unstable_by(mid, f64::total_cmp).1;
+    (1.4826 * mad).max(SCATTER_MIN_MS)
+}
+
 /// The stations and the bin, from the bin source.
 pub struct Monitor {
     chains: Vec<Chain>,
@@ -358,8 +437,14 @@ pub struct Monitor {
     fbuf: Vec<Complex32>,
     floors: Vec<f64>,
     since_fft: u64,
+    /// Frames a second (the floor's FFT is at each second's start).
+    rate_frames: u64,
+    /// The run as complex floats (kept: no allocation per run).
+    z: Vec<Complex32>,
     minute: Option<i64>,
     pub counts: Vec<[u64; 3]>,
+    /// Breaks in the frames (data lost: the monitor behind).
+    pub gaps: u64,
 }
 
 impl Monitor {
@@ -403,8 +488,53 @@ impl Monitor {
             fbuf: Vec::with_capacity(FFT_N),
             floors: Vec::new(),
             since_fft: 0,
+            rate_frames: rate.round() as u64,
+            z: Vec::new(),
             minute: None,
+            gaps: 0,
         })
+    }
+
+    /// The receiver's position (lat, lon °): the stations' paths, hence
+    /// their offsets ([`Report::offset_ms`]).
+    pub fn set_receiver(&mut self, rx: (f64, f64)) {
+        for c in &mut self.chains {
+            c.delay_ms = c
+                .station
+                .site(c.fc)
+                .map(|s| path_ms(s, rx) + decoder_ms(c.station));
+        }
+    }
+
+    /// Stop decoding the station least worth its CPU (the most scattered
+    /// minutes), keeping one: its name.
+    pub fn shed_one(&mut self) -> Option<String> {
+        let on: Vec<usize> = (0..self.chains.len())
+            .filter(|&i| !self.chains[i].shed)
+            .collect();
+        if on.len() < 2 {
+            return None;
+        }
+        let i = *on.iter().max_by(|&&a, &&b| {
+            scatter(&self.chains[a].lates).total_cmp(&scatter(&self.chains[b].lates))
+        })?;
+        self.chains[i].shed = true;
+        Some(self.chains[i].station.name().into())
+    }
+
+    /// Decode a shed station again (the least scattered first): its name.
+    pub fn resume_one(&mut self) -> Option<String> {
+        let i = (0..self.chains.len())
+            .filter(|&i| self.chains[i].shed)
+            .min_by(|&a, &b| {
+                scatter(&self.chains[a].lates).total_cmp(&scatter(&self.chains[b].lates))
+            })?;
+        let c = &mut self.chains[i];
+        // from scratch: its decoder missed the time it was shed
+        let (d, l) = (c.delay_ms, std::mem::take(&mut c.lates));
+        *c = Chain::new(c.station, c.fc, self.centre, self.rate);
+        (c.delay_ms, c.lates) = (d, l);
+        Some(c.station.name().into())
     }
 
     /// The stations and their carriers, for the log.
@@ -427,34 +557,46 @@ impl Monitor {
     ) -> Vec<Report> {
         if self.next != Some(first) {
             // a gap: start again
+            if self.next.is_some() {
+                self.gaps += 1;
+            }
             for c in &mut self.chains {
+                let (d, l, sh) = (c.delay_ms, std::mem::take(&mut c.lates), c.shed);
                 *c = Chain::new(c.station, c.fc, self.centre, self.rate);
+                (c.delay_ms, c.lates, c.shed) = (d, l, sh);
             }
             self.frame0 = first;
             self.fbuf.clear();
             self.since_fft = 0;
         }
         self.next = Some(first + iq.len() as u64);
-        let z: Vec<Complex32> = iq
-            .iter()
-            .map(|s| Complex32::new(s.i as f32, s.q as f32))
-            .collect();
+        let mut z = std::mem::take(&mut self.z);
+        z.clear();
+        z.extend(iq.iter().map(|s| Complex32::new(s.i as f32, s.q as f32)));
         // the floor: FFT_N frames at the start of each second
-        for &x in &z {
-            if self.since_fft < FFT_N as u64 {
-                self.fbuf.push(x);
+        let mut i = 0;
+        while i < z.len() {
+            let left = (z.len() - i) as u64;
+            let n = if self.since_fft < FFT_N as u64 {
+                let n = left.min(FFT_N as u64 - self.since_fft);
+                self.fbuf.extend_from_slice(&z[i..i + n as usize]);
                 if self.fbuf.len() == FFT_N {
                     self.floor();
                 }
-            }
-            self.since_fft += 1;
-            if self.since_fft >= self.rate as u64 {
+                n
+            } else {
+                left.min(self.rate_frames - self.since_fft)
+            };
+            i += n as usize;
+            self.since_fft += n;
+            if self.since_fft >= self.rate_frames {
                 self.since_fft = 0;
             }
         }
-        for c in &mut self.chains {
+        for c in self.chains.iter_mut().filter(|c| !c.shed) {
             c.push(&z, self.decim, &self.taps);
         }
+        self.z = z;
         // the minute by the receiver's clock
         let end = first + iq.len() as u64;
         let Some(now) = utc(end as f64) else {
@@ -524,11 +666,23 @@ impl Monitor {
                 let f = self.frame0 as f64 + m.t * FS * self.decim as f64 - (TAPS - 1) as f64 / 2.0;
                 utc(f).map(|u| ((u - m.utc as f64) * 1e3 * 100.0).round() / 100.0)
             });
-            self.counts[i][match (ok, confirmed) {
-                (true, true) => 0,
-                (true, false) => 1,
-                _ => 2,
-            }] += 1;
+            let mut offset_ms = None;
+            let mut sigma_ms = None;
+            if let Some(l) = late_ms {
+                c.lates.push_back(l);
+                while c.lates.len() > LATES {
+                    c.lates.pop_front();
+                }
+                offset_ms = c.delay_ms.map(|d| ((d - l) * 1e3).round() / 1e3);
+                sigma_ms = Some((scatter(&c.lates) * 1e3).round() / 1e3);
+            }
+            if !c.shed {
+                self.counts[i][match (ok, confirmed) {
+                    (true, true) => 0,
+                    (true, false) => 1,
+                    _ => 2,
+                }] += 1;
+            }
             let r3 = |v: f64| (v * 1e3).round() / 1e3;
             let r1 = |v: f64| (v * 10.0).round() / 10.0;
             out.push(Report {
@@ -553,6 +707,10 @@ impl Monitor {
                 sys_ppm: None,
                 kernel_freq_ppm: None,
                 temp_c: None,
+                offset_ms,
+                sigma_ms,
+                shed: c.shed,
+                cpu_pct: None,
             });
         }
         out
@@ -560,7 +718,14 @@ impl Monitor {
 }
 
 /// Start watching (`[timecode] enabled`): a thread on the bin tap.
-pub fn spawn(sh: &Arc<Shared>, cfg: Timecode, state_dir: PathBuf) -> std::io::Result<()> {
+/// `locator`: the receiver's (`[station]`), for the paths from the
+/// transmitters.
+pub fn spawn(
+    sh: &Arc<Shared>,
+    cfg: Timecode,
+    locator: &str,
+    state_dir: PathBuf,
+) -> std::io::Result<()> {
     if !cfg.enabled {
         return Ok(());
     }
@@ -578,6 +743,10 @@ pub fn spawn(sh: &Arc<Shared>, cfg: Timecode, state_dir: PathBuf) -> std::io::Re
             return Ok(());
         }
     };
+    match crate::kiwi::locator_pos(locator) {
+        Some(rx) => mon.set_receiver(rx),
+        None => eprintln!("timecode: no [station] locator: no offsets for the system clock"),
+    }
     eprintln!(
         "timecode: {} in the bin at {:.0} kHz",
         mon.describe(),
@@ -591,12 +760,75 @@ pub fn spawn(sh: &Arc<Shared>, cfg: Timecode, state_dir: PathBuf) -> std::io::Re
     Ok(())
 }
 
+/// Data lost this many times within `LOSS_WINDOW`, with no skimmer band
+/// left to shed: the monitor sheds a station of its own.
+const LOSSES_TO_SHED: usize = 3;
+const LOSS_WINDOW: Duration = Duration::from_secs(600);
+/// A shed station comes back after this long without a loss (and as
+/// long after the last change).
+const RESUME_AFTER: Duration = Duration::from_secs(1800);
+
+/// The monitor's place in the load shedding: it ranks above the FT8/FT4
+/// skimmers (their decoders run at idle priority, below it), so when it
+/// loses data (its queue from the bin reader overflowed: it fell behind)
+/// it asks them to shed bands ([`web888_skim::shed::press`]); with none
+/// left to shed and the losses going on, it sheds its own noisiest
+/// station, keeping one.
+#[derive(Default)]
+struct Shedding {
+    gaps: u64,
+    losses: std::collections::VecDeque<std::time::Instant>,
+    last_change: Option<std::time::Instant>,
+}
+
+impl Shedding {
+    fn check(&mut self, mon: &mut Monitor) {
+        use web888_skim::events::{Level, emit};
+        let now = std::time::Instant::now();
+        let since = |t: Option<std::time::Instant>| t.map_or(Duration::MAX, |t| now - t);
+        if mon.gaps > self.gaps {
+            self.gaps = mon.gaps;
+            web888_skim::shed::press();
+            self.losses.push_back(now);
+        }
+        while self.losses.front().is_some_and(|&t| now - t > LOSS_WINDOW) {
+            self.losses.pop_front();
+        }
+        if self.losses.len() >= LOSSES_TO_SHED
+            && !web888_skim::shed::bands_left()
+            && since(self.last_change) >= Duration::from_secs(60)
+            && let Some(name) = mon.shed_one()
+        {
+            emit(
+                Level::Notice,
+                "timecode",
+                format!("shed {name}: the monitor is short of CPU"),
+            );
+            self.last_change = Some(now);
+            self.losses.clear();
+        }
+        if since(self.losses.back().copied()) >= RESUME_AFTER
+            && since(self.last_change) >= RESUME_AFTER
+            && let Some(name) = mon.resume_one()
+        {
+            emit(Level::Notice, "timecode", format!("resume {name}"));
+            self.last_change = Some(now);
+        }
+    }
+}
+
+fn thread_cpu_s() -> f64 {
+    crate::sysstat::clock_s(libc::CLOCK_THREAD_CPUTIME_ID)
+}
+
 fn run(tap: BinTap, bin: usize, mon: &mut Monitor, log: Option<PathBuf>) {
     let (handle, rx) = tap.subscribe();
     handle.want(vec![bin], 0.0);
     let mut iq: Vec<Iq32> = Vec::new();
     let mut clocks = ClockMeter::default();
+    let mut shedding = Shedding::default();
     let rate = tap.caps().frame_rate;
+    let mut cpu0 = (thread_cpu_s(), std::time::Instant::now());
     loop {
         let m = match rx.recv_timeout(Duration::from_secs(5)) {
             Ok(m) => m,
@@ -604,34 +836,65 @@ fn run(tap: BinTap, bin: usize, mon: &mut Monitor, log: Option<PathBuf>) {
             Err(_) => return,
         };
         let TapMsg::Frames(runs) = m else { continue };
+        // a message's runs as one push where they're contiguous (a few
+        // runs of a few dozen frames each), one clock sample and timebase
+        // look-up per message: per run, these cost more than the DSP
+        let mut reports = Vec::new();
+        let mut first: Option<u64> = None;
+        let mut end = 0u64;
+        // the lock only for each look-up: the bin reader takes it too
+        let ppm = tap.timebase().info().adc_ppm;
+        iq.clear();
         for f in runs.iter() {
             let Some(idx) = f.bins.iter().position(|&b| b == bin) else {
                 continue;
             };
-            iq.clear();
-            iq.extend((0..f.count).map(|k| f.frame(k)[idx]));
-            // the lock only for each look-up: the bin reader takes it too
-            let ppm = tap.timebase().info().adc_ppm;
-            clocks.run(f.first + f.count as u64, rate);
-            let mut reports = mon.push(f.first, &iq, |fr| tap.timebase().utc(fr), ppm);
-            if reports.is_empty() {
-                continue;
+            if let Some(f0) = first
+                && f.first != end
+            {
+                reports.extend(mon.push(f0, &iq, |fr| tap.timebase().utc(fr), ppm));
+                iq.clear();
+                first = None;
             }
-            let (raw, sys) = clocks.minute(rate);
-            let kf = crate::sysstat::kernel_freq_ppm().map(|v| (v * 1e3).round() / 1e3);
-            let temp = crate::sysstat::temperature().map(|t| (t as f64 * 10.0).round() / 10.0);
-            for r in &mut reports {
-                (r.raw_ppm, r.sys_ppm, r.kernel_freq_ppm, r.temp_c) = (raw, sys, kf, temp);
-            }
-            if let Some(p) = &log {
-                write_log(p, &reports);
-            }
-            let mut s = STATE.lock().unwrap_or_else(|e| e.into_inner());
-            *s = Some(State {
-                reports,
-                counts: mon.counts.clone(),
-            });
+            first.get_or_insert(f.first);
+            let n = f.bins.len();
+            iq.extend(f.iq.chunks_exact(n).take(f.count).map(|fr| fr[idx]));
+            end = f.first + f.count as u64;
         }
+        let Some(f0) = first else { continue };
+        clocks.run(end, rate);
+        reports.extend(mon.push(f0, &iq, |fr| tap.timebase().utc(fr), ppm));
+        shedding.check(mon);
+        if reports.is_empty() {
+            continue;
+        }
+        let (raw, sys) = clocks.minute(rate);
+        let kf = crate::sysstat::kernel_freq_ppm().map(|v| (v * 1e3).round() / 1e3);
+        let temp = crate::sysstat::temperature().map(|t| (t as f64 * 10.0).round() / 10.0);
+        let cpu1 = (thread_cpu_s(), std::time::Instant::now());
+        let wall = (cpu1.1 - cpu0.1).as_secs_f64();
+        let cpu = (wall > 1.0).then(|| ((cpu1.0 - cpu0.0) / wall * 1e4).round() / 100.0);
+        cpu0 = cpu1;
+        for r in &mut reports {
+            (r.raw_ppm, r.sys_ppm, r.kernel_freq_ppm, r.temp_c, r.cpu_pct) =
+                (raw, sys, kf, temp, cpu);
+            if let (Some(o), Some(sg)) = (r.offset_ms, r.sigma_ms) {
+                crate::timesync::submit(crate::timesync::Sample {
+                    source: r.station.clone(),
+                    offset: o / 1e3,
+                    at: r.t as f64,
+                    sigma: sg / 1e3,
+                });
+            }
+        }
+        if let Some(p) = &log {
+            write_log(p, &reports);
+        }
+        let mut s = STATE.lock().unwrap_or_else(|e| e.into_inner());
+        *s = Some(State {
+            reports,
+            counts: mon.counts.clone(),
+        });
     }
 }
 
@@ -679,6 +942,9 @@ mod tests {
                 .map(|(s, fc)| (s, fc, web888_timecode::keying(s, start, minutes)))
                 .collect();
         let mut mon = Monitor::new(&["MSF".into(), "DCF77".into()], 60_000.0, rate).unwrap();
+        // at Mainflingen (DCF77's path ~0, MSF's ~1000 km: 3.3 ms; the
+        // synthetic signal has none)
+        mon.set_receiver((50.0156, 9.0108));
         let utc = |f: f64| Some(start as f64 + f / rate);
         let a = RX_SINE_FULL_SCALE * 1e-3;
         let n = minutes * 60 * rate as usize;
@@ -721,6 +987,15 @@ mod tests {
                 "{r:?}"
             );
             assert!(r.snr_db_hz.unwrap() > 20.0, "{r:?}");
+            // offset: the calibrated delay less the lateness
+            let off = r.offset_ms.unwrap();
+            let delay = if r.station == "MSF" {
+                path_ms((54.9116, -3.2785), (50.0156, 9.0108)) + decoder_ms(Station::Msf)
+            } else {
+                decoder_ms(Station::Dcf77)
+            };
+            assert!((off - (delay - late)).abs() < 0.01, "{r:?}");
+            assert!(r.sigma_ms.unwrap() > 0.0);
         }
         assert!(mon.counts.iter().all(|c| c[0] >= 2), "{:?}", mon.counts);
     }

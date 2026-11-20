@@ -388,9 +388,10 @@ Built: the timebase with the host clock as its reference (`ntp`,
 `holdover`, `none`), timestamps on audio frames and the `timebase`
 message; the page's time-code, FT8/FT4/WSPR and JS8 decoders use them
 (and RBU decodes); wide IQ frames' times; the time-code monitor on the
-unit (`[timecode]`: measures, doesn't steer yet). Not yet: time-code
-stations and GPS as references, the waterfall's times from the
-timebase, chrony.
+unit (`[timecode]`), whose stations feed the system clock through
+chrony (`[timesync]`). Not yet: the timebase taking a time-code station
+or GPS as its own reference (`source` stays `ntp` while chrony follows
+the stations), GPS, the waterfall's times from the timebase.
 
 Programs and the page's own decoders want to know when a sample was
 received at the antenna, not when it reached them: a time-code decoder
@@ -479,11 +480,28 @@ it (`sys_ppm`), the kernel's frequency correction and the SoC's
 temperature: how far the system clock would drift without NTP. As
 metrics (`timecode_*`, `doc/metrics.md`) and a JSON line per station and
 minute in `timecode.log` (state directory). The decoders' own offsets,
-from a synthetic test: MSF about 0 ms, DCF77 about +4.6 ms.
+from a synthetic test: MSF about 0 ms, DCF77 about +4.6 ms. Each
+confirmed minute also gives the system clock's error by that station
+(`offset_ms`: true minus system time, the lateness less the path from
+the transmitter, by `[station] locator`, and the decoder's and
+receiver's own delay, calibrated on the remote unit against NTP:
+RBU 0.23 ms, MSF 1.06 ms, DCF77 2.96 ms) and its scatter over the last
+15 minutes (`sigma_ms`; on the unit RBU about 0.3 ms, MSF and DCF77 2-3
+ms: their keying's 5 ms steps).
 
 The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching
-one channelizer bin (about 9 % of the A9's core for three stations). A bin centred at 60 kHz
+one channelizer bin: about 3 % of the A9's core for three stations on a
+recorded bin (`crates/web/examples/tcbench.rs`; 5.3 % before the
+2026-11-20 work: a NEON filter, block mixing, sliding order statistics
+in the decoders, tables for RBU's phase demodulation), with the
+monitor's own CPU per minute as `cpu_pct`. It ranks above the FT8/FT4
+skimmers in the load shedding: their decoders run at idle priority,
+and when the monitor loses data (it fell behind) the skimmers shed
+bands first, a band every 15 s while the losses go on, down to none (a
+shed band stops its channel's DSP too); only then does the monitor
+shed its own noisiest station (`shed`), keeping one, back after 30
+minutes without a loss. A bin centred at 60 kHz
 covers MSF (60 kHz), RBU (66.67 kHz, phase-modulated: 10 bits a second,
 each on the tenth of a second after a 5 ms gap in the carrier) and
 DCF77 (77.5 kHz) at once;
@@ -493,13 +511,29 @@ and the epoch (the second markers, ~1 ms; DCF77's phase code, perhaps
 10-100 µs), corrected for the path from the station (from the
 receiver's locator).
 
-**The system clock: chrony.** The OS changes from systemd-timesyncd to
-chrony: several NTP servers combined and cross-checked, a drift file
-for holdover, a quick and safe start without a battery-backed clock,
-and reference clocks. web888d hands chrony its time-code (and later
-GPS-derived) time over chrony's socket reference-clock interface, as
-gpsd does, so an air-gapped receiver's system clock follows the
-station too.
+**The system clock: chrony** (**built**, os ≥ 426aa87). The OS runs
+chrony instead of systemd-timesyncd: several NTP servers combined and
+cross-checked, a drift file for holdover (on `/config`), a quick start
+without a battery-backed clock, and reference clocks. web888d hands
+chrony its time sources over chrony's socket reference clock (`refclock
+SOCK /run/chrony.web888.sock refid LF`, as gpsd does), so an
+air-gapped receiver's system clock follows the stations too
+(`[timesync]`, `crate::timesync`):
+
+* any source (the time-code stations now; the EFR teleswitch telegrams
+  or GPS later) submits samples: the system clock's offset, when, and
+  its own standard error; nothing else is needed to add one;
+* once a minute, at second 30, the samples since the last time are
+  combined, one per source: an offset of 0.5 s or more needs two
+  sources agreeing within 20 ms (a wrong decode doesn't set the clock),
+  with two or more a source beyond 4 of its errors (at least 3 ms) from
+  their median is left out, the rest are weighted by their errors; the
+  result goes to chrony, stamped with the time it is sent;
+* `[timesync] trim_ms` adds a calibration per source; `chrony_socket`
+  empty: measured only;
+* chrony.conf gives the LF clock a 20 ms delay: while NTP is reachable
+  it dominates, and the stations carry the clock when it isn't. Metrics
+  `timesync_*` (`doc/metrics.md`).
 
 **The page** (**built**). While its time-code, FT8/FT4/WSPR or JS8
 decoders run it asks for timed audio, and their sample clocks take the

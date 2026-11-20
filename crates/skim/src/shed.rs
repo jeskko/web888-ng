@@ -2,13 +2,36 @@
 //! Decoder load shedding: when the decoders keep running out of time
 //! (slots cut short or dropped: the CPU went to the listeners), the band
 //! with the fewest recent decodes stops being decoded, one at a time;
-//! after a calm spell the last one shed comes back. The bands' channels
-//! keep running, so a band resumes at its next slot.
+//! after a calm spell the last one shed comes back.
+//!
+//! Work that ranks above the skimmers (the LF time-code monitor, which
+//! feeds the system clock) calls [`press`] when it loses data: a band is
+//! shed then too, every [`PRESS_GAP`] while the presses go on, down to
+//! none, and none comes back until [`HOLD`] has passed without one. A shed
+//! band stops its channel's DSP as well (its slots are only counted), so
+//! the CPU goes to that work; it resumes at its next full slot.
 
 use crate::Band;
 use std::sync::Arc;
-use std::sync::atomic::Ordering;
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::{Duration, Instant};
+
+static PRESSES: AtomicU64 = AtomicU64::new(0);
+static BANDS_LEFT: AtomicBool = AtomicBool::new(false);
+
+/// Work ranking above the skimmers lost data for want of CPU.
+pub fn press() {
+    PRESSES.fetch_add(1, Ordering::Relaxed);
+}
+
+/// Whether a band is still decoded (else the skimmers have nothing more
+/// to give up: the caller's own shedding is next).
+pub fn bands_left() -> bool {
+    BANDS_LEFT.load(Ordering::Relaxed)
+}
+
+/// Least time between two sheds for [`press`].
+pub const PRESS_GAP: Duration = Duration::from_secs(15);
 
 /// Weight of each slot in the pressure (cut or dropped: 1, else 0).
 const ALPHA: f64 = 0.2;
@@ -41,6 +64,10 @@ pub struct Shedder {
     /// Since when the pressure has been below `CALM_BELOW`.
     calm_since: Option<Instant>,
     hold: Duration,
+    /// [`press`]es seen (of `press_count`), and when the last came.
+    press_count: &'static AtomicU64,
+    presses: u64,
+    last_press: Option<Instant>,
 }
 
 impl Default for Shedder {
@@ -53,6 +80,9 @@ impl Default for Shedder {
             last_resume: None,
             calm_since: None,
             hold: HOLD,
+            press_count: &PRESSES,
+            presses: PRESSES.load(Ordering::Relaxed),
+            last_press: None,
         }
     }
 }
@@ -69,21 +99,59 @@ impl Shedder {
         } else if self.calm_since.is_none() {
             self.calm_since = Some(now);
         }
+        let c = self.decide(now);
+        self.publish();
+        c
+    }
+
+    /// A shed band's slot went by (no decoding: the pressure can't be
+    /// measured; with every band shed the decoders are calm).
+    pub fn tick(&mut self, now: Instant) -> Option<Change> {
+        self.shed
+            .retain(|b| self.bands.iter().any(|x| Arc::ptr_eq(x, b)));
+        if self.active().is_empty() {
+            self.pressure = 0.0;
+            self.calm_since.get_or_insert(now);
+        }
+        let c = self.decide(now);
+        self.publish();
+        c
+    }
+
+    fn active(&self) -> Vec<&Arc<Band>> {
+        self.bands
+            .iter()
+            .filter(|b| !b.status.shed.load(Ordering::Relaxed))
+            .filter(|b| b.status.granted.load(Ordering::Relaxed))
+            .collect()
+    }
+
+    fn publish(&self) {
+        BANDS_LEFT.store(!self.active().is_empty(), Ordering::Relaxed);
+    }
+
+    fn decide(&mut self, now: Instant) -> Option<Change> {
         let since = |t: Option<Instant>| t.map_or(Duration::MAX, |t| now.duration_since(t));
-        if self.pressure > SHED_ABOVE && since(self.last_change) >= SHED_GAP {
-            let active: Vec<&Arc<Band>> = self
-                .bands
-                .iter()
-                .filter(|b| !b.status.shed.load(Ordering::Relaxed))
-                .filter(|b| b.status.granted.load(Ordering::Relaxed))
-                .collect();
-            if active.len() < 2 {
-                return None;
-            }
+        let p = self.press_count.load(Ordering::Relaxed);
+        let pressed = p != self.presses;
+        if pressed {
+            self.presses = p;
+            self.last_press = Some(now);
+        }
+        // work above the skimmers short of CPU: down to no band at all
+        let min_left = if pressed && since(self.last_change) >= PRESS_GAP {
+            1
+        } else if self.pressure > SHED_ABOVE && since(self.last_change) >= SHED_GAP {
+            2
+        } else {
+            usize::MAX
+        };
+        let active = self.active();
+        if active.len() >= min_left {
             let b = active
                 .into_iter()
                 .min_by(|a, b| a.status.recent().total_cmp(&b.status.recent()))
-                .expect("two or more")
+                .expect("one or more")
                 .clone();
             if since(self.last_resume) < RELAPSE {
                 self.hold = (self.hold * 2).min(HOLD_MAX);
@@ -91,12 +159,15 @@ impl Shedder {
             b.status.shed.store(true, Ordering::Relaxed);
             self.last_change = Some(now);
             // the next shed on fresh evidence
-            self.pressure = SHED_ABOVE / 2.0;
+            self.pressure = self.pressure.min(SHED_ABOVE / 2.0);
             let label = b.label.clone();
             self.shed.push(b);
             return Some(Change::Shed(label));
         }
-        if since(self.calm_since) >= self.hold && self.calm_since.is_some() {
+        if self.calm_since.is_some()
+            && since(self.calm_since) >= self.hold
+            && since(self.last_press) >= self.hold
+        {
             let b = self.shed.pop()?;
             b.status.shed.store(false, Ordering::Relaxed);
             if since(self.last_resume) > HOLD_MAX {
@@ -172,6 +243,49 @@ mod tests {
             vec![
                 (330, Change::Resumed("20m".into())),
                 (450, Change::Resumed("10m".into()))
+            ]
+        );
+    }
+
+    /// The time-code monitor losing data: bands go every 15 s while it
+    /// does, the last one too; back one by one after the hold without a
+    /// press.
+    #[test]
+    fn presses_shed_every_band() {
+        static COUNT: AtomicU64 = AtomicU64::new(0);
+        let (a, q) = (band("40m", 30.0), band("10m", 0.0));
+        let mut s = Shedder {
+            bands: vec![a.clone(), q.clone()],
+            press_count: &COUNT,
+            presses: 0,
+            ..Shedder::default()
+        };
+        let t0 = Instant::now();
+        let at = |s: u64| t0 + Duration::from_secs(s);
+        let mut changes = Vec::new();
+        for k in 0..400 {
+            if k < 40 {
+                COUNT.fetch_add(1, Ordering::Relaxed);
+            }
+            // the decoders calm; with both bands shed only ticks come
+            let c =
+                if a.status.shed.load(Ordering::Relaxed) && q.status.shed.load(Ordering::Relaxed) {
+                    s.tick(at(k))
+                } else {
+                    s.observe(false, at(k))
+                };
+            if let Some(c) = c {
+                changes.push((k, c));
+            }
+        }
+        assert_eq!(
+            changes,
+            vec![
+                (0, Change::Shed("10m".into())),
+                (15, Change::Shed("40m".into())),
+                // last press at 39: the hold (120 s) from then
+                (159, Change::Resumed("40m".into())),
+                (279, Change::Resumed("10m".into())),
             ]
         );
     }

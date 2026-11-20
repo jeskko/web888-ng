@@ -129,6 +129,7 @@ export function label(key: string): string {
   if (key === "dxspots") return "DX spots";
   if (key === "update") return "OS updates";
   if (key === "timecode") return "Time codes";
+  if (key === "timesync") return "Time sync";
   const words = key.split("_").map((w) => (["wf", "ip", "tls", "iq", "adc", "ui", "hpsdr", "ca", "de", "dx"].includes(w) ? w.toUpperCase() : w));
   const s = words.join(" ");
   return s.charAt(0).toUpperCase() + s.slice(1);
