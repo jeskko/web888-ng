@@ -21,6 +21,7 @@
 //!   [`Minute`]: the UTC the minute starts at, with the stream time it
 //!   was heard at, and whether an earlier minute agrees.
 
+pub mod efr;
 pub mod rbu;
 
 use num_complex::Complex32;
@@ -42,6 +43,11 @@ pub enum Station {
     Wwv,
     /// Phase-modulated, not keyed: its own receiver ([`rbu`]).
     Rbu,
+    /// EFR's teleswitch stations: FSK telegrams, a time telegram every
+    /// 10 s ([`efr`]). Their carriers aren't steered by atomic clocks.
+    Dcf39,
+    Hga22,
+    Dcf49,
 }
 
 /// Each symbol's mean level (0 keyed down / off, 1 up / on) in the
@@ -50,14 +56,28 @@ type Templates = &'static [(char, &'static [f32])];
 
 impl Station {
     /// In the page's order (its station numbers).
-    pub const ALL: [Station; 6] = [
+    pub const ALL: [Station; 9] = [
         Station::Dcf77,
         Station::Msf,
         Station::Wwvb,
         Station::Jjy,
         Station::Wwv,
         Station::Rbu,
+        Station::Dcf39,
+        Station::Hga22,
+        Station::Dcf49,
     ];
+
+    /// An EFR teleswitch station ([`efr`]).
+    pub fn is_efr(self) -> bool {
+        matches!(self, Station::Dcf39 | Station::Hga22 | Station::Dcf49)
+    }
+
+    /// Its carrier is an atomic clock's (the ADC clock can be measured on
+    /// it).
+    pub fn atomic(self) -> bool {
+        !self.is_efr()
+    }
 
     /// The keyed carriers (the envelope receiver's).
     pub const KEYED: [Station; 5] = [
@@ -76,6 +96,9 @@ impl Station {
             Station::Jjy => "JJY",
             Station::Wwv => "WWV/WWVH",
             Station::Rbu => "RBU",
+            Station::Dcf39 => "DCF39",
+            Station::Hga22 => "HGA22",
+            Station::Dcf49 => "DCF49",
         }
     }
 
@@ -102,6 +125,10 @@ impl Station {
             Station::Wwv => None,
             // Taldom
             Station::Rbu => Some((56.7333, 37.6633)),
+            // Burg near Magdeburg
+            Station::Dcf39 | Station::Dcf49 => Some((52.2869, 11.8964)),
+            // Lakihegy near Budapest
+            Station::Hga22 => Some((47.3725, 19.0042)),
         }
     }
 
@@ -114,6 +141,9 @@ impl Station {
             Station::Jjy => &[40_000.0, 60_000.0],
             Station::Wwv => &[2.5e6, 5e6, 10e6, 15e6, 20e6, 25e6],
             Station::Rbu => &[200_000.0 / 3.0],
+            Station::Dcf39 => &[139_000.0],
+            Station::Hga22 => &[135_600.0],
+            Station::Dcf49 => &[129_100.0],
         }
     }
 
@@ -184,7 +214,7 @@ impl Station {
                     ('H', &[0.0, 0.0, 0.0, 0.0]),
                 ],
             ),
-            Station::Rbu => (&[], &[]),
+            Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => (&[], &[]),
         }
     }
 
@@ -250,7 +280,7 @@ impl Station {
                         0.0
                     }
                 }
-                Station::Rbu => 1.0,
+                Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => 1.0,
             };
         }
         p
@@ -277,7 +307,7 @@ impl Station {
             Station::Wwvb => &[22..=33, 45..=53],
             Station::Jjy => &[22..=33, 41..=48, 50..=52],
             Station::Wwv => &[4..=7, 30..=41, 51..=54],
-            Station::Rbu => &[],
+            Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => &[],
         }
     }
 
@@ -288,7 +318,7 @@ impl Station {
             Station::Msf => 0.25,
             Station::Wwvb | Station::Jjy => 0.5,
             Station::Wwv => 0.65,
-            Station::Rbu => 0.05,
+            Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => 0.05,
         }
     }
 
@@ -392,6 +422,8 @@ pub struct Receiver {
     passed: Vec<(f64, i64)>,
     /// RBU: its own receiver does the work.
     rbu: Option<Box<rbu::Rbu>>,
+    /// EFR: its own receiver too.
+    efr: Option<Box<efr::Efr>>,
 }
 
 impl Receiver {
@@ -428,6 +460,9 @@ impl Receiver {
             frames: std::collections::VecDeque::new(),
             passed: Vec::new(),
             rbu: (station == Station::Rbu).then(|| Box::new(rbu::Rbu::new(fs, tone, t0))),
+            efr: station
+                .is_efr()
+                .then(|| Box::new(efr::Efr::new(station, fs, tone, t0))),
         }
     }
 
@@ -440,6 +475,9 @@ impl Receiver {
         if let Some(r) = &mut self.rbu {
             r.set_tone(tone);
         }
+        if let Some(r) = &mut self.efr {
+            r.set_tone(tone);
+        }
         self.lo_step = num_complex::Complex64::from_polar(1.0, -2.0 * PI * tone / self.fs);
     }
 
@@ -450,6 +488,11 @@ impl Receiver {
 
     pub fn push(&mut self, x: &[f32]) {
         if let Some(r) = &mut self.rbu {
+            r.push(x);
+            self.level = r.level;
+            return;
+        }
+        if let Some(r) = &mut self.efr {
             r.push(x);
             self.level = r.level;
             return;
@@ -531,6 +574,9 @@ impl Receiver {
 
     pub fn poll(&mut self) -> Vec<Event> {
         if let Some(r) = &mut self.rbu {
+            return r.poll();
+        }
+        if let Some(r) = &mut self.efr {
             return r.poll();
         }
         std::mem::take(&mut self.out)
@@ -857,8 +903,8 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
     let mut notes = Vec::new();
     let (mut ok, t, y, mo, d, h, mi, zone, zname): (bool, f64, i64, i64, i64, i64, i64, i64, &str);
     match station {
-        // its own receiver decodes it
-        Station::Rbu => return None,
+        // their own receivers decode them
+        Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => return None,
         Station::Dcf77 => {
             let b = b?;
             // the time of the minute that follows
@@ -1179,7 +1225,7 @@ pub fn keying(station: Station, start: i64, minutes: usize) -> Vec<f32> {
 
 fn level(station: Station, s: char, t: f64) -> f32 {
     let on = match station {
-        Station::Rbu => true,
+        Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => true,
         Station::Dcf77 => match s {
             '0' => t >= 0.1,
             '1' => t >= 0.2,
@@ -1254,8 +1300,8 @@ pub fn encode(station: Station, utc: i64) -> Vec<char> {
     };
     let mut syms = vec!['0'; 60];
     match station {
-        // its own encoder: rbu::encode
-        Station::Rbu => {}
+        // its own encoder: rbu::encode; EFR: none
+        Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => {}
         Station::Dcf77 => {
             // the next minute, CET (no summer time in tests)
             let (y, m, d, h, mi, _, wd) = civil(utc + 60 + 3600);

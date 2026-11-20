@@ -207,17 +207,28 @@ fn timecode(o: &mut Out) {
         "Time-code minutes: confirmed (ok), decoded but not confirmed, failed",
         &counts,
     );
+    // the floor per bin
+    let mut fl: Vec<(String, f64)> = Vec::new();
+    let mut seen: Vec<f64> = Vec::new();
+    for r in &st.reports {
+        if seen.contains(&r.bin_khz) {
+            continue;
+        }
+        seen.push(r.bin_khz);
+        let b = format!("{:.0}", r.bin_khz);
+        for (q, v) in [("median", r.floor_dbfs_hz), ("p90", r.floor_p90_dbfs_hz)] {
+            if let Some(v) = v {
+                fl.push((labels(&[("q", q), ("bin_khz", &b)]), v));
+            }
+        }
+    }
+    o.put(
+        "timecode_floor_dbfs_hz",
+        "gauge",
+        "A time-code bin's noise floor over the last minute's seconds (dBFS/Hz)",
+        &fl,
+    );
     if let Some(r) = st.reports.first() {
-        let fl: Vec<(String, f64)> = [("median", r.floor_dbfs_hz), ("p90", r.floor_p90_dbfs_hz)]
-            .into_iter()
-            .filter_map(|(q, v)| v.map(|v| (labels(&[("q", q)]), v)))
-            .collect();
-        o.put(
-            "timecode_floor_dbfs_hz",
-            "gauge",
-            "The time-code bin's noise floor over the last minute's seconds (dBFS/Hz)",
-            &fl,
-        );
         let ck: Vec<(String, f64)> = [("raw", r.raw_ppm), ("realtime", r.sys_ppm)]
             .into_iter()
             .filter_map(|(c, v)| v.map(|v| (labels(&[("clock", c)]), v)))

@@ -6,7 +6,7 @@
 //!
 //!   cargo run --release -p web888-web --example tcbench -- \
 //!       FILE.sigmf-data START_UTC [--centre 60000] [--secs N] \
-//!       [--stations MSF,RBU,DCF77] [--run 64]
+//!       [--stations MSF,RBU,DCF77] [--run 64] [--ppm P]
 //!
 //! `-` reads the samples from stdin (on the unit: streamed over ssh). All
 //! of it is read first (60 s: ~58 MB), then timed as a whole.
@@ -37,6 +37,8 @@ fn main() {
     let centre: f64 = opt("--centre").map_or(60_000.0, |s| s.parse().unwrap());
     let secs: f64 = opt("--secs").map_or(f64::INFINITY, |s| s.parse().unwrap());
     let run: usize = opt("--run").map_or(64, |s| s.parse().unwrap());
+    // the ADC clock's error (ppm, + fast): the frames' real rate
+    let ppm: f64 = opt("--ppm").map_or(0.0, |s| s.parse().unwrap());
     let stations: Vec<String> = opt("--stations")
         .map_or("MSF,RBU,DCF77", |s| s.as_str())
         .split(',')
@@ -67,7 +69,7 @@ fn main() {
     }));
     drop(bytes);
     all.truncate((secs * rate).min(all.len() as f64) as usize);
-    let utc = |f: f64| Some(start + f / rate);
+    let utc = |f: f64| Some(start + f / (rate * (1.0 + ppm * 1e-6)));
     let mut out = Vec::new();
     let t0 = cpu_s();
     for (k, iq) in all.chunks(run).enumerate() {

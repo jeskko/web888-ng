@@ -1262,7 +1262,7 @@
           "default": false
         },
         "centre_hz": {
-          "description": "The bin nearest this frequency (Hz) is watched; each station's\ncarrier must be within 21 kHz of the bin's centre.",
+          "description": "The bin nearest this frequency (Hz) is watched for the stations\nwhose carrier is within 21 kHz of its centre; any other station in\nthe bin nearest its carrier (a bin more each: its own floor).",
           "type": "number",
           "format": "double",
           "minimum": 0.0,
@@ -1270,7 +1270,7 @@
           "default": 60000.0
         },
         "stations": {
-          "description": "The stations: DCF77, MSF, RBU, WWVB, JJY (JJY's 40 or 60 kHz,\nwhichever is in the bin).",
+          "description": "The stations: DCF77, MSF, RBU, WWVB, JJY (JJY's 40 or 60 kHz,\nwhichever is in the bin), and EFR's teleswitch stations DCF39\n(139 kHz), HGA22 (135.6 kHz), DCF49 (129.1 kHz): a time telegram\nevery 10 s (in the 120 kHz bin).",
           "type": "array",
           "items": {
             "type": "string"

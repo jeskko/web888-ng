@@ -489,6 +489,19 @@ RBU 0.23 ms, MSF 1.06 ms, DCF77 2.96 ms) and its scatter over the last
 15 minutes (`sigma_ms`; on the unit RBU about 0.3 ms, MSF and DCF77 2-3
 ms: their keying's 5 ms steps).
 
+**EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
+HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s
+(FSK ±170 Hz at 200 Bd, FT1.2 frames; `crates/timecode/src/efr.rs`
+has the format). Listed in `[timecode] stations` they are watched in
+the 120 kHz bin (a second bin: about 0.8 % of the A9's core for DCF39).
+Each telegram's start bit is timed against its 10 s mark; a minute
+reports their median (`late_ms` about 1206 ms for DCF39: the station
+sends 1.2 s after the mark). On the recorded hour of 2026-11-19 DCF39
+decoded every minute, its minutes' lateness within ±0.07 ms: by far
+the steadiest source here, though its carrier isn't an atomic clock's
+(no `adc_ppm` from it). HGA22 and DCF49 are too weak by day at the
+remote unit; their offsets are provisional (±1-3 ms).
+
 The time-code decoder
 (`crates/timecode`) runs on the unit as well as in the page, watching
 one channelizer bin: about 3 % of the A9's core for three stations on a

@@ -148,12 +148,15 @@ impl Default for Timesync {
 pub struct Timecode {
     /// Watch the stations.
     pub enabled: bool,
-    /// The bin nearest this frequency (Hz) is watched; each station's
-    /// carrier must be within 21 kHz of the bin's centre.
+    /// The bin nearest this frequency (Hz) is watched for the stations
+    /// whose carrier is within 21 kHz of its centre; any other station in
+    /// the bin nearest its carrier (a bin more each: its own floor).
     #[schemars(range(min = 0.0, max = 1000000.0))]
     pub centre_hz: f64,
     /// The stations: DCF77, MSF, RBU, WWVB, JJY (JJY's 40 or 60 kHz,
-    /// whichever is in the bin).
+    /// whichever is in the bin), and EFR's teleswitch stations DCF39
+    /// (139 kHz), HGA22 (135.6 kHz), DCF49 (129.1 kHz): a time telegram
+    /// every 10 s (in the 120 kHz bin).
     pub stations: Vec<String>,
     /// A line per station and minute (JSON) to `timecode.log` in the
     /// state directory (kept under 10 MB, the older half in
