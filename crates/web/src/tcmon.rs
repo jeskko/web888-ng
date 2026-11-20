@@ -102,7 +102,7 @@ pub struct Report {
     /// The system clock's error by this station (ms, true minus system
     /// time: the confirmed minute's lateness less the path from the
     /// transmitter and the decoder's own delay) and its scatter over the
-    /// last minutes (ms, a standard deviation from their median absolute
+    /// last minutes (ms, a standard deviation from their mean absolute
     /// deviation): what goes to [`crate::timesync`].
     pub offset_ms: Option<f64>,
     pub sigma_ms: Option<f64>,
@@ -393,6 +393,8 @@ const LATES: usize = 15;
 const SCATTER_PRIOR_MS: f64 = 3.0;
 /// The least scatter assumed (ms).
 const SCATTER_MIN_MS: f64 = 0.1;
+/// A minute's deviation counts at most this much (ms).
+const SCATTER_CAP_MS: f64 = 20.0;
 
 /// The decoders' own delay per station plus the receiver's (ms): the
 /// lateness of the confirmed minutes over the path from the transmitter,
@@ -429,7 +431,11 @@ fn path_ms(site: (f64, f64), rx: (f64, f64)) -> f64 {
     km / 299.792_458 / 0.9997
 }
 
-/// A standard deviation from the median absolute deviation (ms).
+/// A standard deviation from the mean absolute deviation from the
+/// median (ms; each deviation at most `SCATTER_CAP_MS`, so one wild
+/// minute counts little). Not the median absolute deviation: DCF77's and
+/// MSF's minutes come in two values 5 ms apart (their keying's steps),
+/// and with most at one of them that reads near 0 (0.19 ms on the unit).
 fn scatter(v: &std::collections::VecDeque<f64>) -> f64 {
     if v.len() < LATES / 3 {
         return SCATTER_PRIOR_MS;
@@ -437,9 +443,12 @@ fn scatter(v: &std::collections::VecDeque<f64>) -> f64 {
     let mut a: Vec<f64> = v.iter().copied().collect();
     let mid = a.len() / 2;
     let med = *a.select_nth_unstable_by(mid, f64::total_cmp).1;
-    let mut d: Vec<f64> = a.iter().map(|x| (x - med).abs()).collect();
-    let mad = *d.select_nth_unstable_by(mid, f64::total_cmp).1;
-    (1.4826 * mad).max(SCATTER_MIN_MS)
+    let mad = a
+        .iter()
+        .map(|x| (x - med).abs().min(SCATTER_CAP_MS))
+        .sum::<f64>()
+        / a.len() as f64;
+    (1.2533 * mad).max(SCATTER_MIN_MS)
 }
 
 /// The stations and the bin, from the bin source.
@@ -792,8 +801,11 @@ pub fn spawn(
                 .iter()
                 .any(|c| (c - caps.freq(b)).abs() <= CLEAN_HZ)
         };
+        // the main bin, then one already watched, then the nearest
         let bin = if near(main) {
             main
+        } else if let Some(g) = groups.iter().find(|g| near(g.0)) {
+            g.0
         } else {
             st.carriers()
                 .iter()
@@ -1046,6 +1058,19 @@ mod tests {
     /// MSF and DCF77 keyed as sent, in a bin at 60 kHz whose ADC clock is
     /// 0.5 ppm fast (the carriers appear low), with noise: both decode,
     /// on time, and the carriers give the clock's error.
+    /// Two values 5 ms apart, most at one: the scatter shows it.
+    #[test]
+    fn scatter_sees_two_values() {
+        let v: std::collections::VecDeque<f64> =
+            [6.2, 6.3, 11.2, 6.2, 6.1, 11.3, 6.2, 6.2, 11.2, 6.3]
+                .into_iter()
+                .collect();
+        let s = scatter(&v);
+        assert!(s > 1.5 && s < 3.0, "{s}");
+        let steady: std::collections::VecDeque<f64> = std::iter::repeat_n(1206.3, 10).collect();
+        assert_eq!(scatter(&steady), SCATTER_MIN_MS);
+    }
+
     #[test]
     fn stations_decode_and_measure_the_clock() {
         let rate = 60_000.0;
