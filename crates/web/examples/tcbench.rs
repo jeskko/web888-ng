@@ -73,7 +73,7 @@ fn main() {
     let mut out = Vec::new();
     let t0 = cpu_s();
     for (k, iq) in all.chunks(run).enumerate() {
-        out.extend(mon.push((k * run) as u64, iq, utc, None));
+        out.extend(mon.push((k * run) as u64, iq, utc, |_| Some((0.0, start)), None));
     }
     let cpu = cpu_s() - t0;
     for r in &out {

@@ -40,6 +40,10 @@ pub const LARGE_S: f64 = 0.5;
 pub const OUTLIER_SIGMAS: f64 = 4.0;
 /// ... but never for less than this (s).
 pub const OUTLIER_MIN_S: f64 = 0.003;
+/// The second of each minute the hub sends at.
+const SEND_AT_S: f64 = 10.0;
+/// The oldest sample sent (s): chrony refuses older than 2^(poll+1) s.
+const MAX_AGE_S: f64 = 100.0;
 /// chrony's sample: struct sock_sample (64-bit time_t), its magic.
 const SOCK_MAGIC: i32 = 0x534f_434b;
 
@@ -75,10 +79,12 @@ pub struct State {
     pub sigma: Option<f64>,
     pub n: usize,
     /// Samples sent to chrony; failed sends (no chrony); minutes with no
-    /// usable sample (some came, none passed).
+    /// usable sample (some came, none passed); minutes whose samples were
+    /// too old to send.
     pub sent: u64,
     pub send_errors: u64,
     pub rejected: u64,
+    pub stale: u64,
 }
 
 struct Hub {
@@ -123,10 +129,12 @@ pub fn spawn(cfg: Timesync) -> std::io::Result<()> {
         .spawn(move || {
             let sock = UnixDatagram::unbound().ok();
             loop {
-                // at each minute's 30th second: the time codes' minutes
-                // (reported a few seconds after the minute) are in
+                // at each minute's 10th second: the time codes' minutes
+                // (reported within a second or two of the minute) are in,
+                // and the samples fresh (chrony takes them up to 128 s
+                // old at poll 6, but adjusts its clock in between)
                 let now = now_s();
-                let wait = 30.0 - now.rem_euclid(60.0);
+                let wait = SEND_AT_S - now.rem_euclid(60.0);
                 std::thread::sleep(Duration::from_secs_f64(wait.rem_euclid(60.0).max(1.0)));
                 let mut g = HUB.lock().unwrap_or_else(|e| e.into_inner());
                 let Some(h) = g.as_mut() else { return };
@@ -134,12 +142,18 @@ pub fn spawn(cfg: Timesync) -> std::io::Result<()> {
                 let Some((offset, _)) = h.combine(&samples) else {
                     continue;
                 };
+                // stamped with when it was measured, not now: a sample
+                // stamped late steers on the past (the trial of 2026-11-20)
+                let Some(at) = sample_time(&samples, now_s()) else {
+                    h.state.stale += 1;
+                    continue;
+                };
                 if path.is_empty() {
                     continue;
                 }
                 let sent = sock
                     .as_ref()
-                    .is_some_and(|s| s.send_to(&sock_sample(now_s(), offset), &path).is_ok());
+                    .is_some_and(|s| s.send_to(&sock_sample(at, offset), &path).is_ok());
                 if sent {
                     h.state.sent += 1;
                 } else {
@@ -148,6 +162,18 @@ pub fn spawn(cfg: Timesync) -> std::io::Result<()> {
             }
         })?;
     Ok(())
+}
+
+/// The minute's samples' time (their median), unless it is in the future
+/// or older than [`MAX_AGE_S`].
+fn sample_time(samples: &[Sample], now: f64) -> Option<f64> {
+    let mut at: Vec<f64> = samples.iter().map(|s| s.at).collect();
+    if at.is_empty() {
+        return None;
+    }
+    at.sort_by(f64::total_cmp);
+    let m = at[at.len() / 2];
+    (m <= now + 1e-3 && now - m <= MAX_AGE_S).then_some(m)
 }
 
 fn now_s() -> f64 {
@@ -336,5 +362,24 @@ mod tests {
             i32::from_ne_bytes(b[36..40].try_into().unwrap()),
             SOCK_MAGIC
         );
+    }
+
+    /// Sent stamped with when the samples were measured; too old: not.
+    #[test]
+    fn stamped_with_the_measurement_time() {
+        let at = |a: f64| Sample {
+            source: "RBU".into(),
+            offset: 0.0,
+            at: a,
+            sigma: 1e-3,
+        };
+        let now = 1_800_000_070.0;
+        assert_eq!(
+            sample_time(&[at(now - 12.0), at(now - 11.0), at(now - 40.0)], now),
+            Some(now - 12.0)
+        );
+        assert_eq!(sample_time(&[at(now - 120.0)], now), None);
+        assert_eq!(sample_time(&[at(now + 5.0)], now), None);
+        assert_eq!(sample_time(&[], now), None);
     }
 }

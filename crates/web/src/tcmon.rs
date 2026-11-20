@@ -54,6 +54,9 @@ const LOG_MAX: u64 = 10 << 20;
 /// Audio handed to a decoder at a time (1 s: each push sorts its last
 /// 30 s of envelope, so pushes cost by their number).
 const CHUNK: usize = FS as usize;
+/// Seconds of the stream's reads that measure the system clock "now"
+/// (`Timebase::recent`): ~20 µs of read jitter left, 10 s old.
+pub const RECENT_S: usize = 20;
 /// The carrier over the floor (dB in 1 Hz) for its frequency to count.
 const MIN_SNR: f64 = 20.0;
 
@@ -79,8 +82,14 @@ pub struct Report {
     pub confirmed: bool,
     /// Seconds not read in the decoded minute.
     pub unread: Option<usize>,
-    /// The confirmed minute's start, late by the receiver's clock (ms).
+    /// The confirmed minute's start, late by the receiver's clock (ms):
+    /// the clock as it was at `at` (lately, not over the timebase's
+    /// minutes-long fit: a clock being steered would be measured late).
     pub late_ms: Option<f64>,
+    /// When the clock was as `late_ms` and `offset_ms` say (system
+    /// time, s): the middle of the last [`RECENT_S`] seconds' reads.
+    #[serde(skip)]
+    pub at: Option<f64>,
     /// The ADC clock's error (ppm, + fast) from the carrier's frequency
     /// over the last minute.
     pub adc_ppm: Option<f64>,
@@ -579,12 +588,15 @@ impl Monitor {
     }
 
     /// Frames `first..` of the bin; `utc` maps a bin frame (fractional) to
-    /// UTC. The minutes that ended, one report per station.
+    /// UTC, `recent` gives the system clock lately as (frame, time), for
+    /// the stream's true rate in frames/s (`Timebase::recent`). The
+    /// minutes that ended, one report per station.
     pub fn push(
         &mut self,
         first: u64,
         iq: &[Iq32],
         utc: impl Fn(f64) -> Option<f64>,
+        recent: impl Fn(f64) -> Option<(f64, f64)>,
         tb_ppm: Option<f64>,
     ) -> Vec<Report> {
         if self.next != Some(first) {
@@ -637,7 +649,7 @@ impl Monitor {
         let m = (now / 60.0).floor() as i64;
         let prev = self.minute.replace(m);
         match prev {
-            Some(p) if p != m => self.reports(p * 60, &utc, tb_ppm),
+            Some(p) if p != m => self.reports(p * 60, &utc, &recent, tb_ppm),
             _ => vec![],
         }
     }
@@ -670,12 +682,32 @@ impl Monitor {
         &mut self,
         t: i64,
         utc: &impl Fn(f64) -> Option<f64>,
+        recent: &impl Fn(f64) -> Option<(f64, f64)>,
         tb_ppm: Option<f64>,
     ) -> Vec<Report> {
         let mut fl = std::mem::take(&mut self.floors);
         fl.sort_by(f64::total_cmp);
         let floor = (!fl.is_empty()).then(|| fl[fl.len() / 2]);
         let p90 = (!fl.is_empty()).then(|| fl[(fl.len() * 9 / 10).min(fl.len() - 1)]);
+        // the stream's true rate: the atomic carriers' (their median), else
+        // the timebase's (against the system clock), else nominal
+        let mut cp: Vec<f64> = self
+            .chains
+            .iter()
+            .filter(|c| c.station.atomic() && !c.amps.is_empty())
+            .filter(|c| {
+                let a = c.amps.iter().sum::<f64>() / c.amps.len() as f64;
+                let db = 20.0 * (a / RX_SINE_FULL_SCALE).max(1e-15).log10();
+                floor.is_some_and(|f| db - f > MIN_SNR)
+            })
+            .filter_map(|c| c.ppm())
+            .collect();
+        cp.sort_by(f64::total_cmp);
+        let ppm = cp.get(cp.len() / 2).copied().or(tb_ppm).unwrap_or(0.0);
+        let rate = self.rate * (1.0 + ppm * 1e-6);
+        // the system clock lately: frames to its time
+        let anchor = recent(rate);
+        let now = |f: f64| anchor.map(|(fa, sa)| sa + (f - fa) / rate);
         let mut out = Vec::new();
         for (i, c) in self.chains.iter_mut().enumerate() {
             let amps = std::mem::take(&mut c.amps);
@@ -702,7 +734,7 @@ impl Monitor {
                     // back by the filter's delay
                     let f =
                         self.frame0 as f64 + m.t * FS * self.decim as f64 - (TAPS - 1) as f64 / 2.0;
-                    utc(f).map(|u| (u - m.utc as f64) * 1e3)
+                    now(f).or_else(|| utc(f)).map(|u| (u - m.utc as f64) * 1e3)
                 })
                 .collect();
             lates.sort_by(f64::total_cmp);
@@ -722,7 +754,11 @@ impl Monitor {
                 while c.lates.len() > LATES {
                     c.lates.pop_front();
                 }
-                offset_ms = c.delay_ms.map(|d| ((d - l) * 1e3).round() / 1e3);
+                // through the recent reads only (the fit lags a steered clock)
+                offset_ms = c
+                    .delay_ms
+                    .filter(|_| anchor.is_some())
+                    .map(|d| ((d - l) * 1e3).round() / 1e3);
                 sigma_ms = Some((scatter(&c.lates) * 1e3).round() / 1e3);
             }
             if !c.shed {
@@ -745,6 +781,7 @@ impl Monitor {
                 confirmed,
                 unread: best.map(|m| m.symbols.chars().filter(|&s| s == '?').count()),
                 late_ms,
+                at: anchor.map(|a| a.1).filter(|_| late_ms.is_some()),
                 // a carrier well above the floor only (else its phase is noise)
                 adc_ppm: c
                     .ppm()
@@ -961,9 +998,15 @@ fn run(tap: BinTap, mut mons: Vec<(usize, Monitor)>, log: Option<PathBuf>) {
                     && f.first != e
                 {
                     reports.extend(
-                        mon.push(f0, &iq, |fr| tap.timebase().utc(fr), ppm)
-                            .into_iter()
-                            .map(|r| (k, r)),
+                        mon.push(
+                            f0,
+                            &iq,
+                            |fr| tap.timebase().utc(fr),
+                            |r| tap.timebase().recent(RECENT_S, r),
+                            ppm,
+                        )
+                        .into_iter()
+                        .map(|r| (k, r)),
                     );
                     iq.clear();
                     first = None;
@@ -976,9 +1019,15 @@ fn run(tap: BinTap, mut mons: Vec<(usize, Monitor)>, log: Option<PathBuf>) {
             let Some(f0) = first else { continue };
             end = Some(e);
             reports.extend(
-                mon.push(f0, &iq, |fr| tap.timebase().utc(fr), ppm)
-                    .into_iter()
-                    .map(|r| (k, r)),
+                mon.push(
+                    f0,
+                    &iq,
+                    |fr| tap.timebase().utc(fr),
+                    |r| tap.timebase().recent(RECENT_S, r),
+                    ppm,
+                )
+                .into_iter()
+                .map(|r| (k, r)),
             );
         }
         let Some(end) = end else { continue };
@@ -1010,7 +1059,7 @@ fn run(tap: BinTap, mut mons: Vec<(usize, Monitor)>, log: Option<PathBuf>) {
                 crate::timesync::submit(crate::timesync::Sample {
                     source: r.station.clone(),
                     offset: o / 1e3,
-                    at: r.t as f64,
+                    at: r.at.unwrap_or(r.t as f64),
                     sigma: sg / 1e3,
                 });
             }
@@ -1115,7 +1164,10 @@ mod tests {
                     q: z.im.round() as i32,
                 });
             }
-            reports.extend(mon.push(b0 as u64, &buf, utc, None));
+            // the system clock "lately": the ADC's, as `utc` has it
+            let fa = (minutes as f64 - 1.0) * 60.0 * rate;
+            let recent = |_r: f64| Some((fa, start as f64 + fa / rate));
+            reports.extend(mon.push(b0 as u64, &buf, utc, recent, None));
         }
         // the last full minute
         let last: Vec<&Report> = reports
@@ -1144,6 +1196,7 @@ mod tests {
             };
             assert!((off - (delay - late)).abs() < 0.01, "{r:?}");
             assert!(r.sigma_ms.unwrap() > 0.0);
+            assert_eq!(r.at, Some(start as f64 + (minutes as f64 - 1.0) * 60.0));
         }
         assert!(mon.counts.iter().all(|c| c[0] >= 2), "{:?}", mon.counts);
     }

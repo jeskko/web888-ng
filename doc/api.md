@@ -536,12 +536,19 @@ air-gapped receiver's system clock follows the stations too
 * any source (the time-code stations now; the EFR teleswitch telegrams
   or GPS later) submits samples: the system clock's offset, when, and
   its own standard error; nothing else is needed to add one;
-* once a minute, at second 30, the samples since the last time are
+* a station's offset is measured against the system clock as it is
+  lately, not through the timebase's fit: the last 20 s of the stream's
+  reads, the stream's rate from the atomic carriers (else the
+  timebase's). The fit spans ten minutes; against a clock that chrony
+  steers it lags by minutes, and a loop closed over it swings ever
+  wider (the LF-only trial of 2026-11-20: ±1.5 s within two hours);
+* once a minute, at second 10, the samples since the last time are
   combined, one per source: an offset of 0.5 s or more needs two
   sources agreeing within 20 ms (a wrong decode doesn't set the clock),
   with two or more a source beyond 4 of its errors (at least 3 ms) from
   their median is left out, the rest are weighted by their errors; the
-  result goes to chrony, stamped with the time it is sent;
+  result goes to chrony, stamped with the time it was measured (the
+  samples' median; older than 100 s: not sent);
 * `[timesync] trim_ms` adds a calibration per source; `chrony_socket`
   empty: measured only;
 * chrony.conf gives the LF clock a 20 ms delay: while NTP is reachable

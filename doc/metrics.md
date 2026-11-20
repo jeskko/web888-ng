@@ -90,7 +90,7 @@ Prometheus); `$__rate_interval` then follows it.
 | `timesync_source_offset_seconds`, `timesync_source_sigma_seconds` | gauge | `source` | a time source's last offset of the system clock (s, true minus system, `[timesync] trim_ms` applied) and standard error, as combined for chrony (`[timesync]`) |
 | `timesync_source_minutes_total` | counter | `source`, `result` (used, rejected) | minutes a source was in the combined sample, or left out (an outlier, or a large offset no other source agreed with) |
 | `timesync_offset_seconds`, `timesync_sigma_seconds`, `timesync_sources` | gauge | | the last combined sample sent toward chrony: offset (s), standard error (s), sources in it |
-| `timesync_samples_total` | counter | `result` (sent, error, rejected) | combined samples sent to chrony's socket; sends failed (no chrony); minutes with samples but none usable |
+| `timesync_samples_total` | counter | `result` (sent, error, rejected, stale) | combined samples sent to chrony's socket; sends failed (no chrony); minutes with samples but none usable; minutes whose samples were too old to send |
 | `kernel_clock_freq_ppm` | gauge | | the kernel's frequency correction of the system clock (set by the NTP daemon, ppm) |
 | `system_cpu_seconds_total` | counter | `mode` (busy, idle) | all CPUs |
 | `temperature_celsius` | gauge | | the SoC's |

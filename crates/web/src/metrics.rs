@@ -319,11 +319,12 @@ fn timesync(o: &mut Out) {
     o.put(
         "timesync_samples_total",
         "counter",
-        "Combined samples: sent to chrony, failed to send (no chrony), none usable",
+        "Combined samples: sent to chrony, failed to send (no chrony), none usable, too old to send",
         &[
             (labels(&[("result", "sent")]), st.sent as f64),
             (labels(&[("result", "error")]), st.send_errors as f64),
             (labels(&[("result", "rejected")]), st.rejected as f64),
+            (labels(&[("result", "stale")]), st.stale as f64),
         ],
     );
 }

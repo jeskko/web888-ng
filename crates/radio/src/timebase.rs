@@ -214,6 +214,48 @@ impl Timebase {
         self.offset_at(frame).map(|o| o + frame / self.nominal)
     }
 
+    /// The host clock lately, as one point (frame, host time): the last
+    /// `n` seconds' least-late reads, each moved to their mean frame with
+    /// the stream taken to run at `rate` frames per second of true time
+    /// (a reference's rate, not the host clock's). For measuring the host
+    /// clock while something steers it: [`Timebase::utc`]'s fit spans
+    /// minutes, so against a clock being slewed it lags by minutes, and a
+    /// loop closed over it oscillates (the LF-only chrony trial of
+    /// 2026-11-20). The point is as old as the reads' middle.
+    pub fn recent(&self, n: usize, rate: f64) -> Option<(f64, f64)> {
+        let n = n.max(MIN_POINTS);
+        if self.nominal == 0.0 || rate <= 0.0 || self.pts.len() < MIN_POINTS {
+            return None;
+        }
+        let p: Vec<(f64, f64)> = self
+            .pts
+            .iter()
+            .rev()
+            .take(n)
+            .map(|&(f, o)| (f, o + f / self.nominal))
+            .collect();
+        let fa = p.iter().map(|x| x.0).sum::<f64>() / p.len() as f64;
+        let mut h: Vec<f64> = p.iter().map(|&(f, t)| t + (fa - f) / rate).collect();
+        let mean = |v: &[f64]| v.iter().sum::<f64>() / v.len() as f64;
+        // as the fit: again without the reads well above the rest
+        for _ in 0..2 {
+            let m = mean(&h);
+            let mut s: Vec<f64> = h.iter().map(|v| (v - m).abs()).collect();
+            s.sort_by(f64::total_cmp);
+            let mad = s[s.len() / 2].max(1e-6);
+            let keep: Vec<f64> = h
+                .iter()
+                .copied()
+                .filter(|v| v - m < 3.0 * 1.4826 * mad)
+                .collect();
+            if keep.len() < MIN_POINTS || keep.len() == h.len() {
+                break;
+            }
+            h = keep;
+        }
+        Some((fa, mean(&h)))
+    }
+
     /// The stream's frames per second by the host clock.
     pub fn rate(&self) -> Option<f64> {
         if self.nominal == 0.0 {
@@ -361,5 +403,64 @@ mod tests {
         // another nominal rate: a new stream
         tb.observe(256, 1.9e9, 24_000.0);
         assert_eq!(tb.pts.len(), 0);
+    }
+
+    /// A clock steered by a simple PI loop (a chrony stand-in) from the
+    /// offset it measures each 64 s through the timebase, the stream's
+    /// rate known (as from a station's carrier): the host clock's error
+    /// (s) each minute over `secs`.
+    fn steer(recent: bool, secs: f64) -> Vec<f64> {
+        let (nominal, block) = (48_000.0, 480u64);
+        let real = nominal * (1.0 + 0.4e-6);
+        let t0 = 1.8e9;
+        let mut tb = Timebase::default();
+        // the host clock's error (s), its oscillator's (s/s), the loop's
+        // frequency correction and phase slew
+        let (mut x, f_err, mut f_corr, mut slew) = (0.005, 20e-6, 0.0, 0.0);
+        let (mut end, mut k, mut next) = (0u64, 0u64, 64.0);
+        let mut out = Vec::new();
+        let dt = block as f64 / real;
+        while (end as f64) / real < secs {
+            end += block;
+            k += 1;
+            x += (f_err + f_corr + slew) * dt;
+            let t = end as f64 / real;
+            let late = 0.0048 * ((k * 7919 % 1000) as f64 / 1000.0);
+            tb.observe(end, t0 + t + x + late, nominal);
+            if t >= next {
+                next += 64.0;
+                // true minus host time, as the stations give it
+                let o = if recent {
+                    tb.recent(20, real).map(|(fa, sa)| t0 + fa / real - sa)
+                } else {
+                    let f = end as f64 - 30.0 * real;
+                    tb.utc(f).map(|u| t0 + f / real - u)
+                };
+                if let Some(o) = o {
+                    slew = 0.5 * o / 64.0;
+                    f_corr += 0.1 * o / 64.0;
+                }
+            }
+            if k % (60 * real as u64 / block) == 0 {
+                out.push(x);
+            }
+        }
+        out
+    }
+
+    /// Measured through the fit (minutes long) the loop swings ever wider,
+    /// as the 2026-11-20 trial did; through the recent reads it settles.
+    #[test]
+    fn a_loop_over_the_recent_reads_settles() {
+        let worst = |v: &[f64]| v[v.len() - 30..].iter().fold(0.0f64, |m, x| m.max(x.abs()));
+        let r = steer(true, 7200.0);
+        let f = steer(false, 7200.0);
+        eprintln!(
+            "recent {:.3} ms, fit {:.3} ms",
+            worst(&r) * 1e3,
+            worst(&f) * 1e3
+        );
+        assert!(worst(&r) < 0.3e-3, "{:?}", r);
+        assert!(worst(&f) > 10.0 * worst(&r), "{:?}", f);
     }
 }
