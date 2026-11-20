@@ -75,7 +75,7 @@ msgstr "Kirjaudu"
 msgid "Back to the receiver"
 msgstr "Takaisin vastaanottimeen"
 
-#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:381 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:382 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr "Ladataan…"
 
@@ -359,7 +359,7 @@ msgstr "Ei määritetty ([[skimmer]] asetuksissa)."
 msgid "band"
 msgstr "kaista"
 
-#: src/admin/admin.tsx:477 src/admin/clock.tsx:193
+#: src/admin/admin.tsx:477 src/admin/clock.tsx:194
 msgid "state"
 msgstr "tila"
 
@@ -581,11 +581,11 @@ msgstr "{class} (tunniste {name})"
 msgid "{rx}, listening to #{n}"
 msgstr "{rx}, kuuntelee mukana: #{n}"
 
-#: src/admin/admin.tsx:680 src/admin/clock.tsx:128
+#: src/admin/admin.tsx:680 src/admin/clock.tsx:129
 msgid "yes"
 msgstr "kyllä"
 
-#: src/admin/admin.tsx:680 src/admin/clock.tsx:128
+#: src/admin/admin.tsx:680 src/admin/clock.tsx:129
 msgid "no"
 msgstr "ei"
 
@@ -1237,275 +1237,275 @@ msgid "Log out"
 msgstr "Kirjaudu ulos"
 
 #. chrony's states of a time source; selected = the one the clock follows; combined = averaged in with it; falseticker = disagrees with the others
-#: src/admin/clock.tsx:95
+#: src/admin/clock.tsx:96
 msgid "selected"
 msgstr ""
 
-#: src/admin/clock.tsx:97
+#: src/admin/clock.tsx:98
 msgid "combined"
 msgstr ""
 
-#: src/admin/clock.tsx:99
+#: src/admin/clock.tsx:100
 msgid "not combined"
 msgstr ""
 
-#: src/admin/clock.tsx:101
+#: src/admin/clock.tsx:102
 msgid "unusable"
 msgstr ""
 
-#: src/admin/clock.tsx:103
+#: src/admin/clock.tsx:104
 msgid "a falseticker"
 msgstr ""
 
-#: src/admin/clock.tsx:105
+#: src/admin/clock.tsx:106
 msgid "too variable"
 msgstr ""
 
-#: src/admin/clock.tsx:124
+#: src/admin/clock.tsx:125
 msgid "System clock"
 msgstr ""
 
-#: src/admin/clock.tsx:125
+#: src/admin/clock.tsx:126
 msgid "chrony doesn't answer (chronyc): the kernel's view only."
 msgstr ""
 
-#: src/admin/clock.tsx:127
+#: src/admin/clock.tsx:128
 msgid "Synchronised"
 msgstr ""
 
 #. the reference = the time source the clock follows now; LF = this receiver's own time-code stations
-#: src/admin/clock.tsx:132
+#: src/admin/clock.tsx:133
 msgid "Reference"
 msgstr ""
 
-#: src/admin/clock.tsx:134
+#: src/admin/clock.tsx:135
 msgid "LF: this receiver's time-code stations"
 msgstr ""
 
-#: src/admin/clock.tsx:135
+#: src/admin/clock.tsx:136
 msgid "stratum {n}"
 msgstr ""
 
 #. how far the system clock is from the reference now, and which way
-#: src/admin/clock.tsx:138
+#: src/admin/clock.tsx:139
 msgid "Offset"
 msgstr ""
 
-#: src/admin/clock.tsx:143
+#: src/admin/clock.tsx:144
 msgid "{s} slow"
 msgstr ""
 
-#: src/admin/clock.tsx:144
+#: src/admin/clock.tsx:145
 msgid "{s} fast"
 msgstr ""
 
-#: src/admin/clock.tsx:145
+#: src/admin/clock.tsx:146
 msgid "(RMS {s})"
 msgstr ""
 
 #. the crystal's rate error that chrony corrects; skew = its uncertainty
-#: src/admin/clock.tsx:148 src/admin/clock.tsx:171 src/ctl/mobile.tsx:259
+#: src/admin/clock.tsx:149 src/admin/clock.tsx:172 src/ctl/mobile.tsx:259
 msgid "Frequency"
 msgstr "Taajuus"
 
-#: src/admin/clock.tsx:153
+#: src/admin/clock.tsx:154
 msgid "{ppm} ppm slow"
 msgstr ""
 
-#: src/admin/clock.tsx:154
+#: src/admin/clock.tsx:155
 msgid "{ppm} ppm fast"
 msgstr ""
 
 #. the largest error the clock may have against true time: half the path's delay plus the dispersion
-#: src/admin/clock.tsx:158
+#: src/admin/clock.tsx:159
 msgid "Error bound"
 msgstr ""
 
-#: src/admin/clock.tsx:160
+#: src/admin/clock.tsx:161
 msgid "Updated every"
 msgstr ""
 
 #. leap second status: Normal, Insert second, Delete second, Not synchronised
-#: src/admin/clock.tsx:163
+#: src/admin/clock.tsx:164
 msgid "Leap status"
 msgstr ""
 
-#: src/admin/clock.tsx:169
+#: src/admin/clock.tsx:170
 msgid "Estimated error"
 msgstr ""
 
-#: src/admin/clock.tsx:172
+#: src/admin/clock.tsx:173
 msgid "{ppm} ppm correction"
 msgstr ""
 
 #. chrony = the program that keeps the system clock; its sources = NTP servers and reference clocks
-#: src/admin/clock.tsx:185
+#: src/admin/clock.tsx:186
 msgid "chrony's sources"
 msgstr ""
 
-#: src/admin/clock.tsx:187
+#: src/admin/clock.tsx:188
 msgid "None."
 msgstr ""
 
-#: src/admin/clock.tsx:192 src/admin/clock.tsx:253
+#: src/admin/clock.tsx:193 src/admin/clock.tsx:254
 msgid "source"
 msgstr ""
 
 #. reach = which of the last 8 polls got an answer
-#: src/admin/clock.tsx:195
+#: src/admin/clock.tsx:196
 msgid "The last 8 polls, oldest first: ■ answered, □ not"
 msgstr ""
 
 #. reach = which of the last 8 polls got an answer
-#: src/admin/clock.tsx:195
+#: src/admin/clock.tsx:196
 msgid "reach"
 msgstr ""
 
-#: src/admin/clock.tsx:196
+#: src/admin/clock.tsx:197
 msgid "last"
 msgstr ""
 
 #. the system clock against the source at its last sample (+: the clock is ahead), ± its error bound
-#: src/admin/clock.tsx:198
+#: src/admin/clock.tsx:199
 msgid "The system clock against the source at its last sample (+: the clock is ahead), ± its error bound"
 msgstr ""
 
-#: src/admin/clock.tsx:199 src/admin/clock.tsx:254
+#: src/admin/clock.tsx:200 src/admin/clock.tsx:255
 msgid "offset"
 msgstr ""
 
-#: src/admin/clock.tsx:207
+#: src/admin/clock.tsx:208
 msgid "LF (time-code stations)"
 msgstr ""
 
 #. what this receiver sends to chrony each minute: its time sources combined
-#: src/admin/clock.tsx:232
+#: src/admin/clock.tsx:233
 msgid "To chrony"
 msgstr ""
 
 #. the combined sample: the system clock's offset (true time minus the clock's) ± its standard error
-#: src/admin/clock.tsx:235
+#: src/admin/clock.tsx:236
 msgid "Last sample"
 msgstr ""
 
-#: src/admin/clock.tsx:238
+#: src/admin/clock.tsx:239
 msgid "from {n} source"
 msgid_plural "from {n} sources"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/admin/clock.tsx:240
+#: src/admin/clock.tsx:241
 msgid "Samples"
 msgstr ""
 
-#: src/admin/clock.tsx:242
+#: src/admin/clock.tsx:243
 msgid "{sent} sent, {failed} failed (no chrony), {none} minutes with none usable"
 msgstr ""
 
 #. minutes the source was in the combined sample / left out of it
-#: src/admin/clock.tsx:256
+#: src/admin/clock.tsx:257
 msgid "used"
 msgstr ""
 
-#: src/admin/clock.tsx:257
+#: src/admin/clock.tsx:258
 msgid "left out"
 msgstr ""
 
 #. LF time-code stations (DCF77, MSF, RBU, DCF39 ...) decoded on the receiver
-#: src/admin/clock.tsx:286 src/admin/clock.tsx:298
+#: src/admin/clock.tsx:287 src/admin/clock.tsx:299
 msgid "Time-code stations"
 msgstr ""
 
-#: src/admin/clock.tsx:287
-msgid "Not watched ([timecode] enabled in the config)."
+#: src/admin/clock.tsx:288
+msgid "Not watched: needs [timecode] enabled in the config and the channelizer's bins."
 msgstr ""
 
-#: src/admin/clock.tsx:299
+#: src/admin/clock.tsx:300
 msgid "Minute {when} UTC ({ago} ago)."
 msgstr ""
 
-#: src/admin/clock.tsx:303
+#: src/admin/clock.tsx:304
 msgid "station"
 msgstr ""
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
-#: src/admin/clock.tsx:305
+#: src/admin/clock.tsx:306
 msgid "SNR"
 msgstr ""
 
 #. minutes confirmed / decoded but not confirmed / not decoded since the start
-#: src/admin/clock.tsx:307
+#: src/admin/clock.tsx:308
 msgid "Minutes confirmed / decoded but unconfirmed / not decoded"
 msgstr ""
 
-#: src/admin/clock.tsx:308
+#: src/admin/clock.tsx:309
 msgid "minutes"
 msgstr ""
 
 #. late = how late the station's time arrives by the system clock (ms); for EFR, after its 10 s mark
-#: src/admin/clock.tsx:311
+#: src/admin/clock.tsx:312
 msgid "late"
 msgstr ""
 
 #. the system clock's error by this station (true minus system time), ± its scatter
-#: src/admin/clock.tsx:313
+#: src/admin/clock.tsx:314
 msgid "The system clock's error by this station (true minus system time, ms), ± the scatter of its last minutes"
 msgstr ""
 
-#: src/admin/clock.tsx:314
+#: src/admin/clock.tsx:315
 msgid "clock offset"
 msgstr ""
 
-#: src/admin/clock.tsx:323
+#: src/admin/clock.tsx:324
 msgid "(shed)"
 msgstr ""
 
 #. the noise floor of each frequency bin the stations are watched in
-#: src/admin/clock.tsx:340
+#: src/admin/clock.tsx:341
 msgid "Noise floor"
 msgstr ""
 
 #. the ADC's sample clock error, measured on the stations' carriers (atomic clocks)
-#: src/admin/clock.tsx:343
+#: src/admin/clock.tsx:344
 msgid "ADC clock"
 msgstr ""
 
-#: src/admin/clock.tsx:344
+#: src/admin/clock.tsx:345
 msgid "{ppm} ppm (carriers)"
 msgstr ""
 
 #. the CPU's crystal as it runs (without NTP's correction) against the ADC clock
-#: src/admin/clock.tsx:346
+#: src/admin/clock.tsx:347
 msgid "CPU crystal"
 msgstr ""
 
-#: src/admin/clock.tsx:348
+#: src/admin/clock.tsx:349
 msgid "{ppm} ppm against the ADC clock"
 msgstr ""
 
-#: src/admin/clock.tsx:351
+#: src/admin/clock.tsx:352
 msgid "Monitor CPU"
 msgstr ""
 
-#: src/admin/clock.tsx:352
+#: src/admin/clock.tsx:353
 msgid "{pct} % of a core"
 msgstr ""
 
 #. the receiver's timebase: how sample times map to UTC
-#: src/admin/clock.tsx:364
+#: src/admin/clock.tsx:365
 msgid "Receiver timebase"
 msgstr ""
 
-#: src/admin/clock.tsx:366
+#: src/admin/clock.tsx:367
 msgid "Source"
 msgstr ""
 
-#: src/admin/clock.tsx:368
+#: src/admin/clock.tsx:369
 msgid "Uncertainty"
 msgstr ""
 
 #. the sample stream's rate against the system clock
-#: src/admin/clock.tsx:371
+#: src/admin/clock.tsx:372
 msgid "Stream rate"
 msgstr ""
 

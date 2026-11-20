@@ -83,6 +83,7 @@ function secs(s: number | null | undefined, sign = false): string {
   if (s === null || s === undefined || !Number.isFinite(s)) return "–";
   const a = Math.abs(s);
   const p = sign && s > 0 ? "+" : "";
+  if (a < 1e-5) return `${p}${(s * 1e6).toFixed(1)} µs`;
   if (a < 1e-3) return `${p}${(s * 1e6).toFixed(0)} µs`;
   if (a < 1) return `${p}${(s * 1e3).toFixed(a < 0.01 ? 2 : 1)} ms`;
   return `${p}${s.toFixed(3)} s`;
@@ -180,7 +181,7 @@ function SystemCard({ c }: { c: Clock }) {
 function SourcesCard({ c }: { c: Clock }) {
   const src = c.chrony.sources ?? [];
   return (
-    <section class="card">
+    <section class="card span2">
       {/* i18n: chrony = the program that keeps the system clock; its sources = NTP servers and reference clocks */}
       <h3>{t("chrony's sources")}</h3>
       {src.length === 0 ? (
@@ -284,7 +285,7 @@ function StationsCard({ c }: { c: Clock }) {
     return (
       <section class="card">
         <h3>{t("Time-code stations")}</h3>
-        <p class="dim">{t("Not watched ([timecode] enabled in the config).")}</p>
+        <p class="dim">{t("Not watched: needs [timecode] enabled in the config and the channelizer's bins.")}</p>
       </section>
     );
   }

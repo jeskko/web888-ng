@@ -209,6 +209,8 @@ pre { background: var(--panel); padding: 6px 12px; border-radius: 4px; }
 .card dt { color: var(--dim); }
 .card dd { margin: 0; font-variant-numeric: tabular-nums; }
 .card.tokens { grid-column: 1 / -1; }
+/* a wide table: two columns where there are two (not on a phone: an implicit column would overflow) */
+@media (min-width: 760px) { .card.span2 { grid-column: span 2; } }
 .card.tokens select { max-width: 100%; }
 .token-made { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; margin-top: 10px; }
 .token-made p { flex-basis: 100%; margin: 0; }
