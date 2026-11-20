@@ -279,6 +279,7 @@ async fn admin_api() {
         ("GET", "/api/admin/config"),
         ("GET", "/api/admin/stats"),
         ("GET", "/api/admin/skimmers"),
+        ("GET", "/api/admin/clock"),
         ("POST", "/api/admin/sessions/1/kick"),
     ] {
         assert_eq!(http(addr, m, p, None, None).await.status, 401, "{p}");
@@ -497,6 +498,12 @@ async fn admin_api() {
     // no skimmer service in this server
     let k = me("GET", "/api/admin/skimmers", None).await.json();
     assert_eq!(k, json!({"available": false}));
+
+    // the clock: whatever chrony there is; no time-code monitor here
+    let c = me("GET", "/api/admin/clock", None).await.json();
+    assert!(c["chrony"]["available"].is_boolean(), "{c}");
+    assert!(c["now"].as_f64().unwrap() > 1.7e9, "{c}");
+    assert!(c["timecode"].is_null(), "{c}");
 
     // restart isn't wired up here
     assert_eq!(me("POST", "/api/admin/restart", None).await.status, 501);

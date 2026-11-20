@@ -547,6 +547,14 @@ air-gapped receiver's system clock follows the stations too
 * chrony.conf gives the LF clock a 20 ms delay: while NTP is reachable
   it dominates, and the stations carry the clock when it isn't. Metrics
   `timesync_*` (`doc/metrics.md`).
+* the admin page's **Clock** tab (`GET /api/admin/clock`, admin only):
+  chrony's tracking (reference, offset, frequency, error bound, leap
+  status) and sources (state, reach, offset; from `chronyc -c`), the
+  kernel's clock discipline, what goes to chrony (the last combined
+  sample, each source's offset and minutes used or left out), the
+  time-code stations (SNR, minutes, lateness, clock offset and scatter,
+  the bins' floors, the ADC clock and the CPU crystal, the monitor's
+  CPU) and the receiver's timebase.
 
 **The page** (**built**). While its time-code, FT8/FT4/WSPR or JS8
 decoders run it asks for timed audio, and their sample clocks take the

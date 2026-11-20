@@ -106,6 +106,7 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/adc", post(adc))
         .route("/api/admin/sessions/{id}/ban", post(ban))
         .route("/api/admin/skimmers", get(skimmers))
+        .route("/api/admin/clock", get(crate::clockview::clock))
         .route("/metrics", get(metrics))
 }
 

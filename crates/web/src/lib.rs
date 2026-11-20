@@ -9,6 +9,7 @@ pub mod auth;
 pub mod backup;
 pub mod binview;
 pub mod bootloader;
+pub mod clockview;
 pub mod codec;
 pub mod dxspots;
 pub mod info;

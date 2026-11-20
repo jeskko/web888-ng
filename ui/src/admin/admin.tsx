@@ -8,12 +8,15 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { formatKhz } from "../fmt.ts";
 import { N_, t, tc, tn, tx } from "../i18n.ts";
 import { call, get, href, loggedOut, putText, type ApiToken, type Auth, type Changes, type LeaseRow, type Session, type Skimmers, type Stats, type UpdateView } from "./api.ts";
+import { ClockPage } from "./clock.tsx";
 import { ConfigPage } from "./configform.tsx";
+import { ago, usePoll } from "./util.ts";
 
-type Tab = "status" | "sessions" | "config" | "labels" | "info" | "passwords" | "update" | "logs";
+type Tab = "status" | "clock" | "sessions" | "config" | "labels" | "info" | "passwords" | "update" | "logs";
 // i18n: names of the admin page's tabs
 const TABS: { id: Tab; name: string }[] = [
   { id: "status", name: N_("Status") },
+  { id: "clock", name: N_("Clock") },
   { id: "sessions", name: N_("Sessions") },
   { id: "config", name: N_("Configuration") },
   { id: "labels", name: N_("Labels") },
@@ -30,32 +33,6 @@ function tabFromHash(): Tab {
 
 const tab = signal<Tab>(tabFromHash());
 window.addEventListener("hashchange", () => (tab.value = tabFromHash()));
-
-/** Call `f` now and every `ms` while mounted. */
-function usePoll(f: () => Promise<void>, ms: number) {
-  const ref = useRef(f);
-  ref.current = f;
-  useEffect(() => {
-    let stop = false;
-    let timer: number | undefined;
-    const run = async () => {
-      await ref.current().catch(() => {});
-      if (!stop) timer = window.setTimeout(run, ms);
-    };
-    void run();
-    return () => {
-      stop = true;
-      clearTimeout(timer);
-    };
-  }, [ms]);
-}
-
-function ago(unixS: number): string {
-  const s = Math.max(0, Date.now() / 1000 - unixS);
-  if (s < 60) return `${s.toFixed(0)} s`;
-  if (s < 3600) return `${(s / 60).toFixed(0)} min`;
-  return `${Math.floor(s / 3600)} h ${Math.floor((s % 3600) / 60)} min`;
-}
 
 const khz = (hz: number | null) => (hz === null ? "–" : `${formatKhz(hz)} kHz`);
 
@@ -1645,6 +1622,7 @@ export function AdminApp() {
       </header>
       <div class="page">
         {tab.value === "status" && <StatusPage />}
+        {tab.value === "clock" && <ClockPage />}
         {tab.value === "sessions" && <SessionsPage />}
         {tab.value === "config" && (
           <>

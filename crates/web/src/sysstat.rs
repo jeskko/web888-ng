@@ -75,6 +75,24 @@ pub fn kernel_freq_ppm() -> Option<f64> {
     (r >= 0).then(|| t.freq as f64 / 65536.0)
 }
 
+/// The kernel's clock discipline in full (adjtimex): synchronised,
+/// estimated and maximum error (s), frequency correction (ppm).
+pub fn kernel_discipline() -> Option<(bool, f64, f64, f64)> {
+    // SAFETY: a zeroed timex with modes 0 only reads the state.
+    let mut t: libc::timex = unsafe { std::mem::zeroed() };
+    let r = unsafe { libc::adjtimex(&mut t) };
+    if r < 0 {
+        return None;
+    }
+    let synced = r != libc::TIME_ERROR && t.status & libc::STA_UNSYNC == 0;
+    Some((
+        synced,
+        t.esterror as f64 * 1e-6,
+        t.maxerror as f64 * 1e-6,
+        t.freq as f64 / 65536.0,
+    ))
+}
+
 /// Seconds of `clock` (`CLOCK_MONOTONIC_RAW`, `CLOCK_REALTIME`).
 pub fn clock_s(clock: libc::clockid_t) -> f64 {
     // SAFETY: clock_gettime fills the timespec.

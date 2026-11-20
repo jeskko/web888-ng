@@ -2132,6 +2132,38 @@
         }
       }
     },
+    "/api/admin/clock": {
+      "get": {
+        "summary": "Where the time comes from: chrony's tracking and sources, the kernel's clock, the timebase, the samples to chrony and the time-code stations",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        }
+      }
+    },
     "/api/admin/ovl": {
       "get": {
         "summary": "The ADC overload log",
