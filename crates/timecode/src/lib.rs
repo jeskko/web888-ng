@@ -48,6 +48,11 @@ pub enum Station {
     Dcf39,
     Hga22,
     Dcf49,
+    /// TDF (ALS162), 162 kHz from Allouis: DCF77's code as phase
+    /// modulation (a ~50 ms pulse of about -1 rad at each second's start,
+    /// a second one at 100 ms for a 1, none in second 59), read by the
+    /// envelope receiver from the phase.
+    Tdf,
 }
 
 /// Each symbol's mean level (0 keyed down / off, 1 up / on) in the
@@ -56,7 +61,7 @@ type Templates = &'static [(char, &'static [f32])];
 
 impl Station {
     /// In the page's order (its station numbers).
-    pub const ALL: [Station; 9] = [
+    pub const ALL: [Station; 10] = [
         Station::Dcf77,
         Station::Msf,
         Station::Wwvb,
@@ -66,6 +71,7 @@ impl Station {
         Station::Dcf39,
         Station::Hga22,
         Station::Dcf49,
+        Station::Tdf,
     ];
 
     /// An EFR teleswitch station ([`efr`]).
@@ -99,6 +105,7 @@ impl Station {
             Station::Dcf39 => "DCF39",
             Station::Hga22 => "HGA22",
             Station::Dcf49 => "DCF49",
+            Station::Tdf => "TDF",
         }
     }
 
@@ -129,6 +136,8 @@ impl Station {
             Station::Dcf39 | Station::Dcf49 => Some((52.2869, 11.8964)),
             // Lakihegy near Budapest
             Station::Hga22 => Some((47.3725, 19.0042)),
+            // Allouis
+            Station::Tdf => Some((47.1694, 2.2044)),
         }
     }
 
@@ -144,6 +153,7 @@ impl Station {
             Station::Dcf39 => &[139_000.0],
             Station::Hga22 => &[135_600.0],
             Station::Dcf49 => &[129_100.0],
+            Station::Tdf => &[162_000.0],
         }
     }
 
@@ -214,6 +224,20 @@ impl Station {
                     ('H', &[0.0, 0.0, 0.0, 0.0]),
                 ],
             ),
+            // the phase pulse (read as a low) at 0 ms: 0; at 0 and 100 ms:
+            // 1; none: second 59
+            // (150-800 ms carry other phase modulation, every second: the
+            // up window is after it)
+            // (a cycle of +-0.9 rad centred on 0 ms; a 1's centred on 100
+            // ms: its two lobes)
+            Station::Tdf => (
+                &[(0.01, 0.04), (0.06, 0.09), (0.11, 0.14), (0.86, 0.93)],
+                &[
+                    ('0', &[0.0, 1.0, 1.0, 1.0]),
+                    ('1', &[0.0, 0.0, 0.0, 1.0]),
+                    ('M', &[1.0, 1.0, 1.0, 1.0]),
+                ],
+            ),
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => (&[], &[]),
         }
     }
@@ -222,9 +246,28 @@ impl Station {
     /// sent (for the phase).
     fn profile(self) -> [f32; FPS] {
         let mut p = [0f32; FPS];
+        // TDF's marker as read (a KiwiSDR near Paris, 2026-11-21): the
+        // phase's |deviation| in two lobes of ~0.9 rad, 40 ms either side
+        // of the second's start; a 1's at 100 ms; other modulation over
+        // 150-800 ms
+        let tri = |t: f64| -> f32 {
+            if (0.005..0.045).contains(&t) {
+                (1.0 - (t - 0.025).abs() / 0.02) as f32
+            } else {
+                0.0
+            }
+        };
         for (k, v) in p.iter_mut().enumerate() {
             let t = k as f64 * HOP;
             *v = match self {
+                Station::Tdf => {
+                    let busy = if (0.15..0.8).contains(&t) { 0.15 } else { 0.0 };
+                    1.0 - 0.9 * tri(t)
+                        - 0.9 * tri(t - 0.95)
+                        - 0.45 * tri(t - 0.05)
+                        - 0.45 * tri(t - 0.1)
+                        - busy
+                }
                 Station::Dcf77 => {
                     if t < 0.1 {
                         0.02
@@ -292,7 +335,7 @@ impl Station {
     fn rarity(self, c: char) -> f32 {
         let r = 0.1;
         match (self, c) {
-            (Station::Dcf77 | Station::Msf, 'M') | (Station::Wwv, 'H') => r,
+            (Station::Dcf77 | Station::Msf | Station::Tdf, 'M') | (Station::Wwv, 'H') => r,
             (Station::Wwvb | Station::Jjy, 'M') => r / 3.0,
             _ => 0.0,
         }
@@ -302,7 +345,7 @@ impl Station {
     /// zone): voted over the last minutes.
     fn date_seconds(self) -> &'static [std::ops::RangeInclusive<usize>] {
         match self {
-            Station::Dcf77 => &[17..=18, 36..=58],
+            Station::Dcf77 | Station::Tdf => &[17..=18, 36..=58],
             Station::Msf => &[17..=38, 54..=56],
             Station::Wwvb => &[22..=33, 45..=53],
             Station::Jjy => &[22..=33, 41..=48, 50..=52],
@@ -315,6 +358,7 @@ impl Station {
     fn down(self) -> f32 {
         match self {
             Station::Dcf77 => 0.15,
+            Station::Tdf => 0.06,
             Station::Msf => 0.25,
             Station::Wwvb | Station::Jjy => 0.5,
             Station::Wwv => 0.65,
@@ -388,6 +432,10 @@ pub struct Receiver {
     sum: num_complex::Complex64,
     hop: usize,
     hop_n: usize,
+    /// TDF: this hop's carrier, summed, and the slow reference its phase
+    /// is measured against (~1 s).
+    tdf_acc: num_complex::Complex64,
+    tdf_ref: num_complex::Complex64,
     n: u64,
     /// The envelope (amplitude per 5 ms frame) as measured, and divided by
     /// its up level over the 2 s around it (`env`, a second behind `raw`):
@@ -447,6 +495,8 @@ impl Receiver {
             sum: num_complex::Complex64::new(0.0, 0.0),
             hop: (fs * HOP).round() as usize,
             hop_n: 0,
+            tdf_acc: num_complex::Complex64::new(0.0, 0.0),
+            tdf_ref: num_complex::Complex64::new(0.0, 0.0),
             n: 0,
             raw: Vec::new(),
             env: Vec::new(),
@@ -533,9 +583,22 @@ impl Receiver {
             self.sum += num_complex::Complex64::new((z.re - old.re) as f64, (z.im - old.im) as f64);
             self.n += 1;
             self.hop_n += 1;
+            if self.station == Station::Tdf {
+                self.tdf_acc += num_complex::Complex64::new(z.re as f64, z.im as f64);
+            }
             if self.hop_n == self.hop {
                 self.hop_n = 0;
-                self.raw.push((self.sum.norm() / w as f64) as f32);
+                if self.station == Station::Tdf {
+                    // the phase pulses as lows: 1 - |deviation| (rad)
+                    // against the carrier's phase over the last second
+                    let p = std::mem::take(&mut self.tdf_acc);
+                    let a = HOP / 1.0;
+                    self.tdf_ref = self.tdf_ref * (1.0 - a) + p * a;
+                    let d = (p * self.tdf_ref.conj()).arg().abs();
+                    self.raw.push((1.0 - d.min(1.0) * 0.98) as f32);
+                } else {
+                    self.raw.push((self.sum.norm() / w as f64) as f32);
+                }
             }
         }
         self.lo /= self.lo.norm();
@@ -602,6 +665,13 @@ impl Receiver {
         let n = (secs * FPS).min(self.env.len());
         if n < 5 * FPS {
             return None;
+        }
+        // TDF's envelope is 1 - |phase deviation| (rad), whatever the
+        // signal's strength, and its seconds are busy with other
+        // modulation (no two-level percentiles): fixed, a pulse window's
+        // mean (~0.55) low, the plain carrier high
+        if self.station == Station::Tdf {
+            return Some((0.5, 0.98));
         }
         // two order statistics (no sort: once a second over 30 s)
         let mut v: Vec<f32> = self.env[self.env.len() - n..].to_vec();
@@ -906,6 +976,9 @@ fn bits_of(frame: &[Second], station: Station) -> Option<Vec<u8>> {
             (_, '0') => a[i] = 0,
             (_, '1') => a[i] = 1,
             (_, 'M' | 'H') => {}
+            // seconds no field uses (DCF77's and TDF's 1-14: other data,
+            // DCF77's encrypted): unread there costs nothing
+            (Station::Dcf77 | Station::Tdf, '?') if (1..=14).contains(&i) => {}
             _ => return None,
         }
     }
@@ -936,7 +1009,7 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
     match station {
         // their own receivers decode them
         Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => return None,
-        Station::Dcf77 => {
+        Station::Dcf77 | Station::Tdf => {
             let b = b?;
             // the time of the minute that follows
             t = next_t;
@@ -1256,7 +1329,7 @@ pub fn keying(station: Station, start: i64, minutes: usize) -> Vec<f32> {
 
 fn level(station: Station, s: char, t: f64) -> f32 {
     let on = match station {
-        Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => true,
+        Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 | Station::Tdf => true,
         Station::Dcf77 => match s {
             '0' => t >= 0.1,
             '1' => t >= 0.2,
@@ -1333,7 +1406,7 @@ pub fn encode(station: Station, utc: i64) -> Vec<char> {
     match station {
         // its own encoder: rbu::encode; EFR: none
         Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => {}
-        Station::Dcf77 => {
+        Station::Dcf77 | Station::Tdf => {
             // the next minute, CET (no summer time in tests)
             let (y, m, d, h, mi, _, wd) = civil(utc + 60 + 3600);
             b[18] = 1;

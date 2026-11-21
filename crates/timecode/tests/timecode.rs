@@ -114,3 +114,84 @@ fn debug_symbols() {
     }
     eprintln!("{line}");
 }
+
+/// TDF's phase in the second at `t` (s into it) with its symbol: a cycle
+/// of +-0.9 rad centred on 0 ms (+ before, - after: its first half is the
+/// end of the second before), a 1's centred on 100 ms, none in second 59;
+/// over 150-800 ms other modulation (here: a cycle every 50 ms, signs from
+/// `busy`).
+fn tdf_phase(sym: char, next: char, t: f64, busy: u64) -> f64 {
+    let cycle = |t: f64| -> f64 {
+        // -50..0 ms: +, 0..50 ms: -, triangles of 0.9 rad
+        if (-0.05..0.0).contains(&t) {
+            0.9 * (1.0 - (t + 0.025).abs() / 0.025)
+        } else if (0.0..0.05).contains(&t) {
+            -0.9 * (1.0 - (t - 0.025).abs() / 0.025)
+        } else {
+            0.0
+        }
+    };
+    let mut p = 0.0;
+    if sym != 'M' {
+        p += cycle(t);
+    }
+    if sym == '1' {
+        p += cycle(t - 0.1);
+    }
+    // the next second's marker begins in this one
+    if next != 'M' {
+        p += cycle(t - 1.0);
+    }
+    if (0.2..0.75).contains(&t) {
+        let k = ((t - 0.2) / 0.05) as u64;
+        if (busy >> (k % 64)) & 1 == 1 {
+            p += 0.5 * cycle(t - 0.2 - k as f64 * 0.05 - 0.05);
+        }
+    }
+    p
+}
+
+/// TDF phase-modulated on a 1 kHz tone, with noise and the other
+/// modulation, through the receiver: its minutes decode, on time.
+#[test]
+fn tdf_decodes_from_the_phase() {
+    let st = Station::Tdf;
+    let start = days_from_civil(2026, 11, 16) * 86_400 + 10 * 3600 + 20 * 60;
+    let lead = 23.4;
+    let minutes = 5;
+    let syms: Vec<char> = (0..minutes)
+        .flat_map(|m| web888_timecode::encode(st, start + 60 * m as i64))
+        .collect();
+    let mut rng = Rng(11);
+    let n = ((minutes as f64 * 60.0 - lead - 1.0) * FS) as usize;
+    let mut busy = 0x9e37_79b9_7f4a_7c15u64;
+    let x: Vec<f32> = (0..n)
+        .map(|i| {
+            let tt = lead + i as f64 / FS;
+            let s = tt as usize;
+            if i % FS as usize == 0 {
+                busy = busy.rotate_left(7) ^ 0x2545_f491_4f6c_dd1d;
+            }
+            let ph = tdf_phase(syms[s], syms[s + 1], tt - s as f64, busy);
+            ((2.0 * std::f64::consts::PI * 1000.0 * (i as f64 / FS) + ph).sin()
+                + 0.1 * rng.normal()) as f32
+        })
+        .collect();
+    let mut rx = Receiver::new(st, FS, 1000.0, 0.0);
+    let mut good = 0;
+    for c in x.chunks(1200) {
+        rx.push(c);
+        for e in rx.poll() {
+            if let Event::Minute(m) = e {
+                let want = (m.utc - start) as f64 - lead;
+                assert!(
+                    (m.t - want).abs() < 0.03,
+                    "minute at {} s, wanted {want}",
+                    m.t
+                );
+                good += m.ok as usize;
+            }
+        }
+    }
+    assert!(good >= 3, "{good} minutes");
+}

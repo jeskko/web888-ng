@@ -424,6 +424,9 @@ fn decoder_ms(s: Station) -> f64 {
         Station::Dcf39 => 1200.57,
         Station::Hga22 => 1220.0,
         Station::Dcf49 => 1244.2,
+        // provisional, from a GPS-timed KiwiSDR recording near Paris
+        // (2026-11-21; the Kiwi's own IQ delay not taken out)
+        Station::Tdf => -16.45,
         _ => 0.0,
     }
 }
