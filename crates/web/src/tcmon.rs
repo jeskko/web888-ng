@@ -665,8 +665,9 @@ impl Monitor {
         self.fft.process(&mut b);
         let w2: f64 = self.window.iter().map(|w| (*w as f64).powi(2)).sum();
         let df = self.rate / FFT_N as f64;
-        let k = (20_000.0 / df) as usize;
-        // the clean ±20 kHz: bins 0..k and N-k..N
+        // the clean ±20 kHz (a channelizer bin), or 80 % of a narrower
+        // stream (a KiwiSDR's 12 kS/s): bins 0..k and N-k..N
+        let k = (20_000.0f64.min(0.4 * self.rate) / df) as usize;
         let mut p: Vec<f64> = b[..k]
             .iter()
             .chain(&b[FFT_N - k..])
@@ -1199,5 +1200,60 @@ mod tests {
             assert_eq!(r.at, Some(start as f64 + (minutes as f64 - 1.0) * 60.0));
         }
         assert!(mon.counts.iter().all(|c| c[0] >= 2), "{:?}", mon.counts);
+    }
+
+    /// One station keyed as sent, alone in a stream of `rate` S/s centred
+    /// on `centre`: the minutes it decodes and confirms.
+    fn synth_confirmed(station: Station, fc: f64, centre: f64, rate: f64) -> u64 {
+        let start: i64 = 1_795_000_020;
+        let minutes = 4;
+        let key = web888_timecode::keying(station, start, minutes);
+        let mut mon = Monitor::new(&[station.name().into()], centre, rate).unwrap();
+        let utc = |f: f64| Some(start as f64 + f / rate);
+        let a = RX_SINE_FULL_SCALE * 1e-3;
+        let n = minutes * 60 * rate as usize;
+        let block = 128;
+        let mut buf = Vec::with_capacity(block);
+        let mut seed = 0x9e37_79b9_7f4a_7c15u64;
+        let mut rnd = move || {
+            seed ^= seed << 13;
+            seed ^= seed >> 7;
+            seed ^= seed << 17;
+            (seed >> 11) as f64 / (1u64 << 53) as f64 - 0.5
+        };
+        for b0 in (0..n).step_by(block) {
+            buf.clear();
+            for k in b0..(b0 + block).min(n) {
+                let t = k as f64 / rate;
+                let lv = key[(t * 1000.0) as usize] as f64;
+                let z = Complex64::new(rnd() * a * 0.3, rnd() * a * 0.3)
+                    + Complex64::from_polar(a * lv, 2.0 * PI * (fc - centre) * t);
+                buf.push(Iq32 {
+                    i: z.re.round() as i32,
+                    q: z.im.round() as i32,
+                });
+            }
+            let recent = |_r: f64| Some((0.0, start as f64));
+            mon.push(b0 as u64, &buf, utc, recent, None);
+        }
+        mon.counts[0][0]
+    }
+
+    /// The keyed stations decode alone, in a KiwiSDR's 12 kS/s (the
+    /// carrier at the centre) as in a channelizer bin; with their keying
+    /// as deep as a clean signal gives (the impulse blanker once locked
+    /// shut after WWVB's, JJY's and MSF's long lows).
+    #[test]
+    fn keyed_stations_decode_at_12k() {
+        for (st, fc) in [
+            (Station::Wwvb, 60_000.0),
+            (Station::Jjy, 40_000.0),
+            (Station::Dcf77, 77_500.0),
+            (Station::Msf, 60_000.0),
+        ] {
+            let a = synth_confirmed(st, fc, fc, 12_000.0);
+            let b = synth_confirmed(st, fc, fc + 10_000.0, 60_000.0);
+            assert!(a >= 2 && b >= 2, "{st:?}: {a} at 12 kS/s, {b} at 60 kS/s");
+        }
     }
 }

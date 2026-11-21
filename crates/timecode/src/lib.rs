@@ -405,6 +405,11 @@ pub struct Receiver {
     /// The second's phase (frame index mod FPS) and when it was set.
     phase: Option<usize>,
     phase_at: u64,
+    /// The true phase's offset from `phase` (frames, within +-4): the
+    /// correlation peak interpolated. Seconds are read at whole frames
+    /// (5 ms); their times carry this, or a station's lateness steps by
+    /// 5 ms as the phase drifts across a frame.
+    phase_off: f64,
     /// The next second to read: its first frame (absolute).
     next: Option<u64>,
     syms: Vec<Second>,
@@ -450,6 +455,7 @@ impl Receiver {
             win: (0, 0),
             phase: None,
             phase_at: 0,
+            phase_off: 0.0,
             next: None,
             syms: Vec::new(),
             minute_at: None,
@@ -498,16 +504,24 @@ impl Receiver {
             return;
         }
         let w = self.ring.len();
-        // the blanker: an impulse (|x| over 6 times the average) is zeroed
+        // the blanker: an impulse (|x| over 6 times the average) is zeroed.
+        // The average follows every sample, capped at 4 times the
+        // threshold: one impulse raises it by ~5 %, and a carrier back at
+        // full power after a long low (WWVB's 0.8 s at -17 dB, JJY's
+        // -20 dB, MSF's 0.5 s off: 40 dB and more at a strong site) is
+        // let through within ~30 ms instead of being blanked for good
         let a_ema = 1.0 / (0.2 * self.fs);
         for &v in x {
             let m = (v as f64).abs();
-            let v = if self.n > (self.fs as u64) && m > 6.0 * self.avg / 0.64 {
-                0.0
+            let thr = 6.0 * self.avg / 0.64;
+            let blank = self.n > (self.fs as u64) && m > thr;
+            let m_avg = if self.n > (self.fs as u64) {
+                m.min(4.0 * thr)
             } else {
-                self.avg += (m - self.avg) * a_ema;
-                v
+                m
             };
+            self.avg += (m_avg - self.avg) * a_ema;
+            let v = if blank { 0.0 } else { v };
             let z = Complex32::new(
                 (v as f64 * self.lo.re) as f32,
                 (v as f64 * self.lo.im) as f32,
@@ -608,7 +622,7 @@ impl Receiver {
 
     /// The second's phase from the last 20 s, and the match there and at
     /// the current phase.
-    fn find_phase(&self, lo: f32, hi: f32) -> Option<(usize, f32, f32)> {
+    fn find_phase(&self, lo: f32, hi: f32) -> Option<(usize, f32, f32, f64)> {
         let n = (20 * FPS).min(self.env.len() / FPS * FPS);
         if n < 8 * FPS {
             return None;
@@ -636,7 +650,15 @@ impl Receiver {
             }
         }
         let cur = self.phase.map(corr).unwrap_or(0.0);
-        (best.1 > 0.0).then_some((best.0, best.1, cur))
+        // the peak between frames: a parabola through it and its neighbours
+        let (cm, cp) = (corr((best.0 + FPS - 1) % FPS), corr((best.0 + 1) % FPS));
+        let den = cm - 2.0 * best.1 + cp;
+        let frac = if den < 0.0 {
+            (0.5 * (cm - cp) / den).clamp(-0.5, 0.5) as f64
+        } else {
+            0.0
+        };
+        (best.1 > 0.0).then_some((best.0, best.1, cur, best.0 as f64 + frac))
     }
 
     fn read(&mut self) {
@@ -648,7 +670,7 @@ impl Receiver {
         let end_abs = self.env_base + self.env.len() as u64;
         if self.phase.is_none() || end_abs >= self.phase_at + 5 * FPS as u64 {
             self.phase_at = end_abs;
-            if let Some((p, c, cur)) = self.find_phase(lo, hi) {
+            if let Some((p, c, cur, fine)) = self.find_phase(lo, hi) {
                 // a better phase must be clearly better (noise moves the
                 // estimate around); a few frames is drift, followed
                 let near = self.phase.is_some_and(|q| {
@@ -669,6 +691,15 @@ impl Receiver {
                         self.minute_at = None;
                     }
                     self.phase = Some(p);
+                }
+                // the fine phase, when it is this peak's (a far one not
+                // clearly better is ignored, and so is its fraction)
+                if let Some(q) = self.phase {
+                    let d = (fine - q as f64 + FPS as f64 / 2.0).rem_euclid(FPS as f64)
+                        - FPS as f64 / 2.0;
+                    if d.abs() <= 4.5 {
+                        self.phase_off = d;
+                    }
                 }
             }
         }
@@ -704,7 +735,7 @@ impl Receiver {
             d.sort_by(|a, b| a.0.total_cmp(&b.0));
             let q = (d[1].0.sqrt() - d[0].0.sqrt()).clamp(0.0, 1.0);
             let sym = if q < 0.02 { '?' } else { d[0].1 };
-            let t = self.frame_t(at);
+            let t = self.frame_t(at) + self.phase_off * HOP;
             self.second(Second {
                 t,
                 sym,

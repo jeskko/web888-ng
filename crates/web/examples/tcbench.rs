@@ -6,7 +6,10 @@
 //!
 //!   cargo run --release -p web888-web --example tcbench -- \
 //!       FILE.sigmf-data START_UTC [--centre 60000] [--secs N] \
-//!       [--stations MSF,RBU,DCF77] [--run 64] [--ppm P]
+//!       [--stations MSF,RBU,DCF77] [--run 64] [--ppm P] [--rate 60000]
+//!
+//! `--rate`: other recordings at a multiple of 4 kS/s (a KiwiSDR's IQ,
+//! resampled to 12 kS/s on its GPS time).
 //!
 //! `-` reads the samples from stdin (on the unit: streamed over ssh). All
 //! of it is read first (60 s: ~58 MB), then timed as a whole.
@@ -45,7 +48,7 @@ fn main() {
         .filter(|s| !s.is_empty())
         .map(String::from)
         .collect();
-    let rate = 60_000.0;
+    let rate: f64 = opt("--rate").map_or(60_000.0, |s| s.parse().unwrap());
     let mut mon = Monitor::new(&stations, centre, rate).expect("monitor");
     let input: Box<dyn Read> = if path == "-" {
         Box::new(std::io::stdin().lock())
