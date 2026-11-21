@@ -424,9 +424,17 @@ fn decoder_ms(s: Station) -> f64 {
         Station::Dcf39 => 1200.57,
         Station::Hga22 => 1220.0,
         Station::Dcf49 => 1244.2,
-        // provisional, from a GPS-timed KiwiSDR recording near Paris
-        // (2026-11-21; the Kiwi's own IQ delay not taken out)
-        Station::Tdf => -16.45,
+        // provisional, from GPS-timed KiwiSDR recordings (2026-11-21):
+        // lateness less the ground-wave path, shifted by the decoders'
+        // own lateness at 60 against 12 kS/s (synthetic: DCF77 -0.65 ms,
+        // JJY +1.2, WWVB +0.1); a Kiwi near Mainflingen showed the Kiwi's
+        // own delay ~0 (DCF77 there 0.06 ms off its synthetic lateness).
+        // TDF: two Kiwis (near Paris, near Kaiserslautern) within 0.15 ms
+        Station::Tdf => -16.4,
+        // Nebraska, 703 km
+        Station::Wwvb => 3.3,
+        // 40 kHz: Saitama, 191 km (60 kHz not yet heard)
+        Station::Jjy => 7.5,
         _ => 0.0,
     }
 }
