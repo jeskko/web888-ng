@@ -487,7 +487,30 @@ the transmitter, by `[station] locator`, and the decoder's and
 receiver's own delay, calibrated on the remote unit against NTP:
 RBU 0.23 ms, MSF 1.06 ms, DCF77 2.96 ms) and its scatter over the last
 15 minutes (`sigma_ms`; on the unit RBU about 0.3 ms, MSF and DCF77 2-3
-ms: their keying's 5 ms steps).
+ms: their keying's 5 ms steps, gone since server 61f1ed9: the second's
+phase is interpolated between the envelope's 5 ms frames).
+
+**Which stations** (`[timecode] region`, 2026-11-21): with `stations`
+empty, "auto" watches those within reach of the receiver (each
+station's typical reach, by `[station] locator`), or a region's:
+"europe" (DCF77, MSF, RBU, TDF, DCF39, HGA22, DCF49), "north-america"
+(WWVB), "east-asia" (JJY on 40 and 60 kHz), "all". An explicit
+`stations` list overrides it. Each station costs ~0.5-1 % of the A9's
+core, so a receiver watches only what it can hear. Tested on GPS-timed
+recordings from public KiwiSDRs near the stations (2026-11-21): WWVB
+(Nebraska), JJY 40 kHz (Saitama) and TDF (near Paris) decode every
+minute; their decoder offsets are provisional (the Kiwi's own IQ delay
+is in them). Fixed on the way: the impulse blanker locked shut after a
+long low (WWVB's 0.8 s at -17 dB, JJY's -20 dB, MSF's 0.5 s off).
+
+**TDF** (ALS162, 162 kHz, Allouis; **built**): DCF77's code as phase
+modulation, a cycle of about ±0.9 rad centred on each second's start, a
+second one centred on 100 ms for a 1, none in second 59; 150-800 ms of
+each second carry other phase modulation. The envelope receiver reads
+1 - |phase deviation| (5 ms, against the carrier's phase over a second)
+on a fixed scale, and DCF77's decoding does the rest; on the Kiwi
+recording its minutes' lateness scattered under 0.1 ms. In the 150 kHz
+bin with DCF39.
 
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s

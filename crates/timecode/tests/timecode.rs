@@ -195,3 +195,22 @@ fn tdf_decodes_from_the_phase() {
     }
     assert!(good >= 3, "{good} minutes");
 }
+
+/// "auto" picks what is in reach: all of Europe's in Frankfurt, JJY in
+/// Tokyo, WWVB in Denver, nothing in Sydney; regions by name.
+#[test]
+fn stations_by_region() {
+    let names = |v: Vec<Station>| v.iter().map(|s| s.name()).collect::<Vec<_>>().join(",");
+    let auto = |p| names(Station::for_region("auto", Some(p)).unwrap());
+    assert_eq!(auto((50.11, 8.68)), "DCF77,MSF,RBU,DCF39,HGA22,DCF49,TDF");
+    assert_eq!(auto((35.68, 139.69)), "JJY");
+    assert_eq!(auto((39.74, -104.99)), "WWVB");
+    assert_eq!(auto((-33.87, 151.21)), "");
+    assert_eq!(Station::for_region("auto", None), None);
+    assert_eq!(
+        names(Station::for_region("east-asia", None).unwrap()),
+        "JJY"
+    );
+    assert_eq!(Station::for_region("mars", None), None);
+    assert!(!names(Station::for_region("all", None).unwrap()).contains("WWV/"));
+}

@@ -141,6 +141,64 @@ impl Station {
         }
     }
 
+    /// How far it is usually received (km): its ground wave by day and
+    /// sky wave at night; rough, for picking a receiver's stations from
+    /// its position (`[timecode] region = "auto"`).
+    pub fn reach_km(self) -> f64 {
+        match self {
+            Station::Dcf77 | Station::Msf | Station::Dcf39 => 2500.0,
+            Station::Rbu | Station::Wwvb => 3000.0,
+            Station::Tdf => 2000.0,
+            Station::Hga22 | Station::Dcf49 => 1200.0,
+            Station::Jjy => 1500.0,
+            // HF: not watched by the monitor
+            Station::Wwv => 0.0,
+        }
+    }
+
+    /// The regions it serves (`[timecode] region`).
+    pub fn regions(self) -> &'static [&'static str] {
+        match self {
+            Station::Dcf77
+            | Station::Msf
+            | Station::Rbu
+            | Station::Tdf
+            | Station::Dcf39
+            | Station::Hga22
+            | Station::Dcf49 => &["europe"],
+            Station::Wwvb => &["north-america"],
+            Station::Jjy => &["east-asia"],
+            Station::Wwv => &[],
+        }
+    }
+
+    /// The stations for `region` at a receiver at `rx` (lat, lon °):
+    /// "auto" those within their reach of it, a region's name its
+    /// stations, "all" every LF one. None: an unknown region, or "auto"
+    /// without a position.
+    pub fn for_region(region: &str, rx: Option<(f64, f64)>) -> Option<Vec<Station>> {
+        let lf = Station::ALL.into_iter().filter(|s| s.reach_km() > 0.0);
+        match region {
+            "auto" => {
+                let rx = rx?;
+                Some(
+                    lf.filter(|s| {
+                        s.carriers().iter().any(|&c| {
+                            s.site(c)
+                                .is_some_and(|site| distance_km(site, rx) <= s.reach_km())
+                        })
+                    })
+                    .collect(),
+                )
+            }
+            "all" => Some(lf.collect()),
+            r => {
+                let v: Vec<Station> = lf.filter(|s| s.regions().contains(&r)).collect();
+                (!v.is_empty()).then_some(v)
+            }
+        }
+    }
+
     /// Carrier frequencies (Hz).
     pub fn carriers(self) -> &'static [f64] {
         match self {
@@ -937,6 +995,14 @@ impl Receiver {
 // ------------------------------------------------------------- decoding
 
 /// Days from 1970-01-01 to a civil date (proleptic Gregorian).
+/// Great-circle distance (km) between two points (lat, lon °).
+pub fn distance_km(a: (f64, f64), b: (f64, f64)) -> f64 {
+    let r = |d: f64| d.to_radians();
+    let (la1, lo1, la2, lo2) = (r(a.0), r(a.1), r(b.0), r(b.1));
+    let c = la1.sin() * la2.sin() + la1.cos() * la2.cos() * (lo1 - lo2).cos();
+    6371.0 * c.clamp(-1.0, 1.0).acos()
+}
+
 pub fn days_from_civil(y: i64, m: i64, d: i64) -> i64 {
     let y = if m <= 2 { y - 1 } else { y };
     let era = y.div_euclid(400);

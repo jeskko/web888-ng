@@ -830,9 +830,33 @@ pub fn spawn(
     };
     let caps = tap.caps();
     let main = crate::wideiq::nearest_bin(&caps, cfg.centre_hz);
+    let rx = crate::kiwi::locator_pos(locator);
+    // the config's stations, else the region's
+    let names: Vec<String> = if !cfg.stations.is_empty() {
+        cfg.stations.clone()
+    } else {
+        match Station::for_region(&cfg.region, rx) {
+            Some(v) => v.iter().map(|s| s.name().to_string()).collect(),
+            None if cfg.region == "auto" => {
+                eprintln!("timecode: region \"auto\" needs [station] locator; not watching");
+                return Ok(());
+            }
+            None => {
+                eprintln!("timecode: unknown region {:?}; not watching", cfg.region);
+                return Ok(());
+            }
+        }
+    };
+    if names.is_empty() {
+        eprintln!(
+            "timecode: no station within reach ({}); not watching",
+            cfg.region
+        );
+        return Ok(());
+    }
     // the stations by bin, in the config's order
     let mut groups: Vec<(usize, Vec<String>)> = Vec::new();
-    for name in &cfg.stations {
+    for name in &names {
         let Some(st) = Station::from_name(name) else {
             eprintln!("timecode: unknown station {name:?}; not watching it");
             continue;
@@ -859,7 +883,6 @@ pub fn spawn(
             None => groups.push((bin, vec![name.clone()])),
         }
     }
-    let rx = crate::kiwi::locator_pos(locator);
     if rx.is_none() {
         eprintln!("timecode: no [station] locator: no offsets for the system clock");
     }

@@ -264,11 +264,8 @@
       "default": {
         "enabled": false,
         "centre_hz": 60000.0,
-        "stations": [
-          "MSF",
-          "RBU",
-          "DCF77"
-        ],
+        "region": "auto",
+        "stations": [],
         "log": true
       }
     },
@@ -1269,17 +1266,18 @@
           "maximum": 1000000.0,
           "default": 60000.0
         },
+        "region": {
+          "description": "Which stations, when `stations` is empty: \"auto\" those within\nreach of the receiver (`[station] locator`), or a region's:\n\"europe\" (DCF77, MSF, RBU, TDF, DCF39, HGA22, DCF49),\n\"north-america\" (WWVB), \"east-asia\" (JJY), or \"all\". Each station\ncosts CPU (~0.5-1 % of a core): only what can be received.",
+          "type": "string",
+          "default": "auto"
+        },
         "stations": {
-          "description": "The stations: DCF77, MSF, RBU, WWVB, JJY (JJY's 40 or 60 kHz,\nwhichever is in the bin), and EFR's teleswitch stations DCF39\n(139 kHz), HGA22 (135.6 kHz), DCF49 (129.1 kHz): a time telegram\nevery 10 s (in the 120 kHz bin).",
+          "description": "The stations, by name (overrides `region`): DCF77, MSF, RBU,\nTDF (162 kHz), WWVB, JJY (40 and 60 kHz: whichever is in a bin\nwatched), and EFR's teleswitch stations DCF39 (139 kHz), HGA22\n(135.6 kHz), DCF49 (129.1 kHz): a time telegram every 10 s.",
           "type": "array",
           "items": {
             "type": "string"
           },
-          "default": [
-            "MSF",
-            "RBU",
-            "DCF77"
-          ]
+          "default": []
         },
         "log": {
           "description": "A line per station and minute (JSON) to `timecode.log` in the\nstate directory (kept under 10 MB, the older half in\n`timecode.log.1`).",
