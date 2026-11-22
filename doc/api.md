@@ -494,7 +494,7 @@ phase is interpolated between the envelope's 5 ms frames).
 empty, "auto" watches those within reach of the receiver (each
 station's typical reach, by `[station] locator`), or a region's:
 "europe" (DCF77, MSF, RBU, TDF, DCF39, HGA22, DCF49), "north-america"
-(WWVB), "east-asia" (JJY on 40 and 60 kHz), "all". An explicit
+(WWVB), "east-asia" (JJY on 40 and 60 kHz, BPC), "all". An explicit
 `stations` list overrides it. Each station costs ~0.5-1 % of the A9's
 core, so a receiver watches only what it can hear. Tested on GPS-timed
 recordings from public KiwiSDRs near the stations (2026-11-21): WWVB
@@ -511,6 +511,19 @@ each second carry other phase modulation. The envelope receiver reads
 on a fixed scale, and DCF77's decoding does the rest; on the Kiwi
 recording its minutes' lateness scattered under 0.1 ms. In the 150 kHz
 bin with DCF39.
+
+**BPC** (68.5 kHz, Shangqiu, Beijing time; **built**, 2026-11-22): the
+carrier reduced 0.1, 0.2, 0.3 or 0.4 s at each second's start (a base-4
+digit), not at all at seconds 0, 20 and 40; each 20 s frame carries
+its number, the hour (of 12, with an afternoon flag), minute, weekday,
+day, month and year and two parity digits; a minute passes when two of
+its frames pass and agree. The layout was read from KiwiSDR recordings
+(Hsinchu and Okayama, 2026-11-22) and checked against their time:
+Hsinchu's (24 dB·Hz) decodes most minutes, Okayama's (22 dB·Hz) none
+with the envelope receiver. On Okayama's GPS time the carrier drops
+1.2 ms after the second (its path less); the decoder offset (7.1 ms)
+is provisional. A KiwiSDR in Taiwan (BM2KVV) heard nothing on 68.5 kHz
+at three times of day.
 
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s

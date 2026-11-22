@@ -156,12 +156,12 @@ pub struct Timecode {
     /// Which stations, when `stations` is empty: "auto" those within
     /// reach of the receiver (`[station] locator`), or a region's:
     /// "europe" (DCF77, MSF, RBU, TDF, DCF39, HGA22, DCF49),
-    /// "north-america" (WWVB), "east-asia" (JJY), or "all". Each station
+    /// "north-america" (WWVB), "east-asia" (JJY, BPC), or "all". Each station
     /// costs CPU (~0.5-1 % of a core): only what can be received.
     pub region: String,
     /// The stations, by name (overrides `region`): DCF77, MSF, RBU,
     /// TDF (162 kHz), WWVB, JJY (40 and 60 kHz: whichever is in a bin
-    /// watched), and EFR's teleswitch stations DCF39 (139 kHz), HGA22
+    /// watched), BPC (68.5 kHz), and EFR's teleswitch stations DCF39 (139 kHz), HGA22
     /// (135.6 kHz), DCF49 (129.1 kHz): a time telegram every 10 s.
     pub stations: Vec<String>,
     /// A line per station and minute (JSON) to `timecode.log` in the

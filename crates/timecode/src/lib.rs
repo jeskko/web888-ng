@@ -53,6 +53,11 @@ pub enum Station {
     /// a second one at 100 ms for a 1, none in second 59), read by the
     /// envelope receiver from the phase.
     Tdf,
+    /// BPC, 68.5 kHz from Shangqiu (Beijing time): the carrier reduced
+    /// 0.1-0.4 s at each second's start (one of four lengths, two bits),
+    /// none at seconds 0, 20 and 40; three 20 s frames a minute, each with
+    /// the whole time and date.
+    Bpc,
 }
 
 /// Each symbol's mean level (0 keyed down / off, 1 up / on) in the
@@ -61,7 +66,7 @@ type Templates = &'static [(char, &'static [f32])];
 
 impl Station {
     /// In the page's order (its station numbers).
-    pub const ALL: [Station; 10] = [
+    pub const ALL: [Station; 11] = [
         Station::Dcf77,
         Station::Msf,
         Station::Wwvb,
@@ -72,6 +77,7 @@ impl Station {
         Station::Hga22,
         Station::Dcf49,
         Station::Tdf,
+        Station::Bpc,
     ];
 
     /// An EFR teleswitch station ([`efr`]).
@@ -86,12 +92,13 @@ impl Station {
     }
 
     /// The keyed carriers (the envelope receiver's).
-    pub const KEYED: [Station; 5] = [
+    pub const KEYED: [Station; 6] = [
         Station::Dcf77,
         Station::Msf,
         Station::Wwvb,
         Station::Jjy,
         Station::Wwv,
+        Station::Bpc,
     ];
 
     pub fn name(self) -> &'static str {
@@ -106,6 +113,7 @@ impl Station {
             Station::Hga22 => "HGA22",
             Station::Dcf49 => "DCF49",
             Station::Tdf => "TDF",
+            Station::Bpc => "BPC",
         }
     }
 
@@ -138,6 +146,8 @@ impl Station {
             Station::Hga22 => Some((47.3725, 19.0042)),
             // Allouis
             Station::Tdf => Some((47.1694, 2.2044)),
+            // Shangqiu
+            Station::Bpc => Some((34.457, 115.837)),
         }
     }
 
@@ -148,6 +158,7 @@ impl Station {
         match self {
             Station::Dcf77 | Station::Msf | Station::Dcf39 => 2500.0,
             Station::Rbu | Station::Wwvb => 3000.0,
+            Station::Bpc => 2500.0,
             Station::Tdf => 2000.0,
             Station::Hga22 | Station::Dcf49 => 1200.0,
             Station::Jjy => 1500.0,
@@ -167,7 +178,7 @@ impl Station {
             | Station::Hga22
             | Station::Dcf49 => &["europe"],
             Station::Wwvb => &["north-america"],
-            Station::Jjy => &["east-asia"],
+            Station::Jjy | Station::Bpc => &["east-asia"],
             Station::Wwv => &[],
         }
     }
@@ -212,6 +223,7 @@ impl Station {
             Station::Hga22 => &[135_600.0],
             Station::Dcf49 => &[129_100.0],
             Station::Tdf => &[162_000.0],
+            Station::Bpc => &[68_500.0],
         }
     }
 
@@ -294,6 +306,24 @@ impl Station {
                     ('0', &[0.0, 1.0, 1.0, 1.0]),
                     ('1', &[0.0, 0.0, 0.0, 1.0]),
                     ('M', &[1.0, 1.0, 1.0, 1.0]),
+                ],
+            ),
+            // reduced 0.1 s: 0, 0.2 s: 1, 0.3 s: 2, 0.4 s: 3; none: the
+            // frame's marker (seconds 0, 20, 40)
+            Station::Bpc => (
+                &[
+                    (0.02, 0.08),
+                    (0.12, 0.18),
+                    (0.22, 0.28),
+                    (0.32, 0.38),
+                    (0.5, 0.95),
+                ],
+                &[
+                    ('0', &[0.0, 1.0, 1.0, 1.0, 1.0]),
+                    ('1', &[0.0, 0.0, 1.0, 1.0, 1.0]),
+                    ('2', &[0.0, 0.0, 0.0, 1.0, 1.0]),
+                    ('3', &[0.0, 0.0, 0.0, 0.0, 1.0]),
+                    ('M', &[1.0, 1.0, 1.0, 1.0, 1.0]),
                 ],
             ),
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => (&[], &[]),
@@ -381,6 +411,19 @@ impl Station {
                         0.0
                     }
                 }
+                Station::Bpc => {
+                    if t < 0.1 {
+                        0.05
+                    } else if t < 0.2 {
+                        0.4
+                    } else if t < 0.3 {
+                        0.65
+                    } else if t < 0.4 {
+                        0.85
+                    } else {
+                        1.0
+                    }
+                }
                 Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => 1.0,
             };
         }
@@ -395,6 +438,7 @@ impl Station {
         match (self, c) {
             (Station::Dcf77 | Station::Msf | Station::Tdf, 'M') | (Station::Wwv, 'H') => r,
             (Station::Wwvb | Station::Jjy, 'M') => r / 3.0,
+            (Station::Bpc, 'M') => r / 2.0,
             _ => 0.0,
         }
     }
@@ -408,6 +452,8 @@ impl Station {
             Station::Wwvb => &[22..=33, 45..=53],
             Station::Jjy => &[22..=33, 41..=48, 50..=52],
             Station::Wwv => &[4..=7, 30..=41, 51..=54],
+            // each frame's day, month, year and their parity
+            Station::Bpc => &[11..=19, 31..=39, 51..=59],
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => &[],
         }
     }
@@ -417,7 +463,7 @@ impl Station {
         match self {
             Station::Dcf77 => 0.15,
             Station::Tdf => 0.06,
-            Station::Msf => 0.25,
+            Station::Msf | Station::Bpc => 0.25,
             Station::Wwvb | Station::Jjy => 0.5,
             Station::Wwv => 0.65,
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => 0.05,
@@ -429,6 +475,7 @@ impl Station {
     fn zone(self) -> i64 {
         match self {
             Station::Jjy => 9 * 3600,
+            Station::Bpc => 8 * 3600,
             _ => 0,
         }
     }
@@ -1075,6 +1122,20 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
     match station {
         // their own receivers decode them
         Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => return None,
+        Station::Bpc => {
+            // the three frames, each read alone; the minute passes when at
+            // least two pass their checks and every one that does agrees
+            let frames: Vec<Option<BpcFrame>> = (0..3)
+                .map(|f| bpc_frame(&frame[20 * f..20 * f + 20], f))
+                .collect();
+            let good: Vec<&BpcFrame> = frames.iter().flatten().collect();
+            let first = good.first().copied().copied();
+            ok = good.len() >= 2 && good.iter().all(|g| Some(**g) == first);
+            let g = first.unwrap_or_default();
+            t = frame[0].t;
+            (y, mo, d, h, mi) = (2000 + g.year, g.month, g.day, g.hour, g.minute);
+            (zone, zname) = (station.zone(), "CST");
+        }
         Station::Dcf77 | Station::Tdf => {
             let b = b?;
             // the time of the minute that follows
@@ -1373,6 +1434,54 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
     })
 }
 
+/// One of BPC's 20 s frames, as sent (Beijing time).
+#[derive(Clone, Copy, Debug, Default, PartialEq)]
+struct BpcFrame {
+    year: i64,
+    month: i64,
+    day: i64,
+    hour: i64,
+    minute: i64,
+}
+
+/// BPC's frame `f` (0-2: seconds 0, 20, 40 of the minute) from its 20
+/// symbols, when it passes its checks. The layout (a recording through a
+/// KiwiSDR at Okayama, 2026-11-22, checked against its GPS time): 0 the
+/// marker; 1 the frame's number; 2 zero; 3-4 the hour of 12; 5-7 the
+/// minute; 8-9 the weekday (Sunday 0); 10 the afternoon flag (2) and the
+/// parity of 1-9's bits (1 when odd); 11-13 the day; 14-15 the month;
+/// 16-18 the year in the century; 19 the parity of 11-18's bits. Each
+/// symbol is a base-4 digit, most significant first.
+fn bpc_frame(s: &[Second], f: usize) -> Option<BpcFrame> {
+    if s.len() < 20 || s[0].sym != 'M' {
+        return None;
+    }
+    let v: Vec<u32> = s[1..20]
+        .iter()
+        .map(|x| x.sym.to_digit(4))
+        .collect::<Option<_>>()?;
+    // v[k] is second k + 1
+    let n = |r: std::ops::Range<usize>| r.fold(0i64, |a, k| a * 4 + i64::from(v[k - 1]));
+    let bits =
+        |r: std::ops::RangeInclusive<usize>| -> u32 { r.map(|k| v[k - 1].count_ones()).sum() };
+    let ok = v[0] as usize == f
+        && v[1] == 0
+        && v[9] & 1 == bits(1..=9) & 1
+        && v[18] & 1 == bits(11..=18) & 1
+        // the year's 64 (P4's high bit): not seen yet
+        && v[18] >> 1 == 0
+        && n(8..10) < 7;
+    let hour12 = n(3..5);
+    let fr = BpcFrame {
+        year: n(16..19),
+        month: n(14..16),
+        day: n(11..14),
+        hour: hour12 + 12 * i64::from(v[9] >> 1),
+        minute: n(5..8),
+    };
+    (ok && hour12 < 12).then_some(fr)
+}
+
 // ------------------------------------------------------------- synthesis
 
 /// A station's keying for tests: the level (0..1) of each 1 ms over
@@ -1410,6 +1519,10 @@ fn level(station: Station, s: char, t: f64) -> f32 {
                 }
             }
         }
+        Station::Bpc => match s {
+            c @ '0'..='3' => t >= 0.1 * f64::from(c as u8 - b'0' + 1),
+            _ => true,
+        },
         Station::Wwvb => {
             t >= match s {
                 '0' => 0.2,
@@ -1650,6 +1763,30 @@ pub fn encode(station: Station, utc: i64) -> Vec<char> {
             }
             for i in [0, 9, 19, 29, 39, 49, 59] {
                 syms[i] = 'M';
+            }
+        }
+        Station::Bpc => {
+            let (y, m, d, h, mi, _, wd) = civil(utc + station.zone());
+            let digits = |v: i64, n: usize| -> Vec<u32> {
+                (0..n).rev().map(|k| ((v >> (2 * k)) & 3) as u32).collect()
+            };
+            for f in 0..3 {
+                let mut v = vec![f as u32, 0];
+                v.extend(digits(h % 12, 2));
+                v.extend(digits(mi, 3));
+                v.extend(digits(wd, 2));
+                let p1: u32 = v.iter().map(|x| x.count_ones()).sum::<u32>() & 1;
+                v.push(2 * u32::from(h >= 12) + p1);
+                let mut dv = digits(d, 3);
+                dv.extend(digits(m, 2));
+                dv.extend(digits(y - 2000, 3));
+                let p2: u32 = dv.iter().map(|x| x.count_ones()).sum::<u32>() & 1;
+                v.extend(dv);
+                v.push(p2);
+                syms[20 * f] = 'M';
+                for (k, x) in v.iter().enumerate() {
+                    syms[20 * f + 1 + k] = char::from(b'0' + *x as u8);
+                }
             }
         }
         Station::Wwv => {

@@ -435,6 +435,11 @@ fn decoder_ms(s: Station) -> f64 {
         Station::Wwvb => 3.3,
         // 40 kHz: Saitama, 191 km (60 kHz not yet heard)
         Station::Jjy => 7.5,
+        // provisional: the decoder's own lateness on synthetic keying at
+        // 12 kS/s (5.9 ms, median of 18 minutes) and the carrier's drop
+        // 1.2 ms after the second (a GPS-timed KiwiSDR at Okayama,
+        // 1655 km, 2026-11-22: the drop's 50 % point 6.7 ms late)
+        Station::Bpc => 7.1,
         _ => 0.0,
     }
 }
@@ -1284,6 +1289,7 @@ mod tests {
             (Station::Jjy, 40_000.0),
             (Station::Dcf77, 77_500.0),
             (Station::Msf, 60_000.0),
+            (Station::Bpc, 68_500.0),
         ] {
             let a = synth_confirmed(st, fc, fc, 12_000.0);
             let b = synth_confirmed(st, fc, fc + 10_000.0, 60_000.0);
