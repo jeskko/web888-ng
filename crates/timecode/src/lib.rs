@@ -359,22 +359,28 @@ impl Station {
                 ],
             ),
             // on 100 ms: a second; a second pulse at 200-300 ms: DUT1's;
-            // on 500 ms: the minute; off ('-') or on ('C') all second:
-            // other minutes
+            // on 500 ms: the minute; off ('-'), on ('C') or ten pulses
+            // ('P') all second: other minutes
             Station::Rwm => (
                 &[
                     (0.01, 0.08),
                     (0.12, 0.18),
                     (0.21, 0.28),
                     (0.35, 0.45),
-                    (0.6, 0.95),
+                    (0.6, 0.68),
+                    (0.7, 0.73),
                 ],
                 &[
-                    ('0', &[1.0, 0.0, 0.0, 0.0, 0.0]),
-                    ('D', &[1.0, 0.0, 1.0, 0.0, 0.0]),
-                    ('M', &[1.0, 1.0, 1.0, 1.0, 0.0]),
-                    ('-', &[0.0, 0.0, 0.0, 0.0, 0.0]),
-                    ('C', &[1.0, 1.0, 1.0, 1.0, 1.0]),
+                    ('0', &[1.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+                    ('D', &[1.0, 0.0, 1.0, 0.0, 0.0, 0.0]),
+                    ('M', &[1.0, 1.0, 1.0, 1.0, 0.0, 0.0]),
+                    ('-', &[0.0, 0.0, 0.0, 0.0, 0.0, 0.0]),
+                    ('C', &[1.0, 1.0, 1.0, 1.0, 1.0, 1.0]),
+                    // ten pulses a second (40 ms, then 20 ms every 100 ms;
+                    // 2026-11-22 13:20-13:30 UTC): not UTC's ticks; the
+                    // last window is on a pulse (at 700 ms) wherever the
+                    // phase locks among them
+                    ('P', &[0.7, 0.2, 0.2, 0.2, 0.2, 0.6]),
                 ],
             ),
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => (&[], &[]),
@@ -508,7 +514,7 @@ impl Station {
             (Station::Dcf77 | Station::Msf | Station::Tdf, 'M') | (Station::Wwv, 'H') => r,
             (Station::Wwvb | Station::Jjy, 'M') => r / 3.0,
             (Station::Bpc, 'M') => r / 2.0,
-            (Station::Bpm, 'M' | 'U') | (Station::Rwm, 'M' | 'C') => r,
+            (Station::Bpm, 'M' | 'U') | (Station::Rwm, 'M' | 'C' | 'P') => r,
             _ => 0.0,
         }
     }
@@ -1219,7 +1225,9 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
         let ok = frame.len() == 60
             && frame[0].sym == 'M'
             && ticks >= 50
-            && !frame[1..].iter().any(|s| matches!(s.sym, 'M' | 'U' | 'C'));
+            && !frame[1..]
+                .iter()
+                .any(|s| matches!(s.sym, 'M' | 'U' | 'C' | 'P'));
         // RWM: the seconds with DUT1's second pulse, as read
         let d: Vec<String> = (1..frame.len())
             .filter(|&i| frame[i].sym == 'D')

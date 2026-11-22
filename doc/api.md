@@ -545,7 +545,14 @@ carrier): on 100 ms each second, 500 ms at the minute, a second pulse
 at 200-300 ms in DUT1's seconds (reported as read). Both decode every
 minute of UTC ticks in KiwiSDR recordings (BPM from Taiwan and
 Hiroshima, RWM from southern Finland); their offsets are not
-calibrated yet.
+calibrated yet. RWM's format varies by minute (2026-11-22, 4996 kHz):
+second ticks (e.g. 12:40-12:48, 13:16-13:19), ten pulses a second
+(40 ms, then 20 ms every 100 ms; 13:20-13:30: read as 'P', the minute
+fails), a steady carrier, or none. On GPS-timed recordings (Elimäki,
+793 km) its pulse rises 4.8-6.4 ms after UTC's second; the decoder's
+lateness on them (18-20 ms) and on a synthetic pulse (27 ms) differ,
+so no offset until that is understood. BPM's minutes scatter under
+0.5 ms on one Kiwi; its offset waits for GPS-timed minutes.
 
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s
