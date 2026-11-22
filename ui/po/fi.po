@@ -75,7 +75,7 @@ msgstr "Kirjaudu"
 msgid "Back to the receiver"
 msgstr "Takaisin vastaanottimeen"
 
-#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:467 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:468 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr "Ladataan…"
 
@@ -1239,69 +1239,69 @@ msgstr "Kirjaudu ulos"
 #. chrony's states of a time source; selected = the one the clock follows; combined = averaged in with it; falseticker = disagrees with the others
 #: src/admin/clock.tsx:107
 msgid "selected"
-msgstr ""
+msgstr "valittu"
 
 #: src/admin/clock.tsx:109
 msgid "combined"
-msgstr ""
+msgstr "yhdistetty"
 
 #: src/admin/clock.tsx:111
 msgid "not combined"
-msgstr ""
+msgstr "ei yhdistetty"
 
 #: src/admin/clock.tsx:113
 msgid "unusable"
-msgstr ""
+msgstr "käyttökelvoton"
 
 #: src/admin/clock.tsx:115
 msgid "a falseticker"
-msgstr ""
+msgstr "virheellinen (falseticker)"
 
 #: src/admin/clock.tsx:117
 msgid "too variable"
-msgstr ""
+msgstr "liian vaihteleva"
 
 #: src/admin/clock.tsx:136
 msgid "System clock"
-msgstr ""
+msgstr "Järjestelmän kello"
 
 #: src/admin/clock.tsx:137
 msgid "chrony doesn't answer (chronyc): the kernel's view only."
-msgstr ""
+msgstr "chrony ei vastaa (chronyc): vain ytimen tiedot."
 
 #: src/admin/clock.tsx:139
 msgid "Synchronised"
-msgstr ""
+msgstr "Synkronoitu"
 
 #. the reference = the time source the clock follows now; LF = this receiver's own time-code stations
 #: src/admin/clock.tsx:144
 msgid "Reference"
-msgstr ""
+msgstr "Referenssi"
 
 #: src/admin/clock.tsx:146
 msgid "LF: this receiver's time-code stations"
-msgstr ""
+msgstr "LF: tämän vastaanottimen aikasignaaliasemat"
 
 #: src/admin/clock.tsx:147
 msgid "stratum {n}"
-msgstr ""
+msgstr "stratum {n}"
 
 #. how far the system clock is from the reference now, and which way
 #: src/admin/clock.tsx:150
 msgid "Offset"
-msgstr ""
+msgstr "Poikkeama"
 
 #: src/admin/clock.tsx:155
 msgid "{s} slow"
-msgstr ""
+msgstr "{s} jäljessä"
 
 #: src/admin/clock.tsx:156
 msgid "{s} fast"
-msgstr ""
+msgstr "{s} edellä"
 
 #: src/admin/clock.tsx:157
 msgid "(RMS {s})"
-msgstr ""
+msgstr "(RMS {s})"
 
 #. the crystal's rate error that chrony corrects; skew = its uncertainty
 #: src/admin/clock.tsx:160 src/admin/clock.tsx:183 src/ctl/mobile.tsx:259
@@ -1310,271 +1310,285 @@ msgstr "Taajuus"
 
 #: src/admin/clock.tsx:165
 msgid "{ppm} ppm slow"
-msgstr ""
+msgstr "{ppm} ppm hidas"
 
 #: src/admin/clock.tsx:166
 msgid "{ppm} ppm fast"
-msgstr ""
+msgstr "{ppm} ppm nopea"
 
 #. the largest error the clock may have against true time: half the path's delay plus the dispersion
 #: src/admin/clock.tsx:170
 msgid "Error bound"
-msgstr ""
+msgstr "Virheen yläraja"
 
 #: src/admin/clock.tsx:172
 msgid "Updated every"
-msgstr ""
+msgstr "Päivitetään joka"
 
 #. leap second status: Normal, Insert second, Delete second, Not synchronised
 #: src/admin/clock.tsx:175
 msgid "Leap status"
-msgstr ""
+msgstr "Karkaussekunti"
 
 #: src/admin/clock.tsx:181
 msgid "Estimated error"
-msgstr ""
+msgstr "Arvioitu virhe"
 
 #: src/admin/clock.tsx:184
 msgid "{ppm} ppm correction"
-msgstr ""
+msgstr "{ppm} ppm korjaus"
 
 #. chrony = the program that keeps the system clock; its sources = NTP servers and reference clocks
 #: src/admin/clock.tsx:197
 msgid "chrony's sources"
-msgstr ""
+msgstr "chronyn lähteet"
 
 #: src/admin/clock.tsx:199
 msgid "None."
-msgstr ""
+msgstr "Ei yhtään."
 
 #: src/admin/clock.tsx:204 src/admin/clock.tsx:275
 msgid "source"
-msgstr ""
+msgstr "lähde"
 
 #. reach = which of the last 8 polls got an answer
 #: src/admin/clock.tsx:207
 msgid "The last 8 polls, oldest first: ■ answered, □ not"
-msgstr ""
+msgstr "Viimeiset 8 kyselyä, vanhin ensin: ■ vastattu, □ ei"
 
 #. reach = which of the last 8 polls got an answer
 #: src/admin/clock.tsx:207
 msgid "reach"
-msgstr ""
+msgstr "tavoitettavuus"
 
 #: src/admin/clock.tsx:208
 msgid "last"
-msgstr ""
+msgstr "viimeksi"
 
 #. the system clock against the source at its last sample (+: the clock is ahead), ± its error bound
 #: src/admin/clock.tsx:210
 msgid "The system clock against the source at its last sample (+: the clock is ahead), ± its error bound"
-msgstr ""
+msgstr "Järjestelmän kello lähdettä vasten sen viimeisimmässä näytteessä (+: kello on edellä), ± virheen yläraja"
 
 #: src/admin/clock.tsx:211 src/admin/clock.tsx:276
 msgid "offset"
-msgstr ""
+msgstr "poikkeama"
 
 #: src/admin/clock.tsx:219
 msgid "LF (time-code stations)"
-msgstr ""
+msgstr "LF (aikasignaaliasemat)"
 
 #. what this receiver sends to chrony each minute: its time sources combined
 #: src/admin/clock.tsx:244
 msgid "To chrony"
-msgstr ""
+msgstr "chronylle"
 
 #. the combined sample: the system clock's offset (true time minus the clock's) ± its standard error
 #: src/admin/clock.tsx:247
 msgid "Last sample"
-msgstr ""
+msgstr "Viimeisin näyte"
 
 #: src/admin/clock.tsx:250
 msgid "from {n} source"
 msgid_plural "from {n} sources"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "{n} lähteestä"
+msgstr[1] "{n} lähteestä"
 
 #: src/admin/clock.tsx:252
 msgid "Samples"
-msgstr ""
+msgstr "Näytteet"
 
 #: src/admin/clock.tsx:254
 msgid "{sent} sent, {failed} failed (no chrony), {none} minutes with none usable"
-msgstr ""
+msgstr "{sent} lähetetty, {failed} epäonnistui (ei chronya), {none} minuuttia ilman käyttökelpoista"
 
 #. minutes whose sources were too unsure alone are averaged together before a sample goes to chrony
 #: src/admin/clock.tsx:261
 msgid "Pooling"
-msgstr ""
+msgstr "Yhdistely"
 
 #: src/admin/clock.tsx:264
 msgid "{n} unsure minute waiting"
 msgid_plural "{n} unsure minutes waiting"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "{n} epävarma minuutti odottaa"
+msgstr[1] "{n} epävarmaa minuuttia odottaa"
 
 #: src/admin/clock.tsx:266
 msgid "last sample from {n} minute"
 msgid_plural "last sample from {n} minutes"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "viimeisin näyte {n} minuutista"
+msgstr[1] "viimeisin näyte {n} minuutista"
 
 #: src/admin/clock.tsx:268
 msgid "{n} pool dropped as too unsure"
 msgid_plural "{n} pools dropped as too unsure"
-msgstr[0] ""
-msgstr[1] ""
+msgstr[0] "{n} joukko hylätty liian epävarmana"
+msgstr[1] "{n} joukkoa hylätty liian epävarmoina"
 
 #. minutes the source was in the combined sample / left out of it
 #: src/admin/clock.tsx:278
 msgid "used"
-msgstr ""
+msgstr "käytetty"
 
 #: src/admin/clock.tsx:279
 msgid "left out"
-msgstr ""
+msgstr "jätetty pois"
 
 #. LF time-code stations (DCF77, MSF, RBU, DCF39 ...) decoded on the receiver
 #: src/admin/clock.tsx:308 src/admin/clock.tsx:320
 msgid "Time-code stations"
-msgstr ""
+msgstr "Aikasignaaliasemat"
 
 #: src/admin/clock.tsx:309
 msgid "Not watched: needs [timecode] enabled in the config and the channelizer's bins."
-msgstr ""
+msgstr "Ei seurata: vaatii asetuksiin [timecode] enabled ja kanavoijan kanavat."
 
 #: src/admin/clock.tsx:321
 msgid "Minute {when} UTC ({ago} ago)."
-msgstr ""
+msgstr "Minuutti {when} UTC ({ago} sitten)."
 
 #: src/admin/clock.tsx:325
 msgid "station"
-msgstr ""
+msgstr "asema"
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
 #: src/admin/clock.tsx:327
 msgid "SNR"
-msgstr ""
+msgstr "SNR"
 
 #. minutes confirmed / decoded but not confirmed / not decoded since the start
 #: src/admin/clock.tsx:329
 msgid "Minutes confirmed / decoded but unconfirmed / not decoded"
-msgstr ""
+msgstr "Minuutit vahvistettu / luettu mutta vahvistamatta / lukematta"
 
 #: src/admin/clock.tsx:330
 msgid "minutes"
-msgstr ""
+msgstr "minuutit"
 
 #. late = how late the station's time arrives by the system clock (ms); for EFR, after its 10 s mark
 #: src/admin/clock.tsx:333
 msgid "late"
-msgstr ""
+msgstr "myöhässä"
 
 #. the system clock's error by this station (true minus system time), ± its scatter
 #: src/admin/clock.tsx:335
 msgid "The system clock's error by this station (true minus system time, ms), ± the scatter of its last minutes"
-msgstr ""
+msgstr "Järjestelmän kellon virhe tämän aseman mukaan (oikea miinus järjestelmän aika, ms), ± sen viimeisten minuuttien hajonta"
 
 #: src/admin/clock.tsx:336
 msgid "clock offset"
-msgstr ""
+msgstr "kellon poikkeama"
 
 #: src/admin/clock.tsx:345
 msgid "(shed)"
-msgstr ""
+msgstr "(pudotettu)"
 
 #. the noise floor of each frequency bin the stations are watched in
 #: src/admin/clock.tsx:362
 msgid "Noise floor"
-msgstr ""
+msgstr "Kohinataso"
 
 #. the ADC's sample clock error, measured on the stations' carriers (atomic clocks)
 #: src/admin/clock.tsx:365
 msgid "ADC clock"
-msgstr ""
+msgstr "ADC:n kello"
 
 #: src/admin/clock.tsx:366
 msgid "{ppm} ppm (carriers)"
-msgstr ""
+msgstr "{ppm} ppm (kantoaallot)"
 
 #. the CPU's crystal as it runs (without NTP's correction) against the ADC clock
 #: src/admin/clock.tsx:368
 msgid "CPU crystal"
-msgstr ""
+msgstr "Suorittimen kide"
 
 #: src/admin/clock.tsx:370
 msgid "{ppm} ppm against the ADC clock"
-msgstr ""
+msgstr "{ppm} ppm ADC:n kelloa vasten"
 
 #: src/admin/clock.tsx:373
 msgid "Monitor CPU"
-msgstr ""
+msgstr "Seurannan suoritinkäyttö"
 
 #: src/admin/clock.tsx:374
 msgid "{pct} % of a core"
-msgstr ""
+msgstr "{pct} % ytimestä"
 
 #. the receiver's timebase: how sample times map to UTC
 #: src/admin/clock.tsx:386
 msgid "Receiver timebase"
-msgstr ""
+msgstr "Vastaanottimen aikakanta"
 
 #: src/admin/clock.tsx:388
 msgid "Source"
-msgstr ""
+msgstr "Lähde"
 
 #: src/admin/clock.tsx:390
 msgid "Uncertainty"
-msgstr ""
+msgstr "Epävarmuus"
 
 #. the sample stream's rate against the system clock
 #: src/admin/clock.tsx:393
 msgid "Stream rate"
-msgstr ""
+msgstr "Näytevirran nopeus"
 
-#: src/admin/clock.tsx:412
-msgid ""
-"Serve this receiver's clock to the local network over NTP (UDP port 123)?\n"
-"\n"
-msgstr ""
+#: src/admin/clock.tsx:413
+msgid "Serve this receiver's clock to the local network over NTP (UDP port 123)?"
+msgstr "Jaetaanko tämän vastaanottimen kello lähiverkkoon NTP:llä (UDP-portti 123)?"
+
+#: src/admin/clock.tsx:415
+msgid "Any device on a private or link-local network address (10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 fc00::/7, fe80::/10) can then ask it the time — on a shared network (hotel, campsite, event) that is everyone on it."
+msgstr "Mikä tahansa laite yksityisessä tai link-local-osoitteessa (10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 fc00::/7, fe80::/10) voi silloin kysyä siltä aikaa — jaetussa verkossa (hotelli, leirintäalue, tapahtuma) se tarkoittaa kaikkia verkon käyttäjiä."
+
+#: src/admin/clock.tsx:416
+msgid "Clients set their clocks by it. Without the Internet the time comes from the time-code stations alone: milliseconds at best, and only while they are received. When chrony has no usable source it says so (unsynchronised) and clients should ignore it."
+msgstr "Asiakkaat asettavat kellonsa sen mukaan. Ilman Internetiä aika tulee pelkistä aikasignaaliasemista: parhaimmillaan millisekuntien tarkkuudella ja vain niin kauan kuin ne kuuluvat. Kun chronylla ei ole käyttökelpoista lähdettä, se kertoo sen (synkronoimaton), ja asiakkaiden pitäisi jättää se huomiotta."
+
+#: src/admin/clock.tsx:417
+msgid "Never forward port 123 to the receiver from the Internet: it would be open to abuse, and addresses from outside aren't served anyway."
+msgstr "Älä koskaan ohjaa porttia 123 Internetistä vastaanottimeen: se altistaisi väärinkäytölle, eikä ulkopuolisille osoitteille muutenkaan vastata."
+
+#: src/admin/clock.tsx:418
+msgid "It costs little CPU, but a flood of requests would load the receiver."
+msgstr "Se vie vähän suoritinaikaa, mutta pyyntöjen tulva kuormittaisi vastaanotinta."
 
 #. NTP = the network time protocol; serving it = other computers on the network set their clocks by this receiver
-#: src/admin/clock.tsx:436
-msgid "NTP for the local network"
-msgstr ""
-
 #: src/admin/clock.tsx:437
+msgid "NTP for the local network"
+msgstr "NTP lähiverkolle"
+
+#: src/admin/clock.tsx:438
 msgid "Other computers on the local network can set their clocks by this receiver (UDP port 123)"
-msgstr ""
+msgstr "Muut lähiverkon tietokoneet voivat asettaa kellonsa tämän vastaanottimen mukaan (UDP-portti 123)"
 
-#: src/admin/clock.tsx:439
+#: src/admin/clock.tsx:440
 msgid "serve the clock to the local network"
-msgstr ""
+msgstr "jaa kello lähiverkkoon"
 
-#: src/admin/clock.tsx:442
+#: src/admin/clock.tsx:443
 msgid "chrony didn't take it: {e}"
-msgstr ""
+msgstr "chrony ei hyväksynyt sitä: {e}"
 
-#: src/admin/clock.tsx:445
+#: src/admin/clock.tsx:446
 msgid "Open to every device on private and link-local addresses. Don't forward port 123 from the Internet."
-msgstr ""
+msgstr "Avoinna kaikille laitteille yksityisissä ja link-local-osoitteissa. Älä ohjaa porttia 123 Internetistä."
 
-#: src/admin/clock.tsx:447
+#: src/admin/clock.tsx:448
 msgid "Networks"
-msgstr ""
+msgstr "Verkot"
 
 #. NTP requests chrony has answered (or dropped) since it started
-#: src/admin/clock.tsx:450
+#: src/admin/clock.tsx:451
 msgid "Requests"
-msgstr ""
+msgstr "Pyynnöt"
 
-#: src/admin/clock.tsx:453
+#: src/admin/clock.tsx:454
 msgid "({n} dropped)"
-msgstr ""
+msgstr "({n} hylätty)"
 
-#: src/admin/clock.tsx:458
+#: src/admin/clock.tsx:459
 msgid "Off: chrony answers no one. Handy where the Internet is poor (a DXpedition): the shack's computers can then take their time from the receiver."
-msgstr ""
+msgstr "Pois: chrony ei vastaa kenellekään. Kätevä, missä Internet on heikko (DX-retkikunta): aseman tietokoneet voivat silloin ottaa aikansa vastaanottimelta."
 
 #: src/admin/configform.tsx:33
 msgid "changed"
@@ -4342,7 +4356,7 @@ msgstr "{name} ({s} s{lost})"
 
 #: src/state.ts:996
 msgid "named by the clock"
-msgstr ""
+msgstr "nimetty kellon mukaan"
 
 #: src/state.ts:2180
 msgid "only silence was heard"
@@ -4383,31 +4397,31 @@ msgstr "Taldom Moskovan lähellä: bitti joka 0,1 s, kantoaalto vaihemoduloitu 1
 
 #: src/timecode.ts:37
 msgid "Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST"
-msgstr ""
+msgstr "Allouis, Ranska: DCF77:n koodi kantoaallon vaihemodulaationa (yksi pulssi sekunnissa nollalle, kaksi ykköselle); CET/CEST"
 
 #: src/timecode.ts:38
 msgid "Shangqiu, China: carrier reduced 0.1-0.4 s each second (two bits), none at seconds 0, 20 and 40; Beijing time"
-msgstr ""
+msgstr "Shangqiu, Kiina: kantoaaltoa vaimennetaan 0,1-0,4 s joka sekunti (kaksi bittiä), ei sekunneilla 0, 20 ja 40; Pekingin aika"
 
 #: src/timecode.ts:39 src/timecode.ts:41
 msgid "Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
-msgstr ""
+msgstr "Burg, Saksa (EFR-kauko-ohjaus): FSK-sähkeitä, aikasähke 10 s välein; CET/CEST"
 
 #: src/timecode.ts:40
 msgid "Lakihegy, Hungary (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
-msgstr ""
+msgstr "Lakihegy, Unkari (EFR-kauko-ohjaus): FSK-sähkeitä, aikasähke 10 s välein; CET/CEST"
 
 #: src/timecode.ts:42
 msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC. Which one sent a minute is told by its 1000 or 1200 Hz tones"
-msgstr ""
+msgstr "Fort Collins ja Havaiji: 100 Hz:n apukantoaalto 0,17 s (0), 0,47 s (1), 0,77 s (merkki), kuuluu AM-tilassa; UTC. Lähettäjä tunnistetaan minuutin 1000 tai 1200 Hz:n äänistä"
 
 #: src/timecode.ts:43
 msgid "Pucheng, China: no time code, a 1 kHz tick each second (sent 20 ms early), heard in AM; minutes named by this clock"
-msgstr ""
+msgstr "Pucheng, Kiina: ei aikakoodia, 1 kHz:n tikitys joka sekunti (lähetetään 20 ms etuajassa), kuuluu AM-tilassa; minuutit nimetään tämän kellon mukaan"
 
 #: src/timecode.ts:44
 msgid "Taldom near Moscow: no time code, the carrier on 0.1 s each second and 0.5 s at the minute in some minutes of the hour; minutes named by this clock"
-msgstr ""
+msgstr "Taldom Moskovan lähellä: ei aikakoodia, kantoaalto päällä 0,1 s joka sekunti ja 0,5 s minuutin alussa osana tunnin minuuteista; minuutit nimetään tämän kellon mukaan"
 
 #: src/timecode.ts:87
 msgid "no station {name}"

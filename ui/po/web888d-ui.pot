@@ -74,7 +74,7 @@ msgstr ""
 msgid "Back to the receiver"
 msgstr ""
 
-#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:467 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:468 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr ""
 
@@ -1610,49 +1610,63 @@ msgstr ""
 msgid "Stream rate"
 msgstr ""
 
-#: src/admin/clock.tsx:412
-msgid ""
-"Serve this receiver's clock to the local network over NTP (UDP port 123)?\n"
-"\n"
+#: src/admin/clock.tsx:413
+msgid "Serve this receiver's clock to the local network over NTP (UDP port 123)?"
+msgstr ""
+
+#: src/admin/clock.tsx:415
+msgid "Any device on a private or link-local network address (10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 fc00::/7, fe80::/10) can then ask it the time — on a shared network (hotel, campsite, event) that is everyone on it."
+msgstr ""
+
+#: src/admin/clock.tsx:416
+msgid "Clients set their clocks by it. Without the Internet the time comes from the time-code stations alone: milliseconds at best, and only while they are received. When chrony has no usable source it says so (unsynchronised) and clients should ignore it."
+msgstr ""
+
+#: src/admin/clock.tsx:417
+msgid "Never forward port 123 to the receiver from the Internet: it would be open to abuse, and addresses from outside aren't served anyway."
+msgstr ""
+
+#: src/admin/clock.tsx:418
+msgid "It costs little CPU, but a flood of requests would load the receiver."
 msgstr ""
 
 #. NTP = the network time protocol; serving it = other computers on the network set their clocks by this receiver
-#: src/admin/clock.tsx:436
+#: src/admin/clock.tsx:437
 msgid "NTP for the local network"
 msgstr ""
 
-#: src/admin/clock.tsx:437
+#: src/admin/clock.tsx:438
 msgid "Other computers on the local network can set their clocks by this receiver (UDP port 123)"
 msgstr ""
 
-#: src/admin/clock.tsx:439
+#: src/admin/clock.tsx:440
 msgid "serve the clock to the local network"
 msgstr ""
 
-#: src/admin/clock.tsx:442
+#: src/admin/clock.tsx:443
 #, placeholders
 msgid "chrony didn't take it: {e}"
 msgstr ""
 
-#: src/admin/clock.tsx:445
+#: src/admin/clock.tsx:446
 msgid "Open to every device on private and link-local addresses. Don't forward port 123 from the Internet."
 msgstr ""
 
-#: src/admin/clock.tsx:447
+#: src/admin/clock.tsx:448
 msgid "Networks"
 msgstr ""
 
 #. NTP requests chrony has answered (or dropped) since it started
-#: src/admin/clock.tsx:450
+#: src/admin/clock.tsx:451
 msgid "Requests"
 msgstr ""
 
-#: src/admin/clock.tsx:453
+#: src/admin/clock.tsx:454
 #, placeholders
 msgid "({n} dropped)"
 msgstr ""
 
-#: src/admin/clock.tsx:458
+#: src/admin/clock.tsx:459
 msgid "Off: chrony answers no one. Handy where the Internet is poor (a DXpedition): the shack's computers can then take their time from the receiver."
 msgstr ""
 

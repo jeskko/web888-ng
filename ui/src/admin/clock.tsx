@@ -409,13 +409,14 @@ function ServeCard({ c, reload }: { c: Clock; reload: () => void }) {
     if (
       on &&
       !confirm(
-        t(
-          "Serve this receiver's clock to the local network over NTP (UDP port 123)?\n\n" +
-            "• Any device on a private or link-local network address (10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 fc00::/7, fe80::/10) can then ask it the time — on a shared network (hotel, campsite, event) that is everyone on it.\n" +
-            "• Clients set their clocks by it. Without the Internet the time comes from the time-code stations alone: milliseconds at best, and only while they are received. When chrony has no usable source it says so (unsynchronised) and clients should ignore it.\n" +
-            "• Never forward port 123 to the receiver from the Internet: it would be open to abuse, and addresses from outside aren't served anyway.\n" +
-            "• It costs little CPU, but a flood of requests would load the receiver.",
-        ),
+        [
+          t("Serve this receiver's clock to the local network over NTP (UDP port 123)?"),
+          "",
+          "• " + t("Any device on a private or link-local network address (10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 fc00::/7, fe80::/10) can then ask it the time — on a shared network (hotel, campsite, event) that is everyone on it."),
+          "• " + t("Clients set their clocks by it. Without the Internet the time comes from the time-code stations alone: milliseconds at best, and only while they are received. When chrony has no usable source it says so (unsynchronised) and clients should ignore it."),
+          "• " + t("Never forward port 123 to the receiver from the Internet: it would be open to abuse, and addresses from outside aren't served anyway."),
+          "• " + t("It costs little CPU, but a flood of requests would load the receiver."),
+        ].join("\n"),
       )
     )
       return;
