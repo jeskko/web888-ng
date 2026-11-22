@@ -215,6 +215,10 @@ struct Chain {
     lates: std::collections::VecDeque<f64>,
     /// Not decoded for now (shedding).
     shed: bool,
+    /// WWV/WWVH: AM, its 100 Hz subcarrier read from the envelope (less
+    /// its mean, `dc`) instead of the carrier as a tone.
+    am: bool,
+    dc: f64,
 }
 
 impl Chain {
@@ -247,7 +251,12 @@ impl Chain {
             n: 0,
             up: Complex64::new(1.0, 0.0),
             up_step: Complex64::new(u.cos(), u.sin()),
-            rx: Receiver::new(station, FS, TONE, 0.0),
+            rx: Receiver::new(
+                station,
+                FS,
+                if station == Station::Wwv { 100.0 } else { TONE },
+                0.0,
+            ),
             audio: Vec::with_capacity(CHUNK + 4096),
             sec: (Complex64::default(), 0),
             sec_pow: 0.0,
@@ -257,6 +266,8 @@ impl Chain {
             delay_ms: None,
             lates: Default::default(),
             shed: false,
+            am: station == Station::Wwv,
+            dc: 0.0,
         }
     }
 
@@ -311,8 +322,14 @@ impl Chain {
                 self.sec = (Complex64::default(), 0);
                 self.sec_pow = 0.0;
             }
-            self.audio
-                .push(((y * self.up).re / RX_SINE_FULL_SCALE) as f32);
+            if self.am {
+                let e = y.norm() / RX_SINE_FULL_SCALE;
+                self.dc += (e - self.dc) / FS;
+                self.audio.push((e - self.dc) as f32);
+            } else {
+                self.audio
+                    .push(((y * self.up).re / RX_SINE_FULL_SCALE) as f32);
+            }
             self.up *= self.up_step;
         }
         // keep the history only (now and then: the copy costs by its size)
@@ -415,12 +432,16 @@ const SCATTER_CAP_MS: f64 = 20.0;
 /// 2026-11-19 (`efr134k`, against the recording's NTP timebase): DCF39
 /// 1206.34 ms on a 5.77 ms path (±0.07 ms by the minute); HGA22 about
 /// 1227 and DCF49 about 1250 ms, from their headers alone (±1-3 ms: too
-/// weak to decode by day). Others: unmeasured.
+/// weak to decode by day). Others: unmeasured. DCF77 and MSF moved
+/// after the sub-frame phase (server 61f1ed9): set against DCF39 on the
+/// unit (NTP itself wanders ±0.3 ms), 2026-11-21 22 UTC to 11-22 11 UTC,
+/// the night's and the day's medians averaged: DCF77 read 0.68 / 0.25 ms
+/// early, MSF 0.18 early / 0.42 late (each ±0.6-1.3 ms by the minute).
 fn decoder_ms(s: Station) -> f64 {
     match s {
         Station::Rbu => 0.23,
-        Station::Msf => 1.06,
-        Station::Dcf77 => 2.96,
+        Station::Msf => 0.94,
+        Station::Dcf77 => 3.43,
         Station::Dcf39 => 1200.57,
         Station::Hga22 => 1220.0,
         Station::Dcf49 => 1244.2,
@@ -516,9 +537,6 @@ impl Monitor {
         let mut chains = Vec::new();
         for s in stations {
             let st = Station::from_name(s).ok_or_else(|| format!("unknown station {s:?}"))?;
-            if st == Station::Wwv {
-                return Err("WWV/WWVH is HF (a 100 Hz subcarrier in AM): not here".into());
-            }
             // the nearest (JJY's 40 kHz is within reach of a bin at 60)
             let fc = st
                 .carriers()
@@ -1247,8 +1265,15 @@ mod tests {
     /// One station keyed as sent, alone in a stream of `rate` S/s centred
     /// on `centre`: the minutes it decodes and confirms.
     fn synth_confirmed(station: Station, fc: f64, centre: f64, rate: f64) -> u64 {
+        synth(station, fc, centre, rate, false)
+    }
+
+    /// The minutes confirmed from `station`'s keying at `fc` in a bin
+    /// at `centre`; `am`: as WWV's 100 Hz subcarrier on an AM carrier.
+    fn synth(station: Station, fc: f64, centre: f64, rate: f64, am: bool) -> u64 {
         let start: i64 = 1_795_000_020;
-        let minutes = 4;
+        // WWV's first minute takes a whole minute's hole to align on
+        let minutes = if am { 6 } else { 4 };
         let key = web888_timecode::keying(station, start, minutes);
         let mut mon = Monitor::new(&[station.name().into()], centre, rate).unwrap();
         let utc = |f: f64| Some(start as f64 + f / rate);
@@ -1267,7 +1292,10 @@ mod tests {
             buf.clear();
             for k in b0..(b0 + block).min(n) {
                 let t = k as f64 / rate;
-                let lv = key[(t * 1000.0) as usize] as f64;
+                let mut lv = key[(t * 1000.0) as usize] as f64;
+                if am {
+                    lv = 0.7 + 0.3 * lv * (2.0 * PI * 100.0 * t).sin();
+                }
                 let z = Complex64::new(rnd() * a * 0.3, rnd() * a * 0.3)
                     + Complex64::from_polar(a * lv, 2.0 * PI * (fc - centre) * t);
                 buf.push(Iq32 {
@@ -1279,6 +1307,15 @@ mod tests {
             mon.push(b0 as u64, &buf, utc, recent, None);
         }
         mon.counts[0][0]
+    }
+
+    /// WWV/WWVH from an HF bin: AM, the 100 Hz subcarrier from the
+    /// envelope.
+    #[test]
+    fn wwv_decodes_from_am() {
+        let a = synth(Station::Wwv, 10e6, 10e6, 12_000.0, true);
+        let b = synth(Station::Wwv, 10e6, 10e6 + 7_000.0, 60_000.0, true);
+        assert!(a >= 2 && b >= 2, "{a} at 12 kS/s, {b} at 60 kS/s");
     }
 
     /// The keyed stations decode alone, in a KiwiSDR's 12 kS/s (the

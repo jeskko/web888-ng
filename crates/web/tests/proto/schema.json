@@ -1272,7 +1272,7 @@
           "default": "auto"
         },
         "stations": {
-          "description": "The stations, by name (overrides `region`): DCF77, MSF, RBU,\nTDF (162 kHz), WWVB, JJY (40 and 60 kHz: whichever is in a bin\nwatched), BPC (68.5 kHz), and EFR's teleswitch stations DCF39 (139 kHz), HGA22\n(135.6 kHz), DCF49 (129.1 kHz): a time telegram every 10 s.",
+          "description": "The stations, by name (overrides `region`): DCF77, MSF, RBU,\nTDF (162 kHz), WWVB, JJY (40 and 60 kHz: whichever is in a bin\nwatched), BPC (68.5 kHz), and EFR's teleswitch stations DCF39 (139 kHz), HGA22\n(135.6 kHz), DCF49 (129.1 kHz): a time telegram every 10 s; and\nWWV/WWVH (HF, AM: watched in the bin nearest `centre_hz`, so set\nthat to the carrier wanted, e.g. 10000000).",
           "type": "array",
           "items": {
             "type": "string"

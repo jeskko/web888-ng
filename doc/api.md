@@ -485,7 +485,7 @@ confirmed minute also gives the system clock's error by that station
 (`offset_ms`: true minus system time, the lateness less the path from
 the transmitter, by `[station] locator`, and the decoder's and
 receiver's own delay, calibrated on the remote unit against NTP:
-RBU 0.23 ms, MSF 1.06 ms, DCF77 2.96 ms) and its scatter over the last
+RBU 0.23 ms, MSF 0.94 ms, DCF77 3.43 ms: the last two set against DCF39 on 2026-11-22) and its scatter over the last
 15 minutes (`sigma_ms`; on the unit RBU about 0.3 ms, MSF and DCF77 2-3
 ms: their keying's 5 ms steps, gone since server 61f1ed9: the second's
 phase is interpolated between the envelope's 5 ms frames).
@@ -525,6 +525,15 @@ with the envelope receiver. On Okayama's GPS time the carrier drops
 1.2 ms after the second (its path less); the decoder offset (7.1 ms)
 is provisional. A KiwiSDR in Taiwan (BM2KVV) heard nothing on 68.5 kHz
 at three times of day.
+
+**WWV/WWVH** (HF; in the monitor 2026-11-22): AM, the 100 Hz BCD
+subcarrier read from the carrier's envelope by the page decoder's
+code. Watched in the bin nearest `centre_hz` (set it to the carrier,
+e.g. 10000000; not chosen by region). A KiwiSDR recording in Kansas
+(10 MHz, night) decodes about two minutes in three, as the page
+decoder does; the two transmitters (1000 and 1200 Hz ticks) aren't
+told apart, so no offset for the clock. The code has no parity: an
+unconfirmed minute can be wrong.
 
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s
