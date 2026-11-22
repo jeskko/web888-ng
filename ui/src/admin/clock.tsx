@@ -6,7 +6,7 @@
 
 import { useState } from "preact/hooks";
 import { t, tn } from "../i18n.ts";
-import { get } from "./api.ts";
+import { call, get } from "./api.ts";
 import { ago, usePoll } from "./util.ts";
 
 interface Tracking {
@@ -38,6 +38,8 @@ interface ChronySource {
 interface TcStation {
   t: number;
   station: string;
+  /** WWV or WWVH, when the receiver could tell. */
+  transmitter?: string | null;
   bin_khz: number;
   carrier_dbfs: number | null;
   snr_db_hz: number | null;
@@ -76,6 +78,12 @@ interface Clock {
     rejected: number;
   } | null;
   timecode: { stations: TcStation[] } | null;
+  ntp_server?: {
+    enabled: boolean;
+    status: { enabled: boolean; applied: boolean; error: string | null; at: number; networks: string[] } | null;
+    requests: number | null;
+    dropped: number | null;
+  };
 }
 
 /** Seconds as µs or ms, signed when `sign`. */
@@ -320,7 +328,7 @@ function StationsCard({ c }: { c: Clock }) {
           {st.map((s) => (
             <tr key={s.station} class={s.shed ? "dim" : ""}>
               <td>
-                {s.station} <span class="dim">{s.bin_khz.toFixed(0)}</span>
+                {s.transmitter ? s.station.replace("WWV/WWVH", s.transmitter) : s.station} <span class="dim">{s.bin_khz.toFixed(0)}</span>
                 {s.shed && <span class="warn"> {t("(shed)")}</span>}
               </td>
               <td class="r">{s.snr_db_hz === null ? "–" : `${s.snr_db_hz.toFixed(0)} dB`}</td>
@@ -376,9 +384,73 @@ function TimebaseCard({ c }: { c: Clock }) {
   );
 }
 
+/** Serving the clock to the LAN over NTP (`[timesync] serve_lan`): a
+ * switch, its risks spelt out before it goes on. */
+function ServeCard({ c, reload }: { c: Clock; reload: () => void }) {
+  const [busy, setBusy] = useState(false);
+  const [err, setErr] = useState<string | null>(null);
+  const ns = c.ntp_server;
+  if (!ns) return null;
+  const st = ns.status;
+  const set = async (on: boolean) => {
+    if (
+      on &&
+      !confirm(
+        t(
+          "Serve this receiver's clock to the local network over NTP (UDP port 123)?\n\n" +
+            "• Any device on a private or link-local network address (10.x, 172.16-31.x, 192.168.x, 169.254.x, IPv6 fc00::/7, fe80::/10) can then ask it the time — on a shared network (hotel, campsite, event) that is everyone on it.\n" +
+            "• Clients set their clocks by it. Without the Internet the time comes from the time-code stations alone: milliseconds at best, and only while they are received. When chrony has no usable source it says so (unsynchronised) and clients should ignore it.\n" +
+            "• Never forward port 123 to the receiver from the Internet: it would be open to abuse, and addresses from outside aren't served anyway.\n" +
+            "• It costs little CPU, but a flood of requests would load the receiver.",
+        ),
+      )
+    )
+      return;
+    setBusy(true);
+    setErr(null);
+    try {
+      await call("POST", "api/admin/clock/serve", { enabled: on });
+      reload();
+    } catch (e) {
+      setErr((e as Error).message);
+    } finally {
+      setBusy(false);
+    }
+  };
+  return (
+    <section class="card">
+      {/* i18n: NTP = the network time protocol; serving it = other computers on the network set their clocks by this receiver */}
+      <h3>{t("NTP for the local network")}</h3>
+      <label title={t("Other computers on the local network can set their clocks by this receiver (UDP port 123)")}>
+        <input type="checkbox" checked={ns.enabled} disabled={busy} onChange={() => void set(!ns.enabled)} />{" "}
+        {t("serve the clock to the local network")}
+      </label>
+      {err && <p class="warn">{err}</p>}
+      {ns.enabled && st && !st.applied && <p class="warn">{t("chrony didn't take it: {e}", { e: st.error ?? "?" })}</p>}
+      {ns.enabled && (
+        <>
+          <p class="warn">{t("Open to every device on private and link-local addresses. Don't forward port 123 from the Internet.")}</p>
+          <dl>
+            <dt>{t("Networks")}</dt>
+            <dd>{st?.networks.join(", ") || "–"}</dd>
+            {/* i18n: NTP requests chrony has answered (or dropped) since it started */}
+            <dt>{t("Requests")}</dt>
+            <dd>
+              {ns.requests ?? "–"}
+              {ns.dropped ? <span class="dim"> {t("({n} dropped)", { n: ns.dropped })}</span> : null}
+            </dd>
+          </dl>
+        </>
+      )}
+      {!ns.enabled && <p class="dim">{t("Off: chrony answers no one. Handy where the Internet is poor (a DXpedition): the shack's computers can then take their time from the receiver.")}</p>}
+    </section>
+  );
+}
+
 export function ClockPage() {
   const [c, setC] = useState<Clock | null>(null);
-  usePoll(async () => setC(await get<Clock>("api/admin/clock")), 5000);
+  const load = async () => setC(await get<Clock>("api/admin/clock"));
+  usePoll(load, 5000);
   if (!c) return <p class="dim">{t("Loading…")}</p>;
   return (
     <div class="cards">
@@ -387,6 +459,7 @@ export function ClockPage() {
       <SyncCard c={c} />
       <StationsCard c={c} />
       <TimebaseCard c={c} />
+      <ServeCard c={c} reload={() => void load()} />
     </div>
   );
 }

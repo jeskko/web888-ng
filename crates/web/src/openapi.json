@@ -2164,6 +2164,57 @@
         }
       }
     },
+    "/api/admin/clock/serve": {
+      "post": {
+        "summary": "Serve the system clock to the local network over NTP ([timesync] serve_lan; applied to chrony at once)",
+        "tags": [
+          "admin"
+        ],
+        "x-stability": "unstable",
+        "security": [
+          {
+            "cookie": []
+          },
+          {
+            "token": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Any"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "no admin login or token"
+          }
+        },
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "enabled": {
+                    "type": "boolean",
+                    "description": "answer NTP clients from private and link-local addresses"
+                  }
+                },
+                "required": [
+                  "enabled"
+                ]
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/admin/ovl": {
       "get": {
         "summary": "The ADC overload log",

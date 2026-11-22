@@ -107,6 +107,7 @@ pub fn routes() -> Router<Arc<Shared>> {
         .route("/api/admin/sessions/{id}/ban", post(ban))
         .route("/api/admin/skimmers", get(skimmers))
         .route("/api/admin/clock", get(crate::clockview::clock))
+        .route("/api/admin/clock/serve", post(serve_lan))
         .route("/metrics", get(metrics))
 }
 
@@ -475,6 +476,30 @@ async fn config_put(_: AdminOnly, State(sh): State<Arc<Shared>>, Json(v): Json<V
     let changes = changes_json(&sh, &c);
     match save(&sh, &c) {
         Ok(()) => Json(changes).into_response(),
+        Err(r) => r.into_response(),
+    }
+}
+
+#[derive(Deserialize)]
+#[serde(deny_unknown_fields)]
+struct ServeReq {
+    enabled: bool,
+}
+
+/// Serve the system clock to the LAN over NTP: saved as `[timesync]
+/// serve_lan`, applied to chrony at once ([`crate::ntpserve`]).
+async fn serve_lan(
+    _: AdminOnly,
+    State(sh): State<Arc<Shared>>,
+    Json(r): Json<ServeReq>,
+) -> Response {
+    let mut c = match file_config(&sh) {
+        Ok(c) => c,
+        Err(r) => return r.into_response(),
+    };
+    c.timesync.serve_lan = r.enabled;
+    match save(&sh, &c) {
+        Ok(()) => Json(json!({ "serve_lan": r.enabled })).into_response(),
         Err(r) => r.into_response(),
     }
 }

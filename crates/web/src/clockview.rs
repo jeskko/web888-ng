@@ -54,7 +54,22 @@ pub async fn clock(_: AdminOnly, State(sh): State<Arc<Shared>>) -> Json<Value> {
         "timebase": timebase,
         "timesync": crate::timesync::snapshot(),
         "timecode": tc,
+        "ntp_server": ntp_server(&sh),
     }))
+}
+
+/// The clock served to the LAN: the setting, whether chrony took it and
+/// the NTP requests chrony has had (`chronyc serverstats`).
+fn ntp_server(sh: &Shared) -> Value {
+    let enabled = sh.live.borrow().timesync.serve_lan;
+    let stats = chronyc(&["serverstats"]).and_then(|v| v.into_iter().next());
+    let n = |i: usize| stats.as_ref().and_then(|v| v.get(i)?.parse::<u64>().ok());
+    json!({
+        "enabled": enabled,
+        "status": crate::ntpserve::snapshot(),
+        "requests": n(0),
+        "dropped": n(1),
+    })
 }
 
 /// `chronyc -c ARGS`' lines, its fields split; none when chronyc isn't

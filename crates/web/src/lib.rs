@@ -17,6 +17,7 @@ pub mod kiwi;
 pub mod logs;
 pub mod markers;
 pub mod metrics;
+pub mod ntpserve;
 pub mod ovl;
 pub mod prop;
 pub mod proto;

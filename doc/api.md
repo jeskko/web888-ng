@@ -635,7 +635,20 @@ air-gapped receiver's system clock follows the stations too
   sample, each source's offset and minutes used or left out), the
   time-code stations (SNR, minutes, lateness, clock offset and scatter,
   the bins' floors, the ADC clock and the CPU crystal, the monitor's
-  CPU) and the receiver's timebase.
+  CPU) and the receiver's timebase; `ntp_server`: serving the LAN (the
+  setting, whether chrony took it, its NTP requests and drops from
+  `chronyc serverstats`).
+* **NTP for the local network** (`[timesync] serve_lan`, off by
+  default; `POST /api/admin/clock/serve {"enabled": bool}`, the Clock
+  tab's switch, which spells out the risks first): web888d (`ntpserve`)
+  runs `chronyc allow` for 10/8, 172.16/12, 192.168/16, 169.254/16,
+  fc00::/7 and fe80::/10, or `chronyc deny all`, when it changes and
+  every 10 minutes while on (a restarted chronyd forgets). chronyd then
+  opens UDP 123 (checked on the unit, 2026-11-22) and serves the clock
+  at stratum 1 on the LF clock, or as unsynchronised with no usable
+  source. For a station with poor Internet (a DXpedition): the shack's
+  computers take the receiver's time. Global addresses (IPv6's, the
+  Internet's) are not served; port 123 shouldn't be forwarded to it.
 
 **The page** (**built**). While its time-code, FT8/FT4/WSPR or JS8
 decoders run it asks for timed audio, and their sample clocks take the

@@ -107,7 +107,8 @@ pub struct Config {
     /// restart).
     pub timecode: Timecode,
     /// The system clock fed from the receiver's own time sources (the
-    /// time-code stations) through chrony (changes need a restart).
+    /// time-code stations) through chrony (changes need a restart, but
+    /// for `serve_lan`).
     pub timesync: Timesync,
 }
 
@@ -127,6 +128,17 @@ pub struct Timesync {
     /// offsets: a calibration beyond the built-in one (the path from the
     /// transmitter by `[station] locator`, the decoder's own delay).
     pub trim_ms: BTreeMap<String, f64>,
+    /// Serve the system clock over NTP (UDP port 123) to the local
+    /// network: chrony answers clients from private and link-local
+    /// addresses (10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7,
+    /// fe80::/10). Applies at once. Off by default: anyone on the
+    /// network can then ask the receiver the time, and clients set their
+    /// clocks by it, so it is only as right as the receiver's sources
+    /// (NTP, or the time-code stations alone without the Internet:
+    /// milliseconds at best, and nothing served as synchronised while
+    /// chrony has no usable source). Don't forward port 123 to it from
+    /// the Internet.
+    pub serve_lan: bool,
 }
 
 impl Default for Timesync {
@@ -134,6 +146,7 @@ impl Default for Timesync {
         Timesync {
             chrony_socket: "/run/chrony.web888.sock".into(),
             trim_ms: Default::default(),
+            serve_lan: false,
         }
     }
 }

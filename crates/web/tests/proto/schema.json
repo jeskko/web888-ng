@@ -270,11 +270,12 @@
       }
     },
     "timesync": {
-      "description": "The system clock fed from the receiver's own time sources (the\ntime-code stations) through chrony (changes need a restart).",
+      "description": "The system clock fed from the receiver's own time sources (the\ntime-code stations) through chrony (changes need a restart, but\nfor `serve_lan`).",
       "$ref": "#/$defs/Timesync",
       "default": {
         "chrony_socket": "/run/chrony.web888.sock",
-        "trim_ms": {}
+        "trim_ms": {},
+        "serve_lan": false
       }
     }
   },
@@ -1304,6 +1305,11 @@
             "format": "double"
           },
           "default": {}
+        },
+        "serve_lan": {
+          "description": "Serve the system clock over NTP (UDP port 123) to the local\nnetwork: chrony answers clients from private and link-local\naddresses (10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7,\nfe80::/10). Applies at once. Off by default: anyone on the\nnetwork can then ask the receiver the time, and clients set their\nclocks by it, so it is only as right as the receiver's sources\n(NTP, or the time-code stations alone without the Internet:\nmilliseconds at best, and nothing served as synchronised while\nchrony has no usable source). Don't forward port 123 to it from\nthe Internet.",
+          "type": "boolean",
+          "default": false
         }
       },
       "additionalProperties": false

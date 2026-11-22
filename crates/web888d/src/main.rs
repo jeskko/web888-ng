@@ -1159,6 +1159,8 @@ fn run_serve(a: ServeArgs) -> AnyResult<()> {
         // HF propagation forecasts (`[propagation]`)
         let gps = shared.skim.as_ref().and_then(|s| s.gpsd.clone());
         rt.spawn(web888_web::prop::run(shared.live.clone(), gps));
+        // the clock served to the LAN (`[timesync] serve_lan`)
+        rt.spawn(web888_web::ntpserve::run(shared.live.clone()));
         // OS releases (`[update]`; only where RAUC is)
         rt.spawn(web888_web::update::run(shared.live.clone()));
         let app = web888_web::router(shared, w.ui_dir.clone());
