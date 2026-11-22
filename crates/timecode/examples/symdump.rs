@@ -5,7 +5,8 @@
 //!   cargo run --release -p web888-timecode --example symdump -- \
 //!       FILE.sigmf-data RATE STATION [CARRIER_OFFSET_HZ]
 //!
-//! WWV/WWVH: the envelope (AM), the carrier anywhere in the recording.
+//! WWV/WWVH and BPM: the envelope (AM), the carrier anywhere in the
+//! recording (WWV's 100 Hz subcarrier, BPM's 1 kHz ticks the tone).
 use web888_timecode::{Event, Receiver, Station};
 
 fn main() {
@@ -15,8 +16,8 @@ fn main() {
     let off: f64 = a.get(4).map_or(0.0, |s| s.parse().unwrap());
     let b = std::fs::read(&a[1]).unwrap();
     // WWV/WWVH: AM (the envelope), its 100 Hz subcarrier the tone
-    let am = st == Station::Wwv;
-    let tone = if am { 100.0 } else { 1000.0 };
+    let am = matches!(st, Station::Wwv | Station::Bpm);
+    let tone = if st == Station::Wwv { 100.0 } else { 1000.0 };
     let mut dc = 0f32;
     let mut rx = Receiver::new(st, fs, tone, 0.0);
     let mut line = String::new();

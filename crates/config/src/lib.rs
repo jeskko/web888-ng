@@ -163,8 +163,9 @@ pub struct Timecode {
     /// TDF (162 kHz), WWVB, JJY (40 and 60 kHz: whichever is in a bin
     /// watched), BPC (68.5 kHz), and EFR's teleswitch stations DCF39 (139 kHz), HGA22
     /// (135.6 kHz), DCF49 (129.1 kHz): a time telegram every 10 s; and
-    /// WWV/WWVH (HF, AM: watched in the bin nearest `centre_hz`, so set
-    /// that to the carrier wanted, e.g. 10000000).
+    /// WWV/WWVH, BPM and RWM (HF: watched in the bin nearest
+    /// `centre_hz`, so set that to the carrier wanted, e.g. 10000000;
+    /// BPM and RWM send ticks only, their minutes named by the clock).
     pub stations: Vec<String>,
     /// A line per station and minute (JSON) to `timecode.log` in the
     /// state directory (kept under 10 MB, the older half in

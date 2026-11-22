@@ -269,6 +269,7 @@ impl Efr {
                 confirmed,
                 notes: vec![format!("C {:02X}", v[4])],
                 symbols: String::new(),
+                named: true,
             }));
         }
     }

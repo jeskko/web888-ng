@@ -520,6 +520,7 @@ fn decode(d1: &[u8], d2: &[u8], next_t: f64) -> Option<Minute> {
         confirmed: false,
         notes,
         symbols: String::new(),
+        named: true,
     })
 }
 

@@ -58,6 +58,17 @@ pub enum Station {
     /// none at seconds 0, 20 and 40; three 20 s frames a minute, each with
     /// the whole time and date.
     Bpc,
+    /// BPM (HF, Pucheng; AM): no time code, a 10 ms 1 kHz tick each
+    /// second (20 ms before UTC's), 300 ms at the minute; some minutes
+    /// carry UT1's ticks (100 ms, off UTC's second) or none. Its minutes
+    /// are unnamed ([`Minute::named`]): the receiver's clock names them.
+    Bpm,
+    /// RWM (HF, Taldom; a keyed carrier): no time code, the carrier on
+    /// 100 ms each second, 500 ms at the minute, a second pulse at
+    /// 200-300 ms in the seconds that carry DUT1 (as read, 2026-11-22: 9
+    /// and 21); some minutes other keying or none. Unnamed minutes, as
+    /// BPM's.
+    Rwm,
 }
 
 /// Each symbol's mean level (0 keyed down / off, 1 up / on) in the
@@ -66,7 +77,7 @@ type Templates = &'static [(char, &'static [f32])];
 
 impl Station {
     /// In the page's order (its station numbers).
-    pub const ALL: [Station; 11] = [
+    pub const ALL: [Station; 13] = [
         Station::Dcf77,
         Station::Msf,
         Station::Wwvb,
@@ -78,6 +89,8 @@ impl Station {
         Station::Dcf49,
         Station::Tdf,
         Station::Bpc,
+        Station::Bpm,
+        Station::Rwm,
     ];
 
     /// An EFR teleswitch station ([`efr`]).
@@ -114,6 +127,8 @@ impl Station {
             Station::Dcf49 => "DCF49",
             Station::Tdf => "TDF",
             Station::Bpc => "BPC",
+            Station::Bpm => "BPM",
+            Station::Rwm => "RWM",
         }
     }
 
@@ -148,6 +163,10 @@ impl Station {
             Station::Tdf => Some((47.1694, 2.2044)),
             // Shangqiu
             Station::Bpc => Some((34.457, 115.837)),
+            // Pucheng
+            Station::Bpm => Some((34.948, 109.543)),
+            // Taldom (RBU's site)
+            Station::Rwm => Some((56.7333, 37.6633)),
         }
     }
 
@@ -163,7 +182,7 @@ impl Station {
             Station::Hga22 | Station::Dcf49 => 1200.0,
             Station::Jjy => 1500.0,
             // HF: not watched by the monitor
-            Station::Wwv => 0.0,
+            Station::Wwv | Station::Bpm | Station::Rwm => 0.0,
         }
     }
 
@@ -179,7 +198,7 @@ impl Station {
             | Station::Dcf49 => &["europe"],
             Station::Wwvb => &["north-america"],
             Station::Jjy | Station::Bpc => &["east-asia"],
-            Station::Wwv => &[],
+            Station::Wwv | Station::Bpm | Station::Rwm => &[],
         }
     }
 
@@ -224,6 +243,8 @@ impl Station {
             Station::Dcf49 => &[129_100.0],
             Station::Tdf => &[162_000.0],
             Station::Bpc => &[68_500.0],
+            Station::Bpm => &[2.5e6, 5e6, 10e6, 15e6],
+            Station::Rwm => &[4.996e6, 9.996e6, 14.996e6],
         }
     }
 
@@ -326,6 +347,36 @@ impl Station {
                     ('M', &[1.0, 1.0, 1.0, 1.0, 1.0]),
                 ],
             ),
+            // the 1 kHz tick (in the envelope: the tone): 10 ms each second,
+            // 300 ms at the minute; UT1's 100 ms; none ('-': no ticks)
+            Station::Bpm => (
+                &[(0.0, 0.01), (0.05, 0.09), (0.15, 0.28), (0.5, 0.9)],
+                &[
+                    ('0', &[1.0, 0.0, 0.0, 0.0]),
+                    ('U', &[1.0, 1.0, 0.0, 0.0]),
+                    ('M', &[1.0, 1.0, 1.0, 0.0]),
+                    ('-', &[0.0, 0.0, 0.0, 0.0]),
+                ],
+            ),
+            // on 100 ms: a second; a second pulse at 200-300 ms: DUT1's;
+            // on 500 ms: the minute; off ('-') or on ('C') all second:
+            // other minutes
+            Station::Rwm => (
+                &[
+                    (0.01, 0.08),
+                    (0.12, 0.18),
+                    (0.21, 0.28),
+                    (0.35, 0.45),
+                    (0.6, 0.95),
+                ],
+                &[
+                    ('0', &[1.0, 0.0, 0.0, 0.0, 0.0]),
+                    ('D', &[1.0, 0.0, 1.0, 0.0, 0.0]),
+                    ('M', &[1.0, 1.0, 1.0, 1.0, 0.0]),
+                    ('-', &[0.0, 0.0, 0.0, 0.0, 0.0]),
+                    ('C', &[1.0, 1.0, 1.0, 1.0, 1.0]),
+                ],
+            ),
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => (&[], &[]),
         }
     }
@@ -424,6 +475,24 @@ impl Station {
                         1.0
                     }
                 }
+                Station::Bpm => {
+                    if t < 0.01 {
+                        1.0
+                    } else if t < 0.3 {
+                        0.02
+                    } else {
+                        0.0
+                    }
+                }
+                Station::Rwm => {
+                    if t < 0.1 {
+                        1.0
+                    } else if t < 0.5 {
+                        0.03
+                    } else {
+                        0.0
+                    }
+                }
                 Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => 1.0,
             };
         }
@@ -439,6 +508,7 @@ impl Station {
             (Station::Dcf77 | Station::Msf | Station::Tdf, 'M') | (Station::Wwv, 'H') => r,
             (Station::Wwvb | Station::Jjy, 'M') => r / 3.0,
             (Station::Bpc, 'M') => r / 2.0,
+            (Station::Bpm, 'M' | 'U') | (Station::Rwm, 'M' | 'C') => r,
             _ => 0.0,
         }
     }
@@ -454,6 +524,7 @@ impl Station {
             Station::Wwv => &[4..=7, 30..=41, 51..=54],
             // each frame's day, month, year and their parity
             Station::Bpc => &[11..=19, 31..=39, 51..=59],
+            Station::Bpm | Station::Rwm => &[],
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => &[],
         }
     }
@@ -464,6 +535,9 @@ impl Station {
             Station::Dcf77 => 0.15,
             Station::Tdf => 0.06,
             Station::Msf | Station::Bpc => 0.25,
+            // the tone is on ~5 % of the time (10 ms in the 40 ms boxcar)
+            Station::Bpm => 0.95,
+            Station::Rwm => 0.9,
             Station::Wwvb | Station::Jjy => 0.5,
             Station::Wwv => 0.65,
             Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => 0.05,
@@ -500,6 +574,9 @@ pub struct Minute {
     pub notes: Vec<String>,
     /// The minute's symbols as read ('?' unread).
     pub symbols: String,
+    /// The station said which minute it is; false (BPM: ticks only):
+    /// `utc` and `local` are none of its, the receiver's clock names it.
+    pub named: bool,
 }
 
 /// A second read.
@@ -588,7 +665,10 @@ impl Receiver {
     /// `tone`: the carrier's (or WWV's 100 Hz subcarrier's) audio
     /// frequency (Hz); `t0`: the stream time of the first sample.
     pub fn new(station: Station, fs: f64, tone: f64, t0: f64) -> Self {
-        let w = (WIN * fs).round() as usize;
+        // BPM's 10 ms tick: a boxcar its length (a 40 ms one smears it into
+        // a flat top the second's phase wanders on)
+        let win = if station == Station::Bpm { 0.01 } else { WIN };
+        let w = (win * fs).round() as usize;
         Receiver {
             station,
             fs,
@@ -644,7 +724,7 @@ impl Receiver {
 
     /// Stream time of envelope frame k (the boxcar's centre).
     fn frame_t(&self, k: u64) -> f64 {
-        self.t0 + (k as f64 + 1.0) * HOP - 0.5 * WIN
+        self.t0 + (k as f64 + 1.0) * HOP - 0.5 * self.ring.len() as f64 / self.fs
     }
 
     pub fn push(&mut self, x: &[f32]) {
@@ -736,10 +816,21 @@ impl Receiver {
                 self.win.0 += 1;
             }
             // the up level: the station's percentile (DCF77's carrier is up
-            // 85 % of the time, WWVB's about half)
+            // 85 % of the time, WWVB's about half). Stations down half the
+            // time or more: at least the 90th, as a window over two markers
+            // and a 1 (WWVB's seconds 59, 0, 1) is up only 20 % of the time
+            // (the 75th read the marker of second 0 as a 0: no WWVB minute
+            // in those minutes); the others' up stretches are long, and a
+            // higher percentile there reads the noise's peaks (BPC)
             let n = self.sorted.len();
             let dn = self.station.down();
-            let q = (((dn + (1.0 - dn) / 2.0) * n as f32) as usize).min(n - 1);
+            let p = dn + (1.0 - dn) / 2.0;
+            let p = if (0.5..0.9).contains(&dn) {
+                p.max(0.9)
+            } else {
+                p
+            };
+            let q = ((p * n as f32) as usize).min(n - 1);
             let up = self.sorted[q];
             self.env.push(self.raw[k] / up.max(1e-30));
         }
@@ -981,7 +1072,9 @@ impl Receiver {
         if m.ok {
             m.confirmed = self.passed.iter().any(|&(t, u)| {
                 let k = ((m.t - t) / 60.0).round();
-                k >= 1.0 && ((m.t - t) - 60.0 * k).abs() < 0.5 && m.utc - u == 60 * k as i64
+                k >= 1.0
+                    && ((m.t - t) - 60.0 * k).abs() < 0.5
+                    && (!m.named || m.utc - u == 60 * k as i64)
             });
             self.passed.push((m.t, m.utc));
             self.passed.retain(|p| m.t - p.0 < 1200.0);
@@ -1116,12 +1209,46 @@ fn markers_ok(frame: &[Second], at: &[usize], sym: char) -> bool {
 
 fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
     let symbols: String = frame.iter().map(|s| s.sym).collect();
+    if matches!(station, Station::Bpm | Station::Rwm) {
+        // UTC's ticks: the minute's mark, ticks in (nearly) all the
+        // others, no UT1 tick, no other mark, no steady carrier
+        let ticks = frame[1..]
+            .iter()
+            .filter(|s| matches!(s.sym, '0' | 'D'))
+            .count();
+        let ok = frame.len() == 60
+            && frame[0].sym == 'M'
+            && ticks >= 50
+            && !frame[1..].iter().any(|s| matches!(s.sym, 'M' | 'U' | 'C'));
+        // RWM: the seconds with DUT1's second pulse, as read
+        let d: Vec<String> = (1..frame.len())
+            .filter(|&i| frame[i].sym == 'D')
+            .map(|i| i.to_string())
+            .collect();
+        return Some(Minute {
+            station,
+            t: frame[0].t,
+            utc: 0,
+            local: "UTC ticks".into(),
+            ok,
+            confirmed: false,
+            notes: if d.is_empty() {
+                Vec::new()
+            } else {
+                vec![format!("DUT1 pulses in seconds {}", d.join(","))]
+            },
+            symbols,
+            named: false,
+        });
+    }
     let b = bits_of(frame, station);
     let mut notes = Vec::new();
     let (mut ok, t, y, mo, d, h, mi, zone, zname): (bool, f64, i64, i64, i64, i64, i64, i64, &str);
     match station {
         // their own receivers decode them
         Station::Rbu | Station::Dcf39 | Station::Hga22 | Station::Dcf49 => return None,
+        // above
+        Station::Bpm | Station::Rwm => return None,
         Station::Bpc => {
             // the three frames, each read alone; the minute passes when at
             // least two pass their checks and every one that does agrees
@@ -1431,6 +1558,7 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
         confirmed: false,
         notes,
         symbols,
+        named: true,
     })
 }
 
@@ -1522,6 +1650,20 @@ fn level(station: Station, s: char, t: f64) -> f32 {
         Station::Bpc => match s {
             c @ '0'..='3' => t >= 0.1 * f64::from(c as u8 - b'0' + 1),
             _ => true,
+        },
+        Station::Rwm => match s {
+            '0' => t < 0.1,
+            'D' => t < 0.1 || (0.2..0.3).contains(&t),
+            'M' => t < 0.5,
+            'C' => true,
+            _ => false,
+        },
+        // the tick's tone on (not the carrier)
+        Station::Bpm => match s {
+            '0' => t < 0.01,
+            'U' => t < 0.1,
+            'M' => t < 0.3,
+            _ => false,
         },
         Station::Wwvb => {
             t >= match s {
@@ -1787,6 +1929,14 @@ pub fn encode(station: Station, utc: i64) -> Vec<char> {
                 for (k, x) in v.iter().enumerate() {
                     syms[20 * f + 1 + k] = char::from(b'0' + *x as u8);
                 }
+            }
+        }
+        Station::Bpm | Station::Rwm => {
+            syms.fill('0');
+            syms[0] = 'M';
+            if station == Station::Rwm {
+                syms[9] = 'D';
+                syms[21] = 'D';
             }
         }
         Station::Wwv => {

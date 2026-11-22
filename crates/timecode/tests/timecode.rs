@@ -214,3 +214,37 @@ fn stations_by_region() {
     assert_eq!(Station::for_region("mars", None), None);
     assert!(!names(Station::for_region("all", None).unwrap()).contains("WWV/"));
 }
+
+/// BPM and RWM: ticks only. Their minutes pass on the minute's mark and
+/// the ticks, unnamed (no time code), confirmed 60 s apart; at the
+/// minute's start.
+#[test]
+fn ticks_find_the_minute() {
+    for st in [Station::Bpm, Station::Rwm] {
+        ticks(st);
+    }
+}
+
+fn ticks(st: Station) {
+    let start = days_from_civil(2026, 11, 16) * 86_400 + 10 * 3600 + 20 * 60;
+    let lead = 23.4;
+    let x = audio(st, start, 5, 1000.0, lead, 0.3, 7);
+    let mut rx = Receiver::new(st, FS, 1000.0, 0.0);
+    let mut good = 0;
+    for c in x.chunks(1200) {
+        rx.push(c);
+        for e in rx.poll() {
+            if let Event::Minute(m) = e {
+                assert!(!m.named);
+                if m.ok && m.confirmed {
+                    good += 1;
+                    // a minute's start: a whole minute from the stream's
+                    // start less the lead
+                    let k = ((m.t + lead) / 60.0).round();
+                    assert!((m.t + lead - 60.0 * k).abs() < 0.003, "minute at {} s", m.t);
+                }
+            }
+        }
+    }
+    assert!(good >= 2, "{st:?}: {good} confirmed");
+}

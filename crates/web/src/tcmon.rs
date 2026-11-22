@@ -215,8 +215,8 @@ struct Chain {
     lates: std::collections::VecDeque<f64>,
     /// Not decoded for now (shedding).
     shed: bool,
-    /// WWV/WWVH: AM, its 100 Hz subcarrier read from the envelope (less
-    /// its mean, `dc`) instead of the carrier as a tone.
+    /// WWV/WWVH and BPM: AM, WWV's 100 Hz subcarrier or BPM's 1 kHz ticks
+    /// read from the envelope (less its mean, `dc`), not the carrier.
     am: bool,
     dc: f64,
 }
@@ -254,6 +254,7 @@ impl Chain {
             rx: Receiver::new(
                 station,
                 FS,
+                // WWV's 100 Hz subcarrier; BPM's 1 kHz ticks are TONE
                 if station == Station::Wwv { 100.0 } else { TONE },
                 0.0,
             ),
@@ -266,7 +267,7 @@ impl Chain {
             delay_ms: None,
             lates: Default::default(),
             shed: false,
-            am: station == Station::Wwv,
+            am: matches!(station, Station::Wwv | Station::Bpm),
             dc: 0.0,
         }
     }
@@ -437,8 +438,8 @@ const SCATTER_CAP_MS: f64 = 20.0;
 /// unit (NTP itself wanders ±0.3 ms), 2026-11-21 22 UTC to 11-22 11 UTC,
 /// the night's and the day's medians averaged: DCF77 read 0.68 / 0.25 ms
 /// early, MSF 0.18 early / 0.42 late (each ±0.6-1.3 ms by the minute).
-fn decoder_ms(s: Station) -> f64 {
-    match s {
+fn decoder_ms(s: Station) -> Option<f64> {
+    Some(match s {
         Station::Rbu => 0.23,
         Station::Msf => 0.94,
         Station::Dcf77 => 3.43,
@@ -462,8 +463,10 @@ fn decoder_ms(s: Station) -> f64 {
         // 1.2 ms after the second (a GPS-timed KiwiSDR at Okayama,
         // 1655 km, 2026-11-22: the drop's 50 % point 6.7 ms late)
         Station::Bpc => 7.1,
-        _ => 0.0,
-    }
+        // not measured (BPM's ticks are sent 20 ms early, HF paths vary):
+        // no offset for the clock
+        Station::Wwv | Station::Bpm | Station::Rwm => return None,
+    })
 }
 
 /// The time from a transmitter at `site` to `rx` (lat, lon °): the
@@ -578,7 +581,7 @@ impl Monitor {
             c.delay_ms = c
                 .station
                 .site(c.fc)
-                .map(|s| path_ms(s, rx) + decoder_ms(c.station));
+                .and_then(|s| Some(path_ms(s, rx) + decoder_ms(c.station)?));
         }
     }
 
@@ -772,7 +775,19 @@ impl Monitor {
                     // back by the filter's delay
                     let f =
                         self.frame0 as f64 + m.t * FS * self.decim as f64 - (TAPS - 1) as f64 / 2.0;
-                    now(f).or_else(|| utc(f)).map(|u| (u - m.utc as f64) * 1e3)
+                    let u = now(f).or_else(|| utc(f))?;
+                    // a station without a time code (BPM): the minute
+                    // nearest the clock, when the clock is that close
+                    let mu = if m.named {
+                        m.utc as f64
+                    } else {
+                        let r = (u / 60.0).round() * 60.0;
+                        if (u - r).abs() > 20.0 {
+                            return None;
+                        }
+                        r
+                    };
+                    Some((u - mu) * 1e3)
                 })
                 .collect();
             lates.sort_by(f64::total_cmp);
@@ -1251,9 +1266,9 @@ mod tests {
             // offset: the calibrated delay less the lateness
             let off = r.offset_ms.unwrap();
             let delay = if r.station == "MSF" {
-                path_ms((54.9116, -3.2785), (50.0156, 9.0108)) + decoder_ms(Station::Msf)
+                path_ms((54.9116, -3.2785), (50.0156, 9.0108)) + decoder_ms(Station::Msf).unwrap()
             } else {
-                decoder_ms(Station::Dcf77)
+                decoder_ms(Station::Dcf77).unwrap()
             };
             assert!((off - (delay - late)).abs() < 0.01, "{r:?}");
             assert!(r.sigma_ms.unwrap() > 0.0);
@@ -1294,7 +1309,13 @@ mod tests {
                 let t = k as f64 / rate;
                 let mut lv = key[(t * 1000.0) as usize] as f64;
                 if am {
-                    lv = 0.7 + 0.3 * lv * (2.0 * PI * 100.0 * t).sin();
+                    // WWV's 100 Hz subcarrier, BPM's 1 kHz ticks
+                    let tone = if station == Station::Wwv {
+                        100.0
+                    } else {
+                        1000.0
+                    };
+                    lv = 0.7 + 0.3 * lv * (2.0 * PI * tone * t).sin();
                 }
                 let z = Complex64::new(rnd() * a * 0.3, rnd() * a * 0.3)
                     + Complex64::from_polar(a * lv, 2.0 * PI * (fc - centre) * t);
@@ -1316,6 +1337,15 @@ mod tests {
         let a = synth(Station::Wwv, 10e6, 10e6, 12_000.0, true);
         let b = synth(Station::Wwv, 10e6, 10e6 + 7_000.0, 60_000.0, true);
         assert!(a >= 2 && b >= 2, "{a} at 12 kS/s, {b} at 60 kS/s");
+    }
+
+    /// The stations with ticks only: BPM (AM, 1 kHz ticks) and RWM (a
+    /// keyed carrier); their minutes named by the clock, on time.
+    #[test]
+    fn tick_stations_decode() {
+        let a = synth(Station::Bpm, 10e6, 10e6, 12_000.0, true);
+        let b = synth(Station::Rwm, 9.996e6, 10e6, 60_000.0, false);
+        assert!(a >= 2 && b >= 2, "BPM {a}, RWM {b}");
     }
 
     /// The keyed stations decode alone, in a KiwiSDR's 12 kS/s (the

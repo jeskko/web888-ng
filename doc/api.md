@@ -502,7 +502,7 @@ recordings from public KiwiSDRs near the stations (2026-11-21): WWVB
 2026-11-22, after the monitor stopped taking 40 kHz for JJY in a bin
 at 60 kHz) and TDF (near Paris) decode every minute; their decoder offsets are provisional (the Kiwi's own IQ delay
 is in them). Fixed on the way: the impulse blanker locked shut after a
-long low (WWVB's 0.8 s at -17 dB, JJY's -20 dB, MSF's 0.5 s off).
+long low (WWVB's 0.8 s at -17 dB, JJY's -20 dB, MSF's 0.5 s off); and (2026-11-22) WWVB's second 0 read as a 0 in minutes whose second 1 is a 1 (the up level over two markers and a 1: now at least the 90th percentile for stations down half the time), which held back its first minutes; WWVB's recording now confirms 18 minutes of 20 (was 11), WWV's 14 (was 10).
 
 **TDF** (ALS162, 162 kHz, Allouis; **built**): DCF77's code as phase
 modulation, a cycle of about ±0.9 rad centred on each second's start, a
@@ -534,6 +534,18 @@ e.g. 10000000; not chosen by region). A KiwiSDR recording in Kansas
 decoder does; the two transmitters (1000 and 1200 Hz ticks) aren't
 told apart, so no offset for the clock. The code has no parity: an
 unconfirmed minute can be wrong.
+
+**BPM and RWM** (HF; ticks only, 2026-11-22): no time code, so their
+minutes are named by the receiver's clock (the nearest minute, when
+within 20 s) and give the second's phase. BPM (Pucheng; 2.5, 5, 10, 15
+MHz, AM): a 10 ms 1 kHz tick each second, sent 20 ms before UTC's
+second, 300 ms at the minute; UT1's 100 ms ticks or none in some
+minutes (not used). RWM (Taldom; 4996, 9996, 14996 kHz, a keyed
+carrier): on 100 ms each second, 500 ms at the minute, a second pulse
+at 200-300 ms in DUT1's seconds (reported as read). Both decode every
+minute of UTC ticks in KiwiSDR recordings (BPM from Taiwan and
+Hiroshima, RWM from southern Finland); their offsets are not
+calibrated yet.
 
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s
