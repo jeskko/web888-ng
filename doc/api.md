@@ -531,9 +531,25 @@ subcarrier read from the carrier's envelope by the page decoder's
 code. Watched in the bin nearest `centre_hz` (set it to the carrier,
 e.g. 10000000; not chosen by region). A KiwiSDR recording in Kansas
 (10 MHz, night) decodes about two minutes in three, as the page
-decoder does; the two transmitters (1000 and 1200 Hz ticks) aren't
-told apart, so no offset for the clock. The code has no parity: an
-unconfirmed minute can be wrong.
+decoder does. The code has no parity: an unconfirmed minute can be
+wrong (with both stations heard, minutes of other years pass).
+The two transmitters send the same code; the receiver tells them by
+their tones (`Minute::transmitter`): second 0's 800 ms minute tone
+(WWV 1000 Hz, WWVH 1200 Hz) against the other seconds' power at each,
+and the 5 ms ticks of seconds 1-44 (less 29), the strongest 5 ms window
+within 25 ms of the second (the two arrive over different paths). The
+minute tone decides (above +6 dB at one, under +3 dB at the other), the
+ticks only veto (a strong WWV's tick spills to -4 dB at 1200 Hz); at
+the hour (1500 Hz from both) and with both heard there is no answer.
+In the monitor the low-pass's gain at the two tones is divided out,
+and only minutes with a transmitter count toward the clock, a WWVH
+minute by its own path (the lateness shown is as if from WWV). Decoder
+offset 0.8 ms (provisional): Lincoln, Nebraska, 702 km, 10 MHz, 12
+GPS-timed minutes 3.9 ms late (median, 0.3-7.6) on a 3.12 ms sky path.
+Heard 2026-11-22 ~16:40 UTC: WWV only in Hawaii (Maui, 5 MHz, the
+tick 17 ms late), both in northern California (10 MHz: WWV's tick at
+7 ms, WWVH's at 17 ms; no answer), WWVH ahead in New Zealand (10 and
+15 MHz).
 
 **BPM and RWM** (HF; ticks only, 2026-11-22): no time code, so their
 minutes are named by the receiver's clock (the nearest minute, when

@@ -32,6 +32,8 @@ const FPS: usize = 200;
 const HOP: f64 = 1.0 / FPS as f64;
 /// The envelope's boxcar (s).
 const WIN: f64 = 0.04;
+/// WWV's and WWVH's tick and minute tones (Hz): 5 and 6 cycles in a hop.
+const TICK_HZ: [f64; 2] = [1000.0, 1200.0];
 
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Station {
@@ -137,6 +139,19 @@ impl Station {
             v.name().eq_ignore_ascii_case(s)
                 || (s.eq_ignore_ascii_case("wwv") && *v == Station::Wwv)
         })
+    }
+
+    /// Transmitters sharing a station's carriers and code, by the name a
+    /// [`Minute::transmitter`] gives: their sites (lat, lon °).
+    pub fn transmitters(self) -> &'static [(&'static str, (f64, f64))] {
+        match self {
+            // Fort Collins; Kekaha, Kauai
+            Station::Wwv => &[
+                ("WWV", (40.6806, -105.0403)),
+                ("WWVH", (21.9886, -159.7636)),
+            ],
+            _ => &[],
+        }
     }
 
     /// The transmitter sending `carrier` (Hz): latitude, longitude (°;
@@ -583,6 +598,11 @@ pub struct Minute {
     /// The station said which minute it is; false (BPM: ticks only):
     /// `utc` and `local` are none of its, the receiver's clock names it.
     pub named: bool,
+    /// Which of a station's transmitters sent it, when they share the
+    /// carrier and code and the receiver could tell (WWV's ticks and
+    /// minute tone are 1000 Hz, WWVH's 1200 Hz); None when it couldn't
+    /// (both heard, or too weak) and for single-transmitter stations.
+    pub transmitter: Option<&'static str>,
 }
 
 /// A second read.
@@ -655,6 +675,16 @@ pub struct Receiver {
     pub level: f32,
     /// The noise blanker's average |x|.
     avg: f64,
+    /// WWV/WWVH: 1000 and 1200 Hz in 5 ms windows (one a hop, in step
+    /// with `raw`): their power, the oscillators, the sums so far, the
+    /// filter's gain at each (the caller's), and each second's tick and
+    /// tone powers (stream time, ticks, 50-750 ms).
+    tick_pow: Vec<[f32; 2]>,
+    tick_lo: [num_complex::Complex64; 2],
+    tick_step: [num_complex::Complex64; 2],
+    tick_acc: [num_complex::Complex64; 2],
+    tick_gain: [f32; 2],
+    ticks: std::collections::VecDeque<(f64, [f32; 2], [f32; 2])>,
     /// Whether the blanker runs: not for BPM's and RWM's short pulses
     /// over a carrier off most of the second (its average stays low, and
     /// each pulse's start was blanked until it caught up: the pulse read
@@ -708,6 +738,12 @@ impl Receiver {
             out: Vec::new(),
             level: 0.0,
             avg: 0.0,
+            tick_pow: Vec::new(),
+            tick_lo: [num_complex::Complex64::new(1.0, 0.0); 2],
+            tick_step: TICK_HZ.map(|f| num_complex::Complex64::from_polar(1.0, -2.0 * PI * f / fs)),
+            tick_acc: [num_complex::Complex64::new(0.0, 0.0); 2],
+            tick_gain: [1.0; 2],
+            ticks: std::collections::VecDeque::new(),
             blanks: !matches!(station, Station::Bpm | Station::Rwm),
             bad: 0,
             frames: std::collections::VecDeque::new(),
@@ -721,6 +757,13 @@ impl Receiver {
 
     pub fn station(&self) -> Station {
         self.station
+    }
+
+    /// WWV/WWVH: the gain of the caller's filtering at 1000 and 1200 Hz
+    /// (amplitude, against the carrier's), so the two tones' powers
+    /// compare as sent.
+    pub fn set_tick_gain(&mut self, g: [f64; 2]) {
+        self.tick_gain = g.map(|v| (v * v).max(1e-6) as f32);
     }
 
     /// Retune the tone (Hz).
@@ -768,6 +811,13 @@ impl Receiver {
                 m
             };
             self.avg += (m_avg - self.avg) * a_ema;
+            if self.station == Station::Wwv {
+                // the ticks unblanked (a tick is what the blanker cuts)
+                for j in 0..2 {
+                    self.tick_acc[j] += self.tick_lo[j] * v as f64;
+                    self.tick_lo[j] *= self.tick_step[j];
+                }
+            }
             let v = if blank { 0.0 } else { v };
             let z = Complex32::new(
                 (v as f64 * self.lo.re) as f32,
@@ -785,6 +835,13 @@ impl Receiver {
             }
             if self.hop_n == self.hop {
                 self.hop_n = 0;
+                if self.station == Station::Wwv {
+                    let a = std::mem::take(&mut self.tick_acc);
+                    let h = self.hop as f64;
+                    self.tick_pow.push(
+                        [0, 1].map(|j| ((a[j].norm() / h).powi(2) as f32) / self.tick_gain[j]),
+                    );
+                }
                 if self.station == Station::Tdf {
                     // the phase pulses as lows: 1 - |deviation| (rad)
                     // against the carrier's phase over the last second
@@ -799,6 +856,9 @@ impl Receiver {
             }
         }
         self.lo /= self.lo.norm();
+        for l in &mut self.tick_lo {
+            *l /= l.norm();
+        }
         // re-sum now and then (rounding)
         if self.n % (self.fs as u64 * 10) < x.len() as u64 {
             self.sum = self
@@ -853,6 +913,9 @@ impl Receiver {
             let d = self.env.len() - keep;
             self.env.drain(..d);
             self.raw.drain(..d);
+            if !self.tick_pow.is_empty() {
+                self.tick_pow.drain(..d);
+            }
             self.env_base += d as u64;
         }
     }
@@ -1014,6 +1077,9 @@ impl Receiver {
             let q = (d[1].0.sqrt() - d[0].0.sqrt()).clamp(0.0, 1.0);
             let sym = if q < 0.02 { '?' } else { d[0].1 };
             let t = self.frame_t(at) + self.phase_off * HOP;
+            if self.station == Station::Wwv {
+                self.measure_ticks(t);
+            }
             self.second(Second {
                 t,
                 sym,
@@ -1048,6 +1114,80 @@ impl Receiver {
     /// minutes' (bit errors in the date often pass its one parity bit);
     /// confirmed when its time of day agrees with an earlier minute that
     /// passed, by the time between them.
+    /// WWV/WWVH: a second's tick power at each tone (the strongest 5 ms
+    /// window starting within 25 ms of the second: the other station's
+    /// tick arrives on another path) and the tones' power over 50-750 ms
+    /// (second 0's minute tone).
+    fn measure_ticks(&mut self, t: f64) {
+        let k = |t: f64| ((t - self.t0) / HOP).round() as i64 - self.env_base as i64;
+        let n = self.tick_pow.len() as i64;
+        let (a, b) = (k(t - 0.025), k(t + 0.025));
+        let (c, d) = (k(t + 0.05), k(t + 0.75));
+        if a < 0 || d >= n {
+            return;
+        }
+        let mut tick = [0f32; 2];
+        let mut tone = [0f32; 2];
+        for j in 0..2 {
+            tick[j] = (a..=b)
+                .map(|i| self.tick_pow[i as usize][j])
+                .fold(0.0, f32::max);
+            tone[j] = (c..d).map(|i| self.tick_pow[i as usize][j]).sum::<f32>() / (d - c) as f32;
+        }
+        self.ticks.push_back((t, tick, tone));
+        while self.ticks.len() > 130 {
+            self.ticks.pop_front();
+        }
+    }
+
+    /// WWV/WWVH: which sent a minute, from second 0's minute tone
+    /// against the other seconds' (no 1000 or 1200 Hz tones there) and
+    /// its ticks (seconds 1-44 less 29: no voice there). A 5 ms tick
+    /// spills 4-8 dB down into the other tone, the 800 ms minute tone
+    /// none. At the hour both send 1500 Hz: no answer.
+    fn transmitter(&self, frame: &[Second]) -> (Option<&'static str>, String) {
+        let at = |t: f64| self.ticks.iter().find(|x| (x.0 - t).abs() < 0.1);
+        let (mut tk, mut tn, mut rf, mut nr) = ([0f32; 2], [0f32; 2], [0f32; 2], 0);
+        for (i, s) in frame.iter().enumerate() {
+            let Some(&(_, tick, tone)) = at(s.t) else {
+                continue;
+            };
+            if i == 0 {
+                tn = tone;
+            } else {
+                if i < 45 && i != 29 {
+                    tk[0] += tick[0];
+                    tk[1] += tick[1];
+                }
+                rf[0] += tone[0];
+                rf[1] += tone[1];
+                nr += 1;
+            }
+        }
+        if nr < 30 {
+            return (None, String::new());
+        }
+        let db = |a: f32, b: f32| 10.0 * (a.max(1e-30) / b.max(1e-30)).log10();
+        let rf = rf.map(|v| v / nr as f32);
+        // the minute tone over the other seconds', at each tone; the
+        // ticks' and tones' 1200 over 1000 Hz
+        let (m0, m1) = (db(tn[0], rf[0]), db(tn[1], rf[1]));
+        let rt = db(tk[1], tk[0]);
+        let note = format!(
+            "ticks 1200/1000 Hz {rt:+.1} dB, minute tone 1000 Hz {m0:+.1} dB, 1200 Hz {m1:+.1} dB"
+        );
+        // the minute tone decides (a strong WWV's tick spills to -4 dB at
+        // 1200 Hz: Nebraska, 2026-11-22); the ticks only veto
+        let who = if m0 > 6.0 && m1 < 3.0 && rt < 3.0 {
+            Some("WWV")
+        } else if m1 > 6.0 && m0 < 3.0 && rt > -3.0 {
+            Some("WWVH")
+        } else {
+            None
+        };
+        (who, note)
+    }
+
     fn minute(&mut self, frame: Vec<Second>, next_t: f64) -> Option<Minute> {
         self.frames.push_back(frame.clone());
         while self.frames.len() > 10 {
@@ -1081,6 +1221,14 @@ impl Receiver {
             .map(|f| f.iter().map(|s| s.sym).collect())
             .unwrap_or_default();
         m.symbols = raw;
+        if self.station == Station::Wwv {
+            let (who, note) = self.transmitter(self.frames.back().map_or(&[][..], |f| &f[..]));
+            m.transmitter = who;
+            if !note.is_empty() {
+                m.notes
+                    .push(format!("{}: {note}", who.unwrap_or("WWV or WWVH")));
+            }
+        }
         if m.ok {
             m.confirmed = self.passed.iter().any(|&(t, u)| {
                 let k = ((m.t - t) / 60.0).round();
@@ -1253,6 +1401,7 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
             },
             symbols,
             named: false,
+            transmitter: None,
         });
     }
     let b = bits_of(frame, station);
@@ -1573,6 +1722,7 @@ fn decode(station: Station, frame: &[Second], next_t: f64) -> Option<Minute> {
         notes,
         symbols,
         named: true,
+        transmitter: None,
     })
 }
 

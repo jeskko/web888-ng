@@ -56,6 +56,9 @@ fn main() {
                             m.confirmed,
                             (m.t - (m.t / 60.0).round() * 60.0) * 1e3
                         );
+                        for n in &m.notes {
+                            println!("    {n}");
+                        }
                     }
                 }
             }

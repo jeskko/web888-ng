@@ -66,6 +66,9 @@ pub struct Report {
     /// UTC (s) of the minute's start (the receiver's clock).
     pub t: i64,
     pub station: String,
+    /// The transmitter, where a station has two (WWV or WWVH): the latest
+    /// minute's, when the receiver could tell.
+    pub transmitter: Option<String>,
     /// The centre of the bin it is watched in (kHz).
     pub bin_khz: f64,
     /// The carrier: its mean level over the minute's seconds (dBFS, each
@@ -211,6 +214,9 @@ struct Chain {
     /// The path from the transmitter and the decoder's own delay (ms;
     /// none: no site or no receiver locator).
     delay_ms: Option<f64>,
+    /// WWV/WWVH: each transmitter's path and decoder delay over
+    /// `delay_ms` (WWV's); a minute counts when the receiver said which.
+    tx_extra_ms: Vec<(&'static str, f64)>,
     /// The last confirmed minutes' lateness (ms), for the scatter.
     lates: std::collections::VecDeque<f64>,
     /// Not decoded for now (shedding).
@@ -223,6 +229,24 @@ struct Chain {
 
 impl Chain {
     fn new(station: Station, fc: f64, centre: f64, rate: f64) -> Self {
+        let mut c = Self::build(station, fc, centre, rate);
+        if station == Station::Wwv {
+            // the lowpass's gain at WWV's and WWVH's tones (AM: each
+            // sideband against the carrier's), so their powers compare
+            let h = lowpass(rate);
+            let g = |f: f64| {
+                h.iter()
+                    .enumerate()
+                    .map(|(k, &v)| Complex64::from_polar(v as f64, -2.0 * PI * f * k as f64 / rate))
+                    .sum::<Complex64>()
+                    .norm()
+            };
+            c.rx.set_tick_gain([g(1000.0), g(1200.0)]);
+        }
+        c
+    }
+
+    fn build(station: Station, fc: f64, centre: f64, rate: f64) -> Self {
         let w = -2.0 * PI * (fc - centre) / rate;
         let u = 2.0 * PI * TONE / FS;
         Chain {
@@ -265,6 +289,7 @@ impl Chain {
             amps: Vec::new(),
             minutes: Vec::new(),
             delay_ms: None,
+            tx_extra_ms: Vec::new(),
             lates: Default::default(),
             shed: false,
             am: matches!(station, Station::Wwv | Station::Bpm),
@@ -473,9 +498,11 @@ fn decoder_ms(s: Station) -> Option<f64> {
         // decoder reads a clean pulse 2.2 ms late, and RWM's rises over
         // 4-9 ms after the second and ends at ~107 ms
         Station::Rwm => 6.2,
-        // WWV and WWVH share their carriers, and the decoder can't tell
-        // which it hears: no offset for the clock
-        Station::Wwv => return None,
+        // WWV (WWVH: a minute counts by its path when the receiver tells
+        // it by its 1200 Hz tones): Lincoln, Nebraska, 702 km, 10 MHz,
+        // 2026-11-22 16:30 UTC, 12 GPS-timed minutes 3.9 ms late (median;
+        // 0.3-7.6) on a 3.12 ms sky path
+        Station::Wwv => 0.8,
     })
 }
 
@@ -598,10 +625,17 @@ impl Monitor {
     /// their offsets ([`Report::offset_ms`]).
     pub fn set_receiver(&mut self, rx: (f64, f64)) {
         for c in &mut self.chains {
+            let sky = c.fc > 2e6;
+            let tx = c.station.transmitters();
             c.delay_ms = c
                 .station
                 .site(c.fc)
-                .and_then(|s| Some(path_ms(s, rx, c.fc > 2e6) + decoder_ms(c.station)?));
+                .or(tx.first().map(|t| t.1))
+                .and_then(|s| Some(path_ms(s, rx, sky) + decoder_ms(c.station)?));
+            c.tx_extra_ms = tx
+                .iter()
+                .map(|&(n, s)| (n, path_ms(s, rx, sky) - path_ms(tx[0].1, rx, sky)))
+                .collect();
         }
     }
 
@@ -632,9 +666,13 @@ impl Monitor {
             })?;
         let c = &mut self.chains[i];
         // from scratch: its decoder missed the time it was shed
-        let (d, l) = (c.delay_ms, std::mem::take(&mut c.lates));
+        let (d, l, x) = (
+            c.delay_ms,
+            std::mem::take(&mut c.lates),
+            std::mem::take(&mut c.tx_extra_ms),
+        );
         *c = Chain::new(c.station, c.fc, self.centre, self.rate);
-        (c.delay_ms, c.lates) = (d, l);
+        (c.delay_ms, c.lates, c.tx_extra_ms) = (d, l, x);
         Some(c.station.name().into())
     }
 
@@ -665,9 +703,14 @@ impl Monitor {
                 self.gaps += 1;
             }
             for c in &mut self.chains {
-                let (d, l, sh) = (c.delay_ms, std::mem::take(&mut c.lates), c.shed);
+                let (d, l, sh, x) = (
+                    c.delay_ms,
+                    std::mem::take(&mut c.lates),
+                    c.shed,
+                    std::mem::take(&mut c.tx_extra_ms),
+                );
                 *c = Chain::new(c.station, c.fc, self.centre, self.rate);
-                (c.delay_ms, c.lates, c.shed) = (d, l, sh);
+                (c.delay_ms, c.lates, c.shed, c.tx_extra_ms) = (d, l, sh, x);
             }
             self.frame0 = first;
             self.fbuf.clear();
@@ -798,6 +841,13 @@ impl Monitor {
                     let u = now(f).or_else(|| utc(f))?;
                     // a station without a time code (BPM): the minute
                     // nearest the clock, when the clock is that close
+                    // WWV/WWVH: as if from the first (WWV), when known
+                    let extra = if c.tx_extra_ms.is_empty() {
+                        0.0
+                    } else {
+                        let t = m.transmitter?;
+                        c.tx_extra_ms.iter().find(|x| x.0 == t)?.1
+                    };
                     let mu = if m.named {
                         m.utc as f64
                     } else {
@@ -807,7 +857,7 @@ impl Monitor {
                         }
                         r
                     };
-                    Some((u - mu) * 1e3)
+                    Some((u - mu) * 1e3 - extra)
                 })
                 .collect();
             lates.sort_by(f64::total_cmp);
@@ -846,6 +896,7 @@ impl Monitor {
             out.push(Report {
                 t,
                 station: c.station.name().into(),
+                transmitter: best.and_then(|m| m.transmitter).map(String::from),
                 bin_khz: self.centre / 1e3,
                 carrier_dbfs: carrier.map(r1),
                 snr_db_hz: carrier.zip(floor).map(|(c, f)| r1(c - f)),
