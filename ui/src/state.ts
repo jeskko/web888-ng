@@ -25,7 +25,7 @@ import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
-import { applySeconds, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
+import { applySeconds, minuteUtc, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { IqRecorder, REC_MAX_S, type RecFormat } from "./iqrec.ts";
 import { AREC_MAX_S, AudioRecorder } from "./audiorec.ts";
@@ -979,19 +979,25 @@ function tcStart(): Worker {
       tcLevel.value = run.level;
       if (run.sec.length) tcSeconds.value = applySeconds(tcSeconds.value, run);
       if (run.min.length) {
-        const add: TcMinute[] = run.min.map((m) => {
+        const add: TcMinute[] = run.min.flatMap((m) => {
           // when the minute began by the server's clock, less what it says
+          // (a station without a time code: the clock's nearest minute)
           const heard = tcClock.utc(tcBase + m.t * DIGI_RATE);
-          return {
-            station: tcName,
-            utc: m.utc,
-            local: m.local,
-            ok: m.ok,
-            confirmed: m.confirmed,
-            notes: m.notes,
-            late: heard === null ? null : heard - m.utc,
-            timed: tcClock.timed,
-          };
+          const named = m.named ?? true;
+          const utc = minuteUtc(named, m.utc, heard);
+          if (utc === null) return [];
+          return [
+            {
+              station: m.tx ?? tcName,
+              utc,
+              local: m.local,
+              ok: m.ok,
+              confirmed: m.confirmed,
+              notes: named ? m.notes : [t("named by the clock"), ...m.notes],
+              late: heard === null ? null : heard - utc,
+              timed: tcClock.timed,
+            },
+          ];
         });
         tcMinutes.value = [...add.reverse(), ...tcMinutes.value].slice(0, TC_KEEP);
       }

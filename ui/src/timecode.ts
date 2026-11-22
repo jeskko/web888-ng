@@ -21,6 +21,10 @@ export interface TcStation {
   /** Room its sidebands need around the carrier in the passband (Hz;
    * default 50: a keyed carrier). */
   margin?: number;
+  /** AM: the tone keyed in the audio (Hz; default WWV's 100 Hz). */
+  tone?: number;
+  /** No time code: its minutes are named by the clock (BPM, RWM). */
+  unnamed?: boolean;
 }
 
 // i18n: about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
@@ -30,7 +34,14 @@ export const TC_STATIONS: TcStation[] = [
   { id: 2, name: "WWVB", carriers: [60_000], am: false, about: N_("Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC") },
   { id: 3, name: "JJY", carriers: [40_000, 60_000], am: false, about: N_("Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST") },
   { id: 5, name: "RBU", carriers: [200_000 / 3], am: false, margin: 350, about: N_("Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time") },
-  { id: 4, name: "WWV/WWVH", carriers: [2_500_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000], am: true, about: N_("Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC") },
+  { id: 9, name: "TDF", carriers: [162_000], am: false, margin: 100, about: N_("Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST") },
+  { id: 10, name: "BPC", carriers: [68_500], am: false, about: N_("Shangqiu, China: carrier reduced 0.1-0.4 s each second (two bits), none at seconds 0, 20 and 40; Beijing time") },
+  { id: 6, name: "DCF39", carriers: [139_000], am: false, margin: 250, about: N_("Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST") },
+  { id: 7, name: "HGA22", carriers: [135_600], am: false, margin: 250, about: N_("Lakihegy, Hungary (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST") },
+  { id: 8, name: "DCF49", carriers: [129_100], am: false, margin: 250, about: N_("Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST") },
+  { id: 4, name: "WWV/WWVH", carriers: [2_500_000, 5_000_000, 10_000_000, 15_000_000, 20_000_000, 25_000_000], am: true, about: N_("Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC. Which one sent a minute is told by its 1000 or 1200 Hz tones") },
+  { id: 11, name: "BPM", carriers: [2_500_000, 5_000_000, 10_000_000, 15_000_000], am: true, tone: 1000, unnamed: true, about: N_("Pucheng, China: no time code, a 1 kHz tick each second (sent 20 ms early), heard in AM; minutes named by this clock") },
+  { id: 12, name: "RWM", carriers: [4_996_000, 9_996_000, 14_996_000], am: false, unnamed: true, about: N_("Taldom near Moscow: no time code, the carrier on 0.1 s each second and 0.5 s at the minute in some minutes of the hour; minutes named by this clock") },
 ];
 
 /** WWV's subcarrier (Hz in AM audio). */
@@ -61,7 +72,7 @@ export function tcPlan(
   for (const s of list) {
     for (const c of s.carriers) {
       if (s.am) {
-        if (am && Math.abs(dial - c) <= 3000) return { station: s, tone: WWV_TONE, carrier: c };
+        if (am && Math.abs(dial - c) <= 3000) return { station: s, tone: s.tone ?? WWV_TONE, carrier: c };
         continue;
       }
       const a = audioOf(mode, dial, pitch, c);
@@ -96,7 +107,7 @@ export function tcTuning(s: TcStation, carrier = s.carriers[0]): { dial: number;
 /** What the worker posts. */
 export interface TcRun {
   sec: { t: number; s: string; q: number; i: number }[];
-  min: { t: number; utc: number; ok: boolean; confirmed: boolean; local: string; notes: string[]; sym: string }[];
+  min: { t: number; utc: number; ok: boolean; confirmed: boolean; named?: boolean; tx?: string | null; local: string; notes: string[]; sym: string }[];
   level: number;
   now: number;
 }
@@ -116,6 +127,16 @@ export interface TcMinute {
   /** `late` from the server's timestamps (antenna time), not estimated
    * from when the audio arrived. */
   timed?: boolean;
+}
+
+/** A minute's start (Unix s): its own time, or for a station without a
+ * time code the clock's minute nearest when it was heard (`heard`), if
+ * within 20 s; null when it can't be named. */
+export function minuteUtc(named: boolean, utc: number, heard: number | null): number | null {
+  if (named) return utc;
+  if (heard === null) return null;
+  const r = Math.round(heard / 60) * 60;
+  return Math.abs(heard - r) <= 20 ? r : null;
 }
 
 /** The minutes kept. */

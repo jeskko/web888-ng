@@ -4,15 +4,19 @@
 //! Worker (`ui/src/timecode/worker.ts`). A plain C ABI, one receiver per
 //! instance:
 //!
-//! * `tc_start(station, tone)`: a new receiver (station 0 DCF77, 1 MSF,
-//!   2 WWVB, 3 JJY, 4 WWV/WWVH) for a tone at this audio frequency (Hz);
-//!   stream time restarts at 0
+//! * `tc_start(station, tone)`: a new receiver (station: the index in
+//!   `Station::ALL`, 0 DCF77 .. 12 RWM) for a tone at this audio
+//!   frequency (Hz; WWV's 100 Hz and BPM's 1 kHz in AM audio); stream
+//!   time restarts at 0
 //! * `tc_buffer(n)`: room for n samples (12 kHz mono f32)
 //! * `tc_push(n)`: runs them through; returns the length of the JSON at
 //!   `tc_output()` when something is new, else 0:
-//!   `{"sec":[{"t","s","q","i"}],"min":[{"t","utc","local","ok","confirmed","notes","sym"}],"level","now"}`
+//!   `{"sec":[{"t","s","q","i"}],"min":[{"t","utc","ok","confirmed","named","tx","local","notes","sym"}],"level","now"}`
 //!   (t: stream s; s: the symbol; q: its quality; i: its second in the
-//!   minute, or -1; utc: Unix s of the minute's start)
+//!   minute, or -1; utc: Unix s of the minute's start; named: false for
+//!   stations without a time code (BPM, RWM: utc means nothing, the
+//!   listener's clock names the minute); tx: which transmitter sent it
+//!   (WWV or WWVH) or null)
 
 use std::cell::RefCell;
 use std::fmt::Write;
@@ -76,9 +80,14 @@ pub fn to_json(ev: &[Event], level: f32, now: f64) -> String {
             first = false;
             let _ = write!(
                 s,
-                "{{\"t\":{:.3},\"utc\":{},\"ok\":{},\"confirmed\":{},\"local\":",
-                m.t, m.utc, m.ok, m.confirmed
+                "{{\"t\":{:.3},\"utc\":{},\"ok\":{},\"confirmed\":{},\"named\":{},\"tx\":",
+                m.t, m.utc, m.ok, m.confirmed, m.named
             );
+            match m.transmitter {
+                Some(x) => esc(&mut s, x),
+                None => s.push_str("null"),
+            }
+            s.push_str(",\"local\":");
             esc(&mut s, &m.local);
             s.push_str(",\"notes\":[");
             for (i, n) in m.notes.iter().enumerate() {

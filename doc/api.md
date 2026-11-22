@@ -636,9 +636,26 @@ air-gapped receiver's system clock follows the stations too
   combined, one per source: an offset of 0.5 s or more needs two
   sources agreeing within 20 ms (a wrong decode doesn't set the clock),
   with two or more a source beyond 4 of its errors (at least 3 ms) from
-  their median is left out, the rest are weighted by their errors; the
-  result goes to chrony, stamped with the time it was measured (the
-  samples' median; older than 100 s: not sent);
+  their median is left out, the rest are weighted by their errors;
+* a station's error is its scatter over its last 15 minutes together
+  with its calibration's uncertainty (`Station::calibration` in the
+  timecode crate: 0.3 ms for RBU and DCF39, 0.5 for DCF77 and MSF, 1 for
+  the ones calibrated on KiwiSDRs only, 2 for WWV and the weak EFR
+  stations), or the minute's distance from its recent median when that
+  is larger: at dusk and dawn a station's arrival moves within minutes;
+* a minute less sure than `[timesync] max_sigma_ms` (0.5 ms) is pooled
+  with the next ones, their weighted mean sent once it is that sure; at
+  `pool_minutes` (10) a pool still unsure is sent only if its offset is
+  beyond three of its errors, else dropped, and chrony holds the clock
+  on its frequency. On the remote unit's two days of minutes
+  (2026-11-21/22: RBU, DCF39, DCF77, MSF, TDF) this takes the samples'
+  error from 0.35 / 3.7 ms (90th / 99th percentile) to 0.24 / 0.5 ms,
+  dawn's and dusk's worst from 10 to 1.6 ms, with chrony holding over at
+  most ~50 minutes; in the LF-only trial of 2026-11-20 the dawn hours,
+  with only MSF and DCF77 left, moved the clock 2-5 ms and its frequency
+  by 11 ppm. The result goes to chrony, stamped with the time it was
+  measured (the newest minute's samples' median; older than 100 s: not
+  sent);
 * `[timesync] trim_ms` adds a calibration per source; `chrony_socket`
   empty: measured only;
 * chrony.conf gives the LF clock a 20 ms delay: while NTP is reachable

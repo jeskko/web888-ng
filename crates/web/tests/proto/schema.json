@@ -275,7 +275,9 @@
       "default": {
         "chrony_socket": "/run/chrony.web888.sock",
         "trim_ms": {},
-        "serve_lan": false
+        "serve_lan": false,
+        "max_sigma_ms": 0.5,
+        "pool_minutes": 10
       }
     }
   },
@@ -1310,6 +1312,19 @@
           "description": "Serve the system clock over NTP (UDP port 123) to the local\nnetwork: chrony answers clients from private and link-local\naddresses (10/8, 172.16/12, 192.168/16, 169.254/16, fc00::/7,\nfe80::/10). Applies at once. Off by default: anyone on the\nnetwork can then ask the receiver the time, and clients set their\nclocks by it, so it is only as right as the receiver's sources\n(NTP, or the time-code stations alone without the Internet:\nmilliseconds at best, and nothing served as synchronised while\nchrony has no usable source). Don't forward port 123 to it from\nthe Internet.",
           "type": "boolean",
           "default": false
+        },
+        "max_sigma_ms": {
+          "description": "The largest error of a sample sent to chrony (ms, one standard\ndeviation): a minute whose sources together are less sure is\npooled with the next ones until they are, at most\n`pool_minutes`; chrony holds the clock on its frequency meanwhile.\nNoisy stations alone (at dusk and dawn often) then move the clock\nby their average, not each minute's error.",
+          "type": "number",
+          "format": "double",
+          "default": 0.5
+        },
+        "pool_minutes": {
+          "description": "Minutes pooled at most; then a pool still above `max_sigma_ms` is\nsent only if its offset is beyond three of its errors (the clock\nis surely off), else dropped.",
+          "type": "integer",
+          "format": "uint32",
+          "minimum": 0,
+          "default": 10
         }
       },
       "additionalProperties": false

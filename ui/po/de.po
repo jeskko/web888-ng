@@ -75,7 +75,7 @@ msgstr "Anmelden"
 msgid "Back to the receiver"
 msgstr "Zurück zum Empfänger"
 
-#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:454 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
+#: src/admin/admin.tsx:134 src/admin/admin.tsx:639 src/admin/admin.tsx:1116 src/admin/admin.tsx:1602 src/admin/clock.tsx:467 src/admin/configform.tsx:231 src/ctl/info.tsx:141 src/ctl/licences.tsx:164 src/ctl/prop.tsx:224
 msgid "Loading…"
 msgstr "Wird geladen …"
 
@@ -179,7 +179,7 @@ msgstr "Verluste RX/WF"
 msgid "Waterfall views"
 msgstr "Wasserfall-Ansichten"
 
-#: src/admin/admin.tsx:238 src/admin/admin.tsx:459 src/admin/admin.tsx:1011
+#: src/admin/admin.tsx:238 src/admin/admin.tsx:459 src/admin/admin.tsx:1011 src/admin/clock.tsx:267
 msgid "none"
 msgstr "keine"
 
@@ -359,7 +359,7 @@ msgstr "Keine konfiguriert ([[skimmer]] in der Konfiguration)."
 msgid "band"
 msgstr "Band"
 
-#: src/admin/admin.tsx:477 src/admin/clock.tsx:202
+#: src/admin/admin.tsx:477 src/admin/clock.tsx:205
 msgid "state"
 msgstr "Zustand"
 
@@ -581,11 +581,11 @@ msgstr "{class} (Token {name})"
 msgid "{rx}, listening to #{n}"
 msgstr "{rx}, hört #{n} mit"
 
-#: src/admin/admin.tsx:680 src/admin/clock.tsx:137
+#: src/admin/admin.tsx:680 src/admin/clock.tsx:140
 msgid "yes"
 msgstr "ja"
 
-#: src/admin/admin.tsx:680 src/admin/clock.tsx:137
+#: src/admin/admin.tsx:680 src/admin/clock.tsx:140
 msgid "no"
 msgstr "nein"
 
@@ -1237,319 +1237,342 @@ msgid "Log out"
 msgstr "Abmelden"
 
 #. chrony's states of a time source; selected = the one the clock follows; combined = averaged in with it; falseticker = disagrees with the others
-#: src/admin/clock.tsx:104
+#: src/admin/clock.tsx:107
 msgid "selected"
 msgstr ""
 
-#: src/admin/clock.tsx:106
+#: src/admin/clock.tsx:109
 msgid "combined"
 msgstr ""
 
-#: src/admin/clock.tsx:108
+#: src/admin/clock.tsx:111
 msgid "not combined"
 msgstr ""
 
-#: src/admin/clock.tsx:110
+#: src/admin/clock.tsx:113
 msgid "unusable"
 msgstr ""
 
-#: src/admin/clock.tsx:112
+#: src/admin/clock.tsx:115
 msgid "a falseticker"
 msgstr ""
 
-#: src/admin/clock.tsx:114
+#: src/admin/clock.tsx:117
 msgid "too variable"
 msgstr ""
 
-#: src/admin/clock.tsx:133
+#: src/admin/clock.tsx:136
 msgid "System clock"
 msgstr ""
 
-#: src/admin/clock.tsx:134
+#: src/admin/clock.tsx:137
 msgid "chrony doesn't answer (chronyc): the kernel's view only."
 msgstr ""
 
-#: src/admin/clock.tsx:136
+#: src/admin/clock.tsx:139
 msgid "Synchronised"
 msgstr ""
 
 #. the reference = the time source the clock follows now; LF = this receiver's own time-code stations
-#: src/admin/clock.tsx:141
+#: src/admin/clock.tsx:144
 msgid "Reference"
 msgstr ""
 
-#: src/admin/clock.tsx:143
+#: src/admin/clock.tsx:146
 msgid "LF: this receiver's time-code stations"
 msgstr ""
 
-#: src/admin/clock.tsx:144
+#: src/admin/clock.tsx:147
 msgid "stratum {n}"
 msgstr ""
 
 #. how far the system clock is from the reference now, and which way
-#: src/admin/clock.tsx:147
+#: src/admin/clock.tsx:150
 msgid "Offset"
 msgstr ""
 
-#: src/admin/clock.tsx:152
+#: src/admin/clock.tsx:155
 msgid "{s} slow"
 msgstr ""
 
-#: src/admin/clock.tsx:153
+#: src/admin/clock.tsx:156
 msgid "{s} fast"
 msgstr ""
 
-#: src/admin/clock.tsx:154
+#: src/admin/clock.tsx:157
 msgid "(RMS {s})"
 msgstr ""
 
 #. the crystal's rate error that chrony corrects; skew = its uncertainty
-#: src/admin/clock.tsx:157 src/admin/clock.tsx:180 src/ctl/mobile.tsx:259
+#: src/admin/clock.tsx:160 src/admin/clock.tsx:183 src/ctl/mobile.tsx:259
 msgid "Frequency"
 msgstr "Frequenz"
 
-#: src/admin/clock.tsx:162
+#: src/admin/clock.tsx:165
 msgid "{ppm} ppm slow"
 msgstr ""
 
-#: src/admin/clock.tsx:163
+#: src/admin/clock.tsx:166
 msgid "{ppm} ppm fast"
 msgstr ""
 
 #. the largest error the clock may have against true time: half the path's delay plus the dispersion
-#: src/admin/clock.tsx:167
+#: src/admin/clock.tsx:170
 msgid "Error bound"
 msgstr ""
 
-#: src/admin/clock.tsx:169
+#: src/admin/clock.tsx:172
 msgid "Updated every"
 msgstr ""
 
 #. leap second status: Normal, Insert second, Delete second, Not synchronised
-#: src/admin/clock.tsx:172
+#: src/admin/clock.tsx:175
 msgid "Leap status"
 msgstr ""
 
-#: src/admin/clock.tsx:178
+#: src/admin/clock.tsx:181
 msgid "Estimated error"
 msgstr ""
 
-#: src/admin/clock.tsx:181
+#: src/admin/clock.tsx:184
 msgid "{ppm} ppm correction"
 msgstr ""
 
 #. chrony = the program that keeps the system clock; its sources = NTP servers and reference clocks
-#: src/admin/clock.tsx:194
+#: src/admin/clock.tsx:197
 msgid "chrony's sources"
 msgstr ""
 
-#: src/admin/clock.tsx:196
+#: src/admin/clock.tsx:199
 msgid "None."
 msgstr ""
 
-#: src/admin/clock.tsx:201 src/admin/clock.tsx:262
+#: src/admin/clock.tsx:204 src/admin/clock.tsx:275
 msgid "source"
 msgstr ""
 
 #. reach = which of the last 8 polls got an answer
-#: src/admin/clock.tsx:204
+#: src/admin/clock.tsx:207
 msgid "The last 8 polls, oldest first: ■ answered, □ not"
 msgstr ""
 
 #. reach = which of the last 8 polls got an answer
-#: src/admin/clock.tsx:204
+#: src/admin/clock.tsx:207
 msgid "reach"
 msgstr ""
 
-#: src/admin/clock.tsx:205
+#: src/admin/clock.tsx:208
 msgid "last"
 msgstr ""
 
 #. the system clock against the source at its last sample (+: the clock is ahead), ± its error bound
-#: src/admin/clock.tsx:207
+#: src/admin/clock.tsx:210
 msgid "The system clock against the source at its last sample (+: the clock is ahead), ± its error bound"
 msgstr ""
 
-#: src/admin/clock.tsx:208 src/admin/clock.tsx:263
+#: src/admin/clock.tsx:211 src/admin/clock.tsx:276
 msgid "offset"
 msgstr ""
 
-#: src/admin/clock.tsx:216
+#: src/admin/clock.tsx:219
 msgid "LF (time-code stations)"
 msgstr ""
 
 #. what this receiver sends to chrony each minute: its time sources combined
-#: src/admin/clock.tsx:241
+#: src/admin/clock.tsx:244
 msgid "To chrony"
 msgstr ""
 
 #. the combined sample: the system clock's offset (true time minus the clock's) ± its standard error
-#: src/admin/clock.tsx:244
+#: src/admin/clock.tsx:247
 msgid "Last sample"
 msgstr ""
 
-#: src/admin/clock.tsx:247
+#: src/admin/clock.tsx:250
 msgid "from {n} source"
 msgid_plural "from {n} sources"
 msgstr[0] ""
 msgstr[1] ""
 
-#: src/admin/clock.tsx:249
+#: src/admin/clock.tsx:252
 msgid "Samples"
 msgstr ""
 
-#: src/admin/clock.tsx:251
+#: src/admin/clock.tsx:254
 msgid "{sent} sent, {failed} failed (no chrony), {none} minutes with none usable"
 msgstr ""
 
+#. minutes whose sources were too unsure alone are averaged together before a sample goes to chrony
+#: src/admin/clock.tsx:261
+msgid "Pooling"
+msgstr ""
+
+#: src/admin/clock.tsx:264
+msgid "{n} unsure minute waiting"
+msgid_plural "{n} unsure minutes waiting"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/clock.tsx:266
+msgid "last sample from {n} minute"
+msgid_plural "last sample from {n} minutes"
+msgstr[0] ""
+msgstr[1] ""
+
+#: src/admin/clock.tsx:268
+msgid "{n} pool dropped as too unsure"
+msgid_plural "{n} pools dropped as too unsure"
+msgstr[0] ""
+msgstr[1] ""
+
 #. minutes the source was in the combined sample / left out of it
-#: src/admin/clock.tsx:265
+#: src/admin/clock.tsx:278
 msgid "used"
 msgstr ""
 
-#: src/admin/clock.tsx:266
+#: src/admin/clock.tsx:279
 msgid "left out"
 msgstr ""
 
 #. LF time-code stations (DCF77, MSF, RBU, DCF39 ...) decoded on the receiver
-#: src/admin/clock.tsx:295 src/admin/clock.tsx:307
+#: src/admin/clock.tsx:308 src/admin/clock.tsx:320
 msgid "Time-code stations"
 msgstr ""
 
-#: src/admin/clock.tsx:296
+#: src/admin/clock.tsx:309
 msgid "Not watched: needs [timecode] enabled in the config and the channelizer's bins."
 msgstr ""
 
-#: src/admin/clock.tsx:308
+#: src/admin/clock.tsx:321
 msgid "Minute {when} UTC ({ago} ago)."
 msgstr ""
 
-#: src/admin/clock.tsx:312
+#: src/admin/clock.tsx:325
 msgid "station"
 msgstr ""
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
-#: src/admin/clock.tsx:314
+#: src/admin/clock.tsx:327
 msgid "SNR"
 msgstr ""
 
 #. minutes confirmed / decoded but not confirmed / not decoded since the start
-#: src/admin/clock.tsx:316
+#: src/admin/clock.tsx:329
 msgid "Minutes confirmed / decoded but unconfirmed / not decoded"
 msgstr ""
 
-#: src/admin/clock.tsx:317
+#: src/admin/clock.tsx:330
 msgid "minutes"
 msgstr ""
 
 #. late = how late the station's time arrives by the system clock (ms); for EFR, after its 10 s mark
-#: src/admin/clock.tsx:320
+#: src/admin/clock.tsx:333
 msgid "late"
 msgstr ""
 
 #. the system clock's error by this station (true minus system time), ± its scatter
-#: src/admin/clock.tsx:322
+#: src/admin/clock.tsx:335
 msgid "The system clock's error by this station (true minus system time, ms), ± the scatter of its last minutes"
 msgstr ""
 
-#: src/admin/clock.tsx:323
+#: src/admin/clock.tsx:336
 msgid "clock offset"
 msgstr ""
 
-#: src/admin/clock.tsx:332
+#: src/admin/clock.tsx:345
 msgid "(shed)"
 msgstr ""
 
 #. the noise floor of each frequency bin the stations are watched in
-#: src/admin/clock.tsx:349
+#: src/admin/clock.tsx:362
 msgid "Noise floor"
 msgstr ""
 
 #. the ADC's sample clock error, measured on the stations' carriers (atomic clocks)
-#: src/admin/clock.tsx:352
+#: src/admin/clock.tsx:365
 msgid "ADC clock"
 msgstr ""
 
-#: src/admin/clock.tsx:353
+#: src/admin/clock.tsx:366
 msgid "{ppm} ppm (carriers)"
 msgstr ""
 
 #. the CPU's crystal as it runs (without NTP's correction) against the ADC clock
-#: src/admin/clock.tsx:355
+#: src/admin/clock.tsx:368
 msgid "CPU crystal"
 msgstr ""
 
-#: src/admin/clock.tsx:357
+#: src/admin/clock.tsx:370
 msgid "{ppm} ppm against the ADC clock"
 msgstr ""
 
-#: src/admin/clock.tsx:360
+#: src/admin/clock.tsx:373
 msgid "Monitor CPU"
 msgstr ""
 
-#: src/admin/clock.tsx:361
+#: src/admin/clock.tsx:374
 msgid "{pct} % of a core"
 msgstr ""
 
 #. the receiver's timebase: how sample times map to UTC
-#: src/admin/clock.tsx:373
+#: src/admin/clock.tsx:386
 msgid "Receiver timebase"
 msgstr ""
 
-#: src/admin/clock.tsx:375
+#: src/admin/clock.tsx:388
 msgid "Source"
 msgstr ""
 
-#: src/admin/clock.tsx:377
+#: src/admin/clock.tsx:390
 msgid "Uncertainty"
 msgstr ""
 
 #. the sample stream's rate against the system clock
-#: src/admin/clock.tsx:380
+#: src/admin/clock.tsx:393
 msgid "Stream rate"
 msgstr ""
 
-#: src/admin/clock.tsx:399
+#: src/admin/clock.tsx:412
 msgid ""
 "Serve this receiver's clock to the local network over NTP (UDP port 123)?\n"
 "\n"
 msgstr ""
 
 #. NTP = the network time protocol; serving it = other computers on the network set their clocks by this receiver
-#: src/admin/clock.tsx:423
+#: src/admin/clock.tsx:436
 msgid "NTP for the local network"
 msgstr ""
 
-#: src/admin/clock.tsx:424
+#: src/admin/clock.tsx:437
 msgid "Other computers on the local network can set their clocks by this receiver (UDP port 123)"
 msgstr ""
 
-#: src/admin/clock.tsx:426
+#: src/admin/clock.tsx:439
 msgid "serve the clock to the local network"
 msgstr ""
 
-#: src/admin/clock.tsx:429
+#: src/admin/clock.tsx:442
 msgid "chrony didn't take it: {e}"
 msgstr ""
 
-#: src/admin/clock.tsx:432
+#: src/admin/clock.tsx:445
 msgid "Open to every device on private and link-local addresses. Don't forward port 123 from the Internet."
 msgstr ""
 
-#: src/admin/clock.tsx:434
+#: src/admin/clock.tsx:447
 msgid "Networks"
 msgstr ""
 
 #. NTP requests chrony has answered (or dropped) since it started
-#: src/admin/clock.tsx:437
+#: src/admin/clock.tsx:450
 msgid "Requests"
 msgstr ""
 
-#: src/admin/clock.tsx:440
+#: src/admin/clock.tsx:453
 msgid "({n} dropped)"
 msgstr ""
 
-#: src/admin/clock.tsx:445
+#: src/admin/clock.tsx:458
 msgid "Off: chrony answers no one. Handy where the Internet is poor (a DXpedition): the shack's computers can then take their time from the receiver."
 msgstr ""
 
@@ -4305,7 +4328,7 @@ msgstr "Passwort erforderlich"
 msgid "login failed ({status})"
 msgstr "Anmeldung fehlgeschlagen ({status})"
 
-#: src/state.ts:717 src/state.ts:2174
+#: src/state.ts:717 src/state.ts:2180
 msgid "nothing was received"
 msgstr "es wurde nichts empfangen"
 
@@ -4317,61 +4340,89 @@ msgstr ", {s} s verloren (Nullen)"
 msgid "{name} ({s} s{lost})"
 msgstr "{name} ({s} s{lost})"
 
-#: src/state.ts:2174
+#: src/state.ts:996
+msgid "named by the clock"
+msgstr ""
+
+#: src/state.ts:2180
 msgid "only silence was heard"
 msgstr "es war nur Stille zu hören"
 
-#: src/state.ts:2184
+#: src/state.ts:2190
 msgid ", {s} s of silence left out"
 msgstr ", {s} s Stille ausgelassen"
 
-#: src/state.ts:2185
+#: src/state.ts:2191
 msgid "; ended when the audio format changed"
 msgstr "; beendet, als sich das Audioformat änderte"
 
-#: src/state.ts:2186
+#: src/state.ts:2192
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
 #. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
-#: src/timecode.ts:28
+#: src/timecode.ts:32
 msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
 msgstr "Mainflingen, Deutschland: Träger je Sekunde 0,1 s (0) oder 0,2 s (1) abgesenkt, keine Absenkung in Sekunde 59; MEZ/MESZ"
 
-#: src/timecode.ts:29
+#: src/timecode.ts:33
 msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
 msgstr "Anthorn, Großbritannien: Träger 0,1 s aus, dann Bits A und B; 0,5 s zur vollen Minute; GMT/BST"
 
-#: src/timecode.ts:30
+#: src/timecode.ts:34
 msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
 msgstr "Fort Collins, USA: Träger 0,2 s (0), 0,5 s (1), 0,8 s (Marke) abgesenkt; UTC"
 
-#: src/timecode.ts:31
+#: src/timecode.ts:35
 msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
 msgstr "Japan: Träger 0,8 s (0), 0,5 s (1), 0,2 s (Marke) ein; JST"
 
-#: src/timecode.ts:32
+#: src/timecode.ts:36
 msgid "Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time"
 msgstr "Taldom bei Moskau: alle 0,1 s ein Bit, der Träger mit 100 Hz (0) oder 312,5 Hz (1) phasenmoduliert; Moskauer Zeit"
 
-#: src/timecode.ts:33
-msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC"
-msgstr "Fort Collins und Hawaii: der 100-Hz-Hilfsträger 0,17 s (0), 0,47 s (1), 0,77 s (Marke), in AM zu hören; UTC"
+#: src/timecode.ts:37
+msgid "Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST"
+msgstr ""
 
-#: src/timecode.ts:76
+#: src/timecode.ts:38
+msgid "Shangqiu, China: carrier reduced 0.1-0.4 s each second (two bits), none at seconds 0, 20 and 40; Beijing time"
+msgstr ""
+
+#: src/timecode.ts:39 src/timecode.ts:41
+msgid "Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
+msgstr ""
+
+#: src/timecode.ts:40
+msgid "Lakihegy, Hungary (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
+msgstr ""
+
+#: src/timecode.ts:42
+msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC. Which one sent a minute is told by its 1000 or 1200 Hz tones"
+msgstr ""
+
+#: src/timecode.ts:43
+msgid "Pucheng, China: no time code, a 1 kHz tick each second (sent 20 ms early), heard in AM; minutes named by this clock"
+msgstr ""
+
+#: src/timecode.ts:44
+msgid "Taldom near Moscow: no time code, the carrier on 0.1 s each second and 0.5 s at the minute in some minutes of the hour; minutes named by this clock"
+msgstr ""
+
+#: src/timecode.ts:87
 msgid "no station {name}"
 msgstr "keine Station {name}"
 
 #. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
-#: src/timecode.ts:80
+#: src/timecode.ts:91
 msgid "{name}: tune AM to {mhz} MHz"
 msgstr "{name}: in AM auf {mhz} MHz abstimmen"
 
-#: src/timecode.ts:81
+#: src/timecode.ts:92
 msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
 msgstr "{name}: seinen Träger ({khz} kHz) in USB, LSB oder CW in den Durchlassbereich legen"
 
-#: src/timecode.ts:84
+#: src/timecode.ts:95
 msgid "No time station in the passband: pick one to tune to."
 msgstr "Keine Zeitzeichenstation im Durchlassbereich: Wählen Sie eine zum Abstimmen."
 
@@ -4421,3 +4472,6 @@ msgstr "Wasserfall: Signalstärke über Frequenz und Zeit"
 
 #~ msgid "This minute's seconds as read (dim: unsure; M a marker, H WWV's hole, ? unread; MSF: 0-3 = bits A + 2B)"
 #~ msgstr "Die Sekunden dieser Minute, wie gelesen (blass: unsicher; M eine Marke, H das Loch von WWV, ? ungelesen; MSF: 0–3 = Bits A + 2B)"
+
+#~ msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC"
+#~ msgstr "Fort Collins und Hawaii: der 100-Hz-Hilfsträger 0,17 s (0), 0,47 s (1), 0,77 s (Marke), in AM zu hören; UTC"

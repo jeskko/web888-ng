@@ -20,6 +20,12 @@
 //!   (at least [`OUTLIER_MIN_S`]) from their median is left out;
 //! * the rest weighted by their errors (inverse variance);
 //!
+//! * a minute less sure than `max_sigma_ms` pooled with the next ones
+//!   (their weighted mean) until the pool is, at most `pool_minutes`
+//!   ([`pool`]; on the remote unit's two days of minutes this took the
+//!   samples' 99th percentile error from 3.7 to 0.5 ms, dawn's worst from
+//!   10 to 1.6 ms, chrony holding over at most ~50 minutes);
+//!
 //! and sends the result to chrony's SOCK reference clock (chrony.conf:
 //! `refclock SOCK PATH`), stamped with the time it is sent at (the
 //! offset moves by the clock's frequency error over the seconds since:
@@ -85,11 +91,64 @@ pub struct State {
     pub send_errors: u64,
     pub rejected: u64,
     pub stale: u64,
+    /// Minutes waiting in the pool now; pools dropped (still unsure at
+    /// `pool_minutes`); the minutes in the last sample sent.
+    pub pooled: usize,
+    pub dropped: u64,
+    pub last_pool: usize,
+}
+
+/// What to do with the pooled minutes ([`pool`]).
+#[derive(Clone, Debug, PartialEq)]
+enum Pool {
+    /// Send (offset, error) stamped `at`.
+    Send { at: f64, offset: f64, sigma: f64 },
+    /// Keep pooling.
+    Wait,
+    /// Give up on them.
+    Drop,
+}
+
+/// The pool's minutes (at, offset, error; s), oldest first: send their
+/// weighted mean once its error is `max_sigma` or less, or the offset is
+/// large (two sources agreed on it: the clock is far off); at `max_n`
+/// minutes send it only if the offset is beyond three errors. Stamped
+/// with the newest minute's time (chrony refuses old samples; the
+/// minutes' offsets hold for it as the clock runs on its frequency).
+fn pool(p: &[(f64, f64, f64)], max_sigma: f64, max_n: usize) -> Pool {
+    let Some(&(at, o, sg)) = p.last() else {
+        return Pool::Wait;
+    };
+    if o.abs() >= LARGE_S {
+        // the clock far off (sources agreed): this minute alone
+        return Pool::Send {
+            at,
+            offset: o,
+            sigma: sg,
+        };
+    }
+    let w: f64 = p.iter().map(|x| 1.0 / (x.2 * x.2)).sum();
+    let offset = p.iter().map(|x| x.1 / (x.2 * x.2)).sum::<f64>() / w;
+    let sigma = 1.0 / w.sqrt();
+    let send = Pool::Send { at, offset, sigma };
+    if sigma <= max_sigma {
+        send
+    } else if p.len() >= max_n.max(1) {
+        if offset.abs() > 3.0 * sigma {
+            send
+        } else {
+            Pool::Drop
+        }
+    } else {
+        Pool::Wait
+    }
 }
 
 struct Hub {
     cfg: Timesync,
     pending: Vec<Sample>,
+    /// Minutes pooled (at, offset, error).
+    pool: Vec<(f64, f64, f64)>,
     state: State,
 }
 
@@ -119,6 +178,7 @@ pub fn spawn(cfg: Timesync) -> std::io::Result<()> {
     *HUB.lock().unwrap_or_else(|e| e.into_inner()) = Some(Hub {
         cfg,
         pending: Vec::new(),
+        pool: Vec::new(),
         state: State::default(),
     });
     if path.is_empty() {
@@ -139,13 +199,10 @@ pub fn spawn(cfg: Timesync) -> std::io::Result<()> {
                 let mut g = HUB.lock().unwrap_or_else(|e| e.into_inner());
                 let Some(h) = g.as_mut() else { return };
                 let samples = std::mem::take(&mut h.pending);
-                let Some((offset, _)) = h.combine(&samples) else {
+                let Some(at) = h.minute(&samples, now_s()) else {
                     continue;
                 };
-                // stamped with when it was measured, not now: a sample
-                // stamped late steers on the past (the trial of 2026-11-20)
-                let Some(at) = sample_time(&samples, now_s()) else {
-                    h.state.stale += 1;
+                let Some(offset) = h.ready() else {
                     continue;
                 };
                 if path.is_empty() {
@@ -198,6 +255,50 @@ fn sock_sample(at: f64, offset: f64) -> [u8; 40] {
 }
 
 impl Hub {
+    /// The minute's samples into the pool: when they held (none: no
+    /// usable sample, or too old).
+    fn minute(&mut self, samples: &[Sample], now: f64) -> Option<f64> {
+        let (offset, sigma) = self.combine(samples)?;
+        // stamped with when it was measured, not now: a sample stamped
+        // late steers on the past (the trial of 2026-11-20)
+        let Some(at) = sample_time(samples, now) else {
+            self.state.stale += 1;
+            return None;
+        };
+        // minutes older than the pool may hold (a gap)
+        let span = self.cfg.pool_minutes.max(1) as f64 * 60.0;
+        self.pool.retain(|x| at - x.0 < span);
+        self.pool.push((at, offset, sigma));
+        Some(at)
+    }
+
+    /// The pool's sample to send (offset), if it is ready.
+    fn ready(&mut self) -> Option<f64> {
+        let r = pool(
+            &self.pool,
+            self.cfg.max_sigma_ms / 1e3,
+            self.cfg.pool_minutes as usize,
+        );
+        match r {
+            Pool::Wait => {
+                self.state.pooled = self.pool.len();
+                None
+            }
+            Pool::Drop => {
+                self.pool.clear();
+                self.state.pooled = 0;
+                self.state.dropped += 1;
+                None
+            }
+            Pool::Send { offset, .. } => {
+                self.state.last_pool = self.pool.len();
+                self.pool.clear();
+                self.state.pooled = 0;
+                Some(offset)
+            }
+        }
+    }
+
     /// The minute's samples combined (offset, error), or none.
     fn combine(&mut self, samples: &[Sample]) -> Option<(f64, f64)> {
         // one per source: the mean, its error by the count
@@ -284,6 +385,7 @@ mod tests {
         Hub {
             cfg: Timesync::default(),
             pending: Vec::new(),
+            pool: Vec::new(),
             state: State::default(),
         }
     }
@@ -347,6 +449,77 @@ mod tests {
             .unwrap();
         assert!((o - 0.003).abs() < 1e-12, "{o}");
         assert!((sg - 0.001 / 2f64.sqrt()).abs() < 1e-12);
+    }
+
+    /// Sure minutes go at once; unsure ones pool until their mean is
+    /// sure, or are dropped at the pool's end unless clearly off.
+    #[test]
+    fn unsure_minutes_pool() {
+        let m = |o: f64, sg: f64| (0.0, o, sg);
+        // 0.3 ms: at once
+        assert!(matches!(
+            pool(&[m(0.001, 0.0003)], 0.0005, 10),
+            Pool::Send { .. }
+        ));
+        // 1 ms each: four make 0.5 ms
+        let p: Vec<_> = (0..3).map(|_| m(0.001, 0.001)).collect();
+        assert_eq!(pool(&p, 0.0005, 10), Pool::Wait);
+        let p: Vec<_> = (0..4).map(|i| (i as f64, 0.001, 0.001)).collect();
+        match pool(&p, 0.0005, 10) {
+            Pool::Send { at, offset, sigma } => {
+                assert_eq!(at, 3.0);
+                assert!((offset - 0.001).abs() < 1e-12);
+                assert!((sigma - 0.0005).abs() < 1e-12);
+            }
+            r => panic!("{r:?}"),
+        }
+        // 3 ms each, ten: still 0.95 ms; small offset dropped, large sent
+        let p: Vec<_> = (0..10).map(|_| m(0.001, 0.003)).collect();
+        assert_eq!(pool(&p, 0.0005, 10), Pool::Drop);
+        let p: Vec<_> = (0..10).map(|_| m(0.005, 0.003)).collect();
+        assert!(matches!(pool(&p, 0.0005, 10), Pool::Send { .. }));
+        // a large offset (agreed on): that minute alone
+        let p = [m(0.001, 0.003), m(2.0, 0.003)];
+        assert_eq!(
+            pool(&p, 0.0005, 10),
+            Pool::Send {
+                at: 0.0,
+                offset: 2.0,
+                sigma: 0.003
+            }
+        );
+    }
+
+    /// The hub pools across minutes and forgets minutes older than the
+    /// pool's span.
+    #[test]
+    fn the_hub_pools() {
+        let mut h = hub();
+        let smp = |at: f64, o: f64| Sample {
+            source: "MSF".into(),
+            offset: o,
+            at,
+            sigma: 0.001,
+        };
+        let t0 = 1_800_000_000.0;
+        for k in 0..3 {
+            let at = t0 + 60.0 * k as f64;
+            assert_eq!(h.minute(&[smp(at, 0.002)], at + 10.0), Some(at));
+            assert_eq!(h.ready(), None);
+        }
+        assert_eq!(h.state.pooled, 3);
+        // after a gap the old ones are gone
+        let at = t0 + 3600.0;
+        h.minute(&[smp(at, 0.002)], at + 10.0);
+        assert_eq!(h.ready(), None);
+        assert_eq!(h.state.pooled, 1);
+        for k in 1..4 {
+            let at = t0 + 3600.0 + 60.0 * k as f64;
+            h.minute(&[smp(at, 0.002)], at + 10.0);
+        }
+        let o = h.ready().unwrap();
+        assert!((o - 0.002).abs() < 1e-12);
+        assert_eq!((h.state.last_pool, h.state.pooled), (4, 0));
     }
 
     #[test]

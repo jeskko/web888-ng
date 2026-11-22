@@ -35,6 +35,17 @@ const WIN: f64 = 0.04;
 /// WWV's and WWVH's tick and minute tones (Hz): 5 and 6 cycles in a hop.
 const TICK_HZ: [f64; 2] = [1000.0, 1200.0];
 
+/// A station's calibration ([`Station::calibration`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Calibration {
+    /// The decoder's and receiver's delay (ms): a minute read this much
+    /// later than its start plus the path is on time.
+    pub delay_ms: f64,
+    /// Its uncertainty (ms, one standard deviation): how well the delay
+    /// is known, apart from a minute's own scatter.
+    pub sigma_ms: f64,
+}
+
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 pub enum Station {
     Dcf77,
@@ -199,6 +210,60 @@ impl Station {
             // HF: not watched by the monitor
             Station::Wwv | Station::Bpm | Station::Rwm => 0.0,
         }
+    }
+
+    /// The receiver's calibration for it, where measured: the decoder's
+    /// own delay plus the receiver's (ms) over the path from the
+    /// transmitter, and how well that is known.
+    ///
+    /// RBU, MSF, DCF77 and EFR's stations from the remote unit (2026-11-19
+    /// to 22, `doc/api.md` §8.5): the lateness of the confirmed minutes
+    /// over the ground-wave path against its NTP-steered clock (whose own
+    /// wander, ±0.3 ms, is in them). RBU 3.88 ms late on a 3.65 ms path.
+    /// EFR: the time telegram's start bit after its 10 s mark, from a
+    /// recorded hour (DCF39 1206.34 ms on a 5.77 ms path, ±0.07 ms by the
+    /// minute); HGA22 and DCF49 from their headers alone (too weak by day
+    /// to decode). DCF77 and MSF after the sub-frame phase (server
+    /// 61f1ed9), set against DCF39 over a night and a day (DCF77 read
+    /// 0.68 / 0.25 ms early, MSF 0.18 early / 0.42 late; ±0.6-1.3 ms by the
+    /// minute: their keying's 5 ms steps).
+    ///
+    /// Provisional, from GPS-timed KiwiSDR recordings (2026-11-21/22):
+    /// the lateness less the path, shifted by the decoders' own lateness
+    /// at 60 against 12 kS/s (synthetic: DCF77 -0.65 ms, JJY +1.2, WWVB
+    /// +0.1); a Kiwi near Mainflingen showed the Kiwi's own delay ~0.
+    /// TDF: two Kiwis (near Paris and Kaiserslautern) within 0.15 ms; on
+    /// the remote unit (night, ~2200 km) it reads 0.6-0.9 ms early against
+    /// DCF39. WWVB: Nebraska, 703 km. JJY: Saitama (40 kHz, 191 km),
+    /// Hiroshima (60 kHz, 224 km: 5.5 ms) and Okayama (364 km: 7.6 ms, sky
+    /// wave at night?). BPC: the decoder's lateness on synthetic keying
+    /// (5.9 ms) and the carrier's drop 1.2 ms after the second (Okayama,
+    /// 1655 km).
+    ///
+    /// HF, over the sky wave's path (hops off a 300 km layer): BPM sends
+    /// its ticks 20 ms early and the decoder reads a tick 1.86 ms late:
+    /// -18.1 (measured -17.7 in Taiwan, -19.0 in Hiroshima). RWM: Elimaki,
+    /// 785 km, three minutes 8.9-9.9 ms late (a clean pulse read 2.2 ms
+    /// late; RWM's rises over 4-9 ms). WWV: Lincoln, Nebraska, 702 km,
+    /// 10 MHz, 12 minutes 3.9 ms late (0.3-7.6) on a 3.12 ms path; WWVH
+    /// counted by its own path, not calibrated on its own.
+    pub fn calibration(self) -> Option<Calibration> {
+        let (delay_ms, sigma_ms) = match self {
+            Station::Rbu => (0.23, 0.3),
+            Station::Dcf39 => (1200.57, 0.3),
+            Station::Msf => (0.94, 0.5),
+            Station::Dcf77 => (3.43, 0.5),
+            Station::Hga22 => (1220.0, 2.0),
+            Station::Dcf49 => (1244.2, 2.0),
+            Station::Tdf => (-16.4, 1.0),
+            Station::Wwvb => (3.3, 1.0),
+            Station::Jjy => (7.5, 1.0),
+            Station::Bpc => (7.1, 1.0),
+            Station::Bpm => (-18.1, 1.0),
+            Station::Rwm => (6.2, 1.0),
+            Station::Wwv => (0.8, 2.0),
+        };
+        Some(Calibration { delay_ms, sigma_ms })
     }
 
     /// The regions it serves (`[timecode] region`).

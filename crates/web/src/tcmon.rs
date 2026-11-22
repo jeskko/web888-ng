@@ -113,9 +113,11 @@ pub struct Report {
     pub temp_c: Option<f64>,
     /// The system clock's error by this station (ms, true minus system
     /// time: the confirmed minute's lateness less the path from the
-    /// transmitter and the decoder's own delay) and its scatter over the
-    /// last minutes (ms, a standard deviation from their mean absolute
-    /// deviation): what goes to [`crate::timesync`].
+    /// transmitter and the decoder's own delay) and its error (ms: the
+    /// scatter over the last minutes, a standard deviation from their mean
+    /// absolute deviation, with the calibration's uncertainty; or the
+    /// minute's distance from their median if larger): what goes to
+    /// [`crate::timesync`].
     pub offset_ms: Option<f64>,
     pub sigma_ms: Option<f64>,
     /// The station is shed (the monitor short of CPU, the skimmers already
@@ -448,62 +450,27 @@ const SCATTER_MIN_MS: f64 = 0.1;
 /// A minute's deviation counts at most this much (ms).
 const SCATTER_CAP_MS: f64 = 20.0;
 
-/// The decoders' own delay per station plus the receiver's (ms): the
-/// lateness of the confirmed minutes over the path from the transmitter,
-/// medians over 2026-11-19/20 on the remote unit against its NTP-steered
-/// clock (time3.google.com; so its error is in them too). RBU 3.88 ms
-/// late on a 3.65 ms path, MSF 7.95 on 6.89, DCF77 9.78 on 6.82 (each
-/// ±2-3 ms by the minute: their keying's 5 ms steps). EFR: the time
-/// telegram's start bit after its 10 s mark, from the recorded hour of
-/// 2026-11-19 (`efr134k`, against the recording's NTP timebase): DCF39
-/// 1206.34 ms on a 5.77 ms path (±0.07 ms by the minute); HGA22 about
-/// 1227 and DCF49 about 1250 ms, from their headers alone (±1-3 ms: too
-/// weak to decode by day). Others: unmeasured. DCF77 and MSF moved
-/// after the sub-frame phase (server 61f1ed9): set against DCF39 on the
-/// unit (NTP itself wanders ±0.3 ms), 2026-11-21 22 UTC to 11-22 11 UTC,
-/// the night's and the day's medians averaged: DCF77 read 0.68 / 0.25 ms
-/// early, MSF 0.18 early / 0.42 late (each ±0.6-1.3 ms by the minute).
+/// The decoder's and receiver's delay for a station (ms;
+/// [`Station::calibration`]).
 fn decoder_ms(s: Station) -> Option<f64> {
-    Some(match s {
-        Station::Rbu => 0.23,
-        Station::Msf => 0.94,
-        Station::Dcf77 => 3.43,
-        Station::Dcf39 => 1200.57,
-        Station::Hga22 => 1220.0,
-        Station::Dcf49 => 1244.2,
-        // provisional, from GPS-timed KiwiSDR recordings (2026-11-21):
-        // lateness less the ground-wave path, shifted by the decoders'
-        // own lateness at 60 against 12 kS/s (synthetic: DCF77 -0.65 ms,
-        // JJY +1.2, WWVB +0.1); a Kiwi near Mainflingen showed the Kiwi's
-        // own delay ~0 (DCF77 there 0.06 ms off its synthetic lateness).
-        // TDF: two Kiwis (near Paris, near Kaiserslautern) within 0.15 ms
-        Station::Tdf => -16.4,
-        // Nebraska, 703 km
-        Station::Wwvb => 3.3,
-        // 40 kHz: Saitama, 191 km; 60 kHz (2026-11-22, 21 JST): Hiroshima,
-        // 224 km, 5.5 ms, and Okayama, 364 km, 7.6 ms (sky wave at night?)
-        Station::Jjy => 7.5,
-        // provisional: the decoder's own lateness on synthetic keying at
-        // 12 kS/s (5.9 ms, median of 18 minutes) and the carrier's drop
-        // 1.2 ms after the second (a GPS-timed KiwiSDR at Okayama,
-        // 1655 km, 2026-11-22: the drop's 50 % point 6.7 ms late)
-        Station::Bpc => 7.1,
-        // HF, over the sky wave's path ([`path_ms`]), from GPS-timed
-        // KiwiSDR recordings (2026-11-22, 13 UTC). BPM sends its ticks
-        // 20 ms early, and the decoder reads a tick 1.86 ms late
-        // (synthetic): -18.1; measured -17.7 (Taiwan, 1583 km, two
-        // minutes) and -19.0 (Hiroshima, 2083 km, one)
-        Station::Bpm => -18.1,
-        // RWM: Elimaki, 785 km (three minutes, 8.9-9.9 ms late): the
-        // decoder reads a clean pulse 2.2 ms late, and RWM's rises over
-        // 4-9 ms after the second and ends at ~107 ms
-        Station::Rwm => 6.2,
-        // WWV (WWVH: a minute counts by its path when the receiver tells
-        // it by its 1200 Hz tones): Lincoln, Nebraska, 702 km, 10 MHz,
-        // 2026-11-22 16:30 UTC, 12 GPS-timed minutes 3.9 ms late (median;
-        // 0.3-7.6) on a 3.12 ms sky path
-        Station::Wwv => 0.8,
-    })
+    s.calibration().map(|c| c.delay_ms)
+}
+
+/// A minute's error (ms): the station's scatter and its calibration's
+/// uncertainty together, or the minute's own distance from the station's
+/// recent median when that is larger (at dusk and dawn a station's
+/// arrival moves within minutes, before its scatter shows it).
+fn minute_sigma(s: Station, lates: &std::collections::VecDeque<f64>, late: f64) -> f64 {
+    let cal = s.calibration().map_or(SCATTER_PRIOR_MS, |c| c.sigma_ms);
+    let sc = scatter(lates);
+    let base = (sc * sc + cal * cal).sqrt();
+    if lates.len() < LATES / 3 {
+        return base;
+    }
+    let mut a: Vec<f64> = lates.iter().copied().collect();
+    let mid = a.len() / 2;
+    let med = *a.select_nth_unstable_by(mid, f64::total_cmp).1;
+    base.max((late - med).abs().min(SCATTER_CAP_MS))
 }
 
 /// The time from a transmitter at `site` to `rx` (lat, lon °, ms): LF's
@@ -873,6 +840,8 @@ impl Monitor {
             let mut offset_ms = None;
             let mut sigma_ms = None;
             if let Some(l) = late_ms {
+                // against the minutes before it
+                let sg = minute_sigma(c.station, &c.lates, l);
                 c.lates.push_back(l);
                 while c.lates.len() > LATES {
                     c.lates.pop_front();
@@ -882,7 +851,7 @@ impl Monitor {
                     .delay_ms
                     .filter(|_| anchor.is_some())
                     .map(|d| ((d - l) * 1e3).round() / 1e3);
-                sigma_ms = Some((scatter(&c.lates) * 1e3).round() / 1e3);
+                sigma_ms = Some((sg * 1e3).round() / 1e3);
             }
             if !c.shed {
                 self.counts[i][match (ok, confirmed) {

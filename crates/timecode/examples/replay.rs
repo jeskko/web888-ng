@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! The receiver on a recording: complex IQ (cf32, or cs16 as the page's
 //! Rec IQ saves), the station's carrier shifted to a 1 kHz tone in 12 kHz
-//! audio as USB would give it. Prints each second's symbol (a line a
+//! audio as USB would give it (WWV/WWVH and BPM: AM, its envelope). Prints each second's symbol (a line a
 //! minute) and each decoded minute; with START (the UTC Unix time of the
 //! first sample) also how far the minute's start is from that clock.
 //!
@@ -35,8 +35,7 @@ fn main() {
             .iter()
             .map(|c| f32::from_le_bytes(*c))
             .collect();
-        let tone = if st == Station::Wwv { 100.0 } else { 1000.0 };
-        run(st, &audio, tone, None);
+        run(st, &audio, tone(st), None);
         return;
     }
     let x: Vec<Complex32> = if a[1].ends_with(".cs16") {
@@ -65,9 +64,9 @@ fn main() {
     // the carrier to +1 kHz, a low-pass (windowed sinc, 5 kHz), to 12 kHz real
     let fs = 12_000.0;
     let dec = (rate / fs).round() as usize;
-    // WWV/WWVH: AM (the carrier at 0, the audio its envelope); the others
-    // USB with the carrier at 1 kHz
-    let am = st == Station::Wwv;
+    // WWV/WWVH and BPM: AM (the carrier at 0, the audio its envelope); the
+    // others USB with the carrier at 1 kHz
+    let am = matches!(st, Station::Wwv | Station::Bpm);
     let shift = if am {
         -(carrier - centre)
     } else {
@@ -107,7 +106,13 @@ fn main() {
         }
         n += dec;
     }
-    run(st, &audio, if am { 100.0 } else { 1000.0 }, start);
+    run(st, &audio, tone(st), start);
+}
+
+/// The tone in the audio, as the page sets it: WWV's 100 Hz subcarrier,
+/// BPM's 1 kHz ticks in AM, a carrier at 1 kHz in USB.
+fn tone(st: Station) -> f64 {
+    if st == Station::Wwv { 100.0 } else { 1000.0 }
 }
 
 fn run(st: Station, audio: &[f32], tone: f64, start: Option<f64>) {
@@ -156,8 +161,13 @@ fn run(st: Station, audio: &[f32], tone: f64, start: Option<f64>) {
                         })
                         .unwrap_or_default();
                     println!(
-                        "MINUTE {} at {:.2} s: {} {} {}{off}",
+                        "MINUTE {}{} at {:.2} s: {} {} {}{off}",
                         st.name(),
+                        match (m.transmitter, m.named) {
+                            (Some(t), _) => format!(" ({t})"),
+                            (None, false) => " (unnamed)".into(),
+                            _ => String::new(),
+                        },
                         m.t,
                         m.local,
                         if m.confirmed {

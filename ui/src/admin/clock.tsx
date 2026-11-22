@@ -76,6 +76,9 @@ interface Clock {
     sent: number;
     send_errors: number;
     rejected: number;
+    pooled?: number;
+    dropped?: number;
+    last_pool?: number;
   } | null;
   timecode: { stations: TcStation[] } | null;
   ntp_server?: {
@@ -253,6 +256,16 @@ function SyncCard({ c }: { c: Clock }) {
             failed: s.send_errors,
             none: s.rejected,
           })}
+        </dd>
+        {/* i18n: minutes whose sources were too unsure alone are averaged together before a sample goes to chrony */}
+        <dt>{t("Pooling")}</dt>
+        <dd>
+          {(s.pooled ?? 0) > 0
+            ? tn("{n} unsure minute waiting", "{n} unsure minutes waiting", s.pooled ?? 0)
+            : (s.last_pool ?? 0) > 1
+              ? tn("last sample from {n} minute", "last sample from {n} minutes", s.last_pool ?? 0)
+              : t("none")}
+          {(s.dropped ?? 0) > 0 && <span class="dim"> {tn("{n} pool dropped as too unsure", "{n} pools dropped as too unsure", s.dropped ?? 0)}</span>}
         </dd>
       </dl>
       {names.length > 0 && (

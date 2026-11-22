@@ -139,6 +139,17 @@ pub struct Timesync {
     /// chrony has no usable source). Don't forward port 123 to it from
     /// the Internet.
     pub serve_lan: bool,
+    /// The largest error of a sample sent to chrony (ms, one standard
+    /// deviation): a minute whose sources together are less sure is
+    /// pooled with the next ones until they are, at most
+    /// `pool_minutes`; chrony holds the clock on its frequency meanwhile.
+    /// Noisy stations alone (at dusk and dawn often) then move the clock
+    /// by their average, not each minute's error.
+    pub max_sigma_ms: f64,
+    /// Minutes pooled at most; then a pool still above `max_sigma_ms` is
+    /// sent only if its offset is beyond three of its errors (the clock
+    /// is surely off), else dropped.
+    pub pool_minutes: u32,
 }
 
 impl Default for Timesync {
@@ -147,6 +158,8 @@ impl Default for Timesync {
             chrony_socket: "/run/chrony.web888.sock".into(),
             trim_ms: Default::default(),
             serve_lan: false,
+            max_sigma_ms: 0.5,
+            pool_minutes: 10,
         }
     }
 }

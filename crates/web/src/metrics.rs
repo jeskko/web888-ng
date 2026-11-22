@@ -319,13 +319,20 @@ fn timesync(o: &mut Out) {
     o.put(
         "timesync_samples_total",
         "counter",
-        "Combined samples: sent to chrony, failed to send (no chrony), none usable, too old to send",
+        "Combined samples: sent to chrony, failed to send (no chrony), none usable, too old to send, pools dropped as too unsure",
         &[
             (labels(&[("result", "sent")]), st.sent as f64),
             (labels(&[("result", "error")]), st.send_errors as f64),
             (labels(&[("result", "rejected")]), st.rejected as f64),
             (labels(&[("result", "stale")]), st.stale as f64),
+            (labels(&[("result", "dropped")]), st.dropped as f64),
         ],
+    );
+    o.put(
+        "timesync_pooled_minutes",
+        "gauge",
+        "Minutes waiting to be pooled into a sure enough sample ([timesync] max_sigma_ms)",
+        &[(String::new(), st.pooled as f64)],
     );
 }
 

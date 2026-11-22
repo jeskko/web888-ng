@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { applySeconds, tcPlan, tcTuning, TC_STATIONS, utcText, type TcRun } from "../src/timecode.ts";
+import { applySeconds, minuteUtc, tcPlan, tcTuning, TC_STATIONS, utcText, type TcRun } from "../src/timecode.ts";
 
 test("the station the tuning hears, and its tone", () => {
   // DCF77 in USB at 76.5 kHz: its carrier at 1 kHz
@@ -55,4 +55,22 @@ test("the current minute's seconds", () => {
 
 test("UTC text", () => {
   assert.equal(utcText(Date.UTC(2026, 10, 16, 10, 24) / 1000), "2026-11-16 10:24");
+});
+
+test("BPM's ticks at 1 kHz in AM; RWM keyed in USB", () => {
+  const b = tcPlan("BPM", "am", 10_000_000, -5000, 5000, 600);
+  assert.ok("station" in b && b.station.name === "BPM" && b.tone === 1000);
+  // the same carrier, Auto: WWV/WWVH first
+  const a = tcPlan("auto", "am", 10_000_000, -5000, 5000, 600);
+  assert.ok("station" in a && a.station.name === "WWV/WWVH");
+  const r = tcPlan("auto", "usb", 9_995_000, 300, 2700, 600);
+  assert.ok("station" in r && r.station.name === "RWM" && r.tone === 1000);
+});
+
+test("minutes without a time code are named by the clock", () => {
+  assert.equal(minuteUtc(true, 1_800_000_000, null), 1_800_000_000);
+  assert.equal(minuteUtc(false, 0, 1_800_000_000.012), 1_800_000_000);
+  assert.equal(minuteUtc(false, 0, 1_800_000_019), 1_800_000_000);
+  assert.equal(minuteUtc(false, 0, 1_800_000_030), null);
+  assert.equal(minuteUtc(false, 0, null), null);
 });
