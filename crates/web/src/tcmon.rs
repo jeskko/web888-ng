@@ -433,7 +433,8 @@ fn decoder_ms(s: Station) -> f64 {
         Station::Tdf => -16.4,
         // Nebraska, 703 km
         Station::Wwvb => 3.3,
-        // 40 kHz: Saitama, 191 km (60 kHz not yet heard)
+        // 40 kHz: Saitama, 191 km; 60 kHz (2026-11-22, 21 JST): Hiroshima,
+        // 224 km, 5.5 ms, and Okayama, 364 km, 7.6 ms (sky wave at night?)
         Station::Jjy => 7.5,
         // provisional: the decoder's own lateness on synthetic keying at
         // 12 kS/s (5.9 ms, median of 18 minutes) and the carrier's drop
@@ -518,11 +519,13 @@ impl Monitor {
             if st == Station::Wwv {
                 return Err("WWV/WWVH is HF (a 100 Hz subcarrier in AM): not here".into());
             }
+            // the nearest (JJY's 40 kHz is within reach of a bin at 60)
             let fc = st
                 .carriers()
                 .iter()
                 .copied()
-                .find(|c| (c - centre).abs() <= CLEAN_HZ)
+                .filter(|c| (c - centre).abs() <= CLEAN_HZ)
+                .min_by(|a, b| (a - centre).abs().total_cmp(&(b - centre).abs()))
                 .ok_or_else(|| format!("{s}: no carrier within {CLEAN_HZ} Hz of {centre} Hz"))?;
             chains.push(Chain::new(st, fc, centre, rate));
         }
@@ -1287,6 +1290,7 @@ mod tests {
         for (st, fc) in [
             (Station::Wwvb, 60_000.0),
             (Station::Jjy, 40_000.0),
+            (Station::Jjy, 60_000.0),
             (Station::Dcf77, 77_500.0),
             (Station::Msf, 60_000.0),
             (Station::Bpc, 68_500.0),

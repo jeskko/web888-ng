@@ -498,8 +498,9 @@ station's typical reach, by `[station] locator`), or a region's:
 `stations` list overrides it. Each station costs ~0.5-1 % of the A9's
 core, so a receiver watches only what it can hear. Tested on GPS-timed
 recordings from public KiwiSDRs near the stations (2026-11-21): WWVB
-(Nebraska), JJY 40 kHz (Saitama) and TDF (near Paris) decode every
-minute; their decoder offsets are provisional (the Kiwi's own IQ delay
+(Nebraska), JJY 40 kHz (Saitama), JJY 60 kHz (Hiroshima, Okayama;
+2026-11-22, after the monitor stopped taking 40 kHz for JJY in a bin
+at 60 kHz) and TDF (near Paris) decode every minute; their decoder offsets are provisional (the Kiwi's own IQ delay
 is in them). Fixed on the way: the impulse blanker locked shut after a
 long low (WWVB's 0.8 s at -17 dB, JJY's -20 dB, MSF's 0.5 s off).
 
