@@ -1154,6 +1154,18 @@ impl Config {
             trusted_proxies: Vec::new(),
             ..w.clone()
         };
+        // the time sources: serving NTP to the LAN applies at once
+        // (ntpserve follows the live config), the rest at a restart
+        if self.timecode != new.timecode {
+            c.restart.push("timecode");
+        }
+        let ts = |t: &Timesync| Timesync {
+            serve_lan: false,
+            ..t.clone()
+        };
+        if ts(&self.timesync) != ts(&new.timesync) {
+            c.restart.push("timesync");
+        }
         let web_restart = fixed(a) != fixed(b);
         if web_restart {
             c.restart.push("web");
@@ -1178,6 +1190,7 @@ impl Config {
             || a.metrics_allow != b.metrics_allow
             || a.trusted_proxies != b.trusted_proxies
             || self.limits != new.limits
+            || self.timesync.serve_lan != new.timesync.serve_lan
             || self.auth != new.auth;
         c
     }
@@ -1218,6 +1231,23 @@ mod tests {
         assert_eq!(c.web.tls, TlsMode::Off);
         assert_eq!(c.web.listen, "0.0.0.0:8073");
         assert_eq!(c.hpsdr, Hpsdr::default());
+    }
+
+    /// NTP for the LAN applies at once (the Clock tab's switch); the
+    /// other time-source settings at a restart.
+    #[test]
+    fn time_source_changes() {
+        let a = Config::default();
+        let mut b = a.clone();
+        b.timesync.serve_lan = true;
+        let ch = a.changes(&b);
+        assert!(ch.live && ch.restart.is_empty(), "{ch:?}");
+        let mut b = a.clone();
+        b.timesync.max_sigma_ms = 1.0;
+        b.timecode.enabled = true;
+        let ch = a.changes(&b);
+        assert!(!ch.live);
+        assert_eq!(ch.restart, ["timecode", "timesync"]);
     }
 
     #[test]
