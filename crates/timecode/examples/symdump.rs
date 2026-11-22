@@ -49,7 +49,13 @@ fn main() {
                     Event::Minute(m) => {
                         println!("{line}");
                         line.clear();
-                        println!("  minute {} ok {} confirmed {}", m.local, m.ok, m.confirmed);
+                        println!(
+                            "  minute {} ok {} confirmed {} at {:.2} ms",
+                            m.local,
+                            m.ok,
+                            m.confirmed,
+                            (m.t - (m.t / 60.0).round() * 60.0) * 1e3
+                        );
                     }
                 }
             }

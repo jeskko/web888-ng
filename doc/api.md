@@ -544,15 +544,20 @@ minutes (not used). RWM (Taldom; 4996, 9996, 14996 kHz, a keyed
 carrier): on 100 ms each second, 500 ms at the minute, a second pulse
 at 200-300 ms in DUT1's seconds (reported as read). Both decode every
 minute of UTC ticks in KiwiSDR recordings (BPM from Taiwan and
-Hiroshima, RWM from southern Finland); their offsets are not
-calibrated yet. RWM's format varies by minute (2026-11-22, 4996 kHz):
-second ticks (e.g. 12:40-12:48, 13:16-13:19), ten pulses a second
-(40 ms, then 20 ms every 100 ms; 13:20-13:30: read as 'P', the minute
-fails), a steady carrier, or none. On GPS-timed recordings (Elimäki,
-793 km) its pulse rises 4.8-6.4 ms after UTC's second; the decoder's
-lateness on them (18-20 ms) and on a synthetic pulse (27 ms) differ,
-so no offset until that is understood. BPM's minutes scatter under
-0.5 ms on one Kiwi; its offset waits for GPS-timed minutes.
+Hiroshima, RWM from southern Finland). RWM's format varies by minute
+(2026-11-22, 4996 kHz): second ticks (e.g. 12:40-12:48, 13:16-13:19),
+ten pulses a second (40 ms, then 20 ms every 100 ms; 13:20-13:30: read
+as 'P', the minute fails), a steady carrier, or none. Their receivers
+have no impulse blanker: with the carrier off most of the second its
+average stayed low and each pulse's start was blanked, so a pulse read
+14 ms late on a clean signal and less on a noisy one (2.2 ms without).
+Offsets (provisional, GPS-timed KiwiSDR recordings, 13 UTC): the path
+is the sky wave's (hops off a layer at 300 km, at most 3500 km each),
+which is ±0.2 ms by the layer's height and more when the hops change.
+BPM -18.1 ms (its 20 ms advance and the decoder's 1.9 ms; measured
+-17.7 from Taiwan, 1583 km, and -19.0 from Hiroshima, 2083 km). RWM
+6.2 ms (Elimäki, 785 km, three minutes 8.9-9.9 ms late: its pulse rises
+4.8-6.4 ms after UTC's second there and ends at ~107 ms).
 
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s

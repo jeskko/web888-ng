@@ -463,20 +463,40 @@ fn decoder_ms(s: Station) -> Option<f64> {
         // 1.2 ms after the second (a GPS-timed KiwiSDR at Okayama,
         // 1655 km, 2026-11-22: the drop's 50 % point 6.7 ms late)
         Station::Bpc => 7.1,
-        // not measured (BPM's ticks are sent 20 ms early, HF paths vary):
-        // no offset for the clock
-        Station::Wwv | Station::Bpm | Station::Rwm => return None,
+        // HF, over the sky wave's path ([`path_ms`]), from GPS-timed
+        // KiwiSDR recordings (2026-11-22, 13 UTC). BPM sends its ticks
+        // 20 ms early, and the decoder reads a tick 1.86 ms late
+        // (synthetic): -18.1; measured -17.7 (Taiwan, 1583 km, two
+        // minutes) and -19.0 (Hiroshima, 2083 km, one)
+        Station::Bpm => -18.1,
+        // RWM: Elimaki, 785 km (three minutes, 8.9-9.9 ms late): the
+        // decoder reads a clean pulse 2.2 ms late, and RWM's rises over
+        // 4-9 ms after the second and ends at ~107 ms
+        Station::Rwm => 6.2,
+        // WWV and WWVH share their carriers, and the decoder can't tell
+        // which it hears: no offset for the clock
+        Station::Wwv => return None,
     })
 }
 
-/// The time from a transmitter at `site` to `rx` (lat, lon °): the
-/// great-circle distance at the ground wave's speed (ms).
-fn path_ms(site: (f64, f64), rx: (f64, f64)) -> f64 {
+/// The time from a transmitter at `site` to `rx` (lat, lon °, ms): LF's
+/// ground wave over the great circle; HF's (`sky`) sky wave, hops off a
+/// layer at 300 km, each at most 3500 km (one hop at 785 km is 0.7 ms
+/// longer than the ground; the layer's height moves it ±0.2 ms).
+fn path_ms(site: (f64, f64), rx: (f64, f64), sky: bool) -> f64 {
     let r = |d: f64| d.to_radians();
     let (la1, lo1, la2, lo2) = (r(site.0), r(site.1), r(rx.0), r(rx.1));
     let h = ((la2 - la1) / 2.0).sin().powi(2)
         + la1.cos() * la2.cos() * ((lo2 - lo1) / 2.0).sin().powi(2);
-    let km = 2.0 * h.sqrt().asin() * 6371.0;
+    const R: f64 = 6371.0;
+    let km = 2.0 * h.sqrt().asin() * R;
+    if sky {
+        const LAYER: f64 = 300.0;
+        let hops = (km / 3500.0).ceil().max(1.0);
+        let th = km / (2.0 * hops * R);
+        let leg = (R * R + (R + LAYER).powi(2) - 2.0 * R * (R + LAYER) * th.cos()).sqrt();
+        return 2.0 * hops * leg / 299.792_458;
+    }
     // c, slowed ~0.03 % over ground
     km / 299.792_458 / 0.9997
 }
@@ -581,7 +601,7 @@ impl Monitor {
             c.delay_ms = c
                 .station
                 .site(c.fc)
-                .and_then(|s| Some(path_ms(s, rx) + decoder_ms(c.station)?));
+                .and_then(|s| Some(path_ms(s, rx, c.fc > 2e6) + decoder_ms(c.station)?));
         }
     }
 
@@ -1185,6 +1205,20 @@ mod tests {
     /// on time, and the carriers give the clock's error.
     /// Two values 5 ms apart, most at one: the scatter shows it.
     #[test]
+    fn sky_wave_path() {
+        // RWM to Elimaki, 785 km: ground 2.62 ms, one hop 3.34
+        let (rwm, rx) = ((56.7333, 37.6633), (60.72, 26.41));
+        assert!((path_ms(rwm, rx, false) - 2.62).abs() < 0.02);
+        assert!((path_ms(rwm, rx, true) - 3.34).abs() < 0.02);
+        // BPM to Finland, ~5400 km: two hops
+        let d = path_ms((34.948, 109.543), (60.72, 26.41), true);
+        assert!(
+            d > path_ms((34.948, 109.543), (60.72, 26.41), false) + 0.3,
+            "{d}"
+        );
+    }
+
+    #[test]
     fn scatter_sees_two_values() {
         let v: std::collections::VecDeque<f64> =
             [6.2, 6.3, 11.2, 6.2, 6.1, 11.3, 6.2, 6.2, 11.2, 6.3]
@@ -1266,7 +1300,8 @@ mod tests {
             // offset: the calibrated delay less the lateness
             let off = r.offset_ms.unwrap();
             let delay = if r.station == "MSF" {
-                path_ms((54.9116, -3.2785), (50.0156, 9.0108)) + decoder_ms(Station::Msf).unwrap()
+                path_ms((54.9116, -3.2785), (50.0156, 9.0108), false)
+                    + decoder_ms(Station::Msf).unwrap()
             } else {
                 decoder_ms(Station::Dcf77).unwrap()
             };

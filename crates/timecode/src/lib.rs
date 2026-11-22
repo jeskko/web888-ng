@@ -655,6 +655,11 @@ pub struct Receiver {
     pub level: f32,
     /// The noise blanker's average |x|.
     avg: f64,
+    /// Whether the blanker runs: not for BPM's and RWM's short pulses
+    /// over a carrier off most of the second (its average stays low, and
+    /// each pulse's start was blanked until it caught up: the pulse read
+    /// 14 ms late on a clean signal, less on a noisy one).
+    blanks: bool,
     /// Minutes in a row that failed (the minute's lock is dropped at 2).
     bad: u32,
     /// The last minutes' frames (for the date's vote) and the minutes
@@ -703,6 +708,7 @@ impl Receiver {
             out: Vec::new(),
             level: 0.0,
             avg: 0.0,
+            blanks: !matches!(station, Station::Bpm | Station::Rwm),
             bad: 0,
             frames: std::collections::VecDeque::new(),
             passed: Vec::new(),
@@ -755,7 +761,7 @@ impl Receiver {
         for &v in x {
             let m = (v as f64).abs();
             let thr = 6.0 * self.avg / 0.64;
-            let blank = self.n > (self.fs as u64) && m > thr;
+            let blank = self.blanks && self.n > (self.fs as u64) && m > thr;
             let m_avg = if self.n > (self.fs as u64) {
                 m.min(4.0 * thr)
             } else {
