@@ -559,6 +559,10 @@ BPM -18.1 ms (its 20 ms advance and the decoder's 1.9 ms; measured
 6.2 ms (Elimäki, 785 km, three minutes 8.9-9.9 ms late: its pulse rises
 4.8-6.4 ms after UTC's second there and ends at ~107 ms).
 
+**CHU** (Ottawa): not built; its shortwave broadcasts ended on
+2026-06-22 (none heard from five KiwiSDRs at 500-1700 km on 3330,
+7850 and 14670 kHz, 2026-11-22).
+
 **EFR's teleswitch stations** (**built**, 2026-11-20): DCF39 (139 kHz),
 HGA22 (135.6 kHz) and DCF49 (129.1 kHz) send a time telegram every 10 s
 (FSK ±170 Hz at 200 Bd, FT1.2 frames; `crates/timecode/src/efr.rs`

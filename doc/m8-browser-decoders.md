@@ -444,7 +444,8 @@ hears, or tunes one (USB with the carrier at 1 kHz; AM on WWV).
   bins' 60 kHz frame rate?) fills its off periods. WWV's carriers came in
   (10 MHz 32 dB in 1 Hz) but its 100 Hz code wasn't over the noise.
   WWVB, JJY and WWV are tested on synthetic keying only.
-* **Not done**: CHU (300 Bd FSK), RBU, BPC; WWV's coherent subcarrier.
+* **Not done**: RBU, BPC; WWV's coherent subcarrier. (CHU's 300 Bd FSK
+  code: none; CHU left shortwave on 2026-06-22.)
 
 ## 3. Shared UI
 
