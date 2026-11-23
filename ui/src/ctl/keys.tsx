@@ -30,6 +30,7 @@ const POINTER: [string, string][] = [
   [N_("Drag, sideways swipe"), N_("Pan the waterfall")],
   [N_("Wheel, pinch"), N_("Zoom around the pointer")],
   [N_("Shift+wheel"), N_("Step the dial")],
+  [N_("Shift+drag, shift+click"), N_("What is this? A closer look at the signals in that range (tunes there if needed)")],
   [N_("Wheel over a digit"), N_("Step that digit; click the dial to type a frequency (7074, 7.074M)")],
   [N_("Click a marker, spot or label"), N_("Tune to it, or listen along with that user")],
 ];

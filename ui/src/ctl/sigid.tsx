@@ -6,10 +6,10 @@
 // its decoder.
 
 import { formatKhz } from "../fmt.ts";
-import { t } from "../i18n.ts";
+import { N_, t } from "../i18n.ts";
 import { audioBand } from "../cw.ts";
 import { CLASS_INFO, SURE, type SigRow } from "../sigid.ts";
-import { openSig, setSig, sigError, sigOn, sigRows, st } from "../state.ts";
+import { closeAsk, openSig, setSig, sigAsk, sigError, sigOn, sigRows, st, whatIs } from "../state.ts";
 
 export function SigCtl() {
   const on = sigOn.value;
@@ -44,7 +44,10 @@ function Row({ r }: { r: SigRow }) {
           </>
         )}
       </td>
-      <td>
+      <td class="r">
+        <button onClick={() => whatIs(r.rfLo, r.rfHi)} title={t("What is this? A closer look: its width, tones, keying, symbol rate and frames, measured and explained")} aria-label={t("What is this?")}>
+          ?
+        </button>{" "}
         {best && info!.opens && (
           <button onClick={() => openSig(r, best.cls)} title={info!.opens === "ssb" || info!.opens === "am" ? t("Tune to it") : t("Open the {mode} decoder", { mode: t(info!.label) })}>
             {info!.opens === "ssb" || info!.opens === "am" ? t("Tune") : t("Decode")}
@@ -52,6 +55,71 @@ function Row({ r }: { r: SigRow }) {
         )}
       </td>
     </tr>
+  );
+}
+
+// i18n: how sure the "what is this?" answer is
+const SURENESS = { sure: N_("the figures fit it"), likely: N_("likely"), unsure: N_("unsure") } as const;
+
+/** "What is this?": the answer about one range, above the signal list. */
+function AskCard() {
+  const a = sigAsk.value;
+  if (!a) return null;
+  const d = a.desc;
+  const opens = d?.cls ? CLASS_INFO[d.cls].opens : null;
+  const speech = opens === "ssb" || opens === "am";
+  return (
+    <section class="sig-ask" aria-live="polite">
+      <div class="sig-ask-bar">
+        <strong>{t("What is this?")}</strong>
+        <span class="dim num">
+          {formatKhz(Math.round(a.rfLo))}–{formatKhz(Math.round(a.rfHi))} kHz
+        </span>
+        <button class="close" onClick={closeAsk} title={t("Close")} aria-label={t("Close")}>
+          ✕
+        </button>
+      </div>
+      {d === undefined ? (
+        <p class="dim">{a.retuned ? t("Tuned to it; listening for {n} s…", { n: a.left }) : t("Listening for {n} s…", { n: a.left })}</p>
+      ) : d === null ? (
+        <>
+          <p>{t("Nothing stands out of the noise there.")}</p>
+          <button onClick={() => whatIs(a.rfLo, a.rfHi)}>{t("Again")}</button>
+        </>
+      ) : (
+        <>
+          <p class="sig-ask-title">
+            <strong class={d.sure}>{d.title}</strong> <span class="dim">({t(SURENESS[d.sure])})</span>
+          </p>
+          {d.text.map((x, i) => (
+            <p key={i}>{x}</p>
+          ))}
+          <div class="sig-ask-do">
+            {d.cls && opens && (
+              <button onClick={() => openSig({ id: 0, rf: d.rf, rfLo: d.rfLo, rfHi: d.rfHi, hz: 0, db: 0, top: [] }, d.cls!)}>
+                {speech ? t("Tune") : t("Decode")}
+              </button>
+            )}
+            <button onClick={() => whatIs(a.rfLo, a.rfHi)} title={t("Measure it again from the next 4 seconds")}>
+              {t("Again")}
+            </button>
+          </div>
+          <details>
+            <summary>{t("Measured")}</summary>
+            <table class="sig-facts">
+              <tbody>
+                {d.facts.map(([k, v]) => (
+                  <tr key={k}>
+                    <th>{k}</th>
+                    <td class="num">{v}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </details>
+        </>
+      )}
+    </section>
   );
 }
 
@@ -70,6 +138,7 @@ export function SigPanel() {
         </button>
       </div>
       <div class="spots-list">
+        <AskCard />
         {sigError.value && <p class="warn" role="alert">{sigError.value}</p>}
         {s && !band && <p class="dim">{t("Signals are identified in CW, USB and LSB.")}</p>}
         {rows.length === 0 ? (
@@ -92,6 +161,7 @@ export function SigPanel() {
           </table>
         )}
         <p class="dim">{t("Trained on synthetic signals; a guess, not a decode.")}</p>
+        <p class="dim">{t("For a closer look at one signal: its ? button, or shift-drag across it on the waterfall.")}</p>
       </div>
     </aside>
   );

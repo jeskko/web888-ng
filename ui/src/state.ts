@@ -25,6 +25,7 @@ import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
+import { askPlan, describe as describeSig, type Desc, type SigAn } from "./sigdesc.ts";
 import { applySeconds, minuteUtc, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { IqRecorder, REC_MAX_S, type RecFormat } from "./iqrec.ts";
@@ -1527,8 +1528,19 @@ let sigRf: (hz: number) => number = (hz) => hz;
 function sigStart(): Worker {
   const w = new Worker("sigid-worker.js", { type: "module" });
   w.onmessage = (e: MessageEvent) => {
-    const d = e.data as { run?: SigRun; gen?: number; error?: string };
+    const d = e.data as { run?: SigRun; gen?: number; error?: string; an?: SigAn | null; id?: number; wait?: number };
     if (d.error) sigError.value = d.error;
+    const ask = sigAsk.value;
+    if (ask && d.id === ask.id) {
+      if (d.wait !== undefined) sigAsk.value = { ...ask, left: d.wait };
+      else if (d.an !== undefined && d.gen === sigGen)
+        sigAsk.value = {
+          ...ask,
+          left: 0,
+          desc: d.an ? describeSig(d.an, { rf: sigRf, plan: bandPlan.value, markers: freqMarkers.value }) : null,
+        };
+      return;
+    }
     if (!d.run || d.gen !== sigGen) return;
     sigRows.value = toSigRows(d.run, sigRf);
   };
@@ -1557,8 +1569,60 @@ function sigAudio(f: AudioFrame): void {
     sigBand = b;
     sigWorker.postMessage({ band: [band.lo, band.hi] });
   }
+  if (askPending) {
+    // the tuning that hears it is in effect: what is in the audio there
+    const p = askPlan(s, band, askPending.rfLo, askPending.rfHi);
+    const [a, b] = "audio" in p ? p.audio : [band.lo, band.hi];
+    sigWorker.postMessage({ analyse: [a, b], id: askPending.id, gen: sigGen });
+    askPending = null;
+  }
   const pcm = sigFeed.push(f.pcm, f.rate, f.stereo);
   sigWorker.postMessage({ pcm, gen: sigGen }, [pcm.buffer]);
+}
+
+/** "What is this?": an RF range asked about; while it waits for audio,
+ * `left` s to go; then its description (null: nothing stands out of the
+ * noise there). */
+export interface SigAsk {
+  id: number;
+  rfLo: number;
+  rfHi: number;
+  /** The receiver was retuned to hear it. */
+  retuned: boolean;
+  left: number;
+  desc?: Desc | null;
+}
+export const sigAsk = signal<SigAsk | null>(null);
+let askId = 0;
+let askPending: { rfLo: number; rfHi: number; id: number } | null = null;
+
+/** Ask what is in `rfLo..rfHi` (Hz): measured in this browser from the
+ * next 4 s of audio, the identifier turned on, and the receiver retuned
+ * (and its passband widened) if the range isn't in the audio now. */
+export function whatIs(rfLo: number, rfHi: number): void {
+  const s = st.value;
+  if (!s) return;
+  // the audio holds 5 kHz at most: the middle of a wider range
+  if (rfHi - rfLo > 4600) {
+    const c = (rfLo + rfHi) / 2;
+    [rfLo, rfHi] = [c - 2300, c + 2300];
+  }
+  if (!sigOn.value) setSig(true);
+  const p = askPlan(s, audioBand(s.mode, s.lo, s.hi, s.pitch), rfLo, rfHi);
+  const id = ++askId;
+  if ("tune" in p) {
+    setModePassband(p.tune.mode, p.tune.lo, p.tune.hi);
+    tune(p.tune.dial);
+    // a new stream: the audio from before the retune isn't this
+    sigKey = "";
+  }
+  askPending = { rfLo, rfHi, id };
+  sigAsk.value = { id, rfLo, rfHi, retuned: "tune" in p, left: 5 };
+}
+
+export function closeAsk(): void {
+  askPending = null;
+  sigAsk.value = null;
 }
 
 export function setSig(on: boolean): void {
@@ -1570,6 +1634,7 @@ export function setSig(on: boolean): void {
     sigKey = "";
     sigBand = "";
     sigRows.value = [];
+    closeAsk();
   }
 }
 
@@ -1612,7 +1677,9 @@ export function openSig(row: SigRow, cls: SigClass): void {
     case "ssb": {
       const lsb = row.rf < 10e6;
       tune(lsb ? row.rf + 1500 : row.rf - 1500);
-      setModePassband(lsb ? "lsb" : "usb", 300, 2700);
+      // (LSB's passband is below the dial)
+      if (lsb) setModePassband("lsb", -2700, -300);
+      else setModePassband("usb", 300, 2700);
       break;
     }
     case "am":

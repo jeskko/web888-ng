@@ -13,6 +13,7 @@
 //! negative frequencies (no image), the signal at 0 Hz. LSB audio is
 //! flipped back (the signal's RF orientation).
 
+use crate::measure::{Measure, measure};
 use crate::{CLASSES, N, SigId};
 use num_complex::Complex32;
 use rustfft::FftPlanner;
@@ -130,6 +131,20 @@ impl Scanner {
         &self.found
     }
 
+    /// Seconds of audio held (an analysis needs 4.096).
+    pub fn held(&self) -> f64 {
+        self.audio.len() as f64 / AUDIO_RATE
+    }
+
+    /// What is in audio `lo..hi` (Hz): measured, and named at its centre.
+    pub fn analyse(&self, lo: f64, hi: f64) -> Option<Analysis> {
+        if self.audio.len() < NA {
+            return None;
+        }
+        let x: Vec<f32> = self.audio.iter().copied().collect();
+        analyse(&x, (lo, hi), (self.lo, self.hi), self.lsb)
+    }
+
     fn run(&mut self) {
         let x: Vec<Complex32> = self.audio.iter().map(|&v| Complex32::new(v, 0.0)).collect();
         let now = self.now();
@@ -201,6 +216,26 @@ impl Scanner {
         f.runs += 1;
         self.found.sort_by(|a, b| a.hz.total_cmp(&b.hz));
     }
+}
+
+/// A signal measured ([`measure`]) and named by the identifier at its
+/// centre (the classes most likely first).
+#[derive(Clone, Debug)]
+pub struct Analysis {
+    pub m: Measure,
+    pub top: Vec<(&'static str, f32)>,
+}
+
+/// [`Analysis`] of audio `sel` (Hz) in the last 4.096 s of `audio`
+/// (12 kS/s; `band`: the receiver's audio passband).
+pub fn analyse(audio: &[f32], sel: (f64, f64), band: (f64, f64), lsb: bool) -> Option<Analysis> {
+    let m = measure(audio, sel, band)?;
+    let x: Vec<Complex32> = audio[audio.len() - NA..]
+        .iter()
+        .map(|&v| Complex32::new(v, 0.0))
+        .collect();
+    let top = crate::identify(&baseband(&x, m.centre, lsb));
+    Some(Analysis { m, top })
 }
 
 /// Signals in the band: (lo, hi, peak dB over the floor), strongest first.

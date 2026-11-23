@@ -15,7 +15,7 @@ import { wfSpan } from "../proto.ts";
 import { WheelSteps, wheelPx } from "../wheelzoom.ts";
 import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, palette, paneHooks, peakHold, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, server, setView, skimmers, snapOf, spots, st, stepOf, tune, users, wfTimes } from "../state.ts";
+import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, palette, paneHooks, peakHold, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, server, setView, skimmers, snapOf, spots, st, stepOf, tune, users, wfTimes, whatIs } from "../state.ts";
 import { markerColour, markerTitle, ribbon, type FreqMarker, type RibbonPiece } from "../markers.ts";
 import { pick } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
@@ -49,6 +49,7 @@ export function Pane() {
   const boxRef = useRef<HTMLDivElement>(null);
   const errRef = useRef<HTMLDivElement>(null);
   const ghostRef = useRef<HTMLDivElement>(null);
+  const selRef = useRef<HTMLDivElement>(null);
   const ticksRef = useRef<HTMLCanvasElement>(null);
 
   useEffect(() => {
@@ -56,6 +57,7 @@ export function Pane() {
     const wc = wfRef.current!;
     const box = boxRef.current!;
     const ghost = ghostRef.current!;
+    const selEl = selRef.current!;
     const tc = ticksRef.current!;
     const tctx = tc.getContext("2d")!;
     let wf: Waterfall | null = null;
@@ -244,6 +246,19 @@ export function Pane() {
 
     // pointer interaction (on both canvases)
     let drag: { x: number; center: number; moved: boolean; id: number } | null = null;
+    // shift-drag: a range to ask "what is this?" about
+    let sel: { x0: number; id: number } | null = null;
+    const showSel = (x: number | null) => {
+      if (x === null || !sel) {
+        selEl.style.display = "none";
+        return;
+      }
+      const rect = box.getBoundingClientRect();
+      const [a, b] = [sel.x0, x].sort((p, q) => p - q);
+      selEl.style.display = "";
+      selEl.style.left = `${a - rect.left}px`;
+      selEl.style.width = `${Math.max(2, b - a)}px`;
+    };
     const freqAt = (clientX: number) => {
       const v = view();
       if (!v) return null;
@@ -371,6 +386,13 @@ export function Pane() {
     const down = (e: PointerEvent) => {
       const s = st.value;
       if (!s || e.button !== 0) return;
+      if (e.shiftKey && e.pointerType !== "touch") {
+        sel = { x0: e.clientX, id: e.pointerId };
+        (e.currentTarget as Element).setPointerCapture(e.pointerId);
+        showGhost(null);
+        showSel(e.clientX);
+        return;
+      }
       if (e.pointerType === "touch") {
         fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
         if (fingers.size === 2) {
@@ -406,6 +428,10 @@ export function Pane() {
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
     const move = (e: PointerEvent) => {
+      if (sel && e.pointerId === sel.id) {
+        showSel(e.clientX);
+        return;
+      }
       if (fingers.has(e.pointerId)) fingers.set(e.pointerId, { x: e.clientX, y: e.clientY });
       if (pinch && fingers.size === 2) {
         const s = st.value;
@@ -454,6 +480,21 @@ export function Pane() {
       setView({ ...s.wf, center_hz: center });
     };
     const up = (e: PointerEvent) => {
+      if (sel && e.pointerId === sel.id) {
+        const x0 = sel.x0;
+        const a = freqAt(x0);
+        const b = freqAt(e.clientX);
+        sel = null;
+        showSel(null);
+        if (a !== null && b !== null) {
+          // a shift-click: the 300 Hz around it (the signal's extent is
+          // found within)
+          const c = (a + b) / 2;
+          const [lo, hi] = Math.abs(e.clientX - x0) < 4 ? [c - 150, c + 150] : [Math.min(a, b), Math.max(a, b)];
+          whatIs(lo, hi);
+        }
+        return;
+      }
       fingers.delete(e.pointerId);
       if (fingers.size < 2) pinch = null;
       const s = st.value;
@@ -494,6 +535,8 @@ export function Pane() {
       c.addEventListener("pointerup", up);
       c.addEventListener("pointercancel", (e) => {
         drag = null;
+        sel = null;
+        showSel(null);
         fingers.delete(e.pointerId);
         if (fingers.size < 2) pinch = null;
       });
@@ -526,6 +569,7 @@ export function Pane() {
       <canvas class="waterfall" ref={wfRef} role="img" aria-label={t("Waterfall: signal strength over frequency and time")} />
       <canvas class="wf-ticks" ref={ticksRef} aria-hidden="true" />
       <div class="pane-error" role="alert" ref={errRef} />
+      <div class="wf-sel" ref={selRef} style={{ display: "none" }} />
       <div class="ghost" ref={ghostRef} style={{ display: "none" }}>
         <span />
       </div>

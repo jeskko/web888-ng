@@ -715,7 +715,7 @@ msgstr "Neues Passwort"
 msgid "New password again"
 msgstr "Neues Passwort wiederholen"
 
-#: src/admin/admin.tsx:884
+#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:87 src/ctl/sigid.tsx:104
 msgid "Again"
 msgstr "Wiederholen"
 
@@ -1452,7 +1452,7 @@ msgid "station"
 msgstr "Sender"
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
-#: src/admin/clock.tsx:327
+#: src/admin/clock.tsx:327 src/sigdesc.ts:334
 msgid "SNR"
 msgstr "SNR"
 
@@ -1662,7 +1662,7 @@ msgstr "kein Textfeld"
 msgid "Audio spectrum"
 msgstr "Audiospektrum"
 
-#: src/ctl/afspec.tsx:155 src/ctl/afspec.tsx:155 src/ctl/map.tsx:614 src/ctl/map.tsx:614 src/ctl/mobile.tsx:232 src/ctl/spots.tsx:82 src/ctl/spots.tsx:82
+#: src/ctl/afspec.tsx:155 src/ctl/afspec.tsx:155 src/ctl/map.tsx:614 src/ctl/map.tsx:614 src/ctl/mobile.tsx:232 src/ctl/sigid.tsx:78 src/ctl/sigid.tsx:78 src/ctl/spots.tsx:82 src/ctl/spots.tsx:82
 msgid "Close"
 msgstr "Schließen"
 
@@ -3054,30 +3054,38 @@ msgid "Step the dial"
 msgstr "Abstimmfrequenz verstellen"
 
 #: src/ctl/keys.tsx:33
+msgid "Shift+drag, shift+click"
+msgstr "Umschalt+Ziehen, Umschalt+Klick"
+
+#: src/ctl/keys.tsx:33
+msgid "What is this? A closer look at the signals in that range (tunes there if needed)"
+msgstr "Was ist das? Ein genauerer Blick auf die Signale in diesem Bereich (stimmt bei Bedarf dorthin ab)"
+
+#: src/ctl/keys.tsx:34
 msgid "Wheel over a digit"
 msgstr "Mausrad über einer Ziffer"
 
-#: src/ctl/keys.tsx:33
+#: src/ctl/keys.tsx:34
 msgid "Step that digit; click the dial to type a frequency (7074, 7.074M)"
 msgstr "Diese Ziffer verstellen; Klick auf die Frequenzanzeige, um eine Frequenz einzutippen (7074, 7.074M)"
 
-#: src/ctl/keys.tsx:34
+#: src/ctl/keys.tsx:35
 msgid "Click a marker, spot or label"
 msgstr "Klick auf eine Markierung, einen Spot oder eine Beschriftung"
 
-#: src/ctl/keys.tsx:34
+#: src/ctl/keys.tsx:35
 msgid "Tune to it, or listen along with that user"
 msgstr "Darauf abstimmen oder bei diesem Nutzer mithören"
 
-#: src/ctl/keys.tsx:73 src/ctl/keys.tsx:75
+#: src/ctl/keys.tsx:74 src/ctl/keys.tsx:76
 msgid "Keys"
 msgstr "Tasten"
 
-#: src/ctl/keys.tsx:79
+#: src/ctl/keys.tsx:80
 msgid "Mouse and touch"
 msgstr "Maus und Touch"
 
-#: src/ctl/keys.tsx:83
+#: src/ctl/keys.tsx:84
 msgid "Any key or a click closes this."
 msgstr "Eine beliebige Taste oder ein Klick schließt dies."
 
@@ -3662,45 +3670,92 @@ msgstr "Die Signale im Durchlassbereich erkennen (CW, RTTY, FT8, SSTV, Fax, Spra
 msgid "{hz} Hz audio, {width} Hz wide; {classes}"
 msgstr "{hz} Hz Audio, {width} Hz breit; {classes}"
 
-#: src/ctl/sigid.tsx:49
+#: src/ctl/sigid.tsx:48
+msgid "What is this? A closer look: its width, tones, keying, symbol rate and frames, measured and explained"
+msgstr "Was ist das? Ein genauerer Blick: Breite, Töne, Tastung, Symbolrate und Rahmen, gemessen und erklärt"
+
+#: src/ctl/sigid.tsx:48 src/ctl/sigid.tsx:74
+msgid "What is this?"
+msgstr "Was ist das?"
+
+#: src/ctl/sigid.tsx:52
 msgid "Tune to it"
 msgstr "Darauf abstimmen"
 
-#: src/ctl/sigid.tsx:49
+#: src/ctl/sigid.tsx:52
 msgid "Open the {mode} decoder"
 msgstr "Den {mode}-Dekoder öffnen"
 
-#: src/ctl/sigid.tsx:50
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
 msgid "Tune"
 msgstr "Abstimmen"
 
-#: src/ctl/sigid.tsx:50
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
 msgid "Decode"
 msgstr "Dekodieren"
 
-#: src/ctl/sigid.tsx:66
+#. how sure the "what is this?" answer is
+#: src/ctl/sigid.tsx:62
+msgid "the figures fit it"
+msgstr "die Messwerte passen"
+
+#. how sure the "what is this?" answer is
+#: src/ctl/sigid.tsx:62
+msgid "likely"
+msgstr "wahrscheinlich"
+
+#. how sure the "what is this?" answer is
+#: src/ctl/sigid.tsx:62
+msgid "unsure"
+msgstr "unsicher"
+
+#: src/ctl/sigid.tsx:83
+msgid "Tuned to it; listening for {n} s…"
+msgstr "Abgestimmt; Messung läuft noch {n} s…"
+
+#: src/ctl/sigid.tsx:83
+msgid "Listening for {n} s…"
+msgstr "Messung läuft noch {n} s…"
+
+#: src/ctl/sigid.tsx:86
+msgid "Nothing stands out of the noise there."
+msgstr "Dort hebt sich nichts aus dem Rauschen ab."
+
+#: src/ctl/sigid.tsx:103
+msgid "Measure it again from the next 4 seconds"
+msgstr "Erneut aus den nächsten 4 Sekunden messen"
+
+#: src/ctl/sigid.tsx:108
+msgid "Measured"
+msgstr "Messwerte"
+
+#: src/ctl/sigid.tsx:134
 msgid "Signals"
 msgstr "Signale"
 
-#: src/ctl/sigid.tsx:68 src/ctl/sigid.tsx:68
+#: src/ctl/sigid.tsx:136 src/ctl/sigid.tsx:136
 msgid "Stop identifying"
 msgstr "Erkennung beenden"
 
-#: src/ctl/sigid.tsx:74
+#: src/ctl/sigid.tsx:143
 msgid "Signals are identified in CW, USB and LSB."
 msgstr "Signale werden in CW, USB und LSB erkannt."
 
-#: src/ctl/sigid.tsx:76
+#: src/ctl/sigid.tsx:145
 msgid "Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once."
 msgstr "Noch nichts: Jedes Signal im Durchlassbereich wird gefunden und der Reihe nach aus den letzten 4 Sekunden Audio erkannt, eines alle 2 s. Ein breiter Durchlassbereich (USB, 3 kHz) zeigt mehrere gleichzeitig."
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:152
 msgid "Looks like"
 msgstr "Sieht aus wie"
 
-#: src/ctl/sigid.tsx:94
+#: src/ctl/sigid.tsx:163
 msgid "Trained on synthetic signals; a guess, not a decode."
 msgstr "Mit synthetischen Signalen trainiert; eine Vermutung, keine Dekodierung."
+
+#: src/ctl/sigid.tsx:164
+msgid "For a closer look at one signal: its ? button, or shift-drag across it on the waterfall."
+msgstr "Genauerer Blick auf ein Signal: seine ?-Schaltfläche, oder mit Umschalt im Wasserfall darüber ziehen."
 
 #: src/ctl/spots.tsx:19
 msgid "Both"
@@ -4245,6 +4300,248 @@ msgstr "Sonderdienst"
 msgid "no message on hand"
 msgstr "keine Nachricht vorliegend"
 
+#. SITOR-B: the maritime FEC teleprinter mode NAVTEX uses; Bd = baud
+#: src/sigdesc.ts:170
+msgid "SITOR-B / NAVTEX (100 Bd, 170 Hz shift)"
+msgstr "SITOR-B / NAVTEX (100 Bd, 170 Hz Shift)"
+
+#. the German weather service's teleprinter broadcasts
+#: src/sigdesc.ts:173
+msgid "RTTY 50 Bd, 450 Hz shift (as the DWD weather broadcasts)"
+msgstr "RTTY 50 Bd, 450 Hz Shift (wie die Wettersendungen des DWD)"
+
+#: src/sigdesc.ts:174
+msgid "RTTY {baud} Bd, {shift} Hz shift"
+msgstr "RTTY {baud} Bd, {shift} Hz Shift"
+
+#: src/sigdesc.ts:176
+msgid "ASCII teleprinter, {baud} Bd, {shift} Hz shift"
+msgstr "ASCII-Fernschreiben, {baud} Bd, {shift} Hz Shift"
+
+#. HF fax: weather charts sent by radio; black and white are two frequencies 800 Hz apart
+#: src/sigdesc.ts:180
+msgid "HF fax (black and white 800 Hz apart)"
+msgstr "KW-Fax (Schwarz und Weiß 800 Hz auseinander)"
+
+#. 2G ALE: automatic link establishment, MIL-STD-188-141; 8-FSK = eight tones
+#: src/sigdesc.ts:183
+msgid "2G ALE (8-FSK, 250 Hz apart, 125 Bd)"
+msgstr "2G ALE (8-FSK, 250 Hz Abstand, 125 Bd)"
+
+#: src/sigdesc.ts:184
+msgid "HFDL (1800 Bd PSK, aircraft data link)"
+msgstr "HFDL (1800 Bd PSK, Datenfunk der Luftfahrt)"
+
+#: src/sigdesc.ts:186
+msgid "STANAG 4285 (2400 Bd PSK, 106.7 ms frames)"
+msgstr "STANAG 4285 (2400 Bd PSK, 106,7-ms-Rahmen)"
+
+#. serial-tone: one carrier, fast PSK symbols (MIL-STD-188-110A, STANAG 4285...)
+#: src/sigdesc.ts:189
+msgid "2400 Bd serial-tone PSK modem (as MIL-STD-188-110A)"
+msgstr "2400-Bd-Einträger-PSK-Modem (wie MIL-STD-188-110A)"
+
+#: src/sigdesc.ts:196
+msgid "{mode} (BPSK, {baud} Bd)"
+msgstr "{mode} (BPSK, {baud} Bd)"
+
+#. CW = Morse; WPM = words per minute
+#: src/sigdesc.ts:201
+msgid "CW (Morse), about {wpm} WPM"
+msgstr "CW (Morse), etwa {wpm} WPM"
+
+#: src/sigdesc.ts:203
+msgid "An unmodulated carrier"
+msgstr "Ein unmodulierter Träger"
+
+#: src/sigdesc.ts:204
+msgid "AM (a carrier with both sidebands)"
+msgstr "AM (ein Träger mit beiden Seitenbändern)"
+
+#: src/sigdesc.ts:205
+msgid "A carrier with sidebands on one side (AM heard in SSB?)"
+msgstr "Ein Träger mit Seitenband nur auf einer Seite (AM in SSB gehört?)"
+
+#: src/sigdesc.ts:206
+msgid "Speech (SSB voice)"
+msgstr "Sprache (SSB)"
+
+#: src/sigdesc.ts:208
+msgid "Two-tone FSK, {shift} Hz shift"
+msgstr "Zweiton-FSK, {shift} Hz Shift"
+
+#: src/sigdesc.ts:210
+msgid "{n} tones {spacing} Hz apart (MFSK)"
+msgstr "{n} Töne im Abstand von {spacing} Hz (MFSK)"
+
+#: src/sigdesc.ts:212
+msgid "{psk} phase modulation"
+msgstr "{psk}-Phasenmodulation"
+
+#: src/sigdesc.ts:214
+msgid "Pulses, {rate} a second"
+msgstr "Pulse, {rate} pro Sekunde"
+
+#: src/sigdesc.ts:268
+msgid "The identifier guessed {mode} ({p} %), but the figures fit this better."
+msgstr "Die Erkennung tippte auf {mode} ({p} %), aber die Messwerte passen besser hierzu."
+
+#: src/sigdesc.ts:278 src/sigdesc.ts:283
+msgid "The identifier guessed {mode}, which the figures don't bear out."
+msgstr "Die Erkennung tippte auf {mode}, was die Messwerte nicht bestätigen."
+
+#: src/sigdesc.ts:280
+msgid "{a} or {b}?"
+msgstr "{a} oder {b}?"
+
+#: src/sigdesc.ts:280
+msgid "{mode}?"
+msgstr "{mode}?"
+
+#: src/sigdesc.ts:285
+msgid "Something unknown"
+msgstr "Etwas Unbekanntes"
+
+#: src/sigdesc.ts:297
+msgid "{n} kHz"
+msgstr "{n} kHz"
+
+#: src/sigdesc.ts:297
+msgid "{n} Hz"
+msgstr "{n} Hz"
+
+#: src/sigdesc.ts:300
+msgid "It fills the passband: widen the passband to see its edges (its width and SNR here are only a lower bound)."
+msgstr "Es füllt den Durchlassbereich: verbreitern Sie ihn, um seine Ränder zu sehen (Breite und SNR sind hier nur Untergrenzen)."
+
+#: src/sigdesc.ts:301
+msgid "A narrow signal at {khz} kHz, {snr} dB over the noise."
+msgstr "Ein schmales Signal auf {khz} kHz, {snr} dB über dem Rauschen."
+
+#: src/sigdesc.ts:302
+msgid "About {width} wide around {khz} kHz, {snr} dB over the noise."
+msgstr "Etwa {width} breit um {khz} kHz, {snr} dB über dem Rauschen."
+
+#: src/sigdesc.ts:303
+msgid "It is weak: the figures below are rough."
+msgstr "Es ist schwach: die Werte unten sind grob."
+
+#: src/sigdesc.ts:305
+msgid "Keyed on and off: on {duty} % of the time, the shortest elements about {ms} ms."
+msgstr "Ein- und ausgetastet: {duty} % der Zeit an, die kürzesten Elemente etwa {ms} ms."
+
+#: src/sigdesc.ts:306
+msgid "In bursts: on {duty} % of the time."
+msgstr "In Bursts: {duty} % der Zeit an."
+
+#: src/sigdesc.ts:307
+msgid "On {duty} % of the time."
+msgstr "{duty} % der Zeit an."
+
+#: src/sigdesc.ts:308
+msgid "Its level rises and falls at syllable rates, as speech does."
+msgstr "Sein Pegel steigt und fällt im Silbentakt, wie bei Sprache."
+
+#: src/sigdesc.ts:309
+msgid "Its level stays constant, as FM, FSK or a carrier."
+msgstr "Sein Pegel bleibt konstant, wie bei FM, FSK oder einem Träger."
+
+#: src/sigdesc.ts:311
+msgid "A carrier with sidebands on both sides: AM."
+msgstr "Ein Träger mit Seitenbändern auf beiden Seiten: AM."
+
+#: src/sigdesc.ts:313
+msgid "A carrier with sidebands on one side only: AM heard through an SSB filter (tune in AM to hear it), or a carrier beside SSB."
+msgstr "Ein Träger mit Seitenband nur auf einer Seite: AM durch ein SSB-Filter gehört (stimmen Sie in AM ab, um es zu hören), oder ein Träger neben SSB."
+
+#: src/sigdesc.ts:314
+msgid "It shifts between two tones {shift} Hz apart."
+msgstr "Es wechselt zwischen zwei Tönen im Abstand von {shift} Hz."
+
+#: src/sigdesc.ts:315
+msgid "{n} tones on a {spacing} Hz grid."
+msgstr "{n} Töne im {spacing}-Hz-Raster."
+
+#: src/sigdesc.ts:320
+msgid "Symbols at {baud} Bd."
+msgstr "Symbole mit {baud} Bd."
+
+#: src/sigdesc.ts:321
+msgid "Phase modulation with {k} phases ({psk})."
+msgstr "Phasenmodulation mit {k} Phasen ({psk})."
+
+#: src/sigdesc.ts:322
+msgid "A pattern repeats every {ms} ms (frames or probe sequences)."
+msgstr "Ein Muster wiederholt sich alle {ms} ms (Rahmen oder Testsequenzen)."
+
+#: src/sigdesc.ts:323
+msgid "Pulses every {ms} ms ({rate} a second)."
+msgstr "Pulse alle {ms} ms ({rate} pro Sekunde)."
+
+#: src/sigdesc.ts:326
+msgid "Drifting {rate} Hz a second."
+msgstr "Driftet {rate} Hz pro Sekunde."
+
+#: src/sigdesc.ts:332
+msgid "Centre"
+msgstr "Mitte"
+
+#: src/sigdesc.ts:333
+msgid "Width"
+msgstr "Breite"
+
+#: src/sigdesc.ts:333
+msgid "{width} ({w90} holds 90 % of the power)"
+msgstr "{width} ({w90} enthalten 90 % der Leistung)"
+
+#: src/sigdesc.ts:335
+msgid "Time on"
+msgstr "Aktiv"
+
+#: src/sigdesc.ts:337
+msgid "Tones"
+msgstr "Töne"
+
+#: src/sigdesc.ts:338
+msgid "Envelope line"
+msgstr "Hüllkurvenlinie"
+
+#: src/sigdesc.ts:339
+msgid "Frequency-change line"
+msgstr "Frequenzwechsel-Linie"
+
+#: src/sigdesc.ts:340
+msgid "Repeats"
+msgstr "Wiederholt sich"
+
+#: src/sigdesc.ts:341
+msgid "Envelope repeats"
+msgstr "Hüllkurve wiederholt sich"
+
+#: src/sigdesc.ts:342
+msgid "Carrier share"
+msgstr "Trägeranteil"
+
+#: src/sigdesc.ts:343
+msgid "Identifier"
+msgstr "Erkennung"
+
+#: src/sigdesc.ts:355
+msgid "In the {band} amateur band, its {use} segment."
+msgstr "Im Amateurfunkband {band}, im Segment {use}."
+
+#: src/sigdesc.ts:356
+msgid "In the {band} amateur band."
+msgstr "Im Amateurfunkband {band}."
+
+#: src/sigdesc.ts:357
+msgid "In the {name} band ({service})."
+msgstr "Im Band {name} ({service})."
+
+#: src/sigdesc.ts:366
+msgid "Listed near it: {list}."
+msgstr "In der Nähe verzeichnet: {list}."
+
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
 #: src/sigid.ts:35
 msgid "nothing recognisable at this frequency"
@@ -4334,43 +4631,43 @@ msgstr "Überhorizontradar oder Ionosonde: Sweeps oder Pulse, 5- bis 60-mal pro 
 msgid "aircraft data link, 1800 Bd PSK bursts"
 msgstr "Flugzeug-Datenfunk, 1800-Bd-PSK-Bursts"
 
-#: src/state.ts:164
+#: src/state.ts:165
 msgid "password needed"
 msgstr "Passwort erforderlich"
 
-#: src/state.ts:188
+#: src/state.ts:189
 msgid "login failed ({status})"
 msgstr "Anmeldung fehlgeschlagen ({status})"
 
-#: src/state.ts:717 src/state.ts:2180
+#: src/state.ts:718 src/state.ts:2247
 msgid "nothing was received"
 msgstr "es wurde nichts empfangen"
 
-#: src/state.ts:727
+#: src/state.ts:728
 msgid ", {s} s lost (zeros)"
 msgstr ", {s} s verloren (Nullen)"
 
-#: src/state.ts:728
+#: src/state.ts:729
 msgid "{name} ({s} s{lost})"
 msgstr "{name} ({s} s{lost})"
 
-#: src/state.ts:996
+#: src/state.ts:997
 msgid "named by the clock"
 msgstr "nach der Uhr benannt"
 
-#: src/state.ts:2180
+#: src/state.ts:2247
 msgid "only silence was heard"
 msgstr "es war nur Stille zu hören"
 
-#: src/state.ts:2190
+#: src/state.ts:2257
 msgid ", {s} s of silence left out"
 msgstr ", {s} s Stille ausgelassen"
 
-#: src/state.ts:2191
+#: src/state.ts:2258
 msgid "; ended when the audio format changed"
 msgstr "; beendet, als sich das Audioformat änderte"
 
-#: src/state.ts:2192
+#: src/state.ts:2259
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
@@ -4440,35 +4737,35 @@ msgstr "{name}: seinen Träger ({khz} kHz) in USB, LSB oder CW in den Durchlassb
 msgid "No time station in the passband: pick one to tune to."
 msgstr "Keine Zeitzeichenstation im Durchlassbereich: Wählen Sie eine zum Abstimmen."
 
-#: src/view/pane.tsx:65
+#: src/view/pane.tsx:67
 msgid "Waterfall unavailable: {why}"
 msgstr "Wasserfall nicht verfügbar: {why}"
 
-#: src/view/pane.tsx:429
+#: src/view/pane.tsx:455
 msgid "{mode} skimmer, dial {khz} kHz{waiting}: click to tune there"
 msgstr "{mode}-Skimmer, Abstimmfrequenz {khz} kHz{waiting}: Klicken zum Abstimmen"
 
-#: src/view/pane.tsx:432
+#: src/view/pane.tsx:458
 msgid " (waiting for a channel)"
 msgstr " (wartet auf einen Kanal)"
 
-#: src/view/pane.tsx:435
+#: src/view/pane.tsx:461
 msgid "{khz} kHz {mode}"
 msgstr "{khz} kHz {mode}"
 
-#: src/view/pane.tsx:435
+#: src/view/pane.tsx:461
 msgid "click to tune there"
 msgstr "Klicken zum Abstimmen"
 
-#: src/view/pane.tsx:435
+#: src/view/pane.tsx:461
 msgid "click to listen along"
 msgstr "Klicken zum Mithören"
 
-#: src/view/pane.tsx:525
+#: src/view/pane.tsx:568
 msgid "Spectrum, frequency scale and labels (the labels near the dial are also listed as text)"
 msgstr "Spektrum, Frequenzskala und Beschriftungen (die Beschriftungen nahe der Abstimmfrequenz gibt es auch als Text)"
 
-#: src/view/pane.tsx:526
+#: src/view/pane.tsx:569
 msgid "Waterfall: signal strength over frequency and time"
 msgstr "Wasserfall: Signalstärke über Frequenz und Zeit"
 

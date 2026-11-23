@@ -153,6 +153,17 @@ button.link { background: none; border: 0; padding: 0; color: var(--accent); tex
 .spots-list thead th { position: sticky; top: 0; background: var(--panel); padding-top: 4px; }
 .spots-bar label { display: flex; align-items: center; gap: 3px; white-space: nowrap; }
 .digi-status { margin: 6px 0 !important; }
+.sig-ask { margin: 8px 0; padding: 0 8px 6px; border: 1px solid var(--line); border-radius: 6px; }
+.sig-ask-bar { display: flex; align-items: center; gap: 6px; padding-top: 6px; }
+.sig-ask-bar .close { margin-left: auto; padding: 2px 8px; }
+.sig-ask p { margin: 6px 0; }
+.sig-ask-title strong { font-size: 1rem; }
+.sig-ask-title .sure { color: var(--ok); }
+.sig-ask-title .unsure { color: var(--warn); }
+.sig-ask-do { display: flex; gap: 6px; margin: 6px 0; }
+.sig-facts th { text-align: left; font-weight: 400; color: var(--dim); padding-right: 8px; vertical-align: top; }
+.sig-facts td { overflow-wrap: anywhere; }
+.wf-sel { position: absolute; top: 0; bottom: 0; background: color-mix(in srgb, var(--accent) 22%, transparent); border-left: 1px solid var(--accent); border-right: 1px solid var(--accent); pointer-events: none; }
 .spots-list td.msg { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: normal; overflow-wrap: anywhere; }
 .spots-list tbody tr { cursor: pointer; }
 .spots-list tr.dx td.msg { color: #ffa94d; }

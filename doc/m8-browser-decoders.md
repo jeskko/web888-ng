@@ -705,6 +705,64 @@ still fax (76 of 303 windows); two steady tones and a regular tick are
 what a black-and-white fax looks like at this resolution. Weak SSB in USB
 audio is still unsure (20-35 %).
 
+### 5.3.1 "What is this?" (2026-11-23, phase 1)
+
+A closer look at one signal, explained in a few sentences: shift-drag
+(or shift-click) across it on the waterfall, or its **?** in the ID
+panel. The receiver is retuned (the passband widened, up to 5 kHz) when
+the range isn't in the audio; 4.1 s of audio later the panel shows a
+headline (the mode, how sure), what the signal looks like and why, where
+it is (the band plan's band or segment, the labels near it), Decode/Tune,
+and the measured figures.
+
+* **Measurements** (`crates/sigid/src/measure.rs`, deterministic DSP on
+  the scanner's 4.096 s of audio): the floor (10th percentile of an
+  85-ms spectrogram over time and frequency, so speech pauses and gaps
+  between bursts count; `fills` when the signal covers the passband and
+  no floor can be seen); the extent over the floor, centre, 90 % power
+  width and SNR; keying (time on, bursts, shortest elements), level
+  variation in 100-ms blocks (fading left out) and its share at syllable
+  rates; tones (peaks with 6 dB prominence) and their grid; the strongest
+  line's share and the sideband power on each side of it; the symbol
+  rate from lines in the envelope's spectrum (PSK, filtered modems) or in
+  the transitions of a two-tone discriminator ((a − b)/(a + b) of each
+  tone through a moving average of 1/shift: selective fading cancels)
+  or the instantaneous frequency (MFSK), with the shortest runs deciding
+  the multiple (async RTTY's 1.5 stop bits put its transition line at
+  twice the rate); the PSK order from the lowest power of the signal
+  that shows a line; repetition periods of the signal (|R|, beats of its
+  tones excluded) and of its envelope; drift.
+* **Text** (`ui/src/sigdesc.ts`, pure, tested on real analyses in
+  `ui/test/fixtures/sigdesc.json`): features from the figures (carrier,
+  keyed, AM, carrier with one sideband, speech, two-tone FSK, MFSK, PSK,
+  pulses), matched against known signatures (RTTY rates and shifts, the
+  DWD's 50 Bd/450 Hz, SITOR-B, ASCII, fax's 800 Hz, 2G ALE, HFDL, 2400 Bd
+  serial-tone, STANAG 4285's 106.7 ms frame, PSK31/63/125, CW speed),
+  then checked against the identifier's top two: agreeing is "the figures
+  fit it"; an exact match it didn't name is said, with its guess; a guess
+  the figures contradict (AM without a carrier, a carrier that is keyed)
+  is said not to be borne out. A matched mode states its own symbol
+  rate, or none (fax, CW); a measured rate that doesn't fit is left out.
+  Through i18n (fi, sv, de).
+
+Results. Synthetic signals from `modes.py` (three seeds at 15 and 3 dB
+in 2500 Hz): RTTY/SITOR rate and shift right on all six, PSK31 and
+PSK125 rate and BPSK, CW ~20 WPM, HFDL 1800 Bd, MIL-110A 2400 Bd,
+STANAG 4285's frame at both SNRs, ALE's 250 Hz grid (the wide ones in a
+100-4900 Hz passband; in 200-2800 Hz they fill it, and say so). On air
+(the 60 s recording of 2026-10-22, in the page): DWD 10100.8 kHz "RTTY
+50 Bd, 450 Hz shift" with 443-446 Hz measured through selective fading;
+AM broadcasts (carrier with both sidebands; heard in USB with the carrier
+at 300 Hz: one sideband, "AM heard in SSB?"); 20 m SSB QSOs the identifier
+called AM: no carrier, syllable-rate level, "Speech (SSB voice)".
+
+Left (next phases): wide signals need wider input than the audio (OTH
+radar, DRM, broadcast AM's both sidebands: IQ from the zoom or bins
+path); new classes (DRM, Olivia/Contestia/MFSK, PACTOR/Clover/VARA, Hell,
+3G ALE); calibrated "not sure" from the identifier; more real labelled
+windows. `measurewav` (crates/sigid) and `anjson` (crates/sigid-wasm)
+examples print the figures and the page's JSON for a WAV.
+
 ## 6. Wide skimming (item 9): done (2026-11-15)
 
 The audio is one 12 kS/s channel (±5 kHz at most); the channelizer's

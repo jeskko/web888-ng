@@ -28,6 +28,7 @@
 // index loops: the layers read as their equations
 #![allow(clippy::needless_range_loop)]
 
+pub mod measure;
 pub mod scan;
 
 use num_complex::Complex32;
