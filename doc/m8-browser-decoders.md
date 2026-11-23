@@ -763,6 +763,37 @@ path); new classes (DRM, Olivia/Contestia/MFSK, PACTOR/Clover/VARA, Hell,
 windows. `measurewav` (crates/sigid) and `anjson` (crates/sigid-wasm)
 examples print the figures and the page's JSON for a WAV.
 
+### 5.3.2 Phase 2 (2026-11-23): wide look, more modes, radars
+
+* **Wide look**: the channel's IQ (±10 kHz at 24 kS/s where offered,
+  else ±5 kHz) for 4 s, then the tuning back (`measure_iq`,
+  `analyse_iq`, `sig_iq_*`); for ranges wider than the audio and from
+  every answer's Wide look button.
+* **More figures**: the tone grid frame by frame (MFSK, parallel
+  carriers), FSK shift from the frequency track, noise-corrected
+  kurtosis (1 constant envelope, ~1.3 single-carrier PSK, 2 OFDM), the
+  OFDM symbol in |R|, keying depth, AM's mirrored sidebands, carriers
+  side by side, sweeps (slope along each burst or between flybacks, the
+  burst length, the rate), a noise floor from 85/21/5 ms frames (a sweep
+  lights all of a long one).
+* **Named by their figures**: DRM (mode from its symbol), Olivia/Contestia,
+  MFSK8-64, DominoEX/THOR, Feld Hell, PACTOR, MT63, the 39-tone modem,
+  3G ALE, Codan data and CHIRP, CLOVER 2000, Chinese-64 MFSK, CIS-36-50,
+  F01/F06, F11 (sigidwiki.com's figures, "fits ..."); radars and sounders
+  by pulsed or FMCW, sweeps a second, sweep width (slope x pulse, or slope
+  / rate) and direction: 29B6 'Kontayner' and its sounder, OTH-SW,
+  Podsolnukh, ROTHR, JORN, Chinese 'Foghorn' and 160 kHz radars, chirp
+  ionosondes (several fitting: all named).
+* **On air**: the 2026-10-22 recording's labelled windows 18/18 (DWD
+  RTTY, AM stations fading or with little modulation, FT8 crowd, weak
+  WSPR, weak LSB speech); the OTH radar on 7000 kHz (2026-11-15) "fits 29B6
+  'Kontayner'" in all three windows: 4 ms pulses 40 a second sweeping up at
+  3.51 MHz/s, ~14 kHz. A wide look on 7265 kHz in the page: two AM
+  stations side by side, both labels named.
+* Seven classes added to the identifier's generators (olivia, mfsk,
+  dominoex, hell, pactor, multitone, ale3g); `calibrate.py` for its
+  probabilities.
+
 ## 6. Wide skimming (item 9): done (2026-11-15)
 
 The audio is one 12 kS/s channel (±5 kHz at most); the channelizer's

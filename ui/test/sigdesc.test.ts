@@ -59,6 +59,26 @@ const iqCases: [string, RegExp, string | null][] = [
   ["amIq", /^AM/, "am"],
   ["drm", /^DRM digital broadcast \(OFDM, mode B, 21\.33 ms symbols\)$/, null],
 ];
+// radars and sounders (wide looks): on air (2026-11-15, 7000 kHz) and
+// made from sigidwiki.com's figures; where each was (MHz)
+const radarCases: [string, number, RegExp][] = [
+  ["radar_oth7000_300", 7.0, /^OTH radar: fits 29B6 'Kontayner'$/],
+  ["radar_k29b6_sounder", 12.0, /^OTH radar: fits 29B6 'Kontayner' sounder$/],
+  ["radar_othsw", 7.59, /^OTH radar: fits OTH-SW/],
+  ["radar_foghorn", 9.0, /Foghorn/],
+  ["radar_rothr", 9.0, /^OTH radar: fits ROTHR$/],
+  ["radar_cn160", 11.0, /fits the Chinese 160 kHz OTH radar$/],
+  ["radar_ionosonde", 5.0, /chirp ionosonde$/],
+];
+for (const [k, mhz, title] of radarCases) {
+  test(`sigdesc: ${k}`, () => {
+    const d = describe(an(k), { rf: (h: number) => mhz * 1e6 + h, plan: null, markers: [] });
+    assert.match(d.title, title, `${k}: ${d.title} | ${d.text.join(" ")}`);
+    assert.equal(d.cls, "radar");
+    assert.ok(d.text.some((x) => /kHz\/s/.test(x)), d.text.join(" "));
+  });
+}
+
 for (const [k, title, cls] of iqCases) {
   test(`sigdesc: ${k} (wide)`, () => {
     const d = describe(an(k), { rf: (h: number) => 7_240_000 + h, plan: null, markers: [] });

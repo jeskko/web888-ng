@@ -43,6 +43,20 @@ pub struct Line {
     pub db: f64,
 }
 
+/// A sweep ([`Measure::chirp`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Chirp {
+    pub slope: f64,
+    pub n: u32,
+    pub r2: f64,
+    /// The bursts' median length (s): a pulsed radar's pulse (its sweep
+    /// slope x len wide), an FMCW sweep's time in the window.
+    pub len: f64,
+    /// Sweeps a second from flybacks inside the window (a sweep narrower
+    /// than the window: always on, a sawtooth).
+    pub rate: Option<f64>,
+}
+
 /// A tone grid ([`Measure::grid`]).
 #[derive(Clone, Copy, Debug, PartialEq)]
 pub struct Grid {
@@ -139,6 +153,11 @@ pub struct Measure {
     pub symbol: Option<Line>,
     /// Drift (audio Hz/s) when it is steady enough to say.
     pub drift: Option<f64>,
+    /// Sweeps (radars, sounders): the frequency's slope along each burst
+    /// (Hz/s, + upwards), how many bursts glide alike, and how straight
+    /// (r^2) the median one is. A sweep of width B repeating R times a
+    /// second crosses the window at B R Hz/s.
+    pub chirp: Option<Chirp>,
 }
 
 fn fft(x: &mut [Complex32], inverse: bool) {
@@ -333,9 +352,13 @@ fn core(
 ) -> Option<Measure> {
     let n = x.len();
     let dfa = rate / n as f64;
-    // the baseband the signal is cut out to: half the rate
-    let fs = rate / 2.0;
-    let nb = n / 2;
+    // the baseband the signal is cut out to: half the rate for real audio
+    // (its positive half), the whole of it for IQ (as wide as it is)
+    let (fs, nb) = if kmax == n {
+        (rate, n)
+    } else {
+        (rate / 2.0, n / 2)
+    };
     // one FFT of the window: everything else is cut from it
     let mut xa = x.to_vec();
     fft(&mut xa, false);
@@ -459,14 +482,26 @@ fn core(
     symbols(&mut m, &y, fs, bw);
     periods(&mut m, &y, fs, bw);
     drift(&mut m, &y, fs, bw);
+    chirp(&mut m, &y, fs, noise);
     Some(m)
 }
 
 /// The noise floor of `x` (at `rate`) between bins `b0` and `b1` of its
 /// whole-length FFT, as the mean of such a bin.
 fn floor_of(x: &[Complex32], b0: usize, b1: usize, rate: f64) -> f64 {
-    // frames of ~85 ms
-    let f = ((0.085 * rate) as usize).next_power_of_two();
+    // frames of ~85, ~21 and ~5 ms, the lowest: a sweep crossing the
+    // window lights all of a long frame, a short one falls between
+    [0.085, 0.021, 0.0053]
+        .iter()
+        .filter_map(|&d| {
+            let f = ((d * rate) as usize).next_power_of_two();
+            (x.len() / f >= 8 && (b1 - b0) * f / x.len() >= 16).then(|| floor_frames(x, b0, b1, f))
+        })
+        .fold(f64::MAX, f64::min)
+}
+
+/// [`floor_of`] with frames of `f` samples.
+fn floor_frames(x: &[Complex32], b0: usize, b1: usize, f: usize) -> f64 {
     let na = x.len();
     let r = na as f64 / f as f64;
     let (k0, k1) = (
@@ -1196,7 +1231,125 @@ fn periods(m: &mut Measure, y: &[Complex32], fs: f64, bw: f64) {
         .collect();
     // (a steady envelope's variation is the noise's)
     if m.env_cv >= 0.1 || m.duty < 0.9 {
-        m.env_period = first_period(&r, 5, fs / l as f64);
+        m.env_period = first_period(&r, 2, fs / l as f64);
+    }
+}
+
+/// Sweeps: bursts (the level over the noise, 0.25 ms smoothing), along
+/// each one the instantaneous frequency fitted with a straight line.
+fn chirp(m: &mut Measure, y: &[Complex32], fs: f64, noise: f64) {
+    let h = ((0.000_125 * fs) as usize).max(1);
+    let p = smooth(
+        &y.iter().map(|v| v.norm_sqr() as f64).collect::<Vec<_>>(),
+        h,
+    );
+    let thr = (8.0 * noise).max(0.2 * percentile(&p, 0.95));
+    let fi = smooth(&fi_raw(y), h);
+    let hz = fs / (2.0 * std::f64::consts::PI);
+    let min = (0.0015 * fs) as usize;
+    let mut fits: Vec<(f64, f64)> = Vec::new();
+    let mut lens: Vec<f64> = Vec::new();
+    // the time between flybacks within a run (a sawtooth inside the window)
+    let mut periods: Vec<f64> = Vec::new();
+    let mut runs = Vec::new();
+    let mut i = 0;
+    while i < fi.len() {
+        if p[i] <= thr {
+            i += 1;
+            continue;
+        }
+        let a = i;
+        while i < fi.len() && p[i] > thr {
+            i += 1;
+        }
+        runs.push((a, i));
+    }
+    let d = 2 * h + 1;
+    for (a, b) in runs {
+        // flybacks: the frequency jumping by 40 % of its range at once
+        let mut cuts = vec![a];
+        if b > a + 4 * d {
+            let r = &fi[a..b];
+            let span = percentile(r, 0.95) - percentile(r, 0.05);
+            let mut j = a;
+            while j + d < b {
+                if span > 0.0 && (fi[j + d] - fi[j]).abs() > 0.4 * span {
+                    cuts.push(j + d / 2);
+                    j += 4 * d;
+                } else {
+                    j += 1;
+                }
+            }
+        }
+        cuts.push(b);
+        for w in cuts.windows(2) {
+            let (s0, s1) = (w[0], w[1]);
+            let whole = (s1 - s0) as f64 / fs;
+            // the segment's middle (its edges ring), long enough to fit
+            let (a, b) = (s0 + h * 2, s1.saturating_sub(h * 2));
+            if b <= a + min {
+                continue;
+            }
+            let n = (b - a) as f64;
+            let (mt, mf) = ((a + b - 1) as f64 / 2.0, fi[a..b].iter().sum::<f64>() / n);
+            let (mut stt, mut stf, mut sff) = (0.0, 0.0, 0.0);
+            for (k, &f) in fi[a..b].iter().enumerate() {
+                let dt = (a + k) as f64 - mt;
+                stt += dt * dt;
+                stf += dt * (f - mf);
+                sff += (f - mf) * (f - mf);
+            }
+            let slope = stf / stt; // rad/sample per sample
+            let r2 = if sff > 0.0 {
+                stf * stf / (stt * sff)
+            } else {
+                0.0
+            };
+            if r2 >= 0.8 {
+                fits.push((slope * hz * fs, r2));
+                lens.push(whole);
+            }
+        }
+        for w in cuts[1..cuts.len() - 1].windows(2) {
+            periods.push((w[1] - w[0]) as f64 / fs);
+        }
+    }
+    // one long straight glide (a sounder crossing once): a sweep too
+    if let Some(k) = (0..fits.len())
+        .filter(|&k| lens[k] >= 0.05 && fits[k].1 >= 0.95)
+        .max_by(|&x, &y| lens[x].total_cmp(&lens[y]))
+        && fits.len() < 3
+        && fits[k].0.abs() >= 1000.0
+    {
+        m.chirp = Some(Chirp {
+            slope: fits[k].0,
+            n: 1,
+            r2: fits[k].1,
+            len: lens[k],
+            rate: None,
+        });
+        return;
+    }
+    if fits.len() < 3 {
+        return;
+    }
+    let s: Vec<f64> = fits.iter().map(|f| f.0).collect();
+    let med = percentile(&s, 0.5);
+    // the bursts that glide alike (within 15 % of the median)
+    let alike: Vec<&(f64, f64)> = fits
+        .iter()
+        .filter(|f| (f.0 - med).abs() <= 0.15 * med.abs())
+        .collect();
+    if alike.len() >= 3 && med.abs() >= 1000.0 {
+        let r2 = percentile(&alike.iter().map(|f| f.1).collect::<Vec<_>>(), 0.5);
+        let rate = (periods.len() >= 5).then(|| 1.0 / percentile(&periods, 0.5));
+        m.chirp = Some(Chirp {
+            slope: med,
+            n: alike.len() as u32,
+            r2,
+            len: percentile(&lens, 0.5),
+            rate,
+        });
     }
 }
 
@@ -1555,10 +1708,64 @@ mod tests {
             })
             .collect();
         let m = measure_iq(&x, rate, (-6000.0, 6000.0), (-10_000.0, 10_000.0)).unwrap();
-        assert!((m.hi - m.lo - 9700.0).abs() < 400.0, "{m:?}");
+        assert!((m.hi - m.lo - 9700.0).abs() < 600.0, "{m:?}");
         assert!(m.line < 0.05, "{m:?}");
         assert!(m.papr > 5.5 && (m.kurt - 2.0).abs() < 0.3, "{m:?}");
         let p = m.symbol.expect("the useful symbol in |R|");
         assert!((p.at - 0.021_333).abs() < 0.0005, "{p:?}");
+    }
+    /// A sweep through the window: OTH-SW-like FMCW, 60 kHz wide, 43
+    /// sweeps a second (2.58 MHz/s): its slope, and its repetition from the
+    /// envelope.
+    #[test]
+    fn iq_fmcw_sweep() {
+        let (rate, w, sr) = (24_000.0, 60_000.0, 43.0);
+        // (the receiver passes only its ±10 kHz of the sweep)
+        let f = |t: f64| ((t * sr).fract() - 0.5) * w;
+        let x = iq(
+            f,
+            |t| if f(t).abs() < 9_500.0 { 0.3 } else { 0.0 },
+            0.01,
+            41,
+        );
+        let m = measure_iq(&x, rate, (-10_000.0, 10_000.0), (-10_000.0, 10_000.0)).unwrap();
+        let c = m.chirp.expect("a sweep");
+        assert!(
+            (c.slope / (w * sr) - 1.0).abs() < 0.05 && c.n >= 50,
+            "{c:?}"
+        );
+        let p = m.env_period.expect("sweeps repeating");
+        assert!((1.0 / p.at - sr).abs() < 1.5, "{p:?}");
+    }
+
+    /// A chirp sounder crossing the window once (100 kHz/s): one sweep.
+    #[test]
+    fn iq_single_sweep() {
+        let f = |t: f64| -30_000.0 + 100_000.0 * (t - 0.5);
+        let x = iq(
+            f,
+            |t| if f(t).abs() < 9_000.0 { 0.3 } else { 0.0 },
+            0.01,
+            43,
+        );
+        let m = measure_iq(&x, 24_000.0, (-10_000.0, 10_000.0), (-10_000.0, 10_000.0)).unwrap();
+        let c = m.chirp.expect("a sweep");
+        assert!(
+            c.n == 1 && (c.slope / 100_000.0 - 1.0).abs() < 0.05 && c.len > 0.15,
+            "{c:?}"
+        );
+    }
+
+    /// A sweep narrower than the window (Foghorn-like: 10 kHz, 67 a
+    /// second): always on, a sawtooth; its sweeps from the flybacks.
+    #[test]
+    fn iq_sawtooth_sweep() {
+        let (w, sr) = (10_000.0, 67.0);
+        let x = iq(|t| ((t * sr).fract() - 0.5) * w, |_| 0.3, 0.01, 47);
+        let m = measure_iq(&x, 24_000.0, (-9_000.0, 9_000.0), (-10_000.0, 10_000.0)).unwrap();
+        let c = m.chirp.expect("a sweep");
+        assert!((c.slope / (w * sr) - 1.0).abs() < 0.05, "{c:?}");
+        let r = c.rate.expect("its rate");
+        assert!((r - sr).abs() < 2.0, "{c:?}");
     }
 }

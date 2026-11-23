@@ -89,7 +89,8 @@ fn line(l: Option<Line>) -> String {
 /// The JSON of an analysis: audio Hz; `tones` [[hz, dB over the floor]]
 /// strongest first; `baudEnv`/`baudFreq` [Bd, dB the line stands out];
 /// `psk` [order, carrier offset Hz, line share]; `period`/`envPeriod`
-/// [s, correlation]; `top` the five likeliest classes.
+/// [s, correlation]; `chirp` [Hz/s, bursts, r2, burst s, sweeps/s from flybacks or null]; `top` the five
+/// likeliest classes.
 pub fn analysis_json(a: Option<&Analysis>) -> String {
     let Some(a) = a else {
         return "{\"an\":null}".into();
@@ -109,7 +110,7 @@ pub fn analysis_json(a: Option<&Analysis>) -> String {
         .collect();
     let opt = |v: Option<f64>| v.map_or("null".into(), num);
     format!(
-        "{{\"an\":{{\"lo\":{},\"hi\":{},\"centre\":{},\"bw90\":{},\"snr\":{},\"fills\":{},\"duty\":{},\"bursts\":{},\"onMean\":{},\"onShort\":{},\"depth\":{},\"envCv\":{},\"syllabic\":{},\"papr\":{},\"kurt\":{},\"tones\":[{}],\"spacing\":{},\"grid\":{},\"shift\":{},\"line\":{},\"lineAt\":{},\"sideLo\":{},\"sideHi\":{},\"mirror\":{},\"carriers\":[{}],\"baudEnv\":{},\"baudFreq\":{},\"psk\":{},\"period\":{},\"envPeriod\":{},\"symbol\":{},\"drift\":{},\"top\":[{}]}}}}",
+        "{{\"an\":{{\"lo\":{},\"hi\":{},\"centre\":{},\"bw90\":{},\"snr\":{},\"fills\":{},\"duty\":{},\"bursts\":{},\"onMean\":{},\"onShort\":{},\"depth\":{},\"envCv\":{},\"syllabic\":{},\"papr\":{},\"kurt\":{},\"tones\":[{}],\"spacing\":{},\"grid\":{},\"shift\":{},\"line\":{},\"lineAt\":{},\"sideLo\":{},\"sideHi\":{},\"mirror\":{},\"carriers\":[{}],\"baudEnv\":{},\"baudFreq\":{},\"psk\":{},\"period\":{},\"envPeriod\":{},\"symbol\":{},\"drift\":{},\"chirp\":{},\"top\":[{}]}}}}",
         num(m.lo),
         num(m.hi),
         num(m.centre),
@@ -157,6 +158,14 @@ pub fn analysis_json(a: Option<&Analysis>) -> String {
         line(m.env_period),
         line(m.symbol),
         opt(m.drift),
+        m.chirp.map_or("null".into(), |c| format!(
+            "[{},{},{},{},{}]",
+            num(c.slope),
+            c.n,
+            num(c.r2),
+            num(c.len),
+            c.rate.map_or("null".into(), num)
+        )),
         top.join(","),
     )
 }

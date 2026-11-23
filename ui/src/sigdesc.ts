@@ -63,6 +63,8 @@ export interface SigAn {
   /** A narrow |R| peak at 2-40 ms: OFDM's useful symbol [s, r]. */
   symbol?: [number, number] | null;
   drift: number | null;
+  /** A sweep: [Hz/s, bursts, r2, burst s, sweeps/s from flybacks]. */
+  chirp?: [number, number, number, number, number | null] | null;
   top: [string, number][];
 }
 
@@ -129,12 +131,61 @@ export interface Features {
   narrow: boolean;
   /** Carriers side by side (Hz as measured), strongest first. */
   carriers: number[];
+  /** A sweep: slope (Hz/s), repetitions a second (null: once), pulsed,
+   * its width (Hz: slope x pulse, or slope / rate). */
+  sweep: { slope: number; rate: number | null; pulsed: boolean; width: number | null; once: boolean } | null;
   /** Bursts: on fraction, mean burst (s). */
   duty: number;
   onMean: number;
 }
 
 const near = (x: number | null | undefined, v: number, tol: number) => x != null && Math.abs(x - v) <= tol * v;
+
+/** A sweep's figures: pulsed (on less than 60 % of the time, keyed down
+ * to the noise) its pulses each a sweep (slope x pulse wide), else FMCW
+ * crossing the window once a sweep (slope / rate wide). */
+function sweepOf(a: SigAn): Features["sweep"] {
+  const c = a.chirp;
+  if (!c) return null;
+  const once = c[1] <= 1;
+  // (flybacks only say the rate of a sweep that is always on: one inside
+  // the window)
+  const inside = c[4] != null && a.duty >= 0.9;
+  const rate = once ? null : inside ? c[4]! : a.envPeriod ? 1 / a.envPeriod[0] : c[1] / 4.096;
+  // a burst sweeping across all of a window it fills is a wider sweep
+  // crossing it, not a pulse
+  const crossing = a.fills && Math.abs(c[0]) * c[3] >= 0.85 * (a.hi - a.lo);
+  const pulsed = !once && !crossing && !inside && a.duty < 0.6 && (a.depth ?? 0) >= 15;
+  const width = once ? null : pulsed ? Math.abs(c[0]) * c[3] : rate ? Math.abs(c[0]) / rate : null;
+  return { slope: c[0], rate, pulsed, width, once };
+}
+
+/** HF radars and sounders by sigidwiki.com's figures (2026-11): pulsed
+ * or FMCW, sweeps a second, sweep width (Hz), direction, where. */
+const RADARS: { name: string; pulsed: boolean; rates: number[]; bw: [number, number]; dir?: 1 | -1; mhz?: [number, number] }[] = [
+  { name: "29B6 'Kontayner'", pulsed: true, rates: [40, 50, 25, 100], bw: [9e3, 20e3], dir: 1, mhz: [6.1, 32] },
+  { name: "29B6 'Kontayner' sounder", pulsed: true, rates: [10], bw: [8e3, 16e3], dir: -1, mhz: [6.1, 32] },
+  { name: "OTH-SW", pulsed: false, rates: [43, 86], bw: [35e3, 90e3], mhz: [6, 30] },
+  { name: "Podsolnukh 'Sunflower'", pulsed: false, rates: [20, 30, 43, 87], bw: [35e3, 65e3], mhz: [3.5, 8] },
+  { name: "ROTHR", pulsed: false, rates: [25, 32, 42], bw: [3e3, 110e3], mhz: [5, 28] },
+  { name: "JORN", pulsed: false, rates: [67], bw: [2.5e3, 65e3], mhz: [5.7, 33] },
+  { name: "Chinese 'Foghorn'", pulsed: false, rates: [42, 48, 50, 67, 83], bw: [8e3, 22e3], mhz: [6, 29] },
+  { name: "the Chinese 160 kHz OTH radar", pulsed: false, rates: [10], bw: [120e3, 400e3], mhz: [6, 29] },
+];
+
+/** The radars a sweep's figures fit (at `rf` Hz). */
+export function radarsFor(s: NonNullable<Features["sweep"]>, rf: number): string[] {
+  if (s.once || s.rate == null || s.width == null) return [];
+  return RADARS.filter(
+    (r) =>
+      r.pulsed === s.pulsed &&
+      r.rates.some((v) => near(s.rate, v, 0.04)) &&
+      s.width! >= r.bw[0] &&
+      s.width! <= r.bw[1] &&
+      (r.dir == null || Math.sign(s.slope) === r.dir) &&
+      (r.mhz == null || (rf >= r.mhz[0] * 1e6 && rf <= r.mhz[1] * 1e6)),
+  ).map((r) => r.name);
+}
 
 export function features(a: SigAn): Features {
   const width = a.hi - a.lo;
@@ -166,8 +217,10 @@ export function features(a: SigAn): Features {
   const papr = a.papr ?? 0;
   const constant = a.kurt != null && a.kurt > 0 ? a.kurt < 1.15 : papr < 3.5;
   const gaussian = a.kurt != null && a.kurt > 0 ? a.kurt >= 1.7 : papr >= 5.5;
-  const mfsk =
-    g && g[1] >= 4 && constant && !a.psk && !speech && !two && a.line < 0.5
+  const swept = !!a.chirp;
+  const mfsk = swept
+    ? null
+    : g && g[1] >= 4 && constant && !a.psk && !speech && !two && a.line < 0.5
       ? { n: g[1], spacing: g[0], changes: g[4] }
       : a.spacing != null && a.tones.length >= 3 && a.envCv < 0.25 && !two && !speech
         ? { n: a.tones.length, spacing: a.spacing, changes: null }
@@ -203,15 +256,16 @@ export function features(a: SigAn): Features {
     mfsk,
     baud: carrier || am || speech ? null : baud,
     pskOrder: a.psk?.[0] ?? null,
-    frame: speech ? null : (a.period?.[0] ?? null),
+    frame: speech || swept ? null : (a.period?.[0] ?? null),
     pulses: a.envPeriod && a.duty < 0.85 && !keyed ? a.envPeriod[0] : null,
-    steady: a.envCv < 0.1 && a.duty >= 0.9 && !keyed && a.line < 0.3,
+    steady: a.envCv < 0.1 && a.duty >= 0.9 && !keyed && a.line < 0.3 && !swept,
     dit: keyed ? a.onShort : null,
     width,
     fills: a.fills,
-    ofdm: (a.symbol ?? a.period) && a.line < 0.05 && gaussian && width >= 1500 && !speech && !two ? (a.symbol ?? a.period)![0] : null,
-    parallel:
-      g && g[1] >= 8 && gaussian && !speech && a.line < 0.3
+    ofdm: !a.chirp && (a.symbol ?? a.period) && a.line < 0.05 && gaussian && width >= 1500 && !speech && !two ? (a.symbol ?? a.period)![0] : null,
+    parallel: swept
+      ? null
+      : g && g[1] >= 8 && gaussian && !speech && a.line < 0.3
         ? { n: g[1], spacing: g[0] }
         : a.spacing != null && a.tones.length >= 8 && (a.envCv >= 0.25 || papr >= 4) && !speech && a.line < 0.3
           ? { n: a.tones.length, spacing: a.spacing }
@@ -221,6 +275,7 @@ export function features(a: SigAn): Features {
       .map(([h]) => h)
       .filter((h, i, all) => all.slice(0, i).every((o) => Math.abs(o - h) >= 1000)),
     narrow: a.bw90 <= 12 && !keyed && constant,
+    sweep: sweepOf(a),
     duty: a.duty,
     onMean: a.onMean,
   };
@@ -240,9 +295,21 @@ export interface Match {
 const RTTY_BAUD = [45.45, 50, 75];
 const RTTY_SHIFT = [85, 170, 200, 425, 450, 850];
 
-/** The modes the figures fit, most specific first. */
-export function matches(f: Features): Match[] {
+/** The modes the figures fit, most specific first (`rf`: where, Hz). */
+export function matches(f: Features, rf = 0): Match[] {
   const out: Match[] = [];
+  // radars and sounders, by their sweeps
+  if (f.sweep) {
+    const sw = f.sweep;
+    const fit = radarsFor(sw, rf);
+    if (sw.once && Math.abs(sw.slope) >= 20e3 && Math.abs(sw.slope) <= 1e6)
+      // i18n: a chirp ionosonde: sweeps the whole HF range once every few minutes to sound the ionosphere
+      out.push({ title: t("A single sweep at {rate} kHz/s: a chirp ionosonde", { rate: Math.round(Math.abs(sw.slope) / 1000) }), cls: "radar", exact: true, rate: null });
+    else if (fit.length)
+      out.push({ title: t("OTH radar: fits {names}", { names: fit.join(t(" or ")) }), cls: "radar", exact: true, rate: null });
+    else if (sw.rate != null)
+      out.push({ title: t("A sweeping radar or sounder ({rate} sweeps a second)", { rate: sw.rate.toFixed(1) }), cls: "radar", exact: false, rate: null });
+  }
   const b = f.baud;
   const n = (v: number) => (Math.abs(v - Math.round(v)) < 0.05 ? String(Math.round(v)) : v.toFixed(2));
   if (f.shift != null && b != null) {
@@ -455,7 +522,7 @@ function fits(c: SigClass, f: Features, a: SigAn, rf: number): boolean {
 /** The headline, how sure, the sentences and the figures. */
 export function describe(a: SigAn, ctx: DescCtx): Desc {
   const f = features(a);
-  const ms = matches(f);
+  const ms = matches(f, ctx.rf(a.centre));
   const top = a.top.filter(([c]) => c in CLASS_INFO).map(([c, p]) => ({ cls: c as SigClass, p }));
   const best = top[0];
   const label = (c: SigClass) => t(CLASS_INFO[c].label);
@@ -558,8 +625,26 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
   if (f.ofdm != null)
     text.push(t("Its amplitude is noise-like, as many carriers at once make it (OFDM), and a pattern repeats every {ms} ms: its symbols.", { ms: (1000 * f.ofdm).toFixed(2) }));
   else if (f.parallel) text.push(t("{n} carriers on a {spacing} Hz grid at once.", { n: f.parallel.n, spacing: f.parallel.spacing.toFixed(2) }));
-  if (f.frame != null && f.ofdm == null) text.push(t("A pattern repeats every {ms} ms (frames or probe sequences).", { ms: (1000 * f.frame).toFixed(f.frame < 0.1 ? 1 : 0) }));
-  if (f.pulses != null && chosen?.cls !== "pactor") text.push(t("Pulses every {ms} ms ({rate} a second).", { ms: (1000 * f.pulses).toFixed(1), rate: (1 / f.pulses).toFixed(1) }));
+  if (f.sweep) {
+    const sw = f.sweep;
+    const dir = sw.slope > 0 ? t("upward") : t("downward");
+    const k = (Math.abs(sw.slope) / 1000).toFixed(0);
+    if (sw.once) text.push(t("One sweep {dir} at {rate} kHz/s through the window.", { dir, rate: k }));
+    else if (sw.pulsed && sw.width != null)
+      text.push(
+        t("Pulses of {ms} ms, {n} a second, each sweeping {dir} at {rate} kHz/s: about {w} kHz wide.", {
+          ms: (1000 * (a.chirp?.[3] ?? 0)).toFixed(1),
+          n: sw.rate!.toFixed(1),
+          dir,
+          rate: k,
+          w: (sw.width / 1000).toFixed(0),
+        }),
+      );
+    else if (sw.width != null)
+      text.push(t("Sweeps {dir} at {rate} kHz/s, {n} a second: about {w} kHz wide.", { dir, rate: k, n: sw.rate!.toFixed(1), w: (sw.width / 1000).toFixed(0) }));
+  }
+  if (f.frame != null && f.ofdm == null && !f.sweep) text.push(t("A pattern repeats every {ms} ms (frames or probe sequences).", { ms: (1000 * f.frame).toFixed(f.frame < 0.1 ? 1 : 0) }));
+  if (f.pulses != null && chosen?.cls !== "pactor" && !f.sweep) text.push(t("Pulses every {ms} ms ({rate} a second).", { ms: (1000 * f.pulses).toFixed(1), rate: (1 / f.pulses).toFixed(1) }));
   if (a.drift != null) {
     const d = ctx.rf(a.centre + a.drift) - rf;
     text.push(t("Drifting {rate} Hz a second.", { rate: (d > 0 ? "+" : "") + d.toFixed(1) }));
