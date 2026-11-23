@@ -259,6 +259,24 @@ export function matches(f: Features): Match[] {
     else if (bd != null && sh != null) out.push({ title: t("RTTY {baud} Bd, {shift} Hz shift", { baud: n(bd), shift: sh }), cls: "fsk", exact: true, rate: bd });
     else if (sh != null && [110, 150, 300].some((r) => near(b, r, 0.03)))
       out.push({ title: t("ASCII teleprinter, {baud} Bd, {shift} Hz shift", { baud: n(b), shift: Math.round(f.shift) }), cls: "fsk", exact: true });
+    else {
+      // utility FSK by its rate and shift (sigidwiki.com): named as what it
+      // fits, since others may use the same figures
+      const fsk = (baud: number, shift: number) => near(b, baud, 0.03) && near(f.shift, shift, 0.1);
+      const cis36 =
+        (near(b, 36, 0.03) && [85, 125, 250, 500].some((v) => near(f.shift, v, 0.1))) ||
+        ([50, 75, 100, 150].some((v) => near(b, v, 0.03)) && [125, 250, 500].some((v) => near(f.shift, v, 0.1)));
+      const said = { baud: n(b), shift: Math.round(f.shift) };
+      if (cis36)
+        // i18n: CIS-36-50 (also BEE-36): a Russian Navy FSK teleprinter mode
+        out.push({ title: t("FSK {baud} Bd, {shift} Hz shift: fits CIS-36-50 (Russian Navy)", said), cls: "fsk", exact: true, rate: b });
+      else if (fsk(200, 500) || fsk(200, 1000))
+        // i18n: F01, F06: catalogue names of Russian intelligence FSK broadcasts
+        out.push({ title: t("FSK {baud} Bd, {shift} Hz shift: fits the Russian F01 / F06 broadcasts", said), cls: "fsk", exact: true, rate: 200 });
+      else if (fsk(100, 625))
+        // i18n: F11: catalogue name of a Polish intelligence FSK broadcast
+        out.push({ title: t("FSK {baud} Bd, {shift} Hz shift: fits the Polish F11 broadcasts", said), cls: "fsk", exact: true, rate: 100 });
+    }
   }
   if (f.toneGap != null && near(f.toneGap, 800, 0.1))
     // i18n: HF fax: weather charts sent by radio; black and white are two frequencies 800 Hz apart
@@ -302,9 +320,27 @@ export function matches(f: Features): Match[] {
   if (f.parallel) {
     const { n, spacing } = f.parallel;
     if (near(spacing, 56.25, 0.03)) out.push({ title: t("39-tone HF modem (56.25 Hz apart)"), cls: "multitone", exact: true, rate: 44.44 });
+    else if (near(spacing, 112.5, 0.03) && n >= 10 && n <= 17)
+      // i18n: Codan: an HF radio maker; its data modem has 16 DPSK channels
+      out.push({ title: t("Codan data modem (16 channels 112.5 Hz apart)"), cls: "multitone", exact: true, rate: null });
+    else if (near(spacing, 80, 0.03) && n >= 20 && n <= 33)
+      // i18n: CHIRP: Codan's ALE (link establishment), 32 channels
+      out.push({ title: t("Codan CHIRP ALE (32 channels 80 Hz apart)"), cls: "multitone", exact: true, rate: null });
     else if ([7.8125, 15.625, 31.25].some((v) => near(spacing, v, 0.03)) && n >= 20)
       out.push({ title: t("MT63 ({width} wide)", { width: `${Math.round((64 * spacing) / 100) * 100} Hz` }), cls: "multitone", exact: true, rate: null });
     else out.push({ title: t("{n} carriers {spacing} Hz apart (a parallel-tone modem)", { n, spacing: spacing.toFixed(1) }), cls: "multitone", exact: false });
+  }
+  // CLOVER 2000: 2 kHz, 62.5 Bd, eight tone pulses 2 ms apart (a 16 ms cycle)
+  const per = f.ofdm ?? f.frame;
+  if (f.width >= 1600 && f.width <= 2500 && (near(b, 62.5, 0.03) || near(per, 0.016, 0.05)) && !f.mfsk)
+    // i18n: CLOVER 2000: an HF data mode by HAL Communications
+    out.push({ title: t("CLOVER 2000 (62.5 Bd, a 16 ms cycle)"), cls: "multitone", exact: false, rate: 62.5 });
+  // Chinese-64 MFSK: ~64 tones in 2.5 kHz, 18.75 or 37.5 Bd
+  if (f.mfsk && f.mfsk.n >= 40 && f.width >= 1900 && f.width <= 2900) {
+    const r = b ?? f.mfsk.changes;
+    if (r == null || near(r, 18.75, 0.1) || near(r, 37.5, 0.1))
+      // i18n: a Chinese military MFSK mode (as sigidwiki.com names it)
+      out.push({ title: t("{n} tones {spacing} Hz apart: fits Chinese-64 MFSK", { n: f.mfsk.n, spacing: f.mfsk.spacing.toFixed(1) }), cls: "mfsk", exact: true, rate: null });
   }
   // the MFSK families, by their tone grid (spacing, tones used) and the
   // rate on it (measured, or how often the tone moves frame by frame)
@@ -512,7 +548,7 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
   // (fax's levels are greys between black and white: its tones' gap)
   const shiftSaid = chosen?.cls === "fax" ? f.toneGap : f.shift;
   if (shiftSaid != null) text.push(t("It shifts between two tones {shift} Hz apart.", { shift: Math.round(shiftSaid) }));
-  else if (f.mfsk) text.push(t("{n} tones on a {spacing} Hz grid.", { n: f.mfsk.n, spacing: f.mfsk.spacing.toFixed(1) }));
+  else if (f.mfsk && !f.parallel) text.push(t("{n} tones on a {spacing} Hz grid.", { n: f.mfsk.n, spacing: f.mfsk.spacing.toFixed(1) }));
   // the measured rate, unless the mode named has none or another
   const r = chosen?.rate;
   const rateFits = r === undefined || (r != null && f.baud != null && [r, 2 * r, r / 2].some((x) => near(f.baud, x, 0.03)));

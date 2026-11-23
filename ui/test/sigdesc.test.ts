@@ -43,6 +43,14 @@ const cases: [string, RegExp, string | null, string][] = [
   ["pactor1", /^PACTOR-I \((100|200) Bd, 200 Hz shift/, "pactor", "likely"],
   ["tone39", /^39-tone HF modem/, "multitone", "likely"],
   ["ale3g", /^2400 Bd PSK in bursts \(as 3G ALE\)$/, "ale3g", "likely"],
+  // utility signals by sigidwiki.com's figures (synthetic)
+  ["g1_cis36_50_250", /fits CIS-36-50/, "fsk", "sure"],
+  ["g1_cis36_36_125", /^FSK 36 Bd, 12\d Hz shift: fits CIS-36-50/, "fsk", "sure"],
+  ["g1_f01_200_500", /fits the Russian F01 \/ F06/, "fsk", "sure"],
+  ["g1_f11_100_625", /fits the Polish F11/, "fsk", "sure"],
+  ["g1_codan_data", /^Codan data modem/, "multitone", "likely"],
+  ["g1_codan_chirp", /^Codan CHIRP ALE/, "multitone", "likely"],
+  ["g1_chinese64", /fits Chinese-64 MFSK$/, "mfsk", "likely"],
 ];
 
 // wide looks (IQ, Hz from the dial): a 40 m AM broadcast on air
