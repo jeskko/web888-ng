@@ -949,6 +949,15 @@ decoders keep taking the raw audio, which they read best.
 * The largest of the three (music data and its evaluation); after the
   SSB voice and CW models.
 
+**Later, for fun: a generative voice model** (the user's idea,
+2026-11-23). After the mask models, a diffusion (or flow-matching)
+voice restorer that is allowed to invent a little: it would make weak
+SSB sound like a studio voice and will sometimes say things that weren't
+said (below about −7 dB, per the hallucination papers above). Only as a
+clearly labelled, separate choice ("restore (may invent)"), never the
+default and never feeding the decoders; size and speed in the browser
+to be seen.
+
 ### 5.5 Label every signal (planned, 2026-11-23)
 
 Instead of asking about one signal, mark every signal in the waterfall's
