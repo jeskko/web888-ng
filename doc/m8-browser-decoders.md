@@ -30,6 +30,8 @@ panel, `crates/fsk/src/dsc.rs`, §2.8; time codes, `crates/timecode`,
 | 11 | **HFDL** (aircraft data link, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as the reference) | new | squitters, logons, position reports and ACARS decoded, checked by their CRCs; aircraft positions and ground stations on the map (§2.6) |
 | 12 | **JS8** (JS8Call: FT8's waveform, its own code and frames; Normal, Fast, Turbo, Slow) | the FT8 decoder, generalised | heartbeats, directed messages and free text, frames joined per frequency; senders with a grid on the map (§2.7) |
 | 13 | later: ALE 2G, Olivia | new | — |
+| 14 | planned: **neural voice noise reduction** (§5.4) | the papers in §5.4; trained like the neural CW | SSB/AM voice clearer than the spectral subtraction (`crates/dsp/src/nr.rs`) by Whisper's word errors on real HF recordings, nothing invented at low SNR |
+| 15 | planned: **label every signal** (§5.5) | the identifier and `measure.rs` | every signal in the waterfall's view marked with its class, kept up to date as the view moves |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 (images, a new panel type), then the rest.
@@ -793,6 +795,77 @@ examples print the figures and the page's JSON for a WAV.
 * Seven classes added to the identifier's generators (olivia, mfsk,
   dominoex, hell, pactor, multitone, ale3g); `calibrate.py` for its
   probabilities.
+
+### 5.4 Neural voice noise reduction (planned, 2026-11-23)
+
+After the 25-class identifier. A mask-only network in the page's audio
+path (AudioWorklet, our own Rust inference like §5.1), as a third choice
+next to the server's spectral subtraction; no load on the unit.
+
+**Papers (searched 2026-11-23):**
+
+* RNNoise, Valin 2017/18 ([arXiv 1709.08243](https://arxiv.org/abs/1709.08243)):
+  a GRU predicts ~22 Bark-band gains, a pitch comb removes noise between
+  the harmonics; 1.3 % of an x86 core; BSD; v0.2 trained on public data
+  only. The SDR baseline (SDRangel's denoiser, the extended WDSP used by
+  Thetis/piHPSDR); SDR-Console tests a DNN of its own.
+* PercepNet, Valin et al. 2020 ([arXiv 2008.04259](https://arxiv.org/abs/2008.04259)):
+  RNNoise plus a better comb filter, clearly better, 4.1 % of a core, 40
+  ms look-ahead.
+* DeepFilterNet 1-3 ([2110.05588](https://arxiv.org/abs/2110.05588),
+  [2305.08227](https://arxiv.org/abs/2305.08227)): ERB gains for the
+  envelope + a short complex "deep filter" in the low band; DF3 real-time
+  factor 0.19 on one notebook thread; the quality reference, built for
+  48 kHz and larger than we need.
+* Very small models: GTCRN (ICASSP 2024; 24k weights, 48k with the fixed
+  ERB layer, ~33-40M MAC/s, streaming, beats RNNoise), UL-UNAS
+  ([2503.00340](https://arxiv.org/abs/2503.00340)), CoFi-Lite
+  ([2607.10142](https://arxiv.org/abs/2607.10142), 2026: 83k weights,
+  12.9M MAC/s, DNS3 PESQ 2.16 vs GTCRN 2.07), LiSenNet, AdaptCRN; DTLN
+  ([2005.07551](https://arxiv.org/abs/2005.07551), < 1M weights, two LSTM
+  stages, real time on a Raspberry Pi 3). Code public for GTCRN, UL-UNAS,
+  DTLN.
+* HF: "A Hybrid Deep-Learning Approach for Single Channel HF-SSB Speech
+  Enhancement" (IEEE WCL 2021, [9476003](https://ieeexplore.ieee.org/abstract/document/9476003/)):
+  an anti-fading CNN first, then noise suppression; fading first recovers
+  more weak speech. The Paderborn HF speech database
+  ([2106.02472](https://arxiv.org/abs/2106.02472)): LibriSpeech sent in
+  LSB from Paderborn and received by KiwiSDRs across Europe, the clean
+  source time-aligned, SNR −20..+5 dB, ~23.5 h (3.5 h speech; companion
+  [2103.01599](https://arxiv.org/abs/2103.01599) also estimates SSB
+  mistuning from pitch). Licence not checked yet.
+* Hallucination: generative enhancers (diffusion, flow matching,
+  WavLM-based) invent spectral content below about −7 dB
+  ([2606.02913](https://arxiv.org/abs/2606.02913)); DNSMOS doesn't
+  notice ([URGENT 2025](https://arxiv.org/abs/2505.23212),
+  [PASE](https://arxiv.org/abs/2511.13300)); training for DNSMOS sounds
+  worse to listeners ([2403.11732](https://arxiv.org/abs/2403.11732)).
+
+**Plan:**
+
+* Model: GTCRN/UL-UNAS class (~25-80k weights), causal, mask only (it
+  can take sound away, never add: no guessing), plus an RNNoise-style
+  pitch comb; at 12 kS/s (24 kS/s variant later), f16 weights ~50-160 kB.
+* Training data: LibriSpeech / Common Voice speech mixed with real HF
+  noise from our recordings (`/data/iq`, the identifier's `onair` set);
+  simulated SSB passband 300-2700 Hz, mistuning ±150 Hz, selective
+  fading (the HF-SSB paper's point), impulses (QRN), carriers and CW
+  (QRM), AM too.
+* Scoring: the Paderborn database and our own SSB/AM recordings; Whisper
+  word errors (local whisper.cpp) plus PESQ/STOI from −10 to +10 dB,
+  against `nr.rs` and RNNoise; listen below −7 dB for invented sound.
+* Effort: about the neural CW's; the data simulation is most of it.
+
+### 5.5 Label every signal (planned, 2026-11-23)
+
+Instead of asking about one signal, mark every signal in the waterfall's
+view with its class. First version reuses what exists: find signals in
+the view (the skimmers' peaks / `measure.rs` extents), run the
+identifier and the signatures of `sigdesc.ts` on each (audio where it
+covers them, wide look or a bin for the rest), merge across updates,
+draw short labels over the waterfall (sure / likely / unsure as with
+"What is this?"). Later, if worth it: a detector on the waterfall image
+itself (boxes + classes in one pass).
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 
