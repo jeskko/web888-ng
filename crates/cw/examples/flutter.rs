@@ -60,7 +60,7 @@ fn main() {
         println!();
         for snr in [20.0, 10.0, 5.0, 0.0, -5.0] {
             print!("{snr:>3.0} dB");
-            for fade_hz in dopplers {
+            for spread in dopplers {
                 let (mut a, mut b) = (0.0, 0.0);
                 for rep in 0..reps {
                     for (i, m) in MSGS.iter().enumerate() {
@@ -70,7 +70,7 @@ fn main() {
                         };
                         let ch = Channel {
                             snr_db: Some(snr),
-                            spread_hz: fade_hz,
+                            spread_hz: spread,
                             ..Channel::new(3.0)
                         };
                         let x =

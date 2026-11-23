@@ -2,8 +2,9 @@
 """Training data for the neural CW decoder, made on the fly: text (QSO
 phrases, callsigns, numbers, words, random characters), keying (speed,
 hand-keying jitter, dash/dot ratio, Farnsworth gaps), and the channel
-(carrier offset and drift, edge shaping, Rayleigh fading: slow QSB or
-auroral flutter of 3-30 Hz spread; another CW
+(carrier offset and drift, edge shaping, Rayleigh fading from
+ionochannel (Watterson, ITU-R F.1487): slow QSB or auroral flutter of
+3-30 Hz spread; another CW
 signal nearby, or a pile-up: 1-3 callers 12-120 Hz away at similar or
 higher level, keyed over the wanted one; impulse noise, white noise at an
 SNR in 2500 Hz). The label is only the signal at the centre. Each
@@ -19,6 +20,18 @@ import numpy as np
 import torch
 
 from common import FS, INDEX, MORSE
+
+try:
+    import ionochannel as ic
+except ImportError:
+    # a checkout at IONOCHANNEL, by default beside this repository's
+    import os
+    import sys
+    _here = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, os.path.join(os.environ.get("IONOCHANNEL", os.path.join(_here, "../../../../../ionochannel")),
+                                    "python"))
+    import ionochannel as ic
+import ionochannel.torch as ict  # noqa: E402
 
 WINDOW = 12.0
 
@@ -162,30 +175,34 @@ def example(r: random.Random, n: int):
 QRM = 3  # interferers at most
 
 
-PATHS = 16
+QSB = (0.04, 0.85)       # Doppler spread (2 sigma, Hz) of slow fading
+FLUTTER = (3.0, 30.0)    # and of auroral flutter, log-uniform
+
+
+def _gains(rows: int, n: int, spread, smax: float, g):
+    """(rows, n) Rayleigh gains (ionochannel), each row its own spread
+    (<= smax): one process at smax slowed down per row."""
+    rate = (spread / smax).reshape(rows, 1).expand(rows, n).to(torch.float64)
+    return ict.tap_gain(ic.scatter(0.0, 1.0, smax), n, FS, g, rows, g.device, rate=rate)
 
 
 def fading(B: int, M: int, t, U, g, fl):
-    """(B, M, n) complex gains, mean power 1: per signal, slow QSB (Jakes,
-    0.03-0.6 Hz Doppler) on 40 % or none; where `fl` (B, 1), auroral
-    flutter instead: a Gaussian Doppler spectrum (ITU-R F.1487) of spread
-    (2 sigma) 3-30 Hz, log-uniform, half of them two modes (paths) shifted
-    apart by up to 10 Hz. Sum of PATHS sinusoids at random frequencies."""
-    dev = t.device
-    two_pi = 2 * torch.pi
-    fd = U(B, M, 1, a=0.03, b=0.6)
-    jakes = fd * torch.cos(U(B, M, PATHS, b=two_pi))                     # Hz
-    spread = torch.exp(U(B, M, 1, a=float(np.log(3.0)), b=float(np.log(30.0))))
-    shift = U(B, M, 1, b=5.0) * (U(B, M, 1) < 0.5) * torch.where(torch.arange(PATHS, device=dev) % 2 == 0, 1.0, -1.0)
-    gauss = shift + spread / 2 * torch.randn(B, M, PATHS, device=dev, generator=g)
-    f = torch.where(fl[:, :, None], gauss, jakes)
-    p = U(B, M, PATHS, b=two_pi)
-    gain = torch.zeros(B, M, t.shape[0], dtype=torch.complex64, device=dev)
-    for k in range(PATHS):
-        gain = gain + torch.exp(1j * (two_pi * f[:, :, k, None] * t[None, None, :] + p[:, :, k, None]))
-    gain = gain / PATHS ** 0.5
+    """(B, M, n) complex gains, mean power 1, from ionochannel's
+    Watterson model (a Gaussian Doppler spectrum, ITU-R F.1487): per
+    signal, slow QSB (0.04-0.85 Hz spread) on 40 % or none; where `fl`
+    (B, 1), auroral flutter instead: 3-30 Hz spread (2 sigma),
+    log-uniform, half of them two modes shifted apart by up to 10 Hz."""
+    n, R = t.shape[0], B * M
+    qsb = _gains(R, n, U(R, a=QSB[0], b=QSB[1]), QSB[1], g)
+    spread = torch.exp(U(R, a=float(np.log(FLUTTER[0])), b=float(np.log(FLUTTER[1]))))
+    m = _gains(2 * R, n, spread.repeat(2), FLUTTER[1], g)
+    shift = U(R, 1, b=5.0) * (U(R, 1) < 0.5)
+    rot = torch.exp(1j * 2 * torch.pi * shift * t[None, :])
+    two = (m[:R] * rot + m[R:] * rot.conj()) / 2 ** 0.5
+    flutter = torch.where(shift > 0, two, m[:R])
+    gain = torch.where(fl.expand(B, M).reshape(R, 1), flutter, qsb).reshape(B, M, n)
     on = fl | (U(B, M) < 0.4)
-    return torch.where(on[:, :, None], gain, torch.ones_like(gain))
+    return torch.where(on[:, :, None], gain, torch.ones_like(gain)).to(torch.complex64)
 
 
 def batch(B: int, r: random.Random, device, n: int = int(WINDOW * FS), snr=(-12.0, 20.0), pileup=0.3, flutter=0.15):
@@ -225,7 +242,7 @@ def batch(B: int, r: random.Random, device, n: int = int(WINDOW * FS), snr=(-12.
     f0 = U(B, 1, a=-1.0, b=1.0) * res + U(B, 1, a=-1.0, b=1.0) * t[None, :] / WINDOW
     ph = two_pi * torch.cumsum(f0 / FS, dim=1) + U(B, 1, b=two_pi)
     sig = K * torch.exp(1j * ph)
-    # fading: slow QSB (Jakes, 0.03-0.6 Hz) on ~40 %; auroral flutter on
+    # fading: slow QSB (0.04-0.85 Hz spread) on ~40 %; auroral flutter on
     # `flutter` of them instead (below); the others fade on their own
     fl = U(B, 1) < flutter                                   # (B, 1)
     sig = sig * fading(B, 1, t, U, g, fl)[:, 0, :]

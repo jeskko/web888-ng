@@ -215,7 +215,7 @@ fn selective_fading() {
     let seg = synth::async_simple(&ita2_encode(&text(), true), 5, Parity::None, 1.5);
     let c = Cond {
         snr_db: Some(10.0),
-        fade_hz: 0.3,
+        spread_hz: 0.4,
         selective: true,
         ..Cond::new(0.0)
     };

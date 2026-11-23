@@ -7,8 +7,8 @@
 //! and replaced by a new one (the runner's exchange leaves the call out:
 //! only the callers' own sending counts). The callers' spread around the runner:
 //! tight (±40 Hz), medium (±100 Hz) or wide (±300 Hz). Every station
-//! fades on its own (`FADE`): `none`; `qsb` (the default: Rayleigh, 0.05-0.5
-//! Hz Doppler); `aurora` (flutter: a Gaussian Doppler spectrum, 3-20 Hz
+//! fades on its own (`FADE`): `none`; `qsb` (the default: Rayleigh, a Gaussian
+//! Doppler spectrum of 0.07-0.7 Hz spread); `aurora` (flutter: 3-20 Hz
 //! spread).
 //!
 //! Scored per spread: the share of callers whose call was read as a word
@@ -22,7 +22,7 @@ use num_complex::Complex32;
 use std::collections::{BTreeMap, HashSet};
 use web888_cw::Skimmer;
 use web888_cw::dsp::Rng;
-use web888_cw::synth::{self, Fading, Keying};
+use web888_cw::synth::{self, Keying};
 
 const RATE: f64 = 12_000.0;
 const SECONDS: f64 = 60.0;
@@ -50,7 +50,7 @@ fn callsign(r: &mut Rng) -> String {
 }
 
 struct Caller {
-    fade: Option<Fading>,
+    fade: Option<Vec<Complex32>>,
     call: String,
     hz: f64,
     amp: f32,
@@ -58,22 +58,16 @@ struct Caller {
 }
 
 /// One trial: the IQ and every call sent (the runner's included).
-/// A station's fading (Doppler range in Hz, Gaussian; None: none).
-fn fader(r: &mut Rng, doppler: Option<(f64, f64, bool)>) -> Option<Fading> {
-    doppler.map(|(a, b, gauss)| {
-        let hz = a + (b - a) * r.uniform();
-        if gauss {
-            Fading::gaussian(hz, r)
-        } else {
-            Fading::new(hz, r)
-        }
-    })
+/// A station's fading over `n` samples (its Doppler spread drawn from a
+/// range in Hz; None: none).
+fn fader(r: &mut Rng, doppler: Option<(f64, f64)>, n: usize) -> Option<Vec<Complex32>> {
+    doppler.map(|(a, b)| synth::fading(a + (b - a) * r.uniform(), n, RATE, r))
 }
 
 fn scenario(
     r: &mut Rng,
     spread: f64,
-    doppler: Option<(f64, f64, bool)>,
+    doppler: Option<(f64, f64)>,
 ) -> (Vec<Complex32>, Vec<(String, f64)>, HashSet<String>) {
     // 8 s of noise after the last round: what was sent is all printed
     let n = ((SECONDS + 8.0) * RATE) as usize;
@@ -92,7 +86,7 @@ fn scenario(
                hz: f64,
                amp: f32,
                wpm: f64,
-               fade: &Option<Fading>|
+               fade: &Option<Vec<Complex32>>|
      -> f64 {
         let k = Keying {
             lead: 0.0,
@@ -114,8 +108,7 @@ fn scenario(
             let p = std::f64::consts::TAU * hz * t + ph0;
             let mut v = Complex32::new(amp * kv * p.cos() as f32, amp * kv * p.sin() as f32);
             if let Some(f) = fade {
-                let (gr, gi) = f.gain(t);
-                v *= Complex32::new(gr as f32, gi as f32);
+                v *= f[i0 + i];
             }
             x[i0 + i] += v;
         }
@@ -123,10 +116,10 @@ fn scenario(
     };
     let run_call = callsign(r);
     let run_amp = amp_of(10.0 + 10.0 * r.uniform());
-    let run_fade = fader(r, doppler);
+    let run_fade = fader(r, doppler, n);
     let caller_snr = 6.0 + 12.0 * r.uniform();
     let new_caller = |r: &mut Rng| Caller {
-        fade: fader(r, doppler),
+        fade: fader(r, doppler, n),
         call: callsign(r),
         hz: spread * (2.0 * r.uniform() - 1.0),
         amp: amp_of(caller_snr + 12.0 * r.uniform() - 6.0),
@@ -194,8 +187,8 @@ fn main() {
     let fade = std::env::var("FADE").unwrap_or_else(|_| "qsb".into());
     let doppler = match fade.as_str() {
         "none" => None,
-        "aurora" => Some((3.0, 20.0, true)),
-        _ => Some((0.05, 0.5, false)),
+        "aurora" => Some((3.0, 20.0)),
+        _ => Some((0.07, 0.7)),
     };
     println!("fading: {fade}");
     for (name, spread) in [

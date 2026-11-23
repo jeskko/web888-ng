@@ -14,6 +14,7 @@ pub mod dsp;
 pub mod morse;
 pub mod net;
 pub mod skim;
+#[cfg(feature = "synth")]
 pub mod synth;
 
 pub use channel::AUDIO_RATE;

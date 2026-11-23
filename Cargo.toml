@@ -37,6 +37,9 @@ web888-hfdl = { path = "crates/hfdl" }
 web888-js8 = { path = "crates/js8" }
 libc = "0.2.190"
 num-complex = "0.4.6"
+# the HF channel simulator for synthetic tests and training data (MIT),
+# pinned; only the `synth` features of cw and fsk pull it in
+ionochannel = { git = "https://github.com/jeskko/ionochannel", rev = "74818342233a381aa0f81b43902aedf2808a2fab" }
 rustfft = "6.4.1"
 clap = { version = "4.6.7", features = ["derive"] }
 # Opus for the web UI's audio (a Rust port of libopus 1.6; BSD-3-Clause);

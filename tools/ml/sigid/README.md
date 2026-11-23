@@ -11,7 +11,7 @@ made on the fly. Nothing here is shipped; the trained weights are, as
 | | since 2026-11-23 also: Olivia/Contestia (4-64 tones, 125-2000 Hz), MFSK8/16/32/64, DominoEX/THOR (18 tones, incremental keying), Feld Hell (on-off pixels, 245 slots/s), PACTOR I-III in ARQ (1.25 s cycle, the other side's control bursts), multi-tone modems (MT63, the 39-tone modem with its pilot, OFDM data as VARA), 3G ALE (2400 Bd 8-PSK bursts) |
 | `onair.py` | on-air speech: SSB clips cut from a phone segment of a wideband recording, where a model says SSB (`SIGID_ONAIR`: 40 % of the speech in training) |
 | `voices.py` | the speech bank (espeak-ng, ~40 languages and voice variants) for voice and AM |
-| `data.py` | an example: a signal off centre, fading (QSB or auroral flutter), multipath, neighbours of other classes, a birdie, impulse noise, white noise at −6..+30 dB in 2500 Hz, the receiver's passband edges, LSB, any level |
+| `data.py` | an example: a signal off centre, fading (QSB or auroral flutter) and multipath from ionochannel, neighbours of other classes, a birdie, impulse noise, white noise at −6..+30 dB in 2500 Hz, the receiver's passband edges, LSB, any level |
 | `common.py` | features and model (must match `crates/sigid/src/lib.rs` exactly) |
 | `train.py` | training (worker processes generate, the GPU computes the features); a fixed validation set; `--eval` prints the confusion matrix |
 | `real.py` | real signals: waterfalls of a recording (`survey`), the confusion on labelled windows of recordings (`eval`) |
@@ -21,7 +21,11 @@ made on the fly. Nothing here is shipped; the trained weights are, as
 Content is random where it doesn't identify a mode (FT8's data tones, a
 modem's data symbols, a picture's pixels) and exact where it does (Costas
 arrays, frame and probe structure, scramblers, baud rates, shifts, tone
-spacings, SSTV line timings). Needs PyTorch, scipy and espeak-ng.
+spacings, SSTV line timings). Needs PyTorch, scipy and espeak-ng. The channel (fading, multipath) comes from
+[ionochannel](https://github.com/jeskko/ionochannel) at the commit pinned
+in the workspace `Cargo.toml`: installed (`pip install
+"ionochannel @ git+https://github.com/jeskko/ionochannel@<rev>"`) or a
+checkout beside this repository (or at `IONOCHANNEL`).
 
 ```sh
 cd tools/ml/sigid

@@ -511,6 +511,13 @@ the pile-up fine-tune of §5.2):
 | −8 dB | 57.8 / 0.2 % | 61.7 / 0.8 % | 67.2 / 29.0 % |
 | −10 dB | 80.8 / 2.3 % | 80.3 / 6.0 % | 78.4 / 39.2 % |
 
+Since 2026-11-23 the synthesiser's fading comes from ionochannel
+(Watterson, a Gaussian Doppler spectrum) instead of a 16-sinusoid Jakes
+sum, so the QSB column is now a 0.3 Hz spread (2σ; about the same RMS
+Doppler as Jakes at 0.2 Hz): +6 dB 10.2 / 1.8 %, 0 dB 19.4 / 5.4 %,
+−6 dB 54.1 / 16.0 %, −10 dB 73.8 / 30.8 %. The other columns are
+unchanged to the bit.
+
 12-45 WPM at 0 dB with jitter: 1.4-5.8 % / 0.0 %. A 12 s window takes
 72 ms natively. In the skimmer, the classical decoder still gives speed,
 SNR and frequency; the network's text (last 12 s every 2 s) replaces its

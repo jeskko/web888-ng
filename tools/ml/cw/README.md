@@ -8,11 +8,15 @@ the fly. Nothing here is shipped; the trained weights are, as
 | file | what |
 |---|---|
 | `common.py` | alphabet, features, model (must match `net.rs` exactly) |
-| `synth.py` | training data: text, keying (pauses between phrases as spaces), channel (QSB or auroral flutter, interference or a pile-up of close callers, impulse noise, white noise) |
+| `synth.py` | training data: text, keying (pauses between phrases as spaces), channel (QSB or auroral flutter from ionochannel, interference or a pile-up of close callers, impulse noise, white noise) |
 | `train.py` | CTC training with a fixed validation set at four SNR bands, a pile-up set and a flutter set; `--eval` scores a checkpoint |
 | `export.py` | `cwnet.bin` and `cwnet-ref.bin` (a reference input and output for `net.rs`'s test) |
 
-Needs PyTorch (Arch: `python-pytorch-cuda`) and a GPU (CPU works, slowly).
+Needs PyTorch (Arch: `python-pytorch-cuda`) and a GPU (CPU works, slowly). The channel (fading, multipath) comes from
+[ionochannel](https://github.com/jeskko/ionochannel) at the commit pinned
+in the workspace `Cargo.toml`: installed (`pip install
+"ionochannel @ git+https://github.com/jeskko/ionochannel@<rev>"`) or a
+checkout beside this repository (or at `IONOCHANNEL`).
 
 ```sh
 cd tools/ml/cw

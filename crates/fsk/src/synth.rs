@@ -1,9 +1,12 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! FSK synthesis for tests: async characters, SITOR-B FEC streams,
-//! phase-continuous two-tone FSK with noise and (selective) fading.
+//! phase-continuous two-tone FSK with noise and (selective) fading, the
+//! fading and noise levels from ionochannel.
 
 use crate::analyze::Parity;
 use crate::charset::{self, C476_ALPHA, C476_REP};
+use ionochannel::fading::{Component, TapGain};
+use ionochannel::noise;
 use num_complex::Complex32;
 use web888_cw::dsp::Rng;
 
@@ -74,8 +77,11 @@ pub struct Cond {
     /// Signal over noise in 2500 Hz (dB).
     pub snr_db: Option<f64>,
     pub mark_high: bool,
-    pub fade_hz: f64,
-    /// Independent fading per tone.
+    /// Rayleigh fading: the spread (2σ, Hz) of a Gaussian Doppler spectrum
+    /// (ITU-R F.1487); 0 for none.
+    pub spread_hz: f64,
+    /// Each tone fading on its own (the limit of a long multipath delay:
+    /// frequency-selective fading).
     pub selective: bool,
 }
 
@@ -85,37 +91,20 @@ impl Cond {
             f0,
             snr_db: None,
             mark_high: true,
-            fade_hz: 0.0,
+            spread_hz: 0.0,
             selective: false,
         }
     }
 }
 
-struct Fading {
-    hz: f64,
-    p: Vec<(f64, f64)>,
-}
-
-impl Fading {
-    fn new(hz: f64, rng: &mut Rng) -> Self {
-        let tp = 2.0 * std::f64::consts::PI;
-        Fading {
-            hz,
-            p: (0..16)
-                .map(|_| ((tp * rng.uniform()).cos(), tp * rng.uniform()))
-                .collect(),
-        }
-    }
-
-    fn gain(&self, t: f64) -> Complex32 {
-        let (mut re, mut im) = (0.0, 0.0);
-        for (c, ph) in &self.p {
-            let a = 2.0 * std::f64::consts::PI * self.hz * c * t + ph;
-            re += a.cos();
-            im += a.sin();
-        }
-        Complex32::new((re / 4.0) as f32, (im / 4.0) as f32)
-    }
+/// A fading tap gain from ionochannel.
+fn fading(spread_hz: f64, fs: f64, rng: &mut Rng) -> TapGain {
+    let c = [Component::Scatter {
+        power: 1.0,
+        spread_hz,
+        shift_hz: 0.0,
+    }];
+    TapGain::new(&c, fs, &mut ionochannel::Rng::new(rng.next_u64()))
 }
 
 /// Levels per sample at fs.
@@ -147,25 +136,30 @@ pub fn complex(
 ) -> Vec<Complex32> {
     let lev = levels(seg, baud, fs);
     let mut ph = 2.0 * std::f64::consts::PI * rng.uniform();
-    let fa = (c.fade_hz > 0.0).then(|| Fading::new(c.fade_hz, rng));
-    let fb = (c.fade_hz > 0.0 && c.selective).then(|| Fading::new(c.fade_hz, rng));
+    let mut fa = (c.spread_hz > 0.0).then(|| fading(c.spread_hz, fs, rng));
+    let mut fb = (c.spread_hz > 0.0 && c.selective).then(|| fading(c.spread_hz, fs, rng));
+    // per component: half the complex noise power
     let sig = c
         .snr_db
-        .map(|s| (10f64.powf(-s / 10.0) / 2500.0 * fs / 2.0).sqrt());
+        .map(|s| (noise::noise_power(1.0, s, 2500.0, fs, true) / 2.0).sqrt());
     lev.iter()
-        .enumerate()
-        .map(|(i, &l)| {
+        .map(|&l| {
             let hi = if c.mark_high { l == 1 } else { l == 0 };
             let f = c.f0 + if hi { shift / 2.0 } else { -shift / 2.0 };
             ph += 2.0 * std::f64::consts::PI * f / fs;
             let mut v = Complex32::new(ph.cos() as f32, ph.sin() as f32);
-            let t = i as f64 / fs;
-            if let Some(g) = &fa {
-                let g = match (&fb, hi) {
-                    (Some(g2), false) => g2.gain(t),
-                    _ => g.gain(t),
+            // both gains run on, whichever tone is sent
+            if let Some(ga) = &mut fa {
+                let a = ga.sample();
+                let g = match (&mut fb, hi) {
+                    (Some(gb), false) => gb.sample(),
+                    (Some(gb), true) => {
+                        gb.sample();
+                        a
+                    }
+                    _ => a,
                 };
-                v *= g;
+                v *= Complex32::new(g.re as f32, g.im as f32);
             }
             if let Some(s) = sig {
                 v += Complex32::new((s * rng.normal()) as f32, (s * rng.normal()) as f32);

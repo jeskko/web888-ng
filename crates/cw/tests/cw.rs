@@ -168,7 +168,7 @@ fn error_rates() {
         &Keying::new(20.0),
         &Channel {
             snr_db: Some(8.0),
-            fade_hz: 0.2,
+            spread_hz: 0.3,
             ..Channel::new(0.0)
         },
     );

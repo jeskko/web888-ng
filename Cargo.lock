@@ -775,6 +775,15 @@ dependencies = [
 ]
 
 [[package]]
+name = "ionochannel"
+version = "0.1.0"
+source = "git+https://github.com/jeskko/ionochannel?rev=74818342233a381aa0f81b43902aedf2808a2fab#74818342233a381aa0f81b43902aedf2808a2fab"
+dependencies = [
+ "num-complex",
+ "serde_json",
+]
+
+[[package]]
 name = "is_terminal_polyfill"
 version = "1.70.2"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -1805,8 +1814,10 @@ dependencies = [
 name = "web888-cw"
 version = "0.17.0"
 dependencies = [
+ "ionochannel",
  "num-complex",
  "rustfft",
+ "web888-cw",
 ]
 
 [[package]]
@@ -1850,9 +1861,11 @@ dependencies = [
 name = "web888-fsk"
 version = "0.17.0"
 dependencies = [
+ "ionochannel",
  "num-complex",
  "rustfft",
  "web888-cw",
+ "web888-fsk",
 ]
 
 [[package]]

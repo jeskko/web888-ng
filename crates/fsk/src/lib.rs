@@ -19,6 +19,7 @@ pub mod charset;
 pub mod demod;
 pub mod dsc;
 pub mod skim;
+#[cfg(feature = "synth")]
 pub mod synth;
 
 pub use analyze::{FskDecoder, FskParams, FskResult, Mode, Parity, analyze, is_valid};

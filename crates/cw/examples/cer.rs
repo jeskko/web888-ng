@@ -50,7 +50,7 @@ fn rate(k: &Keying, ch: &Channel, reps: u64) -> (f64, f64) {
 
 fn main() {
     println!("character errors, classical / neural (20 WPM, SNR in 2500 Hz)");
-    println!("SNR      clean            jitter 10 %      QSB 0.2 Hz");
+    println!("SNR      clean            jitter 10 %      QSB 0.3 Hz");
     for snr in [6.0, 3.0, 0.0, -3.0, -6.0, -8.0, -10.0] {
         let ch = Channel {
             snr_db: Some(snr),
@@ -68,7 +68,7 @@ fn main() {
         let c = rate(
             &Keying::new(20.0),
             &Channel {
-                fade_hz: 0.2,
+                spread_hz: 0.3,
                 ..ch.clone()
             },
             4,

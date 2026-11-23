@@ -9,3 +9,11 @@ repository.workspace = true
 [dependencies]
 num-complex.workspace = true
 rustfft.workspace = true
+ionochannel = { workspace = true, optional = true }
+
+[features]
+# test-signal synthesis (the `synth` module) through ionochannel
+synth = ["dep:ionochannel"]
+
+[dev-dependencies]
+web888-cw = { path = ".", features = ["synth"] }

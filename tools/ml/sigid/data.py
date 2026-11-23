@@ -2,7 +2,8 @@
 """Training examples for the signal identifier: a clean signal of a random
 class (modes.py) through a random channel, as the receiver would hand it
 over: offset from the window's centre, Rayleigh fading (slow QSB or
-auroral flutter), multipath, LSB (spectrum inverted), neighbours of other
+auroral flutter) and multipath from ionochannel (Watterson, ITU-R
+F.1487), LSB (spectrum inverted), neighbours of other
 classes beside it, a birdie, impulse noise, white noise at an SNR in
 2500 Hz, sometimes the edges of the receiver's passband, any level.
 """
@@ -12,6 +13,17 @@ import numpy as np
 import torch
 
 from modes import CLASSES, FS, GEN, HALF, TAU
+
+try:
+    import ionochannel as ic
+except ImportError:
+    # a checkout at IONOCHANNEL, by default beside this repository's
+    import os
+    import sys
+    _here = os.path.dirname(os.path.abspath(__file__))
+    sys.path.insert(0, os.path.join(os.environ.get("IONOCHANNEL", os.path.join(_here, "../../../../../ionochannel")),
+                                    "python"))
+    import ionochannel as ic
 
 N = 24576                    # 4.096 s at FS
 
@@ -24,30 +36,23 @@ def active_power(x: np.ndarray) -> float:
     return float(p[len(p) // 2:].mean()) if p[-1] > 0 else 0.0
 
 
-def fading(n: int, rng, kind: str) -> np.ndarray:
-    t = np.arange(n) / FS
-    if kind == "none":
-        return np.ones(n, np.complex64)
-    if kind == "qsb":
-        f = rng.uniform(0.05, 1.0) * np.cos(rng.uniform(0, TAU, 16))
-    else:                                     # auroral flutter: Gaussian Doppler spectrum
-        f = rng.uniform(2, 20) / 2 * rng.normal(size=16)
-    ph = rng.uniform(0, TAU, 16)
-    # at 1/16 of the rate (the fastest flutter is ~30 Hz), interpolated
-    tc = t[::16]
-    g = np.exp(1j * (TAU * f[:, None] * tc[None, :] + ph[:, None])).sum(0) / 4
-    return (np.interp(t, tc, g.real) + 1j * np.interp(t, tc, g.imag)).astype(np.complex64)
-
-
 def channel(x: np.ndarray, rng) -> np.ndarray:
-    """Fading and multipath on a clean signal (unit power)."""
-    n = len(x)
+    """Fading and multipath on a clean signal (unit power): none, slow
+    QSB (a Gaussian Doppler spectrum of 0.07-1.4 Hz spread) or auroral
+    flutter (2-20 Hz); on 30 % a second path 0.5-4 ms later at -14..0 dB,
+    fading on its own (steady without fading). Mean power stays 1."""
     kind = rng.choice(["none", "qsb", "flutter"], p=[0.45, 0.35, 0.2])
-    y = x * fading(n, rng, kind)
+    spread = {"none": 0.0, "qsb": rng.uniform(0.07, 1.4), "flutter": rng.uniform(2, 20)}[kind]
+    path = (lambda d, p: ic.scatter(d, p, spread)) if spread else ic.specular
     if rng.random() < 0.3:
-        d = int(rng.uniform(0.5e-3, 4e-3) * FS)
-        y = y + rng.uniform(0.2, 1.0) * np.roll(x, d) * fading(n, rng, kind)
-    return y
+        a2 = rng.uniform(0.2, 1.0) ** 2
+        paths = [path(0.0, 1 / (1 + a2)), path(rng.uniform(0.5e-3, 4e-3), a2 / (1 + a2))]
+    elif spread:
+        # one path: its gain alone (the delay line's FFTs cost more than the rest)
+        return x * ic.tap_gain(path(0.0, 1.0), len(x), FS, rng)
+    else:
+        return x
+    return ic.Channel(FS, paths).apply(x, rng).astype(np.complex64)
 
 
 def shift(x: np.ndarray, hz: float) -> np.ndarray:

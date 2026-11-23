@@ -1,10 +1,14 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 //! CW synthesis for tests (and training data): keying from text with
-//! hand-keying jitter, Farnsworth spacing, raised-cosine edges, Rayleigh
-//! fading and white noise; complex baseband or real audio.
+//! hand-keying jitter, Farnsworth spacing, raised-cosine edges; the
+//! channel (Watterson fading, ITU-R F.1487) and white noise from
+//! ionochannel; complex baseband or real audio.
 
 use crate::dsp::Rng;
 use crate::morse;
+/// The channel's paths, from ionochannel (also its `presets`).
+pub use ionochannel::{PathSpec, presets};
+use ionochannel::{RealChannel, noise};
 use num_complex::Complex32;
 
 pub fn unit_s(wpm: f64) -> f64 {
@@ -86,11 +90,13 @@ pub struct Channel {
     pub snr_db: Option<f64>,
     /// Edge rise time (s).
     pub rise: f64,
-    /// Rayleigh fading Doppler spread (Hz), 0 for none.
-    pub fade_hz: f64,
-    /// Or a Gaussian Doppler spectrum (ITU-R F.1487: auroral flutter) of
-    /// this spread (2σ, Hz); used when > 0.
+    /// Rayleigh fading of one path: the spread (2σ, Hz) of its Gaussian
+    /// Doppler spectrum (ITU-R F.1487); 0 for none. A fraction of a Hz is
+    /// QSB, several Hz auroral flutter.
     pub spread_hz: f64,
+    /// Or a whole Watterson channel (delays, scatter and specular
+    /// components); used instead of `spread_hz` when not empty.
+    pub paths: Vec<PathSpec>,
 }
 
 impl Channel {
@@ -99,8 +105,17 @@ impl Channel {
             f0,
             snr_db: None,
             rise: 0.005,
-            fade_hz: 0.0,
             spread_hz: 0.0,
+            paths: Vec::new(),
+        }
+    }
+
+    /// The propagation paths, if the signal fades at all.
+    fn paths(&self) -> Option<Vec<PathSpec>> {
+        if !self.paths.is_empty() {
+            Some(self.paths.clone())
+        } else {
+            (self.spread_hz > 0.0).then(|| vec![PathSpec::scatter(0.0, 1.0, self.spread_hz, 0.0)])
         }
     }
 }
@@ -130,81 +145,57 @@ fn shaped(k: &[f32], fs: f64, rise: f64) -> Vec<f32> {
         .collect()
 }
 
-/// Jakes-style Rayleigh gain (16 paths): slow QSB at a fraction of a Hz,
-/// auroral flutter at several Hz.
-pub struct Fading {
-    hz: f64,
-    paths: Vec<(f64, f64)>,
+/// A Rayleigh fading gain sequence of `n` samples at `fs` (mean power 1):
+/// one scatter path with a Gaussian Doppler spectrum of spread
+/// `spread_hz` (2σ, ITU-R F.1487), from ionochannel.
+pub fn fading(spread_hz: f64, n: usize, fs: f64, rng: &mut Rng) -> Vec<Complex32> {
+    let mut g = vec![Complex32::new(1.0, 0.0); n];
+    let p = [PathSpec::scatter(0.0, 1.0, spread_hz, 0.0)];
+    ionochannel::Channel::new(fs, &p, rng.next_u64()).process(&mut g);
+    g
 }
 
-impl Fading {
-    pub fn new(hz: f64, rng: &mut Rng) -> Self {
-        let two_pi = 2.0 * std::f64::consts::PI;
-        Fading {
-            hz,
-            paths: (0..16)
-                .map(|_| ((two_pi * rng.uniform()).cos(), two_pi * rng.uniform()))
-                .collect(),
-        }
-    }
+/// `x` through the channel's paths (delays removed, so the length and
+/// the timing stay).
+fn propagate_c(x: &mut Vec<Complex32>, paths: &[PathSpec], fs: f64, rng: &mut Rng) {
+    let mut ch = ionochannel::Channel::new(fs, paths, rng.next_u64());
+    let (n, lat) = (x.len(), ch.latency());
+    x.resize(n + lat, Complex32::new(0.0, 0.0));
+    ch.process(x);
+    x.drain(..lat);
+}
 
-    /// Gaussian Doppler spectrum of spread `spread` Hz (2σ, as ITU-R
-    /// F.1487): the paths' frequencies drawn from it.
-    pub fn gaussian(spread: f64, rng: &mut Rng) -> Self {
-        let two_pi = 2.0 * std::f64::consts::PI;
-        Fading {
-            hz: 1.0,
-            paths: (0..16)
-                .map(|_| (spread / 2.0 * rng.normal(), two_pi * rng.uniform()))
-                .collect(),
-        }
-    }
-
-    /// A channel's fading, if any.
-    fn of(ch: &Channel, rng: &mut Rng) -> Option<Self> {
-        if ch.spread_hz > 0.0 {
-            Some(Self::gaussian(ch.spread_hz, rng))
-        } else {
-            (ch.fade_hz > 0.0).then(|| Self::new(ch.fade_hz, rng))
-        }
-    }
-
-    /// The complex gain at `t` s (mean power 1).
-    pub fn gain(&self, t: f64) -> (f64, f64) {
-        let (mut re, mut im) = (0.0, 0.0);
-        for (c, ph) in &self.paths {
-            let a = 2.0 * std::f64::consts::PI * self.hz * c * t + ph;
-            re += a.cos();
-            im += a.sin();
-        }
-        (re / 4.0, im / 4.0)
-    }
+fn propagate_r(x: &mut Vec<f32>, paths: &[PathSpec], fs: f64, rng: &mut Rng) {
+    let mut ch = RealChannel::new(fs, paths, rng.next_u64());
+    let (n, lat) = (x.len(), ch.latency());
+    x.resize(n + lat, 0.0);
+    ch.process(x);
+    x.drain(..lat);
 }
 
 /// Complex baseband CW (unit mark power) at `fs`.
 pub fn complex(text: &str, k: &Keying, ch: &Channel, fs: f64, rng: &mut Rng) -> Vec<Complex32> {
     let key = shaped(&keying(text, k, fs, rng), fs, ch.rise);
     let ph0 = 2.0 * std::f64::consts::PI * rng.uniform();
-    let fade = Fading::of(ch, rng);
-    let sig = ch
-        .snr_db
-        .map(|snr| (10f64.powf(-snr / 10.0) / 2500.0 * fs / 2.0).sqrt());
-    key.iter()
+    let mut x: Vec<Complex32> = key
+        .iter()
         .enumerate()
         .map(|(i, &a)| {
-            let t = i as f64 / fs;
-            let ph = 2.0 * std::f64::consts::PI * ch.f0 * t + ph0;
-            let mut v = Complex32::new((a as f64 * ph.cos()) as f32, (a as f64 * ph.sin()) as f32);
-            if let Some(f) = &fade {
-                let (gr, gi) = f.gain(t);
-                v *= Complex32::new(gr as f32, gi as f32);
-            }
-            if let Some(s) = sig {
-                v += Complex32::new((s * rng.normal()) as f32, (s * rng.normal()) as f32);
-            }
-            v
+            let ph = 2.0 * std::f64::consts::PI * ch.f0 * i as f64 / fs + ph0;
+            Complex32::new((a as f64 * ph.cos()) as f32, (a as f64 * ph.sin()) as f32)
         })
-        .collect()
+        .collect();
+    if let Some(p) = ch.paths() {
+        propagate_c(&mut x, &p, fs, rng);
+    }
+    if let Some(snr) = ch.snr_db {
+        // per component: half the complex noise power
+        let s = (noise::noise_power(1.0, snr, 2500.0, fs, true) / 2.0).sqrt();
+        for v in &mut x {
+            *v += Complex32::new((s * rng.normal()) as f32, (s * rng.normal()) as f32);
+        }
+    }
+    x
 }
 
 /// Real audio CW at `fs`: amplitude `amp`; SNR as for [`complex`] (mark
@@ -212,32 +203,28 @@ pub fn complex(text: &str, k: &Keying, ch: &Channel, fs: f64, rng: &mut Rng) -> 
 pub fn audio(text: &str, k: &Keying, ch: &Channel, fs: f64, amp: f64, rng: &mut Rng) -> Vec<f32> {
     let key = shaped(&keying(text, k, fs, rng), fs, ch.rise);
     let ph0 = 2.0 * std::f64::consts::PI * rng.uniform();
-    let fade = Fading::of(ch, rng);
-    // noise s.d. so that its power in 2500 Hz is amp²/2 / snr: PSD (one-sided) * 2500
-    let sig = ch
-        .snr_db
-        .map(|snr| (amp * amp / 2.0 * 10f64.powf(-snr / 10.0) / 2500.0 * fs / 2.0).sqrt());
-    key.iter()
+    let mut x: Vec<f32> = key
+        .iter()
         .enumerate()
         .map(|(i, &a)| {
-            let t = i as f64 / fs;
-            let ph = 2.0 * std::f64::consts::PI * ch.f0 * t + ph0;
-            let mut v = if let Some(f) = &fade {
-                let (gr, gi) = f.gain(t);
-                amp * a as f64 * (gr * ph.cos() - gi * ph.sin())
-            } else {
-                amp * a as f64 * ph.cos()
-            };
-            if let Some(s) = sig {
-                v += s * rng.normal();
-            }
-            v as f32
+            let ph = 2.0 * std::f64::consts::PI * ch.f0 * i as f64 / fs + ph0;
+            (amp * a as f64 * ph.cos()) as f32
         })
-        .collect()
+        .collect();
+    if let Some(p) = ch.paths() {
+        propagate_r(&mut x, &p, fs, rng);
+    }
+    if let Some(snr) = ch.snr_db {
+        let s = noise::noise_power(amp * amp / 2.0, snr, 2500.0, fs, false).sqrt();
+        for v in &mut x {
+            *v += (s * rng.normal()) as f32;
+        }
+    }
+    x
 }
 
 /// White noise of the same density as [`audio`] would add, for padding.
 pub fn audio_noise(n: usize, fs: f64, amp: f64, snr_db: f64, rng: &mut Rng) -> Vec<f32> {
-    let s = (amp * amp / 2.0 * 10f64.powf(-snr_db / 10.0) / 2500.0 * fs / 2.0).sqrt();
+    let s = noise::noise_power(amp * amp / 2.0, snr_db, 2500.0, fs, false).sqrt();
     (0..n).map(|_| (s * rng.normal()) as f32).collect()
 }
