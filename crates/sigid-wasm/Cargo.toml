@@ -11,3 +11,4 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 web888-sigid.workspace = true
+num-complex.workspace = true

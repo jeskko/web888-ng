@@ -715,7 +715,7 @@ msgstr "Nytt lösenord"
 msgid "New password again"
 msgstr "Nytt lösenord igen"
 
-#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:87 src/ctl/sigid.tsx:104
+#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:93 src/ctl/sigid.tsx:110
 msgid "Again"
 msgstr "Igen"
 
@@ -1452,7 +1452,7 @@ msgid "station"
 msgstr "station"
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
-#: src/admin/clock.tsx:327 src/sigdesc.ts:334
+#: src/admin/clock.tsx:327 src/sigdesc.ts:537
 msgid "SNR"
 msgstr "SNR"
 
@@ -3478,7 +3478,7 @@ msgid "Audio"
 msgstr "Ljud"
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/ctl/mobile.tsx:312 src/sigid.ts:35
+#: src/ctl/mobile.tsx:312 src/sigid.ts:42
 msgid "Noise"
 msgstr "Brus"
 
@@ -3686,11 +3686,11 @@ msgstr "Ställ in den"
 msgid "Open the {mode} decoder"
 msgstr "Öppna {mode}-avkodaren"
 
-#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:106
 msgid "Tune"
 msgstr "Ställ in"
 
-#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:106
 msgid "Decode"
 msgstr "Avkoda"
 
@@ -3709,51 +3709,63 @@ msgstr "trolig"
 msgid "unsure"
 msgstr "osäker"
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:85
+msgid "A wide look: the channel in IQ (±{khz} kHz) for {n} s, then back…"
+msgstr "En bred titt: kanalen som IQ (±{khz} kHz) i {n} s, sedan tillbaka…"
+
+#: src/ctl/sigid.tsx:87
 msgid "Tuned to it; listening for {n} s…"
 msgstr "Inställd; lyssnar {n} s till…"
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:88
 msgid "Listening for {n} s…"
 msgstr "Lyssnar {n} s till…"
 
-#: src/ctl/sigid.tsx:86
+#: src/ctl/sigid.tsx:92
 msgid "Nothing stands out of the noise there."
 msgstr "Inget sticker ut ur bruset där."
 
-#: src/ctl/sigid.tsx:103
+#: src/ctl/sigid.tsx:109
 msgid "Measure it again from the next 4 seconds"
 msgstr "Mät igen under de nästa 4 sekunderna"
 
-#: src/ctl/sigid.tsx:108
+#: src/ctl/sigid.tsx:113
+msgid "Measure it from the channel's IQ, up to 20 kHz wide, for 4 seconds, then tune back"
+msgstr "Mät från kanalens IQ, upp till 20 kHz brett, i 4 sekunder, ställ sedan tillbaka"
+
+#: src/ctl/sigid.tsx:114
+msgid "Wide look"
+msgstr "Bred titt"
+
+#: src/ctl/sigid.tsx:119
 msgid "Measured"
 msgstr "Uppmätt"
 
-#: src/ctl/sigid.tsx:134
+#: src/ctl/sigid.tsx:145
 msgid "Signals"
 msgstr "Signaler"
 
-#: src/ctl/sigid.tsx:136 src/ctl/sigid.tsx:136
+#: src/ctl/sigid.tsx:147 src/ctl/sigid.tsx:147
 msgid "Stop identifying"
 msgstr "Sluta identifiera"
 
-#: src/ctl/sigid.tsx:143
+#: src/ctl/sigid.tsx:154
 msgid "Signals are identified in CW, USB and LSB."
 msgstr "Signaler identifieras i CW, USB och LSB."
 
-#: src/ctl/sigid.tsx:145
+#: src/ctl/sigid.tsx:156
 msgid "Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once."
 msgstr "Inget ännu: varje signal i passbandet hittas och identifieras i tur och ordning från de senaste 4 sekunderna ljud, en varannan sekund. Ett brett passband (USB, 3 kHz) visar flera samtidigt."
 
-#: src/ctl/sigid.tsx:152
+#: src/ctl/sigid.tsx:163
 msgid "Looks like"
 msgstr "Ser ut som"
 
-#: src/ctl/sigid.tsx:163
+#: src/ctl/sigid.tsx:174
 msgid "Trained on synthetic signals; a guess, not a decode."
 msgstr "Tränad på syntetiska signaler; en gissning, inte en avkodning."
 
-#: src/ctl/sigid.tsx:164
+#: src/ctl/sigid.tsx:175
 msgid "For a closer look at one signal: its ? button, or shift-drag across it on the waterfall."
 msgstr "En närmare titt på en signal: dess ?-knapp, eller Shift+dra över den i vattenfallet."
 
@@ -4301,335 +4313,468 @@ msgid "no message on hand"
 msgstr "inget meddelande att sända"
 
 #. SITOR-B: the maritime FEC teleprinter mode NAVTEX uses; Bd = baud
-#: src/sigdesc.ts:170
+#: src/sigdesc.ts:253
 msgid "SITOR-B / NAVTEX (100 Bd, 170 Hz shift)"
 msgstr "SITOR-B / NAVTEX (100 Bd, 170 Hz skift)"
 
+#: src/sigdesc.ts:255
+msgid "PACTOR-I ({baud} Bd, 200 Hz shift, in ARQ bursts)"
+msgstr "PACTOR-I ({baud} Bd, 200 Hz skift, i ARQ-skurar)"
+
 #. the German weather service's teleprinter broadcasts
-#: src/sigdesc.ts:173
+#: src/sigdesc.ts:258
 msgid "RTTY 50 Bd, 450 Hz shift (as the DWD weather broadcasts)"
 msgstr "RTTY 50 Bd, 450 Hz skift (som DWD:s vädersändningar)"
 
-#: src/sigdesc.ts:174
+#: src/sigdesc.ts:259
 msgid "RTTY {baud} Bd, {shift} Hz shift"
 msgstr "RTTY {baud} Bd, {shift} Hz skift"
 
-#: src/sigdesc.ts:176
+#: src/sigdesc.ts:261
 msgid "ASCII teleprinter, {baud} Bd, {shift} Hz shift"
 msgstr "ASCII-fjärrskrift, {baud} Bd, {shift} Hz skift"
 
 #. HF fax: weather charts sent by radio; black and white are two frequencies 800 Hz apart
-#: src/sigdesc.ts:180
+#: src/sigdesc.ts:265
 msgid "HF fax (black and white 800 Hz apart)"
 msgstr "HF-fax (svart och vitt 800 Hz isär)"
 
 #. 2G ALE: automatic link establishment, MIL-STD-188-141; 8-FSK = eight tones
-#: src/sigdesc.ts:183
+#: src/sigdesc.ts:268
 msgid "2G ALE (8-FSK, 250 Hz apart, 125 Bd)"
 msgstr "2G ALE (8-FSK, 250 Hz isär, 125 Bd)"
 
-#: src/sigdesc.ts:184
+#: src/sigdesc.ts:269
 msgid "HFDL (1800 Bd PSK, aircraft data link)"
 msgstr "HFDL (1800 Bd PSK, datalänk för flyg)"
 
-#: src/sigdesc.ts:186
+#: src/sigdesc.ts:271
+msgid "2400 Bd PSK in bursts (as 3G ALE)"
+msgstr "2400 Bd PSK i skurar (som 3G ALE)"
+
+#: src/sigdesc.ts:273
 msgid "STANAG 4285 (2400 Bd PSK, 106.7 ms frames)"
 msgstr "STANAG 4285 (2400 Bd PSK, 106,7 ms ramar)"
 
 #. serial-tone: one carrier, fast PSK symbols (MIL-STD-188-110A, STANAG 4285...)
-#: src/sigdesc.ts:189
+#: src/sigdesc.ts:276
 msgid "2400 Bd serial-tone PSK modem (as MIL-STD-188-110A)"
 msgstr "2400 Bd PSK-modem med en bärvåg (som MIL-STD-188-110A)"
 
-#: src/sigdesc.ts:196
+#: src/sigdesc.ts:283
 msgid "{mode} (BPSK, {baud} Bd)"
 msgstr "{mode} (BPSK, {baud} Bd)"
 
+#. DRM = Digital Radio Mondiale, digital shortwave broadcasting; OFDM = many carriers; mode A-D = its robustness modes
+#: src/sigdesc.ts:297
+msgid "DRM digital broadcast (OFDM, mode {m}, {ms} ms symbols)"
+msgstr "DRM digitalradio (OFDM, mod {m}, {ms} ms symboler)"
+
+#: src/sigdesc.ts:298
+msgid "OFDM, {ms} ms symbols"
+msgstr "OFDM, {ms} ms symboler"
+
+#: src/sigdesc.ts:301
+msgid "39-tone HF modem (44.44 Bd)"
+msgstr "HF-modem med 39 toner (44,44 Bd)"
+
+#: src/sigdesc.ts:304
+msgid "39-tone HF modem (56.25 Hz apart)"
+msgstr "HF-modem med 39 toner (56,25 Hz isär)"
+
+#: src/sigdesc.ts:306
+msgid "MT63 ({width} wide)"
+msgstr "MT63 ({width} bred)"
+
+#: src/sigdesc.ts:307
+msgid "{n} carriers {spacing} Hz apart (a parallel-tone modem)"
+msgstr "{n} bärvågor {spacing} Hz isär (ett parallelltonsmodem)"
+
+#: src/sigdesc.ts:342
+msgid "8-FSK, 6.25 Hz apart (as FT8)"
+msgstr "8-FSK, 6,25 Hz isär (som FT8)"
+
+#: src/sigdesc.ts:345
+msgid "MFSK16 (or DominoEX / THOR)"
+msgstr "MFSK16 (eller DominoEX / THOR)"
+
+#. DominoEX and THOR: amateur modes of 18 tones, each the last plus 2 + the data (incremental frequency keying)
+#: src/sigdesc.ts:349
+msgid "DominoEX or THOR (18 tones {sp} Hz apart)"
+msgstr "DominoEX eller THOR (18 toner {sp} Hz isär)"
+
+#. Olivia and Contestia: amateur MFSK modes, M tones over a bandwidth
+#: src/sigdesc.ts:352
+msgid "Olivia or Contestia {m}/{bw}"
+msgstr "Olivia eller Contestia {m}/{bw}"
+
+#. Feld Hell: text drawn as pixels by on-off keying
+#: src/sigdesc.ts:357
+msgid "Feld Hell ({ms} ms pixels)"
+msgstr "Feld Hell ({ms} ms pixlar)"
+
+#. ARQ: automatic repeat request, data and short acknowledgements in turn
+#: src/sigdesc.ts:360
+msgid "PACTOR (ARQ: 0.96 s bursts every 1.25 s)"
+msgstr "PACTOR (ARQ: 0,96 s skurar var 1,25 s)"
+
 #. CW = Morse; WPM = words per minute
-#: src/sigdesc.ts:201
+#: src/sigdesc.ts:364
 msgid "CW (Morse), about {wpm} WPM"
 msgstr "CW (morse), cirka {wpm} WPM"
 
-#: src/sigdesc.ts:203
+#: src/sigdesc.ts:366
 msgid "An unmodulated carrier"
 msgstr "En omodulerad bärvåg"
 
-#: src/sigdesc.ts:204
+#. WSPR: a slow amateur beacon mode, 6 Hz wide
+#: src/sigdesc.ts:369
+msgid "A narrow steady signal: a carrier, or a slow mode such as WSPR"
+msgstr "En smal jämn signal: en bärvåg, eller en långsam mod som WSPR"
+
+#: src/sigdesc.ts:371
+msgid "AM stations side by side ({n} carriers)"
+msgstr "AM-stationer sida vid sida ({n} bärvågor)"
+
+#: src/sigdesc.ts:373
+msgid "AM broadcast ({width} kHz wide)"
+msgstr "AM-rundradio ({width} kHz bred)"
+
+#: src/sigdesc.ts:374
 msgid "AM (a carrier with both sidebands)"
 msgstr "AM (en bärvåg med båda sidbanden)"
 
-#: src/sigdesc.ts:205
+#: src/sigdesc.ts:375
 msgid "A carrier with sidebands on one side (AM heard in SSB?)"
 msgstr "En bärvåg med sidband på ena sidan (AM hörd i SSB?)"
 
-#: src/sigdesc.ts:206
+#: src/sigdesc.ts:376
 msgid "Speech (SSB voice)"
 msgstr "Tal (SSB)"
 
-#: src/sigdesc.ts:208
+#: src/sigdesc.ts:378
 msgid "Two-tone FSK, {shift} Hz shift"
 msgstr "Tvåtons-FSK, {shift} Hz skift"
 
-#: src/sigdesc.ts:210
+#: src/sigdesc.ts:380
 msgid "{n} tones {spacing} Hz apart (MFSK)"
 msgstr "{n} toner {spacing} Hz isär (MFSK)"
 
-#: src/sigdesc.ts:212
+#: src/sigdesc.ts:382
 msgid "{psk} phase modulation"
 msgstr "{psk}-fasmodulering"
 
-#: src/sigdesc.ts:214
+#: src/sigdesc.ts:384
 msgid "Pulses, {rate} a second"
 msgstr "Pulser, {rate} per sekund"
 
-#: src/sigdesc.ts:268
+#: src/sigdesc.ts:445
 msgid "The identifier guessed {mode} ({p} %), but the figures fit this better."
 msgstr "Identifieraren gissade på {mode} ({p} %), men mätvärdena passar bättre in på detta."
 
-#: src/sigdesc.ts:278 src/sigdesc.ts:283
+#: src/sigdesc.ts:455 src/sigdesc.ts:464
 msgid "The identifier guessed {mode}, which the figures don't bear out."
 msgstr "Identifieraren gissade på {mode}, vilket mätvärdena inte stöder."
 
-#: src/sigdesc.ts:280
+#: src/sigdesc.ts:457
 msgid "{a} or {b}?"
 msgstr "{a} eller {b}?"
 
-#: src/sigdesc.ts:280
+#: src/sigdesc.ts:457 src/sigdesc.ts:467
 msgid "{mode}?"
 msgstr "{mode}?"
 
-#: src/sigdesc.ts:285
+#: src/sigdesc.ts:470
+msgid "A carrier with little modulation"
+msgstr "En bärvåg med lite modulering"
+
+#: src/sigdesc.ts:473 src/sigdesc.ts:477
 msgid "Something unknown"
 msgstr "Något okänt"
 
-#: src/sigdesc.ts:297
+#: src/sigdesc.ts:489
 msgid "{n} kHz"
 msgstr "{n} kHz"
 
-#: src/sigdesc.ts:297
+#: src/sigdesc.ts:489
 msgid "{n} Hz"
 msgstr "{n} Hz"
 
-#: src/sigdesc.ts:300
+#: src/sigdesc.ts:492
 msgid "It fills the passband: widen the passband to see its edges (its width and SNR here are only a lower bound)."
 msgstr "Den fyller passbandet: bredda passbandet för att se dess kanter (bredd och SNR här är bara en undre gräns)."
 
-#: src/sigdesc.ts:301
+#: src/sigdesc.ts:493
 msgid "A narrow signal at {khz} kHz, {snr} dB over the noise."
 msgstr "En smal signal på {khz} kHz, {snr} dB över bruset."
 
-#: src/sigdesc.ts:302
+#: src/sigdesc.ts:494
 msgid "About {width} wide around {khz} kHz, {snr} dB over the noise."
 msgstr "Cirka {width} bred kring {khz} kHz, {snr} dB över bruset."
 
-#: src/sigdesc.ts:303
+#: src/sigdesc.ts:495
 msgid "It is weak: the figures below are rough."
 msgstr "Den är svag: värdena nedan är grova."
 
-#: src/sigdesc.ts:305
+#: src/sigdesc.ts:497
 msgid "Keyed on and off: on {duty} % of the time, the shortest elements about {ms} ms."
 msgstr "Nycklad av och på: på {duty} % av tiden, de kortaste elementen cirka {ms} ms."
 
-#: src/sigdesc.ts:306
+#: src/sigdesc.ts:498
 msgid "In bursts: on {duty} % of the time."
 msgstr "I skurar: på {duty} % av tiden."
 
-#: src/sigdesc.ts:307
+#: src/sigdesc.ts:499
 msgid "On {duty} % of the time."
 msgstr "På {duty} % av tiden."
 
-#: src/sigdesc.ts:308
+#: src/sigdesc.ts:500
 msgid "Its level rises and falls at syllable rates, as speech does."
 msgstr "Nivån stiger och sjunker i stavelsetakt, som tal gör."
 
-#: src/sigdesc.ts:309
+#: src/sigdesc.ts:501
 msgid "Its level stays constant, as FM, FSK or a carrier."
 msgstr "Nivån är konstant, som för FM, FSK eller en bärvåg."
 
-#: src/sigdesc.ts:311
+#: src/sigdesc.ts:505
+msgid "Carriers at {list} kHz, their sidebands overlapping: stations side by side."
+msgstr "Bärvågor på {list} kHz, sidbanden överlappar: stationer sida vid sida."
+
+#: src/sigdesc.ts:509
 msgid "A carrier with sidebands on both sides: AM."
 msgstr "En bärvåg med sidband på båda sidor: AM."
 
-#: src/sigdesc.ts:313
+#: src/sigdesc.ts:511
 msgid "A carrier with sidebands on one side only: AM heard through an SSB filter (tune in AM to hear it), or a carrier beside SSB."
 msgstr "En bärvåg med sidband bara på ena sidan: AM hört genom ett SSB-filter (ställ in AM för att höra den), eller en bärvåg bredvid SSB."
 
-#: src/sigdesc.ts:314
+#: src/sigdesc.ts:514
 msgid "It shifts between two tones {shift} Hz apart."
 msgstr "Den växlar mellan två toner {shift} Hz isär."
 
-#: src/sigdesc.ts:315
+#: src/sigdesc.ts:515
 msgid "{n} tones on a {spacing} Hz grid."
 msgstr "{n} toner i ett raster om {spacing} Hz."
 
-#: src/sigdesc.ts:320
+#: src/sigdesc.ts:520
 msgid "Symbols at {baud} Bd."
 msgstr "Symboler med {baud} Bd."
 
-#: src/sigdesc.ts:321
+#: src/sigdesc.ts:521
 msgid "Phase modulation with {k} phases ({psk})."
 msgstr "Fasmodulering med {k} faser ({psk})."
 
-#: src/sigdesc.ts:322
+#: src/sigdesc.ts:523
+msgid "Its amplitude is noise-like, as many carriers at once make it (OFDM), and a pattern repeats every {ms} ms: its symbols."
+msgstr "Amplituden är brusliknande, som många bärvågor samtidigt gör den (OFDM), och ett mönster upprepas var {ms} ms: dess symboler."
+
+#: src/sigdesc.ts:524
+msgid "{n} carriers on a {spacing} Hz grid at once."
+msgstr "{n} bärvågor samtidigt i ett raster om {spacing} Hz."
+
+#: src/sigdesc.ts:525
 msgid "A pattern repeats every {ms} ms (frames or probe sequences)."
 msgstr "Ett mönster upprepas var {ms} ms (ramar eller testsekvenser)."
 
-#: src/sigdesc.ts:323
+#: src/sigdesc.ts:526
 msgid "Pulses every {ms} ms ({rate} a second)."
 msgstr "Pulser var {ms} ms ({rate} per sekund)."
 
-#: src/sigdesc.ts:326
+#: src/sigdesc.ts:529
 msgid "Drifting {rate} Hz a second."
 msgstr "Driver {rate} Hz per sekund."
 
-#: src/sigdesc.ts:332
+#: src/sigdesc.ts:535
 msgid "Centre"
 msgstr "Mitt"
 
-#: src/sigdesc.ts:333
+#: src/sigdesc.ts:536
 msgid "Width"
 msgstr "Bredd"
 
-#: src/sigdesc.ts:333
+#: src/sigdesc.ts:536
 msgid "{width} ({w90} holds 90 % of the power)"
 msgstr "{width} ({w90} rymmer 90 % av effekten)"
 
-#: src/sigdesc.ts:335
+#: src/sigdesc.ts:538
 msgid "Time on"
 msgstr "Tid på"
 
-#: src/sigdesc.ts:337
+#: src/sigdesc.ts:540
 msgid "Tones"
 msgstr "Toner"
 
-#: src/sigdesc.ts:338
+#: src/sigdesc.ts:541
 msgid "Envelope line"
 msgstr "Envelopplinje"
 
-#: src/sigdesc.ts:339
+#: src/sigdesc.ts:542
 msgid "Frequency-change line"
 msgstr "Frekvensändringslinje"
 
-#: src/sigdesc.ts:340
+#: src/sigdesc.ts:543
 msgid "Repeats"
 msgstr "Upprepas"
 
-#: src/sigdesc.ts:341
+#: src/sigdesc.ts:544
 msgid "Envelope repeats"
 msgstr "Envelopp upprepas"
 
-#: src/sigdesc.ts:342
+#: src/sigdesc.ts:545
+msgid "Shift"
+msgstr "Skift"
+
+#: src/sigdesc.ts:546
 msgid "Carrier share"
 msgstr "Bärvågens andel"
 
-#: src/sigdesc.ts:343
+#. peak to average power ratio of the signal
+#: src/sigdesc.ts:548
+msgid "Peak to average"
+msgstr "Topp/medel"
+
+#: src/sigdesc.ts:549
 msgid "Identifier"
 msgstr "Identifierare"
 
-#: src/sigdesc.ts:355
+#: src/sigdesc.ts:561
 msgid "In the {band} amateur band, its {use} segment."
 msgstr "I amatörbandet {band}, segmentet för {use}."
 
-#: src/sigdesc.ts:356
+#: src/sigdesc.ts:562
 msgid "In the {band} amateur band."
 msgstr "I amatörbandet {band}."
 
-#: src/sigdesc.ts:357
+#: src/sigdesc.ts:563
 msgid "In the {name} band ({service})."
 msgstr "I bandet {name} ({service})."
 
-#: src/sigdesc.ts:366
+#: src/sigdesc.ts:572
 msgid "Listed near it: {list}."
 msgstr "Listade i närheten: {list}."
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/sigid.ts:35
+#: src/sigid.ts:42
 msgid "nothing recognisable at this frequency"
 msgstr "inget igenkännbart på den här frekvensen"
 
-#: src/sigid.ts:36
+#: src/sigid.ts:43
 msgid "an unmodulated carrier"
 msgstr "en omodulerad bärvåg"
 
-#: src/sigid.ts:37
+#: src/sigid.ts:44
 msgid "Morse"
 msgstr "Morse"
 
-#: src/sigid.ts:38
+#: src/sigid.ts:45
 msgid "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)"
 msgstr "tvåtons FSK: RTTY, SITOR-B/NAVTEX, ASCII (RTTY-panelen räknar ut baudhastighet, skift och kod)"
 
-#: src/sigid.ts:39
+#: src/sigid.ts:46
 msgid "BPSK 31-125 Bd: PSK31, PSK63, PSK125"
 msgstr "BPSK 31–125 Bd: PSK31, PSK63, PSK125"
 
-#: src/sigid.ts:40
+#: src/sigid.ts:47
 msgid "FT8"
 msgstr "FT8"
 
-#: src/sigid.ts:41
+#: src/sigid.ts:48
 msgid "FT4"
 msgstr "FT4"
 
-#: src/sigid.ts:42
+#: src/sigid.ts:49
 msgid "WSPR beacons"
 msgstr "WSPR-fyrar"
 
-#: src/sigid.ts:43
+#: src/sigid.ts:50
 msgid "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)"
 msgstr "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (avkodas inte här)"
 
-#: src/sigid.ts:44
+#: src/sigid.ts:51
 msgid "2400 Bd PSK modem, 106.7 ms frames (not decoded here)"
 msgstr "2400 Bd PSK-modem, 106,7 ms ramar (avkodas inte här)"
 
-#: src/sigid.ts:45
+#: src/sigid.ts:52
 msgid "MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)"
 msgstr "MIL-STD-188-110A serial-tone-modem, 2400 Bd PSK (avkodas inte här)"
 
-#: src/sigid.ts:46
+#: src/sigid.ts:53
 msgid "slow-scan television"
 msgstr "slow-scan-tv"
 
-#: src/sigid.ts:47
+#: src/sigid.ts:54
 msgid "HF fax"
 msgstr "HF-fax"
 
-#: src/sigid.ts:47
+#: src/sigid.ts:54
 msgid "weather fax (radiofax)"
 msgstr "väderfax (radiofax)"
 
-#: src/sigid.ts:48
+#: src/sigid.ts:55
 msgid "SSB voice"
 msgstr "SSB-tal"
 
-#: src/sigid.ts:48
+#: src/sigid.ts:55
 msgid "single-sideband speech"
 msgstr "enkelsidbandstal"
 
-#: src/sigid.ts:49
+#: src/sigid.ts:56
 msgid "AM broadcast or voice"
 msgstr "AM-rundradio eller tal"
 
-#: src/sigid.ts:50
+#: src/sigid.ts:57
 msgid "Interference"
 msgstr "Störning"
 
-#: src/sigid.ts:50
+#: src/sigid.ts:57
 msgid "local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands"
 msgstr "lokala störningar: bärvågor med brusiga flanker, bärvågspar och kammar, vandrande brusband"
 
-#: src/sigid.ts:51
+#: src/sigid.ts:58
 msgid "Radar"
 msgstr "Radar"
 
-#: src/sigid.ts:51
+#: src/sigid.ts:58
 msgid "over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second"
 msgstr "överhorisontradar eller jonosond: svep eller pulser som upprepas 5–60 gånger per sekund"
 
-#: src/sigid.ts:52
+#: src/sigid.ts:59
 msgid "aircraft data link, 1800 Bd PSK bursts"
 msgstr "flygets datalänk, 1800 Bd PSK-skurar"
+
+#: src/sigid.ts:60
+msgid "Olivia or Contestia: 4-64 tones over 125-2000 Hz (not decoded here)"
+msgstr "Olivia eller Contestia: 4-64 toner över 125-2000 Hz (avkodas inte här)"
+
+#: src/sigid.ts:61
+msgid "MFSK8/16/32/64: 16 or 32 tones, the spacing the symbol rate (not decoded here)"
+msgstr "MFSK8/16/32/64: 16 eller 32 toner, avståndet lika med symbolhastigheten (avkodas inte här)"
+
+#: src/sigid.ts:62
+msgid "DominoEX or THOR: 18 tones, incremental frequency keying (not decoded here)"
+msgstr "DominoEX eller THOR: 18 toner, inkrementell frekvensnyckling (avkodas inte här)"
+
+#: src/sigid.ts:63
+msgid "Feld Hell: letters drawn by on-off keying, read by eye (not decoded here)"
+msgstr "Feld Hell: bokstäver ritade med av/på-nyckling, läses med ögat (avkodas inte här)"
+
+#: src/sigid.ts:64
+msgid "PACTOR I-III: data in ARQ bursts on a 1.25 s cycle (not decoded here)"
+msgstr "PACTOR I-III: data i ARQ-skurar med 1,25 s period (avkodas inte här)"
+
+#. parallel-tone: many carriers at once
+#: src/sigid.ts:66
+msgid "Multi-tone modem"
+msgstr "Flertonsmodem"
+
+#. parallel-tone: many carriers at once
+#: src/sigid.ts:66
+msgid "many carriers at once: MT63, the 39-tone modem, OFDM data such as VARA (not decoded here)"
+msgstr "många bärvågor samtidigt: MT63, 39-tonsmodemet, OFDM-data som VARA (avkodas inte här)"
+
+#: src/sigid.ts:67
+msgid "3G ALE (MIL-STD-188-141B): 2400 Bd PSK bursts (not decoded here)"
+msgstr "3G ALE (MIL-STD-188-141B): 2400 Bd PSK-skurar (avkodas inte här)"
 
 #: src/state.ts:165
 msgid "password needed"
@@ -4639,7 +4784,7 @@ msgstr "lösenord krävs"
 msgid "login failed ({status})"
 msgstr "inloggningen misslyckades ({status})"
 
-#: src/state.ts:718 src/state.ts:2247
+#: src/state.ts:718 src/state.ts:2308
 msgid "nothing was received"
 msgstr "inget togs emot"
 
@@ -4655,19 +4800,19 @@ msgstr "{name} ({s} s{lost})"
 msgid "named by the clock"
 msgstr "namngiven efter klockan"
 
-#: src/state.ts:2247
+#: src/state.ts:2308
 msgid "only silence was heard"
 msgstr "bara tystnad hördes"
 
-#: src/state.ts:2257
+#: src/state.ts:2318
 msgid ", {s} s of silence left out"
 msgstr ", {s} s tystnad utelämnad"
 
-#: src/state.ts:2258
+#: src/state.ts:2319
 msgid "; ended when the audio format changed"
 msgstr "; avslutad när ljudformatet ändrades"
 
-#: src/state.ts:2259
+#: src/state.ts:2320
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 

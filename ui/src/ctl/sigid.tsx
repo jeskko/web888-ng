@@ -9,7 +9,7 @@ import { formatKhz } from "../fmt.ts";
 import { N_, t } from "../i18n.ts";
 import { audioBand } from "../cw.ts";
 import { CLASS_INFO, SURE, type SigRow } from "../sigid.ts";
-import { closeAsk, openSig, setSig, sigAsk, sigError, sigOn, sigRows, st, whatIs } from "../state.ts";
+import { closeAsk, openSig, setSig, sigAsk, sigError, sigOn, sigRows, st, whatIs, whatIsWide } from "../state.ts";
 
 export function SigCtl() {
   const on = sigOn.value;
@@ -80,7 +80,13 @@ function AskCard() {
         </button>
       </div>
       {d === undefined ? (
-        <p class="dim">{a.retuned ? t("Tuned to it; listening for {n} s…", { n: a.left }) : t("Listening for {n} s…", { n: a.left })}</p>
+        <p class="dim">
+          {a.wide
+            ? t("A wide look: the channel in IQ (±{khz} kHz) for {n} s, then back…", { khz: a.wide.rate / 2400, n: a.left })
+            : a.retuned
+              ? t("Tuned to it; listening for {n} s…", { n: a.left })
+              : t("Listening for {n} s…", { n: a.left })}
+        </p>
       ) : d === null ? (
         <>
           <p>{t("Nothing stands out of the noise there.")}</p>
@@ -100,9 +106,14 @@ function AskCard() {
                 {speech ? t("Tune") : t("Decode")}
               </button>
             )}
-            <button onClick={() => whatIs(a.rfLo, a.rfHi)} title={t("Measure it again from the next 4 seconds")}>
+            <button onClick={() => (a.wide ? whatIsWide(a.rfLo, a.rfHi) : whatIs(a.rfLo, a.rfHi))} title={t("Measure it again from the next 4 seconds")}>
               {t("Again")}
             </button>
+            {!a.wide && (
+              <button onClick={() => whatIsWide(a.rfLo, a.rfHi)} title={t("Measure it from the channel's IQ, up to 20 kHz wide, for 4 seconds, then tune back")}>
+                {t("Wide look")}
+              </button>
+            )}
           </div>
           <details>
             <summary>{t("Measured")}</summary>

@@ -17,16 +17,27 @@
 //! * `sig_analyse(lo, hi)`: what is in audio lo..hi Hz ("what is this?"):
 //!   the length of the JSON at `sig_output()`, `{"an":null}` if nothing
 //!   stands over the floor there, else `{"an":{..}}` ([`analysis_json`])
+//! * the receiver's IQ ("what is this?" wider than the audio):
+//!   `sig_iq_buffer(n)` room for n complex samples (I, Q interleaved
+//!   f32), `sig_iq_push(n, rate)` keeps the last 4.096 s (a new rate
+//!   starts over), `sig_iq_held()` seconds held, `sig_iq_analyse(lo, hi,
+//!   band_lo, band_hi)` (Hz from the dial; the JSON as `sig_analyse`'s),
+//!   `sig_iq_reset()`
 
+use num_complex::Complex32;
 use std::cell::RefCell;
+use std::collections::VecDeque;
 use std::fmt::Write;
 use web888_sigid::measure::Line;
-use web888_sigid::scan::{Analysis, Found, Scanner};
+use web888_sigid::measure::iq_len;
+use web888_sigid::scan::{Analysis, Found, Scanner, analyse_iq};
 
 struct State {
     scanner: Scanner,
     input: Vec<f32>,
     output: String,
+    iq: VecDeque<Complex32>,
+    iq_rate: f64,
 }
 
 thread_local! {
@@ -34,6 +45,8 @@ thread_local! {
         scanner: Scanner::new(),
         input: Vec::new(),
         output: String::new(),
+        iq: VecDeque::new(),
+        iq_rate: 0.0,
     });
 }
 
@@ -96,7 +109,7 @@ pub fn analysis_json(a: Option<&Analysis>) -> String {
         .collect();
     let opt = |v: Option<f64>| v.map_or("null".into(), num);
     format!(
-        "{{\"an\":{{\"lo\":{},\"hi\":{},\"centre\":{},\"bw90\":{},\"snr\":{},\"fills\":{},\"duty\":{},\"bursts\":{},\"onMean\":{},\"onShort\":{},\"envCv\":{},\"syllabic\":{},\"tones\":[{}],\"spacing\":{},\"line\":{},\"lineAt\":{},\"sideLo\":{},\"sideHi\":{},\"baudEnv\":{},\"baudFreq\":{},\"psk\":{},\"period\":{},\"envPeriod\":{},\"drift\":{},\"top\":[{}]}}}}",
+        "{{\"an\":{{\"lo\":{},\"hi\":{},\"centre\":{},\"bw90\":{},\"snr\":{},\"fills\":{},\"duty\":{},\"bursts\":{},\"onMean\":{},\"onShort\":{},\"depth\":{},\"envCv\":{},\"syllabic\":{},\"papr\":{},\"kurt\":{},\"tones\":[{}],\"spacing\":{},\"grid\":{},\"shift\":{},\"line\":{},\"lineAt\":{},\"sideLo\":{},\"sideHi\":{},\"mirror\":{},\"carriers\":[{}],\"baudEnv\":{},\"baudFreq\":{},\"psk\":{},\"period\":{},\"envPeriod\":{},\"symbol\":{},\"drift\":{},\"top\":[{}]}}}}",
         num(m.lo),
         num(m.hi),
         num(m.centre),
@@ -107,14 +120,32 @@ pub fn analysis_json(a: Option<&Analysis>) -> String {
         m.bursts,
         num(m.on_mean),
         num(m.on_short),
+        num(m.depth),
         num(m.env_cv),
         num(m.syllabic),
+        num(m.papr),
+        num(m.kurt),
         tones.join(","),
         opt(m.spacing),
+        m.grid.map_or("null".into(), |g| format!(
+            "[{},{},{},{},{}]",
+            num(g.spacing),
+            g.n,
+            num(g.strength),
+            num(g.frame),
+            num(g.changes)
+        )),
+        opt(m.shift),
         num(m.line),
         num(m.line_at),
         num(m.side_lo),
         num(m.side_hi),
+        num(m.mirror),
+        m.carriers
+            .iter()
+            .map(|c| format!("[{},{}]", num(c.at), num(c.db)))
+            .collect::<Vec<_>>()
+            .join(","),
         line(m.baud_env),
         line(m.baud_freq),
         m.psk.map_or("null".into(), |(k, l)| format!(
@@ -124,9 +155,58 @@ pub fn analysis_json(a: Option<&Analysis>) -> String {
         )),
         line(m.period),
         line(m.env_period),
+        line(m.symbol),
         opt(m.drift),
         top.join(","),
     )
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_iq_buffer(n: usize) -> *mut f32 {
+    sig_buffer(2 * n)
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_iq_push(n: usize, rate: f64) {
+    STATE.with_borrow_mut(|s| {
+        if rate != s.iq_rate {
+            s.iq.clear();
+            s.iq_rate = rate;
+        }
+        let n = n.min(s.input.len() / 2);
+        for k in 0..n {
+            s.iq.push_back(Complex32::new(s.input[2 * k], s.input[2 * k + 1]));
+        }
+        let keep = iq_len(rate);
+        while s.iq.len() > keep {
+            s.iq.pop_front();
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_iq_held() -> f64 {
+    STATE.with_borrow(|s| {
+        if s.iq_rate > 0.0 {
+            s.iq.len() as f64 / s.iq_rate
+        } else {
+            0.0
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_iq_reset() {
+    STATE.with_borrow_mut(|s| s.iq.clear());
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_iq_analyse(lo: f64, hi: f64, band_lo: f64, band_hi: f64) -> usize {
+    STATE.with_borrow_mut(|s| {
+        let x: Vec<Complex32> = s.iq.iter().copied().collect();
+        s.output = analysis_json(analyse_iq(&x, s.iq_rate, (lo, hi), (band_lo, band_hi)).as_ref());
+        s.output.len()
+    })
 }
 
 #[unsafe(no_mangle)]

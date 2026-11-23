@@ -2,7 +2,7 @@
 // "What is this?" on real analyses (test/fixtures/sigdesc.json: the JSON
 // of crates/sigid-wasm's example anjson on synthetic signals of each
 // mode (tools/ml/sigid/modes.py) and on recordings of AM, SSB and the
-// DWD's RTTY).
+// DWD's RTTY; the wide looks' IQ of an AM broadcast and of DRM-like OFDM).
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { readFileSync } from "node:fs";
@@ -29,11 +29,42 @@ const cases: [string, RegExp, string | null, string][] = [
   ["am", /^AM \(a carrier with both sidebands\)$/, "am", "sure"],
   ["amUsb", /sidebands on one side/, "am", "likely"],
   ["ssb", /^Speech \(SSB voice\)$/, "ssb", "likely"],
+  // on air, 2026-10-22: an AM station fading (not keying), weak LSB
+  // speech, a weak WSPR signal (no AM), a busy FT8 sub-band with a carrier
+  ["amFade", /^AM \(a carrier with both sidebands\)$/, "am", "sure"],
+  ["ssbWeak", /^Speech \(SSB voice\)$/, "ssb", "unsure"],
+  ["wsprWeak", /^A narrow steady signal/, null, "unsure"],
+  ["ft8Crowd", /FT8/, "ft8", "unsure"],
+  // the 2026-11-23 classes (synthetic, modes.py)
+  ["olivia", /^Olivia or Contestia 8\/250$/, "olivia", "likely"],
+  ["mfsk16", /^MFSK16/, "mfsk", "likely"],
+  ["dominoex", /^DominoEX or THOR \(18 tones/, "dominoex", "likely"],
+  ["hell", /^Feld Hell/, "hell", "likely"],
+  ["pactor1", /^PACTOR-I \((100|200) Bd, 200 Hz shift/, "pactor", "likely"],
+  ["tone39", /^39-tone HF modem/, "multitone", "likely"],
+  ["ale3g", /^2400 Bd PSK in bursts \(as 3G ALE\)$/, "ale3g", "likely"],
 ];
 
+// wide looks (IQ, Hz from the dial): a 40 m AM broadcast on air
+// (2026-11-15, 7240 kHz) and DRM-like OFDM (mode B, synthetic)
+const iqCases: [string, RegExp, string | null][] = [
+  ["amIq", /^AM/, "am"],
+  ["drm", /^DRM digital broadcast \(OFDM, mode B, 21\.33 ms symbols\)$/, null],
+];
+for (const [k, title, cls] of iqCases) {
+  test(`sigdesc: ${k} (wide)`, () => {
+    const d = describe(an(k), { rf: (h: number) => 7_240_000 + h, plan: null, markers: [] });
+    assert.match(d.title, title, `${k}: ${d.title} | ${d.text.join(" ")}`);
+    assert.equal(d.cls, cls, k);
+    assert.ok(Math.abs(d.rf - 7_240_000) < 100, `${d.rf}`);
+  });
+}
+
+// where each was (FT8's sub-band; else 7 MHz)
+const at: Record<string, number> = { ft8Crowd: 7_074_000 };
 for (const [k, title, cls, sure] of cases) {
   test(`sigdesc: ${k}`, () => {
-    const d = describe(an(k), usb);
+    const d = describe(an(k), { ...usb, rf: (a: number) => (at[k] ?? 7_000_000) + a });
     assert.match(d.title, title, `${k}: ${d.title} | ${d.text.join(" ")}`);
     assert.equal(d.cls, cls, k);
     assert.equal(d.sure, sure, `${k}: ${d.title}`);

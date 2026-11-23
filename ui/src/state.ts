@@ -1533,12 +1533,16 @@ function sigStart(): Worker {
     const ask = sigAsk.value;
     if (ask && d.id === ask.id) {
       if (d.wait !== undefined) sigAsk.value = { ...ask, left: d.wait };
-      else if (d.an !== undefined && d.gen === sigGen)
+      else if (d.an !== undefined && (ask.wide || d.gen === sigGen)) {
+        // a wide look: its IQ is Hz from the dial it was measured at
+        const rf = ask.wide ? (h: number) => ask.wide!.dial + h : sigRf;
         sigAsk.value = {
           ...ask,
           left: 0,
-          desc: d.an ? describeSig(d.an, { rf: sigRf, plan: bandPlan.value, markers: freqMarkers.value }) : null,
+          desc: d.an ? describeSig(d.an, { rf, plan: bandPlan.value, markers: freqMarkers.value }) : null,
         };
+        if (ask.wide) restoreWide();
+      }
       return;
     }
     if (!d.run || d.gen !== sigGen) return;
@@ -1550,6 +1554,25 @@ function sigStart(): Worker {
 function sigAudio(f: AudioFrame): void {
   const s = st.value;
   if (!sigOn.value || !s) return;
+  const ask = sigAsk.value;
+  if (ask?.wide && ask.desc === undefined) {
+    // a wide look: the channel's IQ (I, Q interleaved) at the wide rate
+    if (s.mode !== "iq" || !f.stereo || f.rate !== ask.wide.rate || s.hz !== ask.wide.dial) return;
+    sigWorker ??= sigStart();
+    const iq = f.pcm.slice();
+    sigWorker.postMessage({ iq, rate: f.rate }, [iq.buffer]);
+    if (askPending) {
+      const d = ask.wide.dial;
+      sigWorker.postMessage({ iqReset: true });
+      sigWorker.postMessage({
+        analyseIq: [askPending.rfLo - d, askPending.rfHi - d, s.lo + 100, s.hi - 100],
+        id: askPending.id,
+        gen: sigGen,
+      });
+      askPending = null;
+    }
+    return;
+  }
   const band = audioBand(s.mode, s.lo, s.hi, s.pitch);
   if (!band) return;
   sigWorker ??= sigStart();
@@ -1591,10 +1614,46 @@ export interface SigAsk {
   retuned: boolean;
   left: number;
   desc?: Desc | null;
+  /** A wide look: measured from the channel's IQ (this dial and rate). */
+  wide?: { dial: number; rate: number };
 }
 export const sigAsk = signal<SigAsk | null>(null);
 let askId = 0;
 let askPending: { rfLo: number; rfHi: number; id: number } | null = null;
+/** The tuning to go back to after a wide look. */
+let wideSaved: { hz: number; mode: Mode; lo: number; hi: number; rate: number } | null = null;
+
+function restoreWide(): void {
+  const w = wideSaved;
+  wideSaved = null;
+  const s = st.value;
+  if (!w || !s) return;
+  if ((s.audio_rate ?? audioRate) !== w.rate) setAudio({ audio_rate: w.rate });
+  setModePassband(w.mode, w.lo, w.hi);
+  tune(w.hz);
+  sigKey = "";
+}
+
+/** A wide look at `rfLo..rfHi`: the channel in IQ for 4 s (±10 kHz at
+ * 24 kS/s where the receiver offers it, else ±5 kHz), then back. */
+export function whatIsWide(rfLo: number, rfHi: number): void {
+  const s = st.value;
+  if (!s) return;
+  if (!sigOn.value) setSig(true);
+  const rate = audioRates.value.includes(24000) ? 24000 : 12000;
+  const half = rate === 24000 ? 10000 : 5000;
+  const c = Math.round((rfLo + rfHi) / 2);
+  // at least the middle 12 kHz (an AM station's both sidebands), within the IQ
+  const w = Math.min(2 * half - 600, Math.max(rfHi - rfLo, Math.min(12000, 2 * half - 600)));
+  [rfLo, rfHi] = [c - w / 2, c + w / 2];
+  wideSaved ??= { hz: s.hz, mode: s.mode, lo: s.lo, hi: s.hi, rate: s.audio_rate ?? audioRate };
+  if ((s.audio_rate ?? audioRate) !== rate) setAudio({ audio_rate: rate });
+  setModePassband("iq", -half, half);
+  tune(c);
+  const id = ++askId;
+  askPending = { rfLo, rfHi, id };
+  sigAsk.value = { id, rfLo, rfHi, retuned: true, left: 5, wide: { dial: c, rate } };
+}
 
 /** Ask what is in `rfLo..rfHi` (Hz): measured in this browser from the
  * next 4 s of audio, the identifier turned on, and the receiver retuned
@@ -1602,12 +1661,13 @@ let askPending: { rfLo: number; rfHi: number; id: number } | null = null;
 export function whatIs(rfLo: number, rfHi: number): void {
   const s = st.value;
   if (!s) return;
-  // the audio holds 5 kHz at most: the middle of a wider range
+  // wider than the audio holds: a wide look
   if (rfHi - rfLo > 4600) {
-    const c = (rfLo + rfHi) / 2;
-    [rfLo, rfHi] = [c - 2300, c + 2300];
+    whatIsWide(rfLo, rfHi);
+    return;
   }
   if (!sigOn.value) setSig(true);
+  if (wideSaved) restoreWide();
   const p = askPlan(s, audioBand(s.mode, s.lo, s.hi, s.pitch), rfLo, rfHi);
   const id = ++askId;
   if ("tune" in p) {
@@ -1623,6 +1683,7 @@ export function whatIs(rfLo: number, rfHi: number): void {
 export function closeAsk(): void {
   askPending = null;
   sigAsk.value = null;
+  if (wideSaved) restoreWide();
 }
 
 export function setSig(on: boolean): void {

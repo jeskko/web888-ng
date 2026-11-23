@@ -13,6 +13,7 @@ import { t } from "./i18n.ts";
 import type { BandPlan, FreqMarker } from "./markers.ts";
 import { useName } from "./markers.ts";
 import { CLASS_INFO, SURE, type SigClass } from "./sigid.ts";
+import { MODES as DIGI } from "./digi.ts";
 
 /** crates/sigid-wasm's analysis (audio Hz). */
 export interface SigAn {
@@ -26,15 +27,31 @@ export interface SigAn {
   bursts: number;
   onMean: number;
   onShort: number;
+  /** On over off (dB, medians): keying drops to the noise. */
+  depth?: number;
   envCv: number;
   syllabic: number;
+  /** Peak to average power (dB). */
+  papr: number;
+  /** Power kurtosis, the noise taken out: 1 constant envelope, 2
+   * Gaussian-like (OFDM). */
+  kurt?: number;
   /** [audio Hz, dB over the floor], strongest first. */
   tones: [number, number][];
   spacing: number | null;
+  /** Tones seen frame by frame: [spacing Hz, tones, strength, frame s,
+   * changes/s]. */
+  grid?: [number, number, number, number, number] | null;
+  /** Two-tone FSK's shift from its frequency track (Hz). */
+  shift: number | null;
   line: number;
   lineAt: number;
   sideLo: number;
   sideHi: number;
+  /** Below and above the line alike (AM: ~1). */
+  mirror?: number;
+  /** Narrow lines with 5 % of the power or more [Hz, share]. */
+  carriers?: [number, number][];
   /** [Bd, dB the line stands out] */
   baudEnv: [number, number] | null;
   baudFreq: [number, number] | null;
@@ -43,6 +60,8 @@ export interface SigAn {
   /** [s, correlation] */
   period: [number, number] | null;
   envPeriod: [number, number] | null;
+  /** A narrow |R| peak at 2-40 ms: OFDM's useful symbol [s, r]. */
+  symbol?: [number, number] | null;
   drift: number | null;
   top: [string, number][];
 }
@@ -70,6 +89,8 @@ export interface Desc {
   text: string[];
   /** The figures: [label, value]. */
   facts: [string, string][];
+  /** It fills the passband: a wide look would see more. */
+  fills: boolean;
 }
 
 /** What the figures say, before naming anything. */
@@ -81,10 +102,12 @@ export interface Features {
   am: boolean;
   amOneSide: boolean;
   speech: boolean;
-  /** Two tones: their spacing (Hz). */
+  /** Two tones: their shift (Hz); the gap between their spectral peaks. */
   shift: number | null;
-  /** Several tones on one grid: how many, how far apart. */
-  mfsk: { n: number; spacing: number } | null;
+  toneGap: number | null;
+  /** Several tones on one grid: how many, how far apart, how often the
+   * strongest moves (per s, frame by frame). */
+  mfsk: { n: number; spacing: number; changes: number | null } | null;
   /** Symbol rate (Bd). */
   baud: number | null;
   pskOrder: number | null;
@@ -94,6 +117,21 @@ export interface Features {
   steady: boolean;
   /** Typical dit (s) when keyed. */
   dit: number | null;
+  /** Its width (Hz) and whether it fills the passband. */
+  width: number;
+  fills: boolean;
+  /** OFDM: a pattern repeating at the useful symbol (s), the amplitude
+   * noise-like, no carrier. */
+  ofdm: number | null;
+  /** Many carriers at once on one grid. */
+  parallel: { n: number; spacing: number } | null;
+  /** Narrow (90 % of the power within 12 Hz) and steady in level. */
+  narrow: boolean;
+  /** Carriers side by side (Hz as measured), strongest first. */
+  carriers: number[];
+  /** Bursts: on fraction, mean burst (s). */
+  duty: number;
+  onMean: number;
 }
 
 const near = (x: number | null | undefined, v: number, tol: number) => x != null && Math.abs(x - v) <= tol * v;
@@ -108,18 +146,46 @@ export function features(a: SigAn): Features {
     !!t0 &&
     !!t1 &&
     Math.abs(t0[1] - t1[1]) < 12 &&
+    Math.abs(t0[0] - t1[0]) <= 1000 &&
     a.tones.slice(2).every(([h, d]) => d < Math.min(t0[1], t1[1]) - 6 || (h - t0[0]) * (h - t1[0]) < 0) &&
     a.line < 0.5;
   // speech has no symbols; fading FSK's level moves as speech's, a
   // voice's spectrum can have two peaks: FSK when its tones switch at a
   // rate
   const fskRate = twoShape && a.baudFreq != null;
-  const speech = a.line < 0.25 && a.syllabic >= 0.35 && a.envCv >= 0.15 && width >= 600 && !fskRate;
-  const two = twoShape && !speech && (a.envCv < 0.25 || fskRate);
-  const mfsk = a.spacing != null && a.tones.length >= 3 && a.envCv < 0.25 && !two && !speech ? { n: a.tones.length, spacing: a.spacing } : null;
-  const keyed = a.duty > 0.15 && a.duty < 0.9 && a.bursts >= 4 && a.line >= 0.3 && a.onShort >= 0.015;
+  // (weak speech: its level blocks seldom all on, its kurtosis high)
+  const speech = a.line < 0.25 && a.syllabic >= 0.35 && (a.envCv >= 0.15 || (a.kurt ?? 0) >= 1.5) && width >= 600 && !fskRate;
+  // (a clear grid of four or more tones is MFSK, whatever two spectral
+  // peaks stand out)
+  const g = a.grid;
+  const gridMany = !!g && g[1] >= 4 && g[2] >= 0.5;
+  const two = twoShape && !speech && (a.envCv < 0.25 || fskRate) && !gridMany;
+  // hopping tones (one at a time: a constant envelope) on a grid, seen
+  // frame by frame; else peaks of the whole spectrum on a grid
+  // the amplitude's statistics, noise taken out (else peak to average)
+  const papr = a.papr ?? 0;
+  const constant = a.kurt != null && a.kurt > 0 ? a.kurt < 1.15 : papr < 3.5;
+  const gaussian = a.kurt != null && a.kurt > 0 ? a.kurt >= 1.7 : papr >= 5.5;
+  const mfsk =
+    g && g[1] >= 4 && constant && !a.psk && !speech && !two && a.line < 0.5
+      ? { n: g[1], spacing: g[0], changes: g[4] }
+      : a.spacing != null && a.tones.length >= 3 && a.envCv < 0.25 && !two && !speech
+        ? { n: a.tones.length, spacing: a.spacing, changes: null }
+        : null;
+  // keyed: on and off in whole elements that make up most of its time on
+  // (not a steady signal with a few drop-outs)
+  // (and down to the noise: a fading carrier's dips are shallower)
+  const keyed =
+    a.duty > 0.15 &&
+    a.duty < 0.9 &&
+    a.bursts >= 4 &&
+    a.line >= 0.3 &&
+    a.onShort >= 0.003 &&
+    a.bursts * a.onMean >= 0.4 * a.duty * 4.096 &&
+    (a.depth ?? 99) >= 15;
   const sides = [a.sideLo, a.sideHi].sort((x, y) => x - y);
-  const am = a.line >= 0.3 && sides[0] >= 0.005 && sides[0] * 4 >= sides[1] && !keyed;
+  // AM: sidebands on both sides, each other's mirror image
+  const am = a.line >= 0.3 && sides[0] >= 0.005 && sides[0] * 4 >= sides[1] && (a.mirror ?? 1) >= 0.5 && !keyed;
   const amOneSide = a.line >= 0.3 && sides[1] >= 0.005 && sides[0] * 4 < sides[1] && !keyed;
   const carrier = a.line >= 0.8 && a.sideLo + a.sideHi < 0.005 && a.duty >= 0.9;
   // FSK's rate is in its frequency changes (its envelope's lines are the
@@ -132,7 +198,8 @@ export function features(a: SigAn): Features {
     am,
     amOneSide,
     speech,
-    shift: two ? Math.abs(t0[0] - t1[0]) : null,
+    shift: two ? (a.shift ?? Math.abs(t0[0] - t1[0])) : null,
+    toneGap: two ? Math.abs(t0[0] - t1[0]) : null,
     mfsk,
     baud: carrier || am || speech ? null : baud,
     pskOrder: a.psk?.[0] ?? null,
@@ -140,6 +207,22 @@ export function features(a: SigAn): Features {
     pulses: a.envPeriod && a.duty < 0.85 && !keyed ? a.envPeriod[0] : null,
     steady: a.envCv < 0.1 && a.duty >= 0.9 && !keyed && a.line < 0.3,
     dit: keyed ? a.onShort : null,
+    width,
+    fills: a.fills,
+    ofdm: (a.symbol ?? a.period) && a.line < 0.05 && gaussian && width >= 1500 && !speech && !two ? (a.symbol ?? a.period)![0] : null,
+    parallel:
+      g && g[1] >= 8 && gaussian && !speech && a.line < 0.3
+        ? { n: g[1], spacing: g[0] }
+        : a.spacing != null && a.tones.length >= 8 && (a.envCv >= 0.25 || papr >= 4) && !speech && a.line < 0.3
+          ? { n: a.tones.length, spacing: a.spacing }
+          : null,
+    carriers: (a.carriers ?? [])
+      .filter(([, sh]) => sh >= 0.1)
+      .map(([h]) => h)
+      .filter((h, i, all) => all.slice(0, i).every((o) => Math.abs(o - h) >= 1000)),
+    narrow: a.bw90 <= 12 && !keyed && constant,
+    duty: a.duty,
+    onMean: a.onMean,
   };
 }
 
@@ -165,9 +248,11 @@ export function matches(f: Features): Match[] {
   if (f.shift != null && b != null) {
     const sh = RTTY_SHIFT.find((s) => near(f.shift, s, 0.12));
     const bd = RTTY_BAUD.find((r) => near(b, r, 0.03));
-    if (near(b, 100, 0.03) && near(f.shift, 170, 0.15))
+    if (near(b, 100, 0.03) && near(f.shift, 170, 0.12) && f.duty >= 0.9)
       // i18n: SITOR-B: the maritime FEC teleprinter mode NAVTEX uses; Bd = baud
       out.push({ title: t("SITOR-B / NAVTEX (100 Bd, 170 Hz shift)"), cls: "fsk", exact: true, rate: 100 });
+    else if ((near(b, 100, 0.03) || near(b, 200, 0.03)) && near(f.shift, 200, 0.12) && f.duty < 0.9 && f.duty > 0.5)
+      out.push({ title: t("PACTOR-I ({baud} Bd, 200 Hz shift, in ARQ bursts)", { baud: Math.round(b) }), cls: "pactor", exact: true, rate: Math.round(b) });
     else if (bd != null && near(b, 50, 0.03) && near(f.shift, 450, 0.1))
       // i18n: the German weather service's teleprinter broadcasts
       out.push({ title: t("RTTY 50 Bd, 450 Hz shift (as the DWD weather broadcasts)"), cls: "fsk", exact: true, rate: 50 });
@@ -175,14 +260,16 @@ export function matches(f: Features): Match[] {
     else if (sh != null && [110, 150, 300].some((r) => near(b, r, 0.03)))
       out.push({ title: t("ASCII teleprinter, {baud} Bd, {shift} Hz shift", { baud: n(b), shift: Math.round(f.shift) }), cls: "fsk", exact: true });
   }
-  if (f.shift != null && near(f.shift, 800, 0.1))
+  if (f.toneGap != null && near(f.toneGap, 800, 0.1))
     // i18n: HF fax: weather charts sent by radio; black and white are two frequencies 800 Hz apart
     out.push({ title: t("HF fax (black and white 800 Hz apart)"), cls: "fax", exact: true, rate: null });
   if (f.mfsk && near(f.mfsk.spacing, 250, 0.05) && (b == null || near(b, 125, 0.05) || near(b, 250, 0.05)))
     // i18n: 2G ALE: automatic link establishment, MIL-STD-188-141; 8-FSK = eight tones
     out.push({ title: t("2G ALE (8-FSK, 250 Hz apart, 125 Bd)"), cls: "ale", exact: true, rate: 125 });
   if (b != null && near(b, 1800, 0.01)) out.push({ title: t("HFDL (1800 Bd PSK, aircraft data link)"), cls: "hfdl", exact: true, rate: 1800 });
-  if (near(f.frame, 0.10667, 0.03))
+  if (b != null && near(b, 2400, 0.01) && f.duty < 0.7 && !near(f.frame, 0.10667, 0.03))
+    out.push({ title: t("2400 Bd PSK in bursts (as 3G ALE)"), cls: "ale3g", exact: true, rate: 2400 });
+  else if (near(f.frame, 0.10667, 0.03))
     out.push({ title: t("STANAG 4285 (2400 Bd PSK, 106.7 ms frames)"), cls: "stanag4285", exact: true, rate: 2400 });
   else if (b != null && near(b, 2400, 0.01))
     // i18n: serial-tone: one carrier, fast PSK symbols (MIL-STD-188-110A, STANAG 4285...)
@@ -195,13 +282,96 @@ export function matches(f: Features): Match[] {
     if (near(b, r, 0.02) && (f.pskOrder === 2 || f.pskOrder == null) && !f.shift && !f.mfsk)
       out.push({ title: f.pskOrder === 2 ? t("{mode} (BPSK, {baud} Bd)", { mode: name, baud: r }) : name, cls: "psk31", exact: f.pskOrder === 2, rate: r });
   }
-  if (f.keyed && f.dit) {
+  // DRM: OFDM whose useful symbol is one of its four robustness modes'
+  if (f.ofdm != null) {
+    const drm = (
+      [
+        ["A", 0.024],
+        ["B", 0.021333],
+        ["C", 0.014667],
+        ["D", 0.009333],
+      ] as const
+    ).find(([, tu]) => near(f.ofdm, tu, 0.02));
+    if (drm)
+      // i18n: DRM = Digital Radio Mondiale, digital shortwave broadcasting; OFDM = many carriers; mode A-D = its robustness modes
+      out.push({ title: t("DRM digital broadcast (OFDM, mode {m}, {ms} ms symbols)", { m: drm[0], ms: (1000 * drm[1]).toFixed(2) }), cls: null, exact: true, rate: null });
+    else out.push({ title: t("OFDM, {ms} ms symbols", { ms: (1000 * f.ofdm).toFixed(1) }), cls: "multitone", exact: false, rate: null });
+  }
+  if (b != null && near(b, 44.44, 0.02) && f.width >= 1900 && f.width <= 2700 && !f.parallel)
+    out.push({ title: t("39-tone HF modem (44.44 Bd)"), cls: "multitone", exact: true, rate: 44.44 });
+  if (f.parallel) {
+    const { n, spacing } = f.parallel;
+    if (near(spacing, 56.25, 0.03)) out.push({ title: t("39-tone HF modem (56.25 Hz apart)"), cls: "multitone", exact: true, rate: 44.44 });
+    else if ([7.8125, 15.625, 31.25].some((v) => near(spacing, v, 0.03)) && n >= 20)
+      out.push({ title: t("MT63 ({width} wide)", { width: `${Math.round((64 * spacing) / 100) * 100} Hz` }), cls: "multitone", exact: true, rate: null });
+    else out.push({ title: t("{n} carriers {spacing} Hz apart (a parallel-tone modem)", { n, spacing: spacing.toFixed(1) }), cls: "multitone", exact: false });
+  }
+  // the MFSK families, by their tone grid (spacing, tones used) and the
+  // rate on it (measured, or how often the tone moves frame by frame)
+  if (f.mfsk && !f.parallel) {
+    const { n, spacing: sp, changes } = f.mfsk;
+    const r = b ?? changes;
+    const rateOk = (x: number) => r == null || near(r, x, 0.25) || near(r, 2 * x, 0.1);
+    const w = f.width;
+    const mf = (
+      [
+        [7.8125, "MFSK8", 32],
+        [15.625, "MFSK16", 16],
+        [31.25, "MFSK32", 16],
+        [62.5, "MFSK64", 16],
+      ] as const
+    ).find(([v, , m]) => near(sp, v, 0.03) && n >= m - 3 && n <= m && rateOk(v));
+    const dom = [7.8125, 10.766, 15.625, 21.533].some((v) => near(sp, v, 0.03)) && n >= 15 && n <= 18;
+    // Olivia's and Contestia's tones/bandwidth pairs
+    const OL = [
+      [4, 125],
+      [4, 250],
+      [8, 250],
+      [8, 500],
+      [16, 500],
+      [8, 1000],
+      [16, 1000],
+      [32, 1000],
+      [64, 2000],
+    ] as const;
+    const olm = OL.find(([m, bw]) => Math.abs(n - m) <= Math.max(1, m / 8) && near(sp, bw / m, 0.1));
+    const [ol, olBw] = olm ?? [0, 0];
+    if (near(sp, 250, 0.05) && n >= 6 && n <= 8 && (b == null || near(b, 125, 0.05) || near(b, 250, 0.05))) {
+      // (2G ALE: matched below from its tones)
+    } else if (near(sp, 6.25, 0.04) && n >= 6 && n <= 8)
+      out.push({ title: t("8-FSK, 6.25 Hz apart (as FT8)"), cls: "ft8", exact: false, rate: 6.25 });
+    else if (near(sp, 15.625, 0.03) && n >= 14 && n <= 16)
+      // (DominoEX's 18 tones at this spacing, one or two unseen, look the same)
+      out.push({ title: t("MFSK16 (or DominoEX / THOR)"), cls: "mfsk", exact: true, rate: null });
+    else if (mf && n <= 16) out.push({ title: mf[1], cls: "mfsk", exact: true, rate: mf[0] });
+    else if (dom && n >= 17)
+      // i18n: DominoEX and THOR: amateur modes of 18 tones, each the last plus 2 + the data (incremental frequency keying)
+      out.push({ title: t("DominoEX or THOR (18 tones {sp} Hz apart)", { sp: sp.toFixed(2) }), cls: "dominoex", exact: true, rate: null });
+    else if (ol && olBw && w <= 1.4 * olBw + 100)
+      // i18n: Olivia and Contestia: amateur MFSK modes, M tones over a bandwidth
+      out.push({ title: t("Olivia or Contestia {m}/{bw}", { m: ol, bw: olBw }), cls: "olivia", exact: true, rate: null });
+    else if (mf) out.push({ title: mf[1], cls: "mfsk", exact: true, rate: mf[0] });
+  }
+  if (f.keyed && f.dit && f.dit >= 0.0035 && f.dit <= 0.014)
+    // i18n: Feld Hell: text drawn as pixels by on-off keying
+    out.push({ title: t("Feld Hell ({ms} ms pixels)", { ms: (1000 * f.dit).toFixed(1) }), cls: "hell", exact: true, rate: null });
+  if (near(f.pulses, 1.25, 0.05) || (f.duty < 0.9 && near(f.onMean, 0.96, 0.08) && f.duty > 0.5))
+    // i18n: ARQ: automatic repeat request, data and short acknowledgements in turn
+    out.push({ title: t("PACTOR (ARQ: 0.96 s bursts every 1.25 s)"), cls: "pactor", exact: true, rate: null });
+  if (f.keyed && f.dit && f.dit > 0.014) {
     const wpm = Math.round(1.2 / f.dit);
     // i18n: CW = Morse; WPM = words per minute
     out.push({ title: t("CW (Morse), about {wpm} WPM", { wpm }), cls: "cw", exact: wpm >= 5 && wpm <= 60, rate: null });
   }
   if (f.carrier) out.push({ title: t("An unmodulated carrier"), cls: "carrier", exact: true });
-  if (f.am) out.push({ title: t("AM (a carrier with both sidebands)"), cls: "am", exact: true });
+  else if (f.narrow && !f.am && !f.amOneSide)
+    // i18n: WSPR: a slow amateur beacon mode, 6 Hz wide
+    out.push({ title: t("A narrow steady signal: a carrier, or a slow mode such as WSPR"), cls: null, exact: false, rate: null });
+  if (f.carriers.length >= 2 && !f.keyed)
+    out.push({ title: t("AM stations side by side ({n} carriers)", { n: f.carriers.length }), cls: "am", exact: true, rate: null });
+  else if (f.am && f.width >= 6000 && !f.fills)
+    out.push({ title: t("AM broadcast ({width} kHz wide)", { width: (f.width / 1000).toFixed(1) }), cls: "am", exact: true, rate: null });
+  else if (f.am) out.push({ title: t("AM (a carrier with both sidebands)"), cls: "am", exact: true });
   if (f.amOneSide) out.push({ title: t("A carrier with sidebands on one side (AM heard in SSB?)"), cls: "am", exact: false });
   if (f.speech) out.push({ title: t("Speech (SSB voice)"), cls: "ssb", exact: false });
   if (f.shift != null && !out.some((m) => m.exact))
@@ -219,11 +389,17 @@ function pskName(k: number): string {
   return k === 2 ? "BPSK" : k === 4 ? "QPSK" : k === 8 ? "8-PSK" : `${k}-PSK`;
 }
 
-/** What a class expects of the figures: false when they contradict it. */
-function fits(c: SigClass, f: Features, a: SigAn): boolean {
+/** What a class expects of the figures (and of where it is: FT8, FT4
+ * and WSPR live just above their dials): false when they contradict it. */
+function fits(c: SigClass, f: Features, a: SigAn, rf: number): boolean {
   switch (c) {
+    case "ft8":
+    case "ft4":
+    case "wspr":
+      return DIGI[c].dials.some((d) => rf >= d.hz - 200 && rf <= d.hz + 3200);
     case "am":
-      return a.line >= 0.3;
+      // a carrier, and something beside it
+      return a.line >= 0.3 && a.sideLo + a.sideHi >= 0.005;
     case "carrier":
       return !f.keyed && a.line >= 0.5;
     case "ssb":
@@ -231,7 +407,8 @@ function fits(c: SigClass, f: Features, a: SigAn): boolean {
     case "cw":
       return a.line >= 0.2;
     case "fsk":
-      return f.shift != null || f.mfsk != null || a.envCv < 0.25;
+      // (two tones: a grid of more is MFSK)
+      return f.shift != null || (f.mfsk == null && a.envCv < 0.25);
     case "noise":
       return a.snr < 6;
     default:
@@ -253,7 +430,7 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
   let chosen: Match | null = null;
   const exact = ms.find((m) => m.exact);
   const agree = ms.find((m) => m.cls != null && top.slice(0, 2).some((x) => x.cls === m.cls && x.p >= 0.2));
-  const fit = best ? fits(best.cls, f, a) : false;
+  const fit = best ? fits(best.cls, f, a, ctx.rf(a.centre)) : false;
   if (agree) {
     chosen = agree;
     title = agree.title;
@@ -276,11 +453,26 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
     cls = ms[0].cls;
     sure = "unsure";
     if (best && !fit) text.push(t("The identifier guessed {mode}, which the figures don't bear out.", { mode: label(best.cls) }));
-  } else if (best) {
+  } else if (best && fit) {
     title = top[1] && top[1].p >= 0.15 ? t("{a} or {b}?", { a: label(best.cls), b: label(top[1].cls) }) : t("{mode}?", { mode: label(best.cls) });
     cls = best.cls;
     sure = "unsure";
-    if (!fit) text.push(t("The identifier guessed {mode}, which the figures don't bear out.", { mode: label(best.cls) }));
+  } else if (best) {
+    // its guess contradicted: the next one that fits, else what the
+    // figures show
+    const alt = top.slice(1, 3).find((x) => x.p >= 0.1 && fits(x.cls, f, a, ctx.rf(a.centre)));
+    text.push(t("The identifier guessed {mode}, which the figures don't bear out.", { mode: label(best.cls) }));
+    sure = "unsure";
+    if (alt) {
+      title = t("{mode}?", { mode: label(alt.cls) });
+      cls = alt.cls;
+    } else if (a.line >= 0.5) {
+      title = t("A carrier with little modulation");
+      cls = null;
+    } else {
+      title = t("Something unknown");
+      cls = null;
+    }
   } else {
     title = t("Something unknown");
     cls = null;
@@ -308,10 +500,18 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
   if (f.speech) text.push(t("Its level rises and falls at syllable rates, as speech does."));
   else if (f.steady && !f.carrier) text.push(t("Its level stays constant, as FM, FSK or a carrier."));
   // its spectrum
-  if (f.am) text.push(t("A carrier with sidebands on both sides: AM."));
+  if (f.carriers.length >= 2 && !f.keyed)
+    text.push(
+      t("Carriers at {list} kHz, their sidebands overlapping: stations side by side.", {
+        list: f.carriers.map((h) => formatKhz(Math.round(ctx.rf(h)))).join(", "),
+      }),
+    );
+  else if (f.am) text.push(t("A carrier with sidebands on both sides: AM."));
   else if (f.amOneSide)
     text.push(t("A carrier with sidebands on one side only: AM heard through an SSB filter (tune in AM to hear it), or a carrier beside SSB."));
-  if (f.shift != null) text.push(t("It shifts between two tones {shift} Hz apart.", { shift: Math.round(f.shift) }));
+  // (fax's levels are greys between black and white: its tones' gap)
+  const shiftSaid = chosen?.cls === "fax" ? f.toneGap : f.shift;
+  if (shiftSaid != null) text.push(t("It shifts between two tones {shift} Hz apart.", { shift: Math.round(shiftSaid) }));
   else if (f.mfsk) text.push(t("{n} tones on a {spacing} Hz grid.", { n: f.mfsk.n, spacing: f.mfsk.spacing.toFixed(1) }));
   // the measured rate, unless the mode named has none or another
   const r = chosen?.rate;
@@ -319,8 +519,11 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
   const shown = r ?? f.baud;
   if (shown != null && rateFits) text.push(t("Symbols at {baud} Bd.", { baud: shown >= 100 ? Math.round(shown) : +shown.toFixed(2) }));
   if (f.pskOrder) text.push(t("Phase modulation with {k} phases ({psk}).", { k: f.pskOrder, psk: pskName(f.pskOrder) }));
-  if (f.frame != null) text.push(t("A pattern repeats every {ms} ms (frames or probe sequences).", { ms: (1000 * f.frame).toFixed(f.frame < 0.1 ? 1 : 0) }));
-  if (f.pulses != null) text.push(t("Pulses every {ms} ms ({rate} a second).", { ms: (1000 * f.pulses).toFixed(1), rate: (1 / f.pulses).toFixed(1) }));
+  if (f.ofdm != null)
+    text.push(t("Its amplitude is noise-like, as many carriers at once make it (OFDM), and a pattern repeats every {ms} ms: its symbols.", { ms: (1000 * f.ofdm).toFixed(2) }));
+  else if (f.parallel) text.push(t("{n} carriers on a {spacing} Hz grid at once.", { n: f.parallel.n, spacing: f.parallel.spacing.toFixed(2) }));
+  if (f.frame != null && f.ofdm == null) text.push(t("A pattern repeats every {ms} ms (frames or probe sequences).", { ms: (1000 * f.frame).toFixed(f.frame < 0.1 ? 1 : 0) }));
+  if (f.pulses != null && chosen?.cls !== "pactor") text.push(t("Pulses every {ms} ms ({rate} a second).", { ms: (1000 * f.pulses).toFixed(1), rate: (1 / f.pulses).toFixed(1) }));
   if (a.drift != null) {
     const d = ctx.rf(a.centre + a.drift) - rf;
     text.push(t("Drifting {rate} Hz a second.", { rate: (d > 0 ? "+" : "") + d.toFixed(1) }));
@@ -339,9 +542,12 @@ export function describe(a: SigAn, ctx: DescCtx): Desc {
   if (a.baudFreq) facts.push([t("Frequency-change line"), `${a.baudFreq[0].toFixed(2)} Hz (${Math.round(a.baudFreq[1])} dB)`]);
   if (a.period) facts.push([t("Repeats"), `${(1000 * a.period[0]).toFixed(1)} ms (r ${a.period[1].toFixed(2)})`]);
   if (a.envPeriod) facts.push([t("Envelope repeats"), `${(1000 * a.envPeriod[0]).toFixed(1)} ms (r ${a.envPeriod[1].toFixed(2)})`]);
+  if (a.shift != null) facts.push([t("Shift"), `${Math.round(a.shift)} Hz`]);
   facts.push([t("Carrier share"), `${Math.round(100 * a.line)} %`]);
+  // i18n: peak to average power ratio of the signal
+  facts.push([t("Peak to average"), `${(a.papr ?? 0).toFixed(1)} dB`]);
   facts.push([t("Identifier"), top.slice(0, 3).map((x) => `${label(x.cls)} ${Math.round(100 * x.p)} %`).join(", ")]);
-  return { title, sure, cls, rf, rfLo, rfHi, text, facts };
+  return { title, sure, cls, rf, rfLo, rfHi, text, facts, fills: a.fills };
 }
 
 /** Where it is: the band plan's band or segment, the labels near it. */

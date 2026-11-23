@@ -715,7 +715,7 @@ msgstr "Uusi salasana"
 msgid "New password again"
 msgstr "Uusi salasana uudelleen"
 
-#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:87 src/ctl/sigid.tsx:104
+#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:93 src/ctl/sigid.tsx:110
 msgid "Again"
 msgstr "Uudelleen"
 
@@ -1452,7 +1452,7 @@ msgid "station"
 msgstr "asema"
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
-#: src/admin/clock.tsx:327 src/sigdesc.ts:334
+#: src/admin/clock.tsx:327 src/sigdesc.ts:537
 msgid "SNR"
 msgstr "SNR"
 
@@ -3478,7 +3478,7 @@ msgid "Audio"
 msgstr "Ääni"
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/ctl/mobile.tsx:312 src/sigid.ts:35
+#: src/ctl/mobile.tsx:312 src/sigid.ts:42
 msgid "Noise"
 msgstr "Kohina"
 
@@ -3686,11 +3686,11 @@ msgstr "Viritä siihen"
 msgid "Open the {mode} decoder"
 msgstr "Avaa {mode}-dekooderi"
 
-#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:106
 msgid "Tune"
 msgstr "Viritä"
 
-#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:106
 msgid "Decode"
 msgstr "Dekoodaa"
 
@@ -3709,51 +3709,63 @@ msgstr "todennäköinen"
 msgid "unsure"
 msgstr "epävarma"
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:85
+msgid "A wide look: the channel in IQ (±{khz} kHz) for {n} s, then back…"
+msgstr "Laaja katsaus: kanava IQ-muodossa (±{khz} kHz) {n} s, sitten takaisin…"
+
+#: src/ctl/sigid.tsx:87
 msgid "Tuned to it; listening for {n} s…"
 msgstr "Viritetty; kuunnellaan vielä {n} s…"
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:88
 msgid "Listening for {n} s…"
 msgstr "Kuunnellaan vielä {n} s…"
 
-#: src/ctl/sigid.tsx:86
+#: src/ctl/sigid.tsx:92
 msgid "Nothing stands out of the noise there."
 msgstr "Siellä ei erotu mitään kohinasta."
 
-#: src/ctl/sigid.tsx:103
+#: src/ctl/sigid.tsx:109
 msgid "Measure it again from the next 4 seconds"
 msgstr "Mittaa uudelleen seuraavista 4 sekunnista"
 
-#: src/ctl/sigid.tsx:108
+#: src/ctl/sigid.tsx:113
+msgid "Measure it from the channel's IQ, up to 20 kHz wide, for 4 seconds, then tune back"
+msgstr "Mittaa kanavan IQ:sta, enintään 20 kHz leveältä, 4 sekuntia, sitten viritä takaisin"
+
+#: src/ctl/sigid.tsx:114
+msgid "Wide look"
+msgstr "Laaja katsaus"
+
+#: src/ctl/sigid.tsx:119
 msgid "Measured"
 msgstr "Mitattu"
 
-#: src/ctl/sigid.tsx:134
+#: src/ctl/sigid.tsx:145
 msgid "Signals"
 msgstr "Signaalit"
 
-#: src/ctl/sigid.tsx:136 src/ctl/sigid.tsx:136
+#: src/ctl/sigid.tsx:147 src/ctl/sigid.tsx:147
 msgid "Stop identifying"
 msgstr "Lopeta tunnistus"
 
-#: src/ctl/sigid.tsx:143
+#: src/ctl/sigid.tsx:154
 msgid "Signals are identified in CW, USB and LSB."
 msgstr "Signaalit tunnistetaan CW-, USB- ja LSB-tilassa."
 
-#: src/ctl/sigid.tsx:145
+#: src/ctl/sigid.tsx:156
 msgid "Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once."
 msgstr "Ei vielä mitään: jokainen päästökaistan signaali etsitään ja tunnistetaan vuorollaan äänen viimeisten 4 sekunnin perusteella, yksi 2 s välein. Leveä päästökaista (USB, 3 kHz) näyttää useita kerralla."
 
-#: src/ctl/sigid.tsx:152
+#: src/ctl/sigid.tsx:163
 msgid "Looks like"
 msgstr "Arvio"
 
-#: src/ctl/sigid.tsx:163
+#: src/ctl/sigid.tsx:174
 msgid "Trained on synthetic signals; a guess, not a decode."
 msgstr "Opetettu synteettisillä signaaleilla; arvaus, ei dekoodaus."
 
-#: src/ctl/sigid.tsx:164
+#: src/ctl/sigid.tsx:175
 msgid "For a closer look at one signal: its ? button, or shift-drag across it on the waterfall."
 msgstr "Tarkempi katsaus yhteen signaaliin: sen ?-painike tai Shift+veto sen yli vesiputouksessa."
 
@@ -4301,335 +4313,468 @@ msgid "no message on hand"
 msgstr "ei viestejä"
 
 #. SITOR-B: the maritime FEC teleprinter mode NAVTEX uses; Bd = baud
-#: src/sigdesc.ts:170
+#: src/sigdesc.ts:253
 msgid "SITOR-B / NAVTEX (100 Bd, 170 Hz shift)"
 msgstr "SITOR-B / NAVTEX (100 Bd, 170 Hz siirto)"
 
+#: src/sigdesc.ts:255
+msgid "PACTOR-I ({baud} Bd, 200 Hz shift, in ARQ bursts)"
+msgstr "PACTOR-I ({baud} Bd, 200 Hz siirto, ARQ-purskeina)"
+
 #. the German weather service's teleprinter broadcasts
-#: src/sigdesc.ts:173
+#: src/sigdesc.ts:258
 msgid "RTTY 50 Bd, 450 Hz shift (as the DWD weather broadcasts)"
 msgstr "RTTY 50 Bd, 450 Hz siirto (kuten DWD:n säälähetykset)"
 
-#: src/sigdesc.ts:174
+#: src/sigdesc.ts:259
 msgid "RTTY {baud} Bd, {shift} Hz shift"
 msgstr "RTTY {baud} Bd, {shift} Hz siirto"
 
-#: src/sigdesc.ts:176
+#: src/sigdesc.ts:261
 msgid "ASCII teleprinter, {baud} Bd, {shift} Hz shift"
 msgstr "ASCII-kaukokirjoitin, {baud} Bd, {shift} Hz siirto"
 
 #. HF fax: weather charts sent by radio; black and white are two frequencies 800 Hz apart
-#: src/sigdesc.ts:180
+#: src/sigdesc.ts:265
 msgid "HF fax (black and white 800 Hz apart)"
 msgstr "HF-faksi (musta ja valkoinen 800 Hz:n päässä toisistaan)"
 
 #. 2G ALE: automatic link establishment, MIL-STD-188-141; 8-FSK = eight tones
-#: src/sigdesc.ts:183
+#: src/sigdesc.ts:268
 msgid "2G ALE (8-FSK, 250 Hz apart, 125 Bd)"
 msgstr "2G ALE (8-FSK, 250 Hz:n välein, 125 Bd)"
 
-#: src/sigdesc.ts:184
+#: src/sigdesc.ts:269
 msgid "HFDL (1800 Bd PSK, aircraft data link)"
 msgstr "HFDL (1800 Bd PSK, lentokoneiden datayhteys)"
 
-#: src/sigdesc.ts:186
+#: src/sigdesc.ts:271
+msgid "2400 Bd PSK in bursts (as 3G ALE)"
+msgstr "2400 Bd PSK purskeina (kuten 3G ALE)"
+
+#: src/sigdesc.ts:273
 msgid "STANAG 4285 (2400 Bd PSK, 106.7 ms frames)"
 msgstr "STANAG 4285 (2400 Bd PSK, 106,7 ms:n kehykset)"
 
 #. serial-tone: one carrier, fast PSK symbols (MIL-STD-188-110A, STANAG 4285...)
-#: src/sigdesc.ts:189
+#: src/sigdesc.ts:276
 msgid "2400 Bd serial-tone PSK modem (as MIL-STD-188-110A)"
 msgstr "2400 Bd:n yhden kantoaallon PSK-modeemi (kuten MIL-STD-188-110A)"
 
-#: src/sigdesc.ts:196
+#: src/sigdesc.ts:283
 msgid "{mode} (BPSK, {baud} Bd)"
 msgstr "{mode} (BPSK, {baud} Bd)"
 
+#. DRM = Digital Radio Mondiale, digital shortwave broadcasting; OFDM = many carriers; mode A-D = its robustness modes
+#: src/sigdesc.ts:297
+msgid "DRM digital broadcast (OFDM, mode {m}, {ms} ms symbols)"
+msgstr "DRM-digitaaliradio (OFDM, tila {m}, {ms} ms:n symbolit)"
+
+#: src/sigdesc.ts:298
+msgid "OFDM, {ms} ms symbols"
+msgstr "OFDM, {ms} ms:n symbolit"
+
+#: src/sigdesc.ts:301
+msgid "39-tone HF modem (44.44 Bd)"
+msgstr "39-kantoaaltoinen HF-modeemi (44,44 Bd)"
+
+#: src/sigdesc.ts:304
+msgid "39-tone HF modem (56.25 Hz apart)"
+msgstr "39-kantoaaltoinen HF-modeemi (56,25 Hz:n välein)"
+
+#: src/sigdesc.ts:306
+msgid "MT63 ({width} wide)"
+msgstr "MT63 ({width} leveä)"
+
+#: src/sigdesc.ts:307
+msgid "{n} carriers {spacing} Hz apart (a parallel-tone modem)"
+msgstr "{n} kantoaaltoa {spacing} Hz:n välein (rinnakkaisäänimodeemi)"
+
+#: src/sigdesc.ts:342
+msgid "8-FSK, 6.25 Hz apart (as FT8)"
+msgstr "8-FSK, 6,25 Hz:n välein (kuten FT8)"
+
+#: src/sigdesc.ts:345
+msgid "MFSK16 (or DominoEX / THOR)"
+msgstr "MFSK16 (tai DominoEX / THOR)"
+
+#. DominoEX and THOR: amateur modes of 18 tones, each the last plus 2 + the data (incremental frequency keying)
+#: src/sigdesc.ts:349
+msgid "DominoEX or THOR (18 tones {sp} Hz apart)"
+msgstr "DominoEX tai THOR (18 ääntä {sp} Hz:n välein)"
+
+#. Olivia and Contestia: amateur MFSK modes, M tones over a bandwidth
+#: src/sigdesc.ts:352
+msgid "Olivia or Contestia {m}/{bw}"
+msgstr "Olivia tai Contestia {m}/{bw}"
+
+#. Feld Hell: text drawn as pixels by on-off keying
+#: src/sigdesc.ts:357
+msgid "Feld Hell ({ms} ms pixels)"
+msgstr "Feld Hell ({ms} ms:n pikselit)"
+
+#. ARQ: automatic repeat request, data and short acknowledgements in turn
+#: src/sigdesc.ts:360
+msgid "PACTOR (ARQ: 0.96 s bursts every 1.25 s)"
+msgstr "PACTOR (ARQ: 0,96 s:n purskeet 1,25 s:n välein)"
+
 #. CW = Morse; WPM = words per minute
-#: src/sigdesc.ts:201
+#: src/sigdesc.ts:364
 msgid "CW (Morse), about {wpm} WPM"
 msgstr "CW (sähkötys), noin {wpm} WPM"
 
-#: src/sigdesc.ts:203
+#: src/sigdesc.ts:366
 msgid "An unmodulated carrier"
 msgstr "Moduloimaton kantoaalto"
 
-#: src/sigdesc.ts:204
+#. WSPR: a slow amateur beacon mode, 6 Hz wide
+#: src/sigdesc.ts:369
+msgid "A narrow steady signal: a carrier, or a slow mode such as WSPR"
+msgstr "Kapea tasainen signaali: kantoaalto tai hidas lähetelaji kuten WSPR"
+
+#: src/sigdesc.ts:371
+msgid "AM stations side by side ({n} carriers)"
+msgstr "AM-asemia vierekkäin ({n} kantoaaltoa)"
+
+#: src/sigdesc.ts:373
+msgid "AM broadcast ({width} kHz wide)"
+msgstr "AM-yleisradio ({width} kHz leveä)"
+
+#: src/sigdesc.ts:374
 msgid "AM (a carrier with both sidebands)"
 msgstr "AM (kantoaalto ja molemmat sivunauhat)"
 
-#: src/sigdesc.ts:205
+#: src/sigdesc.ts:375
 msgid "A carrier with sidebands on one side (AM heard in SSB?)"
 msgstr "Kantoaalto, sivunauha vain toisella puolella (AM SSB:llä kuunneltuna?)"
 
-#: src/sigdesc.ts:206
+#: src/sigdesc.ts:376
 msgid "Speech (SSB voice)"
 msgstr "Puhetta (SSB)"
 
-#: src/sigdesc.ts:208
+#: src/sigdesc.ts:378
 msgid "Two-tone FSK, {shift} Hz shift"
 msgstr "Kaksitaajuinen FSK, {shift} Hz siirto"
 
-#: src/sigdesc.ts:210
+#: src/sigdesc.ts:380
 msgid "{n} tones {spacing} Hz apart (MFSK)"
 msgstr "{n} ääntä {spacing} Hz:n välein (MFSK)"
 
-#: src/sigdesc.ts:212
+#: src/sigdesc.ts:382
 msgid "{psk} phase modulation"
 msgstr "{psk}-vaihemodulaatio"
 
-#: src/sigdesc.ts:214
+#: src/sigdesc.ts:384
 msgid "Pulses, {rate} a second"
 msgstr "Pulsseja, {rate} sekunnissa"
 
-#: src/sigdesc.ts:268
+#: src/sigdesc.ts:445
 msgid "The identifier guessed {mode} ({p} %), but the figures fit this better."
 msgstr "Tunnistimen arvaus oli {mode} ({p} %), mutta mittaukset sopivat paremmin tähän."
 
-#: src/sigdesc.ts:278 src/sigdesc.ts:283
+#: src/sigdesc.ts:455 src/sigdesc.ts:464
 msgid "The identifier guessed {mode}, which the figures don't bear out."
 msgstr "Tunnistimen arvaus oli {mode}, mutta mittaukset eivät tue sitä."
 
-#: src/sigdesc.ts:280
+#: src/sigdesc.ts:457
 msgid "{a} or {b}?"
 msgstr "{a} vai {b}?"
 
-#: src/sigdesc.ts:280
+#: src/sigdesc.ts:457 src/sigdesc.ts:467
 msgid "{mode}?"
 msgstr "{mode}?"
 
-#: src/sigdesc.ts:285
+#: src/sigdesc.ts:470
+msgid "A carrier with little modulation"
+msgstr "Kantoaalto, vähän modulaatiota"
+
+#: src/sigdesc.ts:473 src/sigdesc.ts:477
 msgid "Something unknown"
 msgstr "Jotain tuntematonta"
 
-#: src/sigdesc.ts:297
+#: src/sigdesc.ts:489
 msgid "{n} kHz"
 msgstr "{n} kHz"
 
-#: src/sigdesc.ts:297
+#: src/sigdesc.ts:489
 msgid "{n} Hz"
 msgstr "{n} Hz"
 
-#: src/sigdesc.ts:300
+#: src/sigdesc.ts:492
 msgid "It fills the passband: widen the passband to see its edges (its width and SNR here are only a lower bound)."
 msgstr "Se täyttää päästökaistan: levennä päästökaistaa nähdäksesi sen reunat (leveys ja SNR ovat tässä vain alarajoja)."
 
-#: src/sigdesc.ts:301
+#: src/sigdesc.ts:493
 msgid "A narrow signal at {khz} kHz, {snr} dB over the noise."
 msgstr "Kapea signaali taajuudella {khz} kHz, {snr} dB kohinan yläpuolella."
 
-#: src/sigdesc.ts:302
+#: src/sigdesc.ts:494
 msgid "About {width} wide around {khz} kHz, {snr} dB over the noise."
 msgstr "Noin {width} leveä, keskellä {khz} kHz, {snr} dB kohinan yläpuolella."
 
-#: src/sigdesc.ts:303
+#: src/sigdesc.ts:495
 msgid "It is weak: the figures below are rough."
 msgstr "Se on heikko: alla olevat luvut ovat karkeita."
 
-#: src/sigdesc.ts:305
+#: src/sigdesc.ts:497
 msgid "Keyed on and off: on {duty} % of the time, the shortest elements about {ms} ms."
 msgstr "Avainnettu päälle ja pois: päällä {duty} % ajasta, lyhimmät merkit noin {ms} ms."
 
-#: src/sigdesc.ts:306
+#: src/sigdesc.ts:498
 msgid "In bursts: on {duty} % of the time."
 msgstr "Purskeina: päällä {duty} % ajasta."
 
-#: src/sigdesc.ts:307
+#: src/sigdesc.ts:499
 msgid "On {duty} % of the time."
 msgstr "Päällä {duty} % ajasta."
 
-#: src/sigdesc.ts:308
+#: src/sigdesc.ts:500
 msgid "Its level rises and falls at syllable rates, as speech does."
 msgstr "Sen taso nousee ja laskee tavujen tahdissa, kuten puheessa."
 
-#: src/sigdesc.ts:309
+#: src/sigdesc.ts:501
 msgid "Its level stays constant, as FM, FSK or a carrier."
 msgstr "Sen taso pysyy vakiona, kuten FM:ssä, FSK:ssa tai kantoaallossa."
 
-#: src/sigdesc.ts:311
+#: src/sigdesc.ts:505
+msgid "Carriers at {list} kHz, their sidebands overlapping: stations side by side."
+msgstr "Kantoaallot taajuuksilla {list} kHz, sivunauhat päällekkäin: asemia vierekkäin."
+
+#: src/sigdesc.ts:509
 msgid "A carrier with sidebands on both sides: AM."
 msgstr "Kantoaalto ja sivunauhat molemmin puolin: AM."
 
-#: src/sigdesc.ts:313
+#: src/sigdesc.ts:511
 msgid "A carrier with sidebands on one side only: AM heard through an SSB filter (tune in AM to hear it), or a carrier beside SSB."
 msgstr "Kantoaalto, sivunauha vain toisella puolella: SSB-suodattimen läpi kuultu AM (kuuntele AM:llä), tai kantoaalto SSB:n vieressä."
 
-#: src/sigdesc.ts:314
+#: src/sigdesc.ts:514
 msgid "It shifts between two tones {shift} Hz apart."
 msgstr "Se vaihtelee kahden taajuuden välillä, {shift} Hz:n päässä toisistaan."
 
-#: src/sigdesc.ts:315
+#: src/sigdesc.ts:515
 msgid "{n} tones on a {spacing} Hz grid."
 msgstr "{n} ääntä {spacing} Hz:n välein."
 
-#: src/sigdesc.ts:320
+#: src/sigdesc.ts:520
 msgid "Symbols at {baud} Bd."
 msgstr "Symbolinopeus {baud} Bd."
 
-#: src/sigdesc.ts:321
+#: src/sigdesc.ts:521
 msgid "Phase modulation with {k} phases ({psk})."
 msgstr "Vaihemodulaatio, {k} vaihetta ({psk})."
 
-#: src/sigdesc.ts:322
+#: src/sigdesc.ts:523
+msgid "Its amplitude is noise-like, as many carriers at once make it (OFDM), and a pattern repeats every {ms} ms: its symbols."
+msgstr "Sen amplitudi on kohinan kaltainen, kuten monta kantoaaltoa yhtä aikaa tekee (OFDM), ja kuvio toistuu {ms} ms:n välein: sen symbolit."
+
+#: src/sigdesc.ts:524
+msgid "{n} carriers on a {spacing} Hz grid at once."
+msgstr "{n} kantoaaltoa yhtä aikaa {spacing} Hz:n välein."
+
+#: src/sigdesc.ts:525
 msgid "A pattern repeats every {ms} ms (frames or probe sequences)."
 msgstr "Kuvio toistuu {ms} ms:n välein (kehykset tai opetusjaksot)."
 
-#: src/sigdesc.ts:323
+#: src/sigdesc.ts:526
 msgid "Pulses every {ms} ms ({rate} a second)."
 msgstr "Pulsseja {ms} ms:n välein ({rate} sekunnissa)."
 
-#: src/sigdesc.ts:326
+#: src/sigdesc.ts:529
 msgid "Drifting {rate} Hz a second."
 msgstr "Ryömii {rate} Hz sekunnissa."
 
-#: src/sigdesc.ts:332
+#: src/sigdesc.ts:535
 msgid "Centre"
 msgstr "Keskitaajuus"
 
-#: src/sigdesc.ts:333
+#: src/sigdesc.ts:536
 msgid "Width"
 msgstr "Leveys"
 
-#: src/sigdesc.ts:333
+#: src/sigdesc.ts:536
 msgid "{width} ({w90} holds 90 % of the power)"
 msgstr "{width} (90 % tehosta {w90}:n sisällä)"
 
-#: src/sigdesc.ts:335
+#: src/sigdesc.ts:538
 msgid "Time on"
 msgstr "Päällä"
 
-#: src/sigdesc.ts:337
+#: src/sigdesc.ts:540
 msgid "Tones"
 msgstr "Äänet"
 
-#: src/sigdesc.ts:338
+#: src/sigdesc.ts:541
 msgid "Envelope line"
 msgstr "Verhokäyrän viiva"
 
-#: src/sigdesc.ts:339
+#: src/sigdesc.ts:542
 msgid "Frequency-change line"
 msgstr "Taajuusmuutosten viiva"
 
-#: src/sigdesc.ts:340
+#: src/sigdesc.ts:543
 msgid "Repeats"
 msgstr "Toistuu"
 
-#: src/sigdesc.ts:341
+#: src/sigdesc.ts:544
 msgid "Envelope repeats"
 msgstr "Verhokäyrä toistuu"
 
-#: src/sigdesc.ts:342
+#: src/sigdesc.ts:545
+msgid "Shift"
+msgstr "Siirto"
+
+#: src/sigdesc.ts:546
 msgid "Carrier share"
 msgstr "Kantoaallon osuus"
 
-#: src/sigdesc.ts:343
+#. peak to average power ratio of the signal
+#: src/sigdesc.ts:548
+msgid "Peak to average"
+msgstr "Huippu/keskiarvo"
+
+#: src/sigdesc.ts:549
 msgid "Identifier"
 msgstr "Tunnistin"
 
-#: src/sigdesc.ts:355
+#: src/sigdesc.ts:561
 msgid "In the {band} amateur band, its {use} segment."
 msgstr "Radioamatöörialueella {band}, osa: {use}."
 
-#: src/sigdesc.ts:356
+#: src/sigdesc.ts:562
 msgid "In the {band} amateur band."
 msgstr "Radioamatöörialueella {band}."
 
-#: src/sigdesc.ts:357
+#: src/sigdesc.ts:563
 msgid "In the {name} band ({service})."
 msgstr "Alueella {name} ({service})."
 
-#: src/sigdesc.ts:366
+#: src/sigdesc.ts:572
 msgid "Listed near it: {list}."
 msgstr "Lähellä listattuja: {list}."
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/sigid.ts:35
+#: src/sigid.ts:42
 msgid "nothing recognisable at this frequency"
 msgstr "ei mitään tunnistettavaa tällä taajuudella"
 
-#: src/sigid.ts:36
+#: src/sigid.ts:43
 msgid "an unmodulated carrier"
 msgstr "moduloimaton kantoaalto"
 
-#: src/sigid.ts:37
+#: src/sigid.ts:44
 msgid "Morse"
 msgstr "Sähkötys"
 
-#: src/sigid.ts:38
+#: src/sigid.ts:45
 msgid "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)"
 msgstr "kaksitaajuuksinen FSK: RTTY, SITOR-B/NAVTEX, ASCII (RTTY-paneeli selvittää baudinopeuden, siirron ja koodin)"
 
-#: src/sigid.ts:39
+#: src/sigid.ts:46
 msgid "BPSK 31-125 Bd: PSK31, PSK63, PSK125"
 msgstr "BPSK 31–125 Bd: PSK31, PSK63, PSK125"
 
-#: src/sigid.ts:40
+#: src/sigid.ts:47
 msgid "FT8"
 msgstr "FT8"
 
-#: src/sigid.ts:41
+#: src/sigid.ts:48
 msgid "FT4"
 msgstr "FT4"
 
-#: src/sigid.ts:42
+#: src/sigid.ts:49
 msgid "WSPR beacons"
 msgstr "WSPR-majakat"
 
-#: src/sigid.ts:43
+#: src/sigid.ts:50
 msgid "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)"
 msgstr "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (ei dekoodata täällä)"
 
-#: src/sigid.ts:44
+#: src/sigid.ts:51
 msgid "2400 Bd PSK modem, 106.7 ms frames (not decoded here)"
 msgstr "2400 Bd PSK-modeemi, 106,7 ms:n kehykset (ei dekoodata täällä)"
 
-#: src/sigid.ts:45
+#: src/sigid.ts:52
 msgid "MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)"
 msgstr "MIL-STD-188-110A serial tone -modeemi, 2400 Bd PSK (ei dekoodata täällä)"
 
-#: src/sigid.ts:46
+#: src/sigid.ts:53
 msgid "slow-scan television"
 msgstr "hidaspyyhkäisytelevisio"
 
-#: src/sigid.ts:47
+#: src/sigid.ts:54
 msgid "HF fax"
 msgstr "HF-faksi"
 
-#: src/sigid.ts:47
+#: src/sigid.ts:54
 msgid "weather fax (radiofax)"
 msgstr "sääfaksi (radiofaksi)"
 
-#: src/sigid.ts:48
+#: src/sigid.ts:55
 msgid "SSB voice"
 msgstr "SSB-puhe"
 
-#: src/sigid.ts:48
+#: src/sigid.ts:55
 msgid "single-sideband speech"
 msgstr "yksisivunauhapuhe"
 
-#: src/sigid.ts:49
+#: src/sigid.ts:56
 msgid "AM broadcast or voice"
 msgstr "AM-yleisradioasema tai puhe"
 
-#: src/sigid.ts:50
+#: src/sigid.ts:57
 msgid "Interference"
 msgstr "Häiriö"
 
-#: src/sigid.ts:50
+#: src/sigid.ts:57
 msgid "local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands"
 msgstr "paikallinen häiriö: kantoaallot kohinaisine helmoineen, kantoaaltoparit ja -kammat, vaeltavat kohinakaistat"
 
-#: src/sigid.ts:51
+#: src/sigid.ts:58
 msgid "Radar"
 msgstr "Tutka"
 
-#: src/sigid.ts:51
+#: src/sigid.ts:58
 msgid "over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second"
 msgstr "horisontin taakse näkevä tutka tai ionosondi: pyyhkäisyjä tai pulsseja, jotka toistuvat 5–60 kertaa sekunnissa"
 
-#: src/sigid.ts:52
+#: src/sigid.ts:59
 msgid "aircraft data link, 1800 Bd PSK bursts"
 msgstr "lentokoneiden datalinkki, 1800 Bd PSK-purskeet"
+
+#: src/sigid.ts:60
+msgid "Olivia or Contestia: 4-64 tones over 125-2000 Hz (not decoded here)"
+msgstr "Olivia tai Contestia: 4-64 ääntä 125-2000 Hz:n alueella (ei dekoodata täällä)"
+
+#: src/sigid.ts:61
+msgid "MFSK8/16/32/64: 16 or 32 tones, the spacing the symbol rate (not decoded here)"
+msgstr "MFSK8/16/32/64: 16 tai 32 ääntä, väli sama kuin symbolinopeus (ei dekoodata täällä)"
+
+#: src/sigid.ts:62
+msgid "DominoEX or THOR: 18 tones, incremental frequency keying (not decoded here)"
+msgstr "DominoEX tai THOR: 18 ääntä, inkrementaalinen taajuusavainnus (ei dekoodata täällä)"
+
+#: src/sigid.ts:63
+msgid "Feld Hell: letters drawn by on-off keying, read by eye (not decoded here)"
+msgstr "Feld Hell: avainnuksella piirretyt kirjaimet, luetaan silmällä (ei dekoodata täällä)"
+
+#: src/sigid.ts:64
+msgid "PACTOR I-III: data in ARQ bursts on a 1.25 s cycle (not decoded here)"
+msgstr "PACTOR I-III: dataa ARQ-purskeina 1,25 s:n jaksossa (ei dekoodata täällä)"
+
+#. parallel-tone: many carriers at once
+#: src/sigid.ts:66
+msgid "Multi-tone modem"
+msgstr "Monikantoaaltomodeemi"
+
+#. parallel-tone: many carriers at once
+#: src/sigid.ts:66
+msgid "many carriers at once: MT63, the 39-tone modem, OFDM data such as VARA (not decoded here)"
+msgstr "monta kantoaaltoa yhtä aikaa: MT63, 39-kantoaaltoinen modeemi, OFDM-data kuten VARA (ei dekoodata täällä)"
+
+#: src/sigid.ts:67
+msgid "3G ALE (MIL-STD-188-141B): 2400 Bd PSK bursts (not decoded here)"
+msgstr "3G ALE (MIL-STD-188-141B): 2400 Bd:n PSK-purskeet (ei dekoodata täällä)"
 
 #: src/state.ts:165
 msgid "password needed"
@@ -4639,7 +4784,7 @@ msgstr "salasana vaaditaan"
 msgid "login failed ({status})"
 msgstr "kirjautuminen epäonnistui ({status})"
 
-#: src/state.ts:718 src/state.ts:2247
+#: src/state.ts:718 src/state.ts:2308
 msgid "nothing was received"
 msgstr "mitään ei vastaanotettu"
 
@@ -4655,19 +4800,19 @@ msgstr "{name} ({s} s{lost})"
 msgid "named by the clock"
 msgstr "nimetty kellon mukaan"
 
-#: src/state.ts:2247
+#: src/state.ts:2308
 msgid "only silence was heard"
 msgstr "kuului vain hiljaisuutta"
 
-#: src/state.ts:2257
+#: src/state.ts:2318
 msgid ", {s} s of silence left out"
 msgstr ", {s} s hiljaisuutta jätetty pois"
 
-#: src/state.ts:2258
+#: src/state.ts:2319
 msgid "; ended when the audio format changed"
 msgstr "; päättyi äänimuodon vaihtuessa"
 
-#: src/state.ts:2259
+#: src/state.ts:2320
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 

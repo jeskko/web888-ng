@@ -64,7 +64,17 @@ def main():
     torch.manual_seed(1)
     model = SigId().to(dev)
     if a.resume:
-        model.load_state_dict(torch.load(a.resume, map_location=dev))
+        sd = torch.load(a.resume, map_location=dev)
+        # classes added at the end: the old ones' rows of the last layer
+        # kept, the new ones' as initialised
+        own = model.state_dict()
+        for k in ("head.3.weight", "head.3.bias"):
+            if sd[k].shape != own[k].shape:
+                print(f"{k}: {tuple(sd[k].shape)} -> {tuple(own[k].shape)} (new classes)")
+                w = own[k].clone()
+                w[: sd[k].shape[0]] = sd[k]
+                sd[k] = w
+        model.load_state_dict(sd)
     vx, vl, vs = fixed(1500, 12345)
     if a.eval:
         report(predict(model, vx, dev), vl, vs)

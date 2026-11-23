@@ -58,9 +58,17 @@ fn main() {
                 l.map_or("-".into(), |l| format!("{:.2}{u}/{:.2}", l.at, l.db))
             };
             println!(
-                "{}: {} | {:.0}-{:.0} c{:.0} bw90 {:.0} snr {:.0}{} | duty {:.2} n{} short {:.3} cv {:.2} syl {:.2} | tones {} sp {} line {:.2} sb {:.3}/{:.3} | bEnv {} bFrq {} psk {} | per {} envPer {} | drift {}",
+                "{}: {} | grid {} | {:.0}-{:.0} c{:.0} bw90 {:.0} snr {:.0}{} | duty {:.2} n{} short {:.3} cv {:.2} syl {:.2} papr {:.1} | tones {} sh {} sp {} line {:.2} sb {:.3}/{:.3} | bEnv {} bFrq {} psk {} | per {} envPer {} | drift {}",
                 a[1].rsplit('/').next().unwrap(),
                 top.join(", "),
+                m.grid.map_or("-".into(), |g| format!(
+                    "{:.2}Hz x{} r{:.2} T{:.0}ms ch{:.0}/s",
+                    g.spacing,
+                    g.n,
+                    g.strength,
+                    1000.0 * g.frame,
+                    g.changes
+                )),
                 m.lo,
                 m.hi,
                 m.centre,
@@ -72,12 +80,14 @@ fn main() {
                 m.on_short,
                 m.env_cv,
                 m.syllabic,
+                m.papr,
                 m.tones
                     .iter()
                     .take(6)
                     .map(|t| format!("{:.0}", t.at))
                     .collect::<Vec<_>>()
                     .join(","),
+                m.shift.map_or("-".into(), |v| format!("{v:.0}")),
                 m.spacing.map_or("-".into(), |v| format!("{v:.1}")),
                 m.line,
                 m.side_lo,

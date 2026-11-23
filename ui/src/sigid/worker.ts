@@ -6,7 +6,9 @@
 // once 4.09 s of audio is held since the last reset). Out: {run: SigRun,
 // gen} after each identification (every 2 s), {an: SigAn | null, id, gen}
 // after an analysis, {wait: s, id} while it waits for audio, {error} if
-// it can't load.
+// it can't load. A wide look: {iq: Float32Array (I, Q interleaved), rate},
+// {iqReset: true}, {analyseIq: [lo, hi, bandLo, bandHi], id, gen} (Hz from
+// the dial).
 
 import type { SigAn } from "../sigdesc.ts";
 import type { SigRun } from "../sigid.ts";
@@ -21,19 +23,24 @@ interface Sig {
   sig_reset(): void;
   sig_held(): number;
   sig_analyse(lo: number, hi: number): number;
+  sig_iq_buffer(n: number): number;
+  sig_iq_push(n: number, rate: number): void;
+  sig_iq_held(): number;
+  sig_iq_reset(): void;
+  sig_iq_analyse(lo: number, hi: number, bandLo: number, bandHi: number): number;
 }
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
 const queue: MessageEvent[] = [];
 let sig: Sig | null = null;
 let failed = false;
-let ask: { lo: number; hi: number; id: number; gen: number } | null = null;
+let ask: { lo: number; hi: number; id: number; gen: number; band?: [number, number] } | null = null;
 let told = -1;
 
 /** The analysis asked for, once there is enough audio. */
 function answer(x: Sig): void {
   if (!ask) return;
-  const held = x.sig_held();
+  const held = ask.band ? x.sig_iq_held() : x.sig_held();
   // (it holds 4.096 s at most)
   if (held < 4.09) {
     const left = Math.ceil(4.09 - held);
@@ -41,7 +48,7 @@ function answer(x: Sig): void {
     told = left;
     return;
   }
-  const n = x.sig_analyse(ask.lo, ask.hi);
+  const n = ask.band ? x.sig_iq_analyse(ask.lo, ask.hi, ask.band[0], ask.band[1]) : x.sig_analyse(ask.lo, ask.hi);
   const json = new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.sig_output(), n));
   post({ an: (JSON.parse(json) as { an: SigAn | null }).an, id: ask.id, gen: ask.gen });
   ask = null;
@@ -53,6 +60,25 @@ function handle(e: MessageEvent): void {
   const d = e.data;
   if (d?.reset) {
     x.sig_reset();
+    return;
+  }
+  if (d?.iqReset) {
+    x.sig_iq_reset();
+    return;
+  }
+  if (d?.iq) {
+    const iq = d.iq as Float32Array;
+    const ptr = x.sig_iq_buffer(iq.length / 2);
+    new Float32Array(x.memory.buffer, ptr, iq.length).set(iq);
+    x.sig_iq_push(iq.length / 2, d.rate);
+    answer(x);
+    return;
+  }
+  if (d?.analyseIq) {
+    const [lo, hi, bl, bh] = d.analyseIq;
+    ask = { lo, hi, id: d.id, gen: d.gen, band: [bl, bh] };
+    told = -1;
+    answer(x);
     return;
   }
   if (d?.analyse) {

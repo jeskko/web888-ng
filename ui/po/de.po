@@ -715,7 +715,7 @@ msgstr "Neues Passwort"
 msgid "New password again"
 msgstr "Neues Passwort wiederholen"
 
-#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:87 src/ctl/sigid.tsx:104
+#: src/admin/admin.tsx:884 src/ctl/sigid.tsx:93 src/ctl/sigid.tsx:110
 msgid "Again"
 msgstr "Wiederholen"
 
@@ -1452,7 +1452,7 @@ msgid "station"
 msgstr "Sender"
 
 #. SNR = signal-to-noise ratio of the carrier in 1 Hz
-#: src/admin/clock.tsx:327 src/sigdesc.ts:334
+#: src/admin/clock.tsx:327 src/sigdesc.ts:537
 msgid "SNR"
 msgstr "SNR"
 
@@ -3478,7 +3478,7 @@ msgid "Audio"
 msgstr "Audio"
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/ctl/mobile.tsx:312 src/sigid.ts:35
+#: src/ctl/mobile.tsx:312 src/sigid.ts:42
 msgid "Noise"
 msgstr "Rauschen"
 
@@ -3686,11 +3686,11 @@ msgstr "Darauf abstimmen"
 msgid "Open the {mode} decoder"
 msgstr "Den {mode}-Dekoder öffnen"
 
-#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:106
 msgid "Tune"
 msgstr "Abstimmen"
 
-#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:100
+#: src/ctl/sigid.tsx:53 src/ctl/sigid.tsx:106
 msgid "Decode"
 msgstr "Dekodieren"
 
@@ -3709,51 +3709,63 @@ msgstr "wahrscheinlich"
 msgid "unsure"
 msgstr "unsicher"
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:85
+msgid "A wide look: the channel in IQ (±{khz} kHz) for {n} s, then back…"
+msgstr "Breiter Blick: der Kanal als IQ (±{khz} kHz) für {n} s, dann zurück…"
+
+#: src/ctl/sigid.tsx:87
 msgid "Tuned to it; listening for {n} s…"
 msgstr "Abgestimmt; Messung läuft noch {n} s…"
 
-#: src/ctl/sigid.tsx:83
+#: src/ctl/sigid.tsx:88
 msgid "Listening for {n} s…"
 msgstr "Messung läuft noch {n} s…"
 
-#: src/ctl/sigid.tsx:86
+#: src/ctl/sigid.tsx:92
 msgid "Nothing stands out of the noise there."
 msgstr "Dort hebt sich nichts aus dem Rauschen ab."
 
-#: src/ctl/sigid.tsx:103
+#: src/ctl/sigid.tsx:109
 msgid "Measure it again from the next 4 seconds"
 msgstr "Erneut aus den nächsten 4 Sekunden messen"
 
-#: src/ctl/sigid.tsx:108
+#: src/ctl/sigid.tsx:113
+msgid "Measure it from the channel's IQ, up to 20 kHz wide, for 4 seconds, then tune back"
+msgstr "Aus dem IQ des Kanals messen, bis 20 kHz breit, 4 Sekunden lang, dann zurück abstimmen"
+
+#: src/ctl/sigid.tsx:114
+msgid "Wide look"
+msgstr "Breiter Blick"
+
+#: src/ctl/sigid.tsx:119
 msgid "Measured"
 msgstr "Messwerte"
 
-#: src/ctl/sigid.tsx:134
+#: src/ctl/sigid.tsx:145
 msgid "Signals"
 msgstr "Signale"
 
-#: src/ctl/sigid.tsx:136 src/ctl/sigid.tsx:136
+#: src/ctl/sigid.tsx:147 src/ctl/sigid.tsx:147
 msgid "Stop identifying"
 msgstr "Erkennung beenden"
 
-#: src/ctl/sigid.tsx:143
+#: src/ctl/sigid.tsx:154
 msgid "Signals are identified in CW, USB and LSB."
 msgstr "Signale werden in CW, USB und LSB erkannt."
 
-#: src/ctl/sigid.tsx:145
+#: src/ctl/sigid.tsx:156
 msgid "Nothing yet: every signal in the passband is found and identified in turn from the last 4 seconds of audio, one every 2 s. A wide passband (USB, 3 kHz) shows several at once."
 msgstr "Noch nichts: Jedes Signal im Durchlassbereich wird gefunden und der Reihe nach aus den letzten 4 Sekunden Audio erkannt, eines alle 2 s. Ein breiter Durchlassbereich (USB, 3 kHz) zeigt mehrere gleichzeitig."
 
-#: src/ctl/sigid.tsx:152
+#: src/ctl/sigid.tsx:163
 msgid "Looks like"
 msgstr "Sieht aus wie"
 
-#: src/ctl/sigid.tsx:163
+#: src/ctl/sigid.tsx:174
 msgid "Trained on synthetic signals; a guess, not a decode."
 msgstr "Mit synthetischen Signalen trainiert; eine Vermutung, keine Dekodierung."
 
-#: src/ctl/sigid.tsx:164
+#: src/ctl/sigid.tsx:175
 msgid "For a closer look at one signal: its ? button, or shift-drag across it on the waterfall."
 msgstr "Genauerer Blick auf ein Signal: seine ?-Schaltfläche, oder mit Umschalt im Wasserfall darüber ziehen."
 
@@ -4301,335 +4313,468 @@ msgid "no message on hand"
 msgstr "keine Nachricht vorliegend"
 
 #. SITOR-B: the maritime FEC teleprinter mode NAVTEX uses; Bd = baud
-#: src/sigdesc.ts:170
+#: src/sigdesc.ts:253
 msgid "SITOR-B / NAVTEX (100 Bd, 170 Hz shift)"
 msgstr "SITOR-B / NAVTEX (100 Bd, 170 Hz Shift)"
 
+#: src/sigdesc.ts:255
+msgid "PACTOR-I ({baud} Bd, 200 Hz shift, in ARQ bursts)"
+msgstr "PACTOR-I ({baud} Bd, 200 Hz Shift, in ARQ-Bursts)"
+
 #. the German weather service's teleprinter broadcasts
-#: src/sigdesc.ts:173
+#: src/sigdesc.ts:258
 msgid "RTTY 50 Bd, 450 Hz shift (as the DWD weather broadcasts)"
 msgstr "RTTY 50 Bd, 450 Hz Shift (wie die Wettersendungen des DWD)"
 
-#: src/sigdesc.ts:174
+#: src/sigdesc.ts:259
 msgid "RTTY {baud} Bd, {shift} Hz shift"
 msgstr "RTTY {baud} Bd, {shift} Hz Shift"
 
-#: src/sigdesc.ts:176
+#: src/sigdesc.ts:261
 msgid "ASCII teleprinter, {baud} Bd, {shift} Hz shift"
 msgstr "ASCII-Fernschreiben, {baud} Bd, {shift} Hz Shift"
 
 #. HF fax: weather charts sent by radio; black and white are two frequencies 800 Hz apart
-#: src/sigdesc.ts:180
+#: src/sigdesc.ts:265
 msgid "HF fax (black and white 800 Hz apart)"
 msgstr "KW-Fax (Schwarz und Weiß 800 Hz auseinander)"
 
 #. 2G ALE: automatic link establishment, MIL-STD-188-141; 8-FSK = eight tones
-#: src/sigdesc.ts:183
+#: src/sigdesc.ts:268
 msgid "2G ALE (8-FSK, 250 Hz apart, 125 Bd)"
 msgstr "2G ALE (8-FSK, 250 Hz Abstand, 125 Bd)"
 
-#: src/sigdesc.ts:184
+#: src/sigdesc.ts:269
 msgid "HFDL (1800 Bd PSK, aircraft data link)"
 msgstr "HFDL (1800 Bd PSK, Datenfunk der Luftfahrt)"
 
-#: src/sigdesc.ts:186
+#: src/sigdesc.ts:271
+msgid "2400 Bd PSK in bursts (as 3G ALE)"
+msgstr "2400 Bd PSK in Bursts (wie 3G ALE)"
+
+#: src/sigdesc.ts:273
 msgid "STANAG 4285 (2400 Bd PSK, 106.7 ms frames)"
 msgstr "STANAG 4285 (2400 Bd PSK, 106,7-ms-Rahmen)"
 
 #. serial-tone: one carrier, fast PSK symbols (MIL-STD-188-110A, STANAG 4285...)
-#: src/sigdesc.ts:189
+#: src/sigdesc.ts:276
 msgid "2400 Bd serial-tone PSK modem (as MIL-STD-188-110A)"
 msgstr "2400-Bd-Einträger-PSK-Modem (wie MIL-STD-188-110A)"
 
-#: src/sigdesc.ts:196
+#: src/sigdesc.ts:283
 msgid "{mode} (BPSK, {baud} Bd)"
 msgstr "{mode} (BPSK, {baud} Bd)"
 
+#. DRM = Digital Radio Mondiale, digital shortwave broadcasting; OFDM = many carriers; mode A-D = its robustness modes
+#: src/sigdesc.ts:297
+msgid "DRM digital broadcast (OFDM, mode {m}, {ms} ms symbols)"
+msgstr "DRM-Digitalrundfunk (OFDM, Modus {m}, {ms}-ms-Symbole)"
+
+#: src/sigdesc.ts:298
+msgid "OFDM, {ms} ms symbols"
+msgstr "OFDM, {ms}-ms-Symbole"
+
+#: src/sigdesc.ts:301
+msgid "39-tone HF modem (44.44 Bd)"
+msgstr "39-Ton-KW-Modem (44,44 Bd)"
+
+#: src/sigdesc.ts:304
+msgid "39-tone HF modem (56.25 Hz apart)"
+msgstr "39-Ton-KW-Modem (56,25 Hz Abstand)"
+
+#: src/sigdesc.ts:306
+msgid "MT63 ({width} wide)"
+msgstr "MT63 ({width} breit)"
+
+#: src/sigdesc.ts:307
+msgid "{n} carriers {spacing} Hz apart (a parallel-tone modem)"
+msgstr "{n} Träger im Abstand von {spacing} Hz (ein Paralleltonmodem)"
+
+#: src/sigdesc.ts:342
+msgid "8-FSK, 6.25 Hz apart (as FT8)"
+msgstr "8-FSK, 6,25 Hz Abstand (wie FT8)"
+
+#: src/sigdesc.ts:345
+msgid "MFSK16 (or DominoEX / THOR)"
+msgstr "MFSK16 (oder DominoEX / THOR)"
+
+#. DominoEX and THOR: amateur modes of 18 tones, each the last plus 2 + the data (incremental frequency keying)
+#: src/sigdesc.ts:349
+msgid "DominoEX or THOR (18 tones {sp} Hz apart)"
+msgstr "DominoEX oder THOR (18 Töne im Abstand von {sp} Hz)"
+
+#. Olivia and Contestia: amateur MFSK modes, M tones over a bandwidth
+#: src/sigdesc.ts:352
+msgid "Olivia or Contestia {m}/{bw}"
+msgstr "Olivia oder Contestia {m}/{bw}"
+
+#. Feld Hell: text drawn as pixels by on-off keying
+#: src/sigdesc.ts:357
+msgid "Feld Hell ({ms} ms pixels)"
+msgstr "Feld Hell ({ms}-ms-Pixel)"
+
+#. ARQ: automatic repeat request, data and short acknowledgements in turn
+#: src/sigdesc.ts:360
+msgid "PACTOR (ARQ: 0.96 s bursts every 1.25 s)"
+msgstr "PACTOR (ARQ: 0,96-s-Bursts alle 1,25 s)"
+
 #. CW = Morse; WPM = words per minute
-#: src/sigdesc.ts:201
+#: src/sigdesc.ts:364
 msgid "CW (Morse), about {wpm} WPM"
 msgstr "CW (Morse), etwa {wpm} WPM"
 
-#: src/sigdesc.ts:203
+#: src/sigdesc.ts:366
 msgid "An unmodulated carrier"
 msgstr "Ein unmodulierter Träger"
 
-#: src/sigdesc.ts:204
+#. WSPR: a slow amateur beacon mode, 6 Hz wide
+#: src/sigdesc.ts:369
+msgid "A narrow steady signal: a carrier, or a slow mode such as WSPR"
+msgstr "Ein schmales gleichmäßiges Signal: ein Träger oder eine langsame Betriebsart wie WSPR"
+
+#: src/sigdesc.ts:371
+msgid "AM stations side by side ({n} carriers)"
+msgstr "AM-Sender nebeneinander ({n} Träger)"
+
+#: src/sigdesc.ts:373
+msgid "AM broadcast ({width} kHz wide)"
+msgstr "AM-Rundfunk ({width} kHz breit)"
+
+#: src/sigdesc.ts:374
 msgid "AM (a carrier with both sidebands)"
 msgstr "AM (ein Träger mit beiden Seitenbändern)"
 
-#: src/sigdesc.ts:205
+#: src/sigdesc.ts:375
 msgid "A carrier with sidebands on one side (AM heard in SSB?)"
 msgstr "Ein Träger mit Seitenband nur auf einer Seite (AM in SSB gehört?)"
 
-#: src/sigdesc.ts:206
+#: src/sigdesc.ts:376
 msgid "Speech (SSB voice)"
 msgstr "Sprache (SSB)"
 
-#: src/sigdesc.ts:208
+#: src/sigdesc.ts:378
 msgid "Two-tone FSK, {shift} Hz shift"
 msgstr "Zweiton-FSK, {shift} Hz Shift"
 
-#: src/sigdesc.ts:210
+#: src/sigdesc.ts:380
 msgid "{n} tones {spacing} Hz apart (MFSK)"
 msgstr "{n} Töne im Abstand von {spacing} Hz (MFSK)"
 
-#: src/sigdesc.ts:212
+#: src/sigdesc.ts:382
 msgid "{psk} phase modulation"
 msgstr "{psk}-Phasenmodulation"
 
-#: src/sigdesc.ts:214
+#: src/sigdesc.ts:384
 msgid "Pulses, {rate} a second"
 msgstr "Pulse, {rate} pro Sekunde"
 
-#: src/sigdesc.ts:268
+#: src/sigdesc.ts:445
 msgid "The identifier guessed {mode} ({p} %), but the figures fit this better."
 msgstr "Die Erkennung tippte auf {mode} ({p} %), aber die Messwerte passen besser hierzu."
 
-#: src/sigdesc.ts:278 src/sigdesc.ts:283
+#: src/sigdesc.ts:455 src/sigdesc.ts:464
 msgid "The identifier guessed {mode}, which the figures don't bear out."
 msgstr "Die Erkennung tippte auf {mode}, was die Messwerte nicht bestätigen."
 
-#: src/sigdesc.ts:280
+#: src/sigdesc.ts:457
 msgid "{a} or {b}?"
 msgstr "{a} oder {b}?"
 
-#: src/sigdesc.ts:280
+#: src/sigdesc.ts:457 src/sigdesc.ts:467
 msgid "{mode}?"
 msgstr "{mode}?"
 
-#: src/sigdesc.ts:285
+#: src/sigdesc.ts:470
+msgid "A carrier with little modulation"
+msgstr "Ein Träger mit wenig Modulation"
+
+#: src/sigdesc.ts:473 src/sigdesc.ts:477
 msgid "Something unknown"
 msgstr "Etwas Unbekanntes"
 
-#: src/sigdesc.ts:297
+#: src/sigdesc.ts:489
 msgid "{n} kHz"
 msgstr "{n} kHz"
 
-#: src/sigdesc.ts:297
+#: src/sigdesc.ts:489
 msgid "{n} Hz"
 msgstr "{n} Hz"
 
-#: src/sigdesc.ts:300
+#: src/sigdesc.ts:492
 msgid "It fills the passband: widen the passband to see its edges (its width and SNR here are only a lower bound)."
 msgstr "Es füllt den Durchlassbereich: verbreitern Sie ihn, um seine Ränder zu sehen (Breite und SNR sind hier nur Untergrenzen)."
 
-#: src/sigdesc.ts:301
+#: src/sigdesc.ts:493
 msgid "A narrow signal at {khz} kHz, {snr} dB over the noise."
 msgstr "Ein schmales Signal auf {khz} kHz, {snr} dB über dem Rauschen."
 
-#: src/sigdesc.ts:302
+#: src/sigdesc.ts:494
 msgid "About {width} wide around {khz} kHz, {snr} dB over the noise."
 msgstr "Etwa {width} breit um {khz} kHz, {snr} dB über dem Rauschen."
 
-#: src/sigdesc.ts:303
+#: src/sigdesc.ts:495
 msgid "It is weak: the figures below are rough."
 msgstr "Es ist schwach: die Werte unten sind grob."
 
-#: src/sigdesc.ts:305
+#: src/sigdesc.ts:497
 msgid "Keyed on and off: on {duty} % of the time, the shortest elements about {ms} ms."
 msgstr "Ein- und ausgetastet: {duty} % der Zeit an, die kürzesten Elemente etwa {ms} ms."
 
-#: src/sigdesc.ts:306
+#: src/sigdesc.ts:498
 msgid "In bursts: on {duty} % of the time."
 msgstr "In Bursts: {duty} % der Zeit an."
 
-#: src/sigdesc.ts:307
+#: src/sigdesc.ts:499
 msgid "On {duty} % of the time."
 msgstr "{duty} % der Zeit an."
 
-#: src/sigdesc.ts:308
+#: src/sigdesc.ts:500
 msgid "Its level rises and falls at syllable rates, as speech does."
 msgstr "Sein Pegel steigt und fällt im Silbentakt, wie bei Sprache."
 
-#: src/sigdesc.ts:309
+#: src/sigdesc.ts:501
 msgid "Its level stays constant, as FM, FSK or a carrier."
 msgstr "Sein Pegel bleibt konstant, wie bei FM, FSK oder einem Träger."
 
-#: src/sigdesc.ts:311
+#: src/sigdesc.ts:505
+msgid "Carriers at {list} kHz, their sidebands overlapping: stations side by side."
+msgstr "Träger auf {list} kHz, die Seitenbänder überlappen: Sender nebeneinander."
+
+#: src/sigdesc.ts:509
 msgid "A carrier with sidebands on both sides: AM."
 msgstr "Ein Träger mit Seitenbändern auf beiden Seiten: AM."
 
-#: src/sigdesc.ts:313
+#: src/sigdesc.ts:511
 msgid "A carrier with sidebands on one side only: AM heard through an SSB filter (tune in AM to hear it), or a carrier beside SSB."
 msgstr "Ein Träger mit Seitenband nur auf einer Seite: AM durch ein SSB-Filter gehört (stimmen Sie in AM ab, um es zu hören), oder ein Träger neben SSB."
 
-#: src/sigdesc.ts:314
+#: src/sigdesc.ts:514
 msgid "It shifts between two tones {shift} Hz apart."
 msgstr "Es wechselt zwischen zwei Tönen im Abstand von {shift} Hz."
 
-#: src/sigdesc.ts:315
+#: src/sigdesc.ts:515
 msgid "{n} tones on a {spacing} Hz grid."
 msgstr "{n} Töne im {spacing}-Hz-Raster."
 
-#: src/sigdesc.ts:320
+#: src/sigdesc.ts:520
 msgid "Symbols at {baud} Bd."
 msgstr "Symbole mit {baud} Bd."
 
-#: src/sigdesc.ts:321
+#: src/sigdesc.ts:521
 msgid "Phase modulation with {k} phases ({psk})."
 msgstr "Phasenmodulation mit {k} Phasen ({psk})."
 
-#: src/sigdesc.ts:322
+#: src/sigdesc.ts:523
+msgid "Its amplitude is noise-like, as many carriers at once make it (OFDM), and a pattern repeats every {ms} ms: its symbols."
+msgstr "Seine Amplitude ist rauschartig, wie viele Träger zugleich sie machen (OFDM), und ein Muster wiederholt sich alle {ms} ms: seine Symbole."
+
+#: src/sigdesc.ts:524
+msgid "{n} carriers on a {spacing} Hz grid at once."
+msgstr "{n} Träger zugleich im {spacing}-Hz-Raster."
+
+#: src/sigdesc.ts:525
 msgid "A pattern repeats every {ms} ms (frames or probe sequences)."
 msgstr "Ein Muster wiederholt sich alle {ms} ms (Rahmen oder Testsequenzen)."
 
-#: src/sigdesc.ts:323
+#: src/sigdesc.ts:526
 msgid "Pulses every {ms} ms ({rate} a second)."
 msgstr "Pulse alle {ms} ms ({rate} pro Sekunde)."
 
-#: src/sigdesc.ts:326
+#: src/sigdesc.ts:529
 msgid "Drifting {rate} Hz a second."
 msgstr "Driftet {rate} Hz pro Sekunde."
 
-#: src/sigdesc.ts:332
+#: src/sigdesc.ts:535
 msgid "Centre"
 msgstr "Mitte"
 
-#: src/sigdesc.ts:333
+#: src/sigdesc.ts:536
 msgid "Width"
 msgstr "Breite"
 
-#: src/sigdesc.ts:333
+#: src/sigdesc.ts:536
 msgid "{width} ({w90} holds 90 % of the power)"
 msgstr "{width} ({w90} enthalten 90 % der Leistung)"
 
-#: src/sigdesc.ts:335
+#: src/sigdesc.ts:538
 msgid "Time on"
 msgstr "Aktiv"
 
-#: src/sigdesc.ts:337
+#: src/sigdesc.ts:540
 msgid "Tones"
 msgstr "Töne"
 
-#: src/sigdesc.ts:338
+#: src/sigdesc.ts:541
 msgid "Envelope line"
 msgstr "Hüllkurvenlinie"
 
-#: src/sigdesc.ts:339
+#: src/sigdesc.ts:542
 msgid "Frequency-change line"
 msgstr "Frequenzwechsel-Linie"
 
-#: src/sigdesc.ts:340
+#: src/sigdesc.ts:543
 msgid "Repeats"
 msgstr "Wiederholt sich"
 
-#: src/sigdesc.ts:341
+#: src/sigdesc.ts:544
 msgid "Envelope repeats"
 msgstr "Hüllkurve wiederholt sich"
 
-#: src/sigdesc.ts:342
+#: src/sigdesc.ts:545
+msgid "Shift"
+msgstr "Shift"
+
+#: src/sigdesc.ts:546
 msgid "Carrier share"
 msgstr "Trägeranteil"
 
-#: src/sigdesc.ts:343
+#. peak to average power ratio of the signal
+#: src/sigdesc.ts:548
+msgid "Peak to average"
+msgstr "Spitze/Mittel"
+
+#: src/sigdesc.ts:549
 msgid "Identifier"
 msgstr "Erkennung"
 
-#: src/sigdesc.ts:355
+#: src/sigdesc.ts:561
 msgid "In the {band} amateur band, its {use} segment."
 msgstr "Im Amateurfunkband {band}, im Segment {use}."
 
-#: src/sigdesc.ts:356
+#: src/sigdesc.ts:562
 msgid "In the {band} amateur band."
 msgstr "Im Amateurfunkband {band}."
 
-#: src/sigdesc.ts:357
+#: src/sigdesc.ts:563
 msgid "In the {name} band ({service})."
 msgstr "Im Band {name} ({service})."
 
-#: src/sigdesc.ts:366
+#: src/sigdesc.ts:572
 msgid "Listed near it: {list}."
 msgstr "In der Nähe verzeichnet: {list}."
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/sigid.ts:35
+#: src/sigid.ts:42
 msgid "nothing recognisable at this frequency"
 msgstr "nichts Erkennbares auf dieser Frequenz"
 
-#: src/sigid.ts:36
+#: src/sigid.ts:43
 msgid "an unmodulated carrier"
 msgstr "ein unmodulierter Träger"
 
-#: src/sigid.ts:37
+#: src/sigid.ts:44
 msgid "Morse"
 msgstr "Morse"
 
-#: src/sigid.ts:38
+#: src/sigid.ts:45
 msgid "two-tone FSK: RTTY, SITOR-B/NAVTEX, ASCII (the RTTY panel works out baud rate, shift and code)"
 msgstr "Zweiton-FSK: RTTY, SITOR-B/NAVTEX, ASCII (das RTTY-Fenster ermittelt Baudrate, Shift und Code)"
 
-#: src/sigid.ts:39
+#: src/sigid.ts:46
 msgid "BPSK 31-125 Bd: PSK31, PSK63, PSK125"
 msgstr "BPSK 31–125 Bd: PSK31, PSK63, PSK125"
 
-#: src/sigid.ts:40
+#: src/sigid.ts:47
 msgid "FT8"
 msgstr "FT8"
 
-#: src/sigid.ts:41
+#: src/sigid.ts:48
 msgid "FT4"
 msgstr "FT4"
 
-#: src/sigid.ts:42
+#: src/sigid.ts:49
 msgid "WSPR beacons"
 msgstr "WSPR-Baken"
 
-#: src/sigid.ts:43
+#: src/sigid.ts:50
 msgid "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (not decoded here)"
 msgstr "2G ALE (MIL-STD-188-141), 8-FSK 125 Bd (hier nicht dekodiert)"
 
-#: src/sigid.ts:44
+#: src/sigid.ts:51
 msgid "2400 Bd PSK modem, 106.7 ms frames (not decoded here)"
 msgstr "2400-Bd-PSK-Modem, 106,7-ms-Frames (hier nicht dekodiert)"
 
-#: src/sigid.ts:45
+#: src/sigid.ts:52
 msgid "MIL-STD-188-110A serial-tone modem, 2400 Bd PSK (not decoded here)"
 msgstr "MIL-STD-188-110A-Serial-Tone-Modem, 2400 Bd PSK (hier nicht dekodiert)"
 
-#: src/sigid.ts:46
+#: src/sigid.ts:53
 msgid "slow-scan television"
 msgstr "Slow-Scan-Fernsehen"
 
-#: src/sigid.ts:47
+#: src/sigid.ts:54
 msgid "HF fax"
 msgstr "KW-Fax"
 
-#: src/sigid.ts:47
+#: src/sigid.ts:54
 msgid "weather fax (radiofax)"
 msgstr "Wetterfax (Radiofax)"
 
-#: src/sigid.ts:48
+#: src/sigid.ts:55
 msgid "SSB voice"
 msgstr "SSB-Sprache"
 
-#: src/sigid.ts:48
+#: src/sigid.ts:55
 msgid "single-sideband speech"
 msgstr "Einseitenband-Sprache"
 
-#: src/sigid.ts:49
+#: src/sigid.ts:56
 msgid "AM broadcast or voice"
 msgstr "AM-Rundfunk oder Sprache"
 
-#: src/sigid.ts:50
+#: src/sigid.ts:57
 msgid "Interference"
 msgstr "Störungen"
 
-#: src/sigid.ts:50
+#: src/sigid.ts:57
 msgid "local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands"
 msgstr "lokale Störungen: Träger mit verrauschten Flanken, Trägerpaare und -kämme, wandernde Rauschbänder"
 
-#: src/sigid.ts:51
+#: src/sigid.ts:58
 msgid "Radar"
 msgstr "Radar"
 
-#: src/sigid.ts:51
+#: src/sigid.ts:58
 msgid "over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second"
 msgstr "Überhorizontradar oder Ionosonde: Sweeps oder Pulse, 5- bis 60-mal pro Sekunde wiederholt"
 
-#: src/sigid.ts:52
+#: src/sigid.ts:59
 msgid "aircraft data link, 1800 Bd PSK bursts"
 msgstr "Flugzeug-Datenfunk, 1800-Bd-PSK-Bursts"
+
+#: src/sigid.ts:60
+msgid "Olivia or Contestia: 4-64 tones over 125-2000 Hz (not decoded here)"
+msgstr "Olivia oder Contestia: 4-64 Töne über 125-2000 Hz (hier nicht dekodiert)"
+
+#: src/sigid.ts:61
+msgid "MFSK8/16/32/64: 16 or 32 tones, the spacing the symbol rate (not decoded here)"
+msgstr "MFSK8/16/32/64: 16 oder 32 Töne, der Abstand gleich der Symbolrate (hier nicht dekodiert)"
+
+#: src/sigid.ts:62
+msgid "DominoEX or THOR: 18 tones, incremental frequency keying (not decoded here)"
+msgstr "DominoEX oder THOR: 18 Töne, inkrementelle Frequenzumtastung (hier nicht dekodiert)"
+
+#: src/sigid.ts:63
+msgid "Feld Hell: letters drawn by on-off keying, read by eye (not decoded here)"
+msgstr "Feld Hell: durch Ein-Aus-Tastung gezeichnete Buchstaben, mit dem Auge gelesen (hier nicht dekodiert)"
+
+#: src/sigid.ts:64
+msgid "PACTOR I-III: data in ARQ bursts on a 1.25 s cycle (not decoded here)"
+msgstr "PACTOR I-III: Daten in ARQ-Bursts im 1,25-s-Takt (hier nicht dekodiert)"
+
+#. parallel-tone: many carriers at once
+#: src/sigid.ts:66
+msgid "Multi-tone modem"
+msgstr "Mehrtonmodem"
+
+#. parallel-tone: many carriers at once
+#: src/sigid.ts:66
+msgid "many carriers at once: MT63, the 39-tone modem, OFDM data such as VARA (not decoded here)"
+msgstr "viele Träger zugleich: MT63, das 39-Ton-Modem, OFDM-Daten wie VARA (hier nicht dekodiert)"
+
+#: src/sigid.ts:67
+msgid "3G ALE (MIL-STD-188-141B): 2400 Bd PSK bursts (not decoded here)"
+msgstr "3G ALE (MIL-STD-188-141B): 2400-Bd-PSK-Bursts (hier nicht dekodiert)"
 
 #: src/state.ts:165
 msgid "password needed"
@@ -4639,7 +4784,7 @@ msgstr "Passwort erforderlich"
 msgid "login failed ({status})"
 msgstr "Anmeldung fehlgeschlagen ({status})"
 
-#: src/state.ts:718 src/state.ts:2247
+#: src/state.ts:718 src/state.ts:2308
 msgid "nothing was received"
 msgstr "es wurde nichts empfangen"
 
@@ -4655,19 +4800,19 @@ msgstr "{name} ({s} s{lost})"
 msgid "named by the clock"
 msgstr "nach der Uhr benannt"
 
-#: src/state.ts:2247
+#: src/state.ts:2308
 msgid "only silence was heard"
 msgstr "es war nur Stille zu hören"
 
-#: src/state.ts:2257
+#: src/state.ts:2318
 msgid ", {s} s of silence left out"
 msgstr ", {s} s Stille ausgelassen"
 
-#: src/state.ts:2258
+#: src/state.ts:2319
 msgid "; ended when the audio format changed"
 msgstr "; beendet, als sich das Audioformat änderte"
 
-#: src/state.ts:2259
+#: src/state.ts:2320
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 

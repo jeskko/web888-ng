@@ -25,7 +25,14 @@ export type SigClass =
   | "am"
   | "interference"
   | "radar"
-  | "hfdl";
+  | "hfdl"
+  | "olivia"
+  | "mfsk"
+  | "dominoex"
+  | "hell"
+  | "pactor"
+  | "multitone"
+  | "ale3g";
 
 /** The decoder in this page a class opens (none: listed only). */
 export type Opens = "cw" | "rtty" | "psk" | "img" | "ft8" | "ft4" | "wspr" | "hfdl" | "ssb" | "am" | null;
@@ -50,6 +57,14 @@ export const CLASS_INFO: Record<SigClass, { label: string; opens: Opens; hint: s
   interference: { label: N_("Interference"), opens: null, hint: N_("local noise: carriers with noisy skirts, carrier pairs and combs, wandering noise bands") },
   radar: { label: N_("Radar"), opens: null, hint: N_("over-the-horizon radar or a sounder: sweeps or pulses repeating 5-60 times a second") },
   hfdl: { label: "HFDL", opens: "hfdl", hint: N_("aircraft data link, 1800 Bd PSK bursts") },
+  olivia: { label: "Olivia", opens: null, hint: N_("Olivia or Contestia: 4-64 tones over 125-2000 Hz (not decoded here)") },
+  mfsk: { label: "MFSK", opens: null, hint: N_("MFSK8/16/32/64: 16 or 32 tones, the spacing the symbol rate (not decoded here)") },
+  dominoex: { label: "DominoEX", opens: null, hint: N_("DominoEX or THOR: 18 tones, incremental frequency keying (not decoded here)") },
+  hell: { label: "Hell", opens: null, hint: N_("Feld Hell: letters drawn by on-off keying, read by eye (not decoded here)") },
+  pactor: { label: "PACTOR", opens: null, hint: N_("PACTOR I-III: data in ARQ bursts on a 1.25 s cycle (not decoded here)") },
+  // i18n: parallel-tone: many carriers at once
+  multitone: { label: N_("Multi-tone modem"), opens: null, hint: N_("many carriers at once: MT63, the 39-tone modem, OFDM data such as VARA (not decoded here)") },
+  ale3g: { label: "3G ALE", opens: null, hint: N_("3G ALE (MIL-STD-188-141B): 2400 Bd PSK bursts (not decoded here)") },
 };
 
 /** One identification run (crates/sigid-wasm's JSON). */

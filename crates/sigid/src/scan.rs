@@ -13,7 +13,7 @@
 //! negative frequencies (no image), the signal at 0 Hz. LSB audio is
 //! flipped back (the signal's RF orientation).
 
-use crate::measure::{Measure, measure};
+use crate::measure::{Measure, iq_len, measure, measure_iq};
 use crate::{CLASSES, N, SigId};
 use num_complex::Complex32;
 use rustfft::FftPlanner;
@@ -235,6 +235,41 @@ pub fn analyse(audio: &[f32], sel: (f64, f64), band: (f64, f64), lsb: bool) -> O
         .map(|&v| Complex32::new(v, 0.0))
         .collect();
     let top = crate::identify(&baseband(&x, m.centre, lsb));
+    Some(Analysis { m, top })
+}
+
+/// [`Analysis`] of the last 4.096 s of complex baseband `iq` at `rate`
+/// (the receiver's IQ mode, up to ±rate/2); `sel` and `band` in Hz from
+/// its centre, as the result's frequencies. The identifier sees the
+/// 6 kHz around the signal's centre (a wider signal: part of it).
+pub fn analyse_iq(
+    iq: &[Complex32],
+    rate: f64,
+    sel: (f64, f64),
+    band: (f64, f64),
+) -> Option<Analysis> {
+    let m = measure_iq(iq, rate, sel, band)?;
+    let n = iq_len(rate);
+    let mut planner = FftPlanner::new();
+    let mut a = iq[iq.len() - n..].to_vec();
+    planner.plan_fft_forward(n).process(&mut a);
+    // the same bins as the identifier's (both 4.096 s long)
+    let df = rate / n as f64;
+    let c = (m.centre / df).round() as i64;
+    let mut y = vec![Complex32::new(0.0, 0.0); N];
+    for (j, v) in y.iter_mut().enumerate() {
+        let k = c + j as i64 - (N / 2) as i64;
+        if ((k as f64) * df).abs() < 0.5 * rate {
+            *v = a[k.rem_euclid(n as i64) as usize];
+        }
+    }
+    y.rotate_left(N / 2);
+    planner.plan_fft_inverse(N).process(&mut y);
+    let g = 1.0 / n as f32;
+    for v in y.iter_mut() {
+        *v *= g;
+    }
+    let top = crate::identify(&y);
     Some(Analysis { m, top })
 }
 

@@ -33,9 +33,6 @@ use rustfft::FftPlanner;
 
 /// Audio samples measured (4.096 s).
 pub const NA: usize = 2 * crate::N;
-/// The baseband rate (complex samples/s).
-const FS: f64 = 6000.0;
-const NB: usize = NA / 2;
 
 /// A spectral line or tone.
 #[derive(Clone, Copy, Debug, PartialEq)]
@@ -44,6 +41,19 @@ pub struct Line {
     pub at: f64,
     /// How far it stands out (dB; for periods the correlation 0..1).
     pub db: f64,
+}
+
+/// A tone grid ([`Measure::grid`]).
+#[derive(Clone, Copy, Debug, PartialEq)]
+pub struct Grid {
+    /// Spacing (Hz), tones used, how periodic the histogram is (0..1).
+    pub spacing: f64,
+    pub n: u32,
+    pub strength: f64,
+    /// Frame length that showed it best (s), and how often the strongest
+    /// tone changes (per s).
+    pub frame: f64,
+    pub changes: f64,
 }
 
 #[derive(Clone, Debug, Default, PartialEq)]
@@ -66,15 +76,38 @@ pub struct Measure {
     pub bursts: u32,
     pub on_mean: f64,
     pub on_short: f64,
+    /// How deep the off times are under the on times (dB, medians): keying
+    /// drops to the noise (20 dB and more), fading and flicker near the
+    /// threshold don't.
+    pub depth: f64,
     /// Envelope while on: standard deviation over mean of the amplitude
     /// within 100-ms blocks (the median block: fading left out).
     pub env_cv: f64,
     /// Share of the envelope's variation at 1-10 Hz (speech: high).
     pub syllabic: f64,
+    /// Peak to average power while on (dB, the 99th percentile of the
+    /// samples' power, noise taken out): ~0 for FSK and carriers, 2-4 for
+    /// filtered single-carrier PSK, ~6.6 for OFDM and other many-carrier
+    /// or noise-like signals.
+    pub papr: f64,
+    /// The signal's power kurtosis E|s|^4 / E|s|^2^2 with the noise's
+    /// share taken out exactly (its power known): 1 for a constant
+    /// envelope (FSK, a carrier), ~1.3-1.6 for single-carrier PSK, 2 for
+    /// OFDM and other Gaussian-like signals.
+    pub kurt: f64,
     /// Tones, strongest first (audio Hz, dB over the floor); their common
     /// spacing when three or more fit one grid.
     pub tones: Vec<Line>,
     pub spacing: Option<f64>,
+    /// Two-tone FSK: the shift (Hz) from its frequency track (the two
+    /// levels of the instantaneous frequency, smoothed over half a bit,
+    /// where the signal is strong); spectral peaks are not the tones when
+    /// the shift is a few times the rate or less.
+    pub shift: Option<f64>,
+    /// Tones on a grid seen frame by frame (as on a waterfall: each short
+    /// frame's strongest frequency, their histogram's period): MFSK's
+    /// hopping tones, parallel-tone modems' carriers.
+    pub grid: Option<Grid>,
     /// Share of the power in the strongest narrow line (±3 Hz).
     pub line: f64,
     /// The strongest line: where (audio Hz), and the share of the power
@@ -83,6 +116,13 @@ pub struct Measure {
     pub line_at: f64,
     pub side_lo: f64,
     pub side_hi: f64,
+    /// How alike the spectra below and above that line are (correlation of
+    /// their log power, mirrored about it): AM's sidebands are each
+    /// other's image (~1), other signals beside a carrier aren't.
+    pub mirror: f64,
+    /// Every narrow line (±3 Hz) with 5 % of the power or more (audio Hz,
+    /// share): carriers side by side (AM stations 5 kHz apart) show here.
+    pub carriers: Vec<Line>,
     /// Symbol rate (Bd, from the envelope), and from frequency transitions.
     pub baud_env: Option<Line>,
     pub baud_freq: Option<Line>,
@@ -94,6 +134,9 @@ pub struct Measure {
     /// its envelope (pulses, frames); `db` is the correlation (0..1).
     pub period: Option<Line>,
     pub env_period: Option<Line>,
+    /// The strongest narrow peak of |R| at 2-40 ms (s, correlation): a
+    /// guard interval's copy, so OFDM's useful symbol length.
+    pub symbol: Option<Line>,
     /// Drift (audio Hz/s) when it is steady enough to say.
     pub drift: Option<f64>,
 }
@@ -172,16 +215,17 @@ fn find_line(p: &[f64], df: f64, f0: f64, f1: f64, ctx: f64) -> Option<Line> {
     })
 }
 
-/// Power spectrum of a real feature (mean removed), length NB, bin FS/NB.
-fn feature_spectrum(v: &[f64]) -> Vec<f64> {
+/// Power spectrum of a real feature (mean removed), padded to `n`
+/// points (bin: rate / n); its first half.
+fn feature_spectrum(v: &[f64], n: usize) -> Vec<f64> {
     let m = v.iter().sum::<f64>() / v.len() as f64;
     let mut z: Vec<Complex32> = v
         .iter()
         .map(|&x| Complex32::new((x - m) as f32, 0.0))
         .collect();
-    z.resize(NB, Complex32::new(0.0, 0.0));
+    z.resize(n, Complex32::new(0.0, 0.0));
     fft(&mut z, false);
-    z[..NB / 2].iter().map(|c| c.norm_sqr() as f64).collect()
+    z[..n / 2].iter().map(|c| c.norm_sqr() as f64).collect()
 }
 
 /// The first peak of a normalised autocorrelation `r` (lag 0 = 1) after
@@ -221,19 +265,82 @@ fn first_period(r: &[f64], l0: usize, rate: f64) -> Option<Line> {
 }
 
 /// Measure the signal in audio `sel` (Hz) of the last [`NA`] samples of
-/// `audio`; `band` is the receiver's audio passband (its floor is the
-/// noise). None if nothing stands over the floor there.
+/// `audio` (12 kS/s); `band` is the receiver's audio passband (its floor
+/// is the noise). None if nothing stands over the floor there.
 pub fn measure(audio: &[f32], sel: (f64, f64), band: (f64, f64)) -> Option<Measure> {
     if audio.len() < NA {
         return None;
     }
-    let x = &audio[audio.len() - NA..];
-    let dfa = AUDIO_RATE / NA as f64;
+    let x: Vec<Complex32> = audio[audio.len() - NA..]
+        .iter()
+        .map(|&v| Complex32::new(v, 0.0))
+        .collect();
+    core(&x, AUDIO_RATE, NA / 2, sel, band)
+}
+
+/// Samples of complex baseband at `rate` that [`measure_iq`] reads.
+pub fn iq_len(rate: f64) -> usize {
+    (4.096 * rate).round() as usize
+}
+
+/// The same on the last 4.096 s of complex baseband `iq` at `rate`
+/// (S/s: the receiver's IQ, as wide as ±rate/2); `sel` and `band` in Hz
+/// from its centre (below it negative), and so are the frequencies
+/// measured.
+pub fn measure_iq(
+    iq: &[Complex32],
+    rate: f64,
+    sel: (f64, f64),
+    band: (f64, f64),
+) -> Option<Measure> {
+    let n = iq_len(rate);
+    if iq.len() < n {
+        return None;
+    }
+    // up by half the rate (every other sample negated): bin k of its
+    // spectrum is k df - rate / 2, all of them positive frequencies here
+    let h = rate / 2.0;
+    let x: Vec<Complex32> = iq[iq.len() - n..]
+        .iter()
+        .enumerate()
+        .map(|(i, &v)| if i % 2 == 1 { -v } else { v })
+        .collect();
+    let mut m = core(
+        &x,
+        rate,
+        n,
+        (sel.0 + h, sel.1 + h),
+        (band.0 + h, band.1 + h),
+    )?;
+    m.lo -= h;
+    m.hi -= h;
+    m.centre -= h;
+    m.line_at -= h;
+    for t in m.tones.iter_mut().chain(m.carriers.iter_mut()) {
+        t.at -= h;
+    }
+    Some(m)
+}
+
+/// `x`: complex samples at `rate` whose first `kmax` FFT bins are the
+/// frequencies looked at (k rate / len Hz); `sel` and `band` in those Hz.
+fn core(
+    x: &[Complex32],
+    rate: f64,
+    kmax: usize,
+    sel: (f64, f64),
+    band: (f64, f64),
+) -> Option<Measure> {
+    let n = x.len();
+    let dfa = rate / n as f64;
+    // the baseband the signal is cut out to: half the rate
+    let fs = rate / 2.0;
+    let nb = n / 2;
     // one FFT of the window: everything else is cut from it
-    let mut xa: Vec<Complex32> = x.iter().map(|&v| Complex32::new(v, 0.0)).collect();
+    let mut xa = x.to_vec();
     fft(&mut xa, false);
-    let pa: Vec<f64> = xa[..NA / 2].iter().map(|c| c.norm_sqr() as f64).collect();
-    let bin = |hz: f64| ((hz / dfa).round().max(1.0) as usize).min(NA / 2 - 1);
+    let pa: Vec<f64> = xa[..kmax].iter().map(|c| c.norm_sqr() as f64).collect();
+    let bin = |hz: f64| ((hz / dfa).round().max(1.0) as usize).min(kmax - 1);
     let (b0, b1) = (bin(band.0.max(50.0)), bin(band.1));
     let (s0, s1) = (bin(sel.0.max(band.0)), bin(sel.1.min(band.1)));
     if b1 <= b0 + 100 || s1 <= s0 + 8 {
@@ -244,17 +351,27 @@ pub fn measure(audio: &[f32], sel: (f64, f64), band: (f64, f64)) -> Option<Measu
     // outer 5 % of the passband left out (the filter's skirts): the gaps
     // in speech and between bursts count, and a signal filling up to ~85 %
     // of the passband for all the time leaves it alone
-    let floor = floor_of(x, b0, b1, NA);
+    let floor = floor_of(x, b0, b1, rate);
     let sw = smooth(&pa, (12.5 / dfa) as usize);
     // the spectrum smoothed over ~3 Hz; a signal: some bins clearly over
     // the floor
     let sp = smooth(&pa, 6);
-    let (seed, peak) = (s0..=s1)
-        .map(|k| (k, sp[k]))
-        .max_by(|a, b| a.1.total_cmp(&b.1))?;
+    let strongest = |a: usize, b: usize| {
+        (a..=b)
+            .map(|k| (k, sp[k]))
+            .max_by(|x, y| x.1.total_cmp(&y.1))
+    };
+    let (seed, peak) = strongest(s0, s1)?;
     if peak < 4.0 * floor {
         return None;
     }
+    // the middle third first: a range picked around a signal (a wide
+    // look's) has its neighbours at the sides
+    let third = (s1 - s0) / 3;
+    let seed = match strongest(s0 + third, s1 - third) {
+        Some((k, p)) if p >= 4.0 * floor && third > 0 => k,
+        _ => seed,
+    };
     // its extent: around the strongest part, the bins over the floor by
     // 3 dB smoothed over 25 Hz, gaps up to 1 kHz joined (a voice, a
     // modem, a keyed carrier's sidebands, 850 Hz FSK, AM's sidebands: one
@@ -311,16 +428,16 @@ pub fn measure(audio: &[f32], sel: (f64, f64), band: (f64, f64)) -> Option<Measu
     let mg = (0.1 * bw + 20.0) / dfa;
     let (f0, f1) = (
         (lo as f64 - mg).max(1.0) as usize,
-        ((hi as f64 + mg) as usize).min(NA / 2 - 1),
+        ((hi as f64 + mg) as usize).min(kmax - 1),
     );
     let c = (centre / dfa).round() as i64;
-    let mut yb = vec![Complex32::new(0.0, 0.0); NB];
+    let mut yb = vec![Complex32::new(0.0, 0.0); nb];
     for k in f0..=f1 {
-        let j = (k as i64 - c).rem_euclid(NB as i64) as usize;
+        let j = (k as i64 - c).rem_euclid(nb as i64) as usize;
         yb[j] = xa[k];
     }
     fft(&mut yb, true);
-    let g = 1.0 / NA as f32;
+    let g = 1.0 / n as f32;
     let y: Vec<Complex32> = yb.iter().map(|v| v * g).collect();
     // the noise power that passes: (f1 - f0 + 1) bins of the floor
     let noise = (f1 - f0 + 1) as f64 * floor * (g as f64).powi(2);
@@ -335,43 +452,49 @@ pub fn measure(audio: &[f32], sel: (f64, f64), band: (f64, f64)) -> Option<Measu
         ..Default::default()
     };
 
-    envelope(&mut m, &y, noise, (f1 - f0 + 1) as f64 * dfa);
+    envelope(&mut m, &y, fs, noise, (f1 - f0 + 1) as f64 * dfa);
     tones(&mut m, &sp, floor, lo, hi, dfa, bw);
     carrier(&mut m, &pa, floor, lo, hi, dfa);
-    symbols(&mut m, &y, bw);
-    periods(&mut m, &y, bw);
-    drift(&mut m, &y, bw);
+    grid(&mut m, &y, fs, bw);
+    symbols(&mut m, &y, fs, bw);
+    periods(&mut m, &y, fs, bw);
+    drift(&mut m, &y, fs, bw);
     Some(m)
 }
 
-/// The noise floor of `x` between NA-point bins `b0` and `b1`, as the
-/// mean of an `na`-point periodogram bin.
-fn floor_of(x: &[f32], b0: usize, b1: usize, na: usize) -> f64 {
-    const F: usize = 1024;
-    let r = na / F;
-    let (k0, k1) = (b0 / r, b1 / r);
+/// The noise floor of `x` (at `rate`) between bins `b0` and `b1` of its
+/// whole-length FFT, as the mean of such a bin.
+fn floor_of(x: &[Complex32], b0: usize, b1: usize, rate: f64) -> f64 {
+    // frames of ~85 ms
+    let f = ((0.085 * rate) as usize).next_power_of_two();
+    let na = x.len();
+    let r = na as f64 / f as f64;
+    let (k0, k1) = (
+        (b0 as f64 / r) as usize,
+        ((b1 as f64 / r) as usize).min(f - 1),
+    );
     let e = (k1 - k0) / 20;
     let (k0, k1) = (k0 + e, k1 - e);
-    let w: Vec<f32> = (0..F)
-        .map(|i| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / F as f64).cos()) as f32)
+    let w: Vec<f32> = (0..f)
+        .map(|i| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / f as f64).cos()) as f32)
         .collect();
     let mut all = Vec::new();
     let mut p = FftPlanner::new();
-    let f = p.plan_fft_forward(F);
-    let mut buf = vec![Complex32::new(0.0, 0.0); F];
-    for c in x.as_chunks::<F>().0 {
-        for i in 0..F {
-            buf[i] = Complex32::new(c[i] * w[i], 0.0);
+    let plan = p.plan_fft_forward(f);
+    let mut buf = vec![Complex32::new(0.0, 0.0); f];
+    for c in x.chunks_exact(f) {
+        for i in 0..f {
+            buf[i] = c[i] * w[i];
         }
-        f.process(&mut buf);
-        let pw: Vec<f64> = buf[..F / 2].iter().map(|v| v.norm_sqr() as f64).collect();
+        plan.process(&mut buf);
+        let pw: Vec<f64> = buf.iter().map(|v| v.norm_sqr() as f64).collect();
         let sm = smooth(&pw, 2);
         all.extend_from_slice(&sm[k0..=k1]);
     }
     // white noise of variance v: a frame's bin has mean v sum(w^2) =
-    // 0.375 F v, an na-point bin na v; FLOOR_P10: the 10th percentile of
-    // the smoothed bins over their mean (measured: the test below)
-    percentile(&all, 0.1) / FLOOR_P10 / (0.375 * F as f64) * na as f64
+    // 0.375 f v, a whole-length bin na v; FLOOR_P10: the 10th percentile
+    // of the smoothed bins over their mean (measured: the test below)
+    percentile(&all, 0.1) / FLOOR_P10 / (0.375 * f as f64) * na as f64
 }
 
 /// The 10th percentile of five neighbouring Hann-windowed bins of white
@@ -379,24 +502,22 @@ fn floor_of(x: &[f32], b0: usize, b1: usize, na: usize) -> f64 {
 const FLOOR_P10: f64 = 0.373;
 
 /// Keying, level variation, syllable-rate variation.
-fn envelope(m: &mut Measure, y: &[Complex32], noise: f64, bw: f64) {
+fn envelope(m: &mut Measure, y: &[Complex32], fs: f64, noise: f64, bw: f64) {
     // frames of 2.5 ms, smoothed to ~1/bw (bw: the filter's; what the
     // filter lets through changes no faster)
-    const L: usize = 15;
+    let l = ((0.0025 * fs).round() as usize).max(1);
     let fr: Vec<f64> = y
-        .as_chunks::<L>()
-        .0
-        .iter()
-        .map(|c| c.iter().map(|v| v.norm_sqr() as f64).sum::<f64>() / L as f64)
+        .chunks_exact(l)
+        .map(|c| c.iter().map(|v| v.norm_sqr() as f64).sum::<f64>() / l as f64)
         .collect();
-    let h = ((1.0 / bw.max(10.0)) * FS / L as f64 / 2.0).round() as usize;
-    let fs = smooth(&fr, h.min(16));
-    let dof = ((2 * h + 1) * L) as f64 * (bw / FS).min(1.0);
-    let p95 = percentile(&fs, 0.95);
+    let h = ((1.0 / bw.max(10.0)) * fs / l as f64 / 2.0).round() as usize;
+    let fsm = smooth(&fr, h.min(16));
+    let dof = ((2 * h + 1) * l) as f64 * (bw / fs).min(1.0);
+    let p95 = percentile(&fsm, 0.95);
     // on: clearly over the noise, and within 10 dB of the top (keying
     // edges timed near half amplitude, not in the filter's tails)
     let thr = (noise * (1.0 + 4.0 / dof.max(1.0).sqrt())).max(0.1 * p95);
-    let mut on: Vec<bool> = fs.iter().map(|&v| v > thr).collect();
+    let mut on: Vec<bool> = fsm.iter().map(|&v| v > thr).collect();
     // lone frames flipped (median of three)
     for i in 1..on.len() - 1 {
         if on[i - 1] == on[i + 1] {
@@ -404,13 +525,31 @@ fn envelope(m: &mut Measure, y: &[Complex32], noise: f64, bw: f64) {
         }
     }
     m.duty = on.iter().filter(|&&b| b).count() as f64 / on.len() as f64;
+    let (onp, offp): (Vec<f64>, Vec<f64>) = {
+        let a: Vec<f64> = fsm
+            .iter()
+            .zip(&on)
+            .filter(|(_, o)| **o)
+            .map(|(v, _)| *v)
+            .collect();
+        let b: Vec<f64> = fsm
+            .iter()
+            .zip(&on)
+            .filter(|(_, o)| !**o)
+            .map(|(v, _)| *v)
+            .collect();
+        (a, b)
+    };
+    if !onp.is_empty() && !offp.is_empty() {
+        m.depth = db(percentile(&onp, 0.5) / percentile(&offp, 0.5).max(1e-30));
+    }
     let mut runs = Vec::new();
     let mut i = 0;
     while i < on.len() {
         let j = (i..on.len()).find(|&j| on[j] != on[i]).unwrap_or(on.len());
         // runs cut by the window's ends don't say how long they are
         if on[i] && i > 0 && j < on.len() {
-            runs.push((j - i) as f64 * L as f64 / FS);
+            runs.push((j - i) as f64 * l as f64 / fs);
         }
         i = j;
     }
@@ -426,7 +565,7 @@ fn envelope(m: &mut Measure, y: &[Complex32], noise: f64, bw: f64) {
         .map(|(&v, &o)| o.then(|| (v - noise).max(0.0).sqrt()))
         .collect();
     let cvs: Vec<f64> = amp
-        .chunks((0.1 * FS) as usize / L)
+        .chunks((0.1 * fs) as usize / l)
         .filter_map(|c| {
             let a: Vec<f64> = c.iter().flatten().copied().collect();
             if a.len() < c.len() * 3 / 4 {
@@ -440,6 +579,23 @@ fn envelope(m: &mut Measure, y: &[Complex32], noise: f64, bw: f64) {
     if cvs.len() >= 3 {
         m.env_cv = percentile(&cvs, 0.5);
     }
+    // peak to average: the samples of the frames that are on
+    let pw: Vec<f64> = y
+        .chunks_exact(l)
+        .zip(&on)
+        .filter(|(_, o)| **o)
+        .flat_map(|(c, _)| c.iter().map(|v| v.norm_sqr() as f64))
+        .collect();
+    if pw.len() > 1000 {
+        let mean = pw.iter().sum::<f64>() / pw.len() as f64;
+        let sig = (mean - noise).max(1e-30);
+        m.papr = db(((percentile(&pw, 0.99) - noise).max(0.0) / sig).max(1e-3));
+        // E|x|^4 = E|s|^4 + 4 S N + 2 N^2 (complex Gaussian noise of power N)
+        let m4 = pw.iter().map(|p| p * p).sum::<f64>() / pw.len() as f64;
+        if sig > 0.5 * noise {
+            m.kurt = (m4 - 4.0 * sig * noise - 2.0 * noise * noise) / (sig * sig);
+        }
+    }
     // syllable rates: the envelope's (amplitude, 400 frames/s) spectrum
     let a: Vec<f64> = fr.iter().map(|v| v.sqrt()).collect();
     let mu = a.iter().sum::<f64>() / a.len() as f64;
@@ -448,7 +604,7 @@ fn envelope(m: &mut Measure, y: &[Complex32], noise: f64, bw: f64) {
         .map(|v| Complex32::new((v - mu) as f32, 0.0))
         .collect();
     fft(&mut z, false);
-    let df = (FS / L as f64) / z.len() as f64;
+    let df = (fs / l as f64) / z.len() as f64;
     let (mut s, mut t) = (0.0, 0.0);
     for (k, v) in z[1..z.len() / 2].iter().enumerate() {
         let f = (k + 1) as f64 * df;
@@ -552,6 +708,27 @@ fn carrier(m: &mut Measure, pa: &[f64], floor: f64, lo: usize, hi: usize, dfa: f
     let lp: f64 = ex[a..=b].iter().sum();
     m.line = lp / tot.max(1e-30);
     m.line_at = k as f64 * dfa;
+    // every narrow line with 5 % or more: peaks of the 6-Hz sums
+    for j in w..sm.len().saturating_sub(w) {
+        let v = sm[j];
+        if v >= sm[j - 1]
+            && v > sm[j + 1]
+            && sm[j.saturating_sub(4 * w)..(j + 4 * w).min(sm.len())]
+                .iter()
+                .all(|&u| u <= v)
+        {
+            let (a, b) = (lo + j - w.min(j), (lo + j + w).min(hi));
+            let share = ex[a..=b].iter().sum::<f64>() / tot.max(1e-30);
+            if share >= 0.05 {
+                m.carriers.push(Line {
+                    at: (lo + j) as f64 * dfa,
+                    db: share,
+                });
+            }
+        }
+    }
+    m.carriers.sort_by(|a, b| b.db.total_cmp(&a.db));
+    m.carriers.truncate(6);
     // sidebands: the power 20 Hz+ away below and above, in the band
     let g = (20.0 / dfa) as usize;
     let below: f64 = if k > lo + g {
@@ -566,15 +743,193 @@ fn carrier(m: &mut Measure, pa: &[f64], floor: f64, lo: usize, hi: usize, dfa: f
     };
     m.side_lo = below / tot.max(1e-30);
     m.side_hi = above / tot.max(1e-30);
+    // mirrored: 20 Hz+ out on both sides, as far as both go, in 10-Hz steps
+    let st = (10.0 / dfa).round().max(1.0) as usize;
+    let reach = (k - lo).min(hi - k);
+    let sm10 = smooth(&ex, st / 2);
+    let (mut u, mut d) = (Vec::new(), Vec::new());
+    let mut j = g;
+    while j < reach {
+        u.push((sm10[k + j] + floor * 0.1).ln());
+        d.push((sm10[k - j] + floor * 0.1).ln());
+        j += st;
+    }
+    if u.len() >= 8 {
+        let n = u.len() as f64;
+        let (mu, md) = (u.iter().sum::<f64>() / n, d.iter().sum::<f64>() / n);
+        let (mut suu, mut sdd, mut sud) = (0.0, 0.0, 0.0);
+        for (a, b) in u.iter().zip(&d) {
+            suu += (a - mu).powi(2);
+            sdd += (b - md).powi(2);
+            sud += (a - mu) * (b - md);
+        }
+        m.mirror = sud / (suu * sdd).sqrt().max(1e-30);
+    }
+}
+
+/// The tone grid, frame by frame: for frame lengths of 8 to 256 ms, each
+/// frame's strongest frequency (where it stands well out of the frame);
+/// their histogram's autocorrelation gives the spacing; the frame length
+/// whose histogram is the most periodic wins, a grid that two frame
+/// lengths agree on first.
+fn grid(m: &mut Measure, y: &[Complex32], fs: f64, bw: f64) {
+    let half = 0.55 * bw + 20.0;
+    let mut cands: Vec<Grid> = Vec::new();
+    for t in [0.008, 0.016, 0.032, 0.064, 0.128, 0.256] {
+        let l = (t * fs) as usize;
+        let nf = (4 * l).next_power_of_two();
+        let df = fs / nf as f64;
+        let kh = ((half / df) as usize).min(nf / 2 - 2);
+        if kh < 8 || l < 8 {
+            continue;
+        }
+        let w: Vec<f32> = (0..l)
+            .map(|i| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / l as f64).cos()) as f32)
+            .collect();
+        let mut peaks = Vec::new();
+        let mut buf = vec![Complex32::new(0.0, 0.0); nf];
+        let mut a = 0;
+        while a + l <= y.len() {
+            buf.iter_mut().for_each(|v| *v = Complex32::new(0.0, 0.0));
+            for i in 0..l {
+                buf[i] = y[a + i] * w[i];
+            }
+            fft(&mut buf, false);
+            let p: Vec<f64> = (0..2 * kh + 1)
+                .map(|j| buf[(j + nf - kh) % nf].norm_sqr() as f64)
+                .collect();
+            let (j, &pk) = p
+                .iter()
+                .enumerate()
+                .max_by(|x, y| x.1.total_cmp(y.1))
+                .unwrap();
+            let med = percentile(&p, 0.5);
+            if pk > 8.0 * med && j > 0 && j + 1 < p.len() {
+                let (u, v, z) = (p[j - 1].sqrt(), pk.sqrt(), p[j + 1].sqrt());
+                let d = 0.5 * (u - z) / (u - 2.0 * v + z).min(-1e-30);
+                peaks.push((j as f64 - kh as f64 + d.clamp(-0.5, 0.5)) * df);
+            }
+            a += l / 2;
+        }
+        if peaks.len() < 30 {
+            continue;
+        }
+        // histogram, 0.25 Hz bins, smoothed over the frame's resolution
+        const HB: f64 = 0.25;
+        let nh = ((2.0 * half / HB) as usize).next_power_of_two() * 2;
+        let mut h = vec![0f64; nh];
+        for &f in &peaks {
+            let k = ((f + half) / HB) as usize;
+            if k < nh / 2 {
+                h[k] += 1.0;
+            }
+        }
+        let h = smooth(&h, ((0.25 / t / HB) as usize).max(1));
+        let mut z: Vec<Complex32> = h.iter().map(|&v| Complex32::new(v as f32, 0.0)).collect();
+        fft(&mut z, false);
+        z.iter_mut()
+            .for_each(|v| *v = Complex32::new(v.norm_sqr(), 0.0));
+        fft(&mut z, true);
+        let r0 = z[0].re.max(1e-30) as f64;
+        let r: Vec<f64> = z[..nh / 2].iter().map(|v| v.re as f64 / r0).collect();
+        // the first peak (from 3 Hz and the frame's resolution up) nearly
+        // as high as the highest: the spacing, not a multiple of it
+        let k0 = ((3.0f64).max(0.7 / t) / HB) as usize;
+        let kmax = ((half / HB) as usize).min(r.len() - 2);
+        if kmax <= k0 + 2 {
+            continue;
+        }
+        let maxima: Vec<usize> = (k0.max(1)..kmax)
+            .filter(|&k| r[k] >= r[k - 1] && r[k] > r[k + 1])
+            .collect();
+        let Some(&gm) = maxima.iter().max_by(|x, y| r[**x].total_cmp(&r[**y])) else {
+            continue;
+        };
+        let kf = maxima
+            .iter()
+            .copied()
+            .find(|&k| r[k] >= 0.6 * r[gm])
+            .unwrap_or(gm);
+        // a clear peak: a smooth histogram (frequencies all over, as a
+        // single wide carrier gives) ripples, it doesn't repeat
+        let dip = r[k0..kf].iter().copied().fold(f64::MAX, f64::min);
+        if r[kf] - dip < 0.1 {
+            continue;
+        }
+        let rf = r[kf];
+        if rf < 0.25 {
+            continue;
+        }
+        let sp0 = kf as f64 * HB;
+        // the tones: the peaks grouped on that grid; the spacing refined by
+        // a straight line through the groups' medians (weighted by their
+        // frames); tones used: groups with 10 % of the busiest one's frames
+        let base = peaks.iter().copied().fold(f64::MAX, f64::min);
+        let mut groups: std::collections::BTreeMap<i64, Vec<f64>> = Default::default();
+        for &f in &peaks {
+            groups
+                .entry(((f - base) / sp0).round() as i64)
+                .or_default()
+                .push(f);
+        }
+        let mx = groups.values().map(|g| g.len()).max().unwrap_or(0);
+        let pts: Vec<(f64, f64, f64)> = groups
+            .iter()
+            .filter(|(_, g)| g.len() * 10 >= mx)
+            .map(|(&i, g)| (i as f64, percentile(g, 0.5), g.len() as f64))
+            .collect();
+        let spacing = if pts.len() >= 2 {
+            let w: f64 = pts.iter().map(|p| p.2).sum();
+            let mi = pts.iter().map(|p| p.0 * p.2).sum::<f64>() / w;
+            let mf = pts.iter().map(|p| p.1 * p.2).sum::<f64>() / w;
+            let sii: f64 = pts.iter().map(|p| p.2 * (p.0 - mi).powi(2)).sum();
+            let sif: f64 = pts.iter().map(|p| p.2 * (p.0 - mi) * (p.1 - mf)).sum();
+            if sii > 0.0 { sif / sii } else { sp0 }
+        } else {
+            sp0
+        };
+        let cnt: std::collections::BTreeMap<i64, u32> =
+            groups.iter().map(|(&i, g)| (i, g.len() as u32)).collect();
+        let mx = cnt.values().copied().max().unwrap_or(0);
+        let n = cnt.values().filter(|&&c| c * 10 >= mx).count() as u32;
+        // how often the strongest tone moves to another
+        let q: Vec<i64> = peaks
+            .iter()
+            .map(|f| ((f - base) / sp0).round() as i64)
+            .collect();
+        let changes =
+            q.windows(2).filter(|w| w[0] != w[1]).count() as f64 / (q.len() as f64 * t / 2.0);
+        cands.push(Grid {
+            spacing,
+            n,
+            strength: rf,
+            frame: t,
+            changes,
+        });
+    }
+    // a grid seen at another frame length too (within 4 %) is the grid; a
+    // frame shorter than the symbols shows a wrong one on its own
+    let agreed = |g: &Grid| {
+        cands
+            .iter()
+            .any(|h| h.frame != g.frame && (h.spacing / g.spacing - 1.0).abs() < 0.04)
+    };
+    let score = |g: &Grid| g.strength + if agreed(g) { 0.15 } else { 0.0 };
+    m.grid = cands
+        .iter()
+        .filter(|g| g.n >= 3)
+        .max_by(|a, b| score(a).total_cmp(&score(b)))
+        .copied();
 }
 
 /// Symbol rate and PSK order.
-fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
-    let top = (1.3 * bw).clamp(20.0, 2900.0);
-    let df = FS / NB as f64;
+fn symbols(m: &mut Measure, y: &[Complex32], fs_: f64, bw: f64) {
+    let top = (1.3 * bw).clamp(20.0, 0.48 * fs_);
+    let nb = y.len();
+    let df = fs_ / nb as f64;
     // the envelope
     let e: Vec<f64> = y.iter().map(|v| v.norm_sqr() as f64).collect();
-    let ps = feature_spectrum(&e);
+    let ps = feature_spectrum(&e, nb);
     // (not where a carrier or speech moves it: a voice's pitch)
     m.baud_env = find_line(&ps, df, 8.0, top, 0.15 * top + 10.0)
         .filter(|l| l.db >= 14.0 && m.line < 0.5 && m.syllabic < 0.35);
@@ -585,9 +940,9 @@ fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
     // The transitions: squared differences over that span.
     let (fs, s) = if two_tones(&m.tones) && m.line < 0.5 {
         let (fa, fb) = (m.tones[0].at - m.centre, m.tones[1].at - m.centre);
-        let l = ((FS / (fa - fb).abs()).round() as usize).clamp(2, 600);
+        let l = ((fs_ / (fa - fb).abs()).round() as usize).clamp(2, 600);
         let energy = |f: f64| -> Vec<f64> {
-            let w = -2.0 * std::f64::consts::PI * f / FS;
+            let w = -2.0 * std::f64::consts::PI * f / fs_;
             let mut cs = vec![num_complex::Complex64::new(0.0, 0.0); y.len() + 1];
             for (n, v) in y.iter().enumerate() {
                 let z = num_complex::Complex64::new(v.re as f64, v.im as f64)
@@ -606,7 +961,7 @@ fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
             .collect();
         (d, l)
     } else {
-        let s = ((FS / (2.0 * bw.max(20.0))).round() as usize).clamp(1, 60);
+        let s = ((fs_ / (2.0 * bw.max(20.0))).round() as usize).clamp(1, 60);
         let fi: Vec<f64> = y
             .windows(2)
             .map(|w| (w[1] * w[0].conj()).arg() as f64)
@@ -614,7 +969,7 @@ fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
         (smooth(&fi, s / 2), s)
     };
     let t: Vec<f64> = (s..fs.len()).map(|i| (fs[i] - fs[i - s]).powi(2)).collect();
-    let pt = feature_spectrum(&t);
+    let pt = feature_spectrum(&t, nb);
     // (async FSK puts its transitions on a half-bit grid when it has 1.5
     // stop bits, and the line can be at any multiple of the rate.) The bit
     // is the shortest common run of one tone (2-FSK): the line taken as
@@ -623,7 +978,7 @@ fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
     let fsk = m.tones.len() >= 2 && m.line < 0.5 && (m.env_cv < 0.25 || two_tones(&m.tones));
     let line = find_line(&pt, df, 8.0, top, 0.15 * top + 10.0).filter(|l| fsk && l.db >= 14.0);
     let runs = tone_runs(&fs, s);
-    let short = (runs.len() >= 20 && two_tones(&m.tones)).then(|| FS / percentile(&runs, 0.15));
+    let short = (runs.len() >= 20 && two_tones(&m.tones)).then(|| fs_ / percentile(&runs, 0.15));
     m.baud_freq = match (line, short) {
         (Some(l), Some(b0)) => {
             let n = (l.at / b0).round().max(1.0);
@@ -638,6 +993,24 @@ fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
         }
         (l, _) => l,
     };
+    if let (Some(b), true) = (m.baud_freq, two_tones(&m.tones)) {
+        let h = ((fs_ / b.at / 4.0).round() as usize).max(1);
+        let tr = smooth(&fi_raw(y), h);
+        let amp: Vec<f64> = smooth(&y.iter().map(|v| v.norm() as f64).collect::<Vec<_>>(), h);
+        let strong = percentile(&amp, 0.5);
+        let mid = 0.5 * (m.tones[0].at + m.tones[1].at) - m.centre;
+        let rad = 2.0 * std::f64::consts::PI / fs_;
+        let (mut up, mut dn) = (Vec::new(), Vec::new());
+        for (i, &v) in tr.iter().enumerate() {
+            if amp.get(i + 1).is_some_and(|&a| a >= strong) {
+                let hz = v / rad;
+                if hz > mid { up.push(hz) } else { dn.push(hz) }
+            }
+        }
+        if up.len() > 50 && dn.len() > 50 {
+            m.shift = Some(percentile(&up, 0.5) - percentile(&dn, 0.5));
+        }
+    }
     // PSK order: y^k shows a line (at k times the carrier offset); not a
     // carrier (y itself has one), nor constant-envelope tones (FSK's show
     // lines too)
@@ -692,6 +1065,13 @@ fn symbols(m: &mut Measure, y: &[Complex32], bw: f64) {
     }
 }
 
+/// The instantaneous frequency (rad / sample).
+fn fi_raw(y: &[Complex32]) -> Vec<f64> {
+    y.windows(2)
+        .map(|w| (w[1] * w[0].conj()).arg() as f64)
+        .collect()
+}
+
 /// Two tones stand out: the strongest two within 12 dB of each other,
 /// every other one 6 dB under the weaker or between them (FSK's
 /// transitions).
@@ -730,7 +1110,7 @@ fn tone_runs(f: &[f64], skip: usize) -> Vec<f64> {
 
 /// Repetition periods: of the signal (|R| of the complex baseband) and
 /// of its envelope; from 5 ms to 1.5 s.
-fn periods(m: &mut Measure, y: &[Complex32], bw: f64) {
+fn periods(m: &mut Measure, y: &[Complex32], fs: f64, bw: f64) {
     let n = y.len();
     let mut z = vec![Complex32::new(0.0, 0.0); 2 * n];
     z[..n].copy_from_slice(y);
@@ -740,12 +1120,12 @@ fn periods(m: &mut Measure, y: &[Complex32], bw: f64) {
     }
     fft(&mut z, true);
     let r0 = z[0].re.max(1e-30) as f64;
-    let max = (1.5 * FS) as usize;
+    let max = (1.5 * fs) as usize;
     // |R| relative to lag 0, the overlap's shrinking undone
     let r: Vec<f64> = (0..max)
         .map(|l| z[l].norm() as f64 / r0 * n as f64 / (n - l) as f64)
         .collect();
-    let l0 = ((0.005 * FS) as usize).max((3.0 * FS / bw.max(1.0)) as usize);
+    let l0 = ((0.005 * fs) as usize).max((3.0 * fs / bw.max(1.0)) as usize);
     // (tones and carriers beat: their |R| repeats at 1 / their spacing,
     // which is no structure)
     let mut gaps: Vec<f64> = m.spacing.into_iter().collect();
@@ -760,14 +1140,41 @@ fn periods(m: &mut Measure, y: &[Complex32], bw: f64) {
             .any(|d| (1..=4).any(|k| (p * d - k as f64).abs() < 0.05 * k as f64))
     };
     if m.line < 0.2 {
-        m.period = first_period(&r, l0, FS).filter(|l| !beat(l.at));
+        m.period = first_period(&r, l0, fs).filter(|l| !beat(l.at));
+        // narrow peaks (a few samples wide) over their surroundings
+        let (a, b) = (
+            ((0.002 * fs) as usize).max(l0),
+            ((0.040 * fs) as usize).min(r.len() - 1),
+        );
+        let w = ((0.001 * fs) as usize).max(3);
+        let mut best: Option<(f64, usize)> = None;
+        for k in a.max(w + 1)..b.min(r.len() - w - 1) {
+            if r[k] < r[k - 1] || r[k] < r[k + 1] {
+                continue;
+            }
+            let around: Vec<f64> = (k - w..=k + w)
+                .filter(|&j| j + 2 < k || j > k + 2)
+                .map(|j| r[j])
+                .collect();
+            let base = percentile(&around, 0.5);
+            let lift = r[k] - base;
+            if lift > 0.04
+                && r[k] > 2.5 * base
+                && best.is_none_or(|(v, _)| lift > v)
+                && !beat(k as f64 / fs)
+            {
+                best = Some((lift, k));
+            }
+        }
+        m.symbol = best.map(|(_, k)| Line {
+            at: k as f64 / fs,
+            db: r[k],
+        });
     }
     // envelope: 1 ms frames
-    const L: usize = 6;
+    let l = ((0.001 * fs).round() as usize).max(1);
     let e: Vec<f64> = y
-        .as_chunks::<L>()
-        .0
-        .iter()
+        .chunks_exact(l)
         .map(|c| c.iter().map(|v| v.norm_sqr() as f64).sum::<f64>())
         .collect();
     let mu = e.iter().sum::<f64>() / e.len() as f64;
@@ -783,34 +1190,34 @@ fn periods(m: &mut Measure, y: &[Complex32], bw: f64) {
     }
     fft(&mut z, true);
     let r0 = z[0].re.max(1e-30) as f64;
-    let max = (1.5 * FS / L as f64) as usize;
+    let max = (1.5 * fs / l as f64) as usize;
     let r: Vec<f64> = (0..max)
         .map(|l| z[l].re as f64 / r0 * ne as f64 / (ne - l) as f64)
         .collect();
     // (a steady envelope's variation is the noise's)
     if m.env_cv >= 0.1 || m.duty < 0.9 {
-        m.env_period = first_period(&r, 5, FS / L as f64);
+        m.env_period = first_period(&r, 5, fs / l as f64);
     }
 }
 
 /// Drift: the centroid in 0.5-s pieces, a straight line through them.
-fn drift(m: &mut Measure, y: &[Complex32], bw: f64) {
+fn drift(m: &mut Measure, y: &[Complex32], fs: f64, bw: f64) {
     if m.duty < 0.6 || bw > 600.0 || m.snr < 6.0 {
         return;
     }
-    const P: usize = 3000;
+    let p = (0.5 * fs) as usize;
     let mut pts = Vec::new();
-    for (i, c) in y.as_chunks::<P>().0.iter().enumerate() {
+    for (i, c) in y.chunks_exact(p).enumerate() {
         let mut z = c.to_vec();
         fft(&mut z, false);
         let (mut s, mut w) = (0.0, 0.0);
         for (k, v) in z.iter().enumerate() {
-            let f = if k < P / 2 {
+            let f = if k < p / 2 {
                 k as f64
             } else {
-                k as f64 - P as f64
-            } * FS
-                / P as f64;
+                k as f64 - p as f64
+            } * fs
+                / p as f64;
             if f.abs() > bw {
                 continue;
             }
@@ -819,7 +1226,7 @@ fn drift(m: &mut Measure, y: &[Complex32], bw: f64) {
             w += p;
         }
         if w > 0.0 {
-            pts.push(((i as f64 + 0.5) * P as f64 / FS, s / w));
+            pts.push(((i as f64 + 0.5) * p as f64 / fs, s / w));
         }
     }
     if pts.len() < 6 {
@@ -905,7 +1312,8 @@ mod tests {
         let x = audio(|_| 1000.0, |_| 0.0, 0.1, 11);
         let df = AUDIO_RATE / NA as f64;
         let (b0, b1) = ((200.0 / df) as usize, (2800.0 / df) as usize);
-        let fl = floor_of(&x, b0, b1, NA);
+        let xc: Vec<Complex32> = x.iter().map(|&v| Complex32::new(v, 0.0)).collect();
+        let fl = floor_of(&xc, b0, b1, AUDIO_RATE);
         let mut z: Vec<Complex32> = x.iter().map(|&v| Complex32::new(v, 0.0)).collect();
         fft(&mut z, false);
         let mean = z[b0..b1].iter().map(|c| c.norm_sqr() as f64).sum::<f64>() / (b1 - b0) as f64;
@@ -961,13 +1369,11 @@ mod tests {
         );
         let m = measure(&x, (1200.0, 1800.0), BAND).unwrap();
         assert!((m.centre - 1500.0).abs() < 15.0, "{m:?}");
-        assert!(m.env_cv < 0.2 && m.duty > 0.95, "{m:?}");
+        assert!(m.env_cv < 0.2 && m.duty > 0.95 && m.kurt < 1.15, "{m:?}");
         let b = m.baud_freq.expect("baud from frequency");
         assert!((b.at - 45.45).abs() < 0.5, "{m:?}");
-        let mut f: Vec<f64> = m.tones.iter().take(2).map(|t| t.at).collect();
-        f.sort_by(|a, b| a.total_cmp(b));
-        assert_eq!(f.len(), 2, "{m:?}");
-        assert!((f[1] - f[0] - 170.0).abs() < 8.0, "{f:?}");
+        let sh = m.shift.expect("shift");
+        assert!((sh - 170.0).abs() < 5.0, "{m:?}");
     }
 
     #[test]
@@ -1025,6 +1431,7 @@ mod tests {
         assert!(m.duty > 0.3 && m.duty < 0.8, "{m:?}");
         assert!(m.bursts > 15, "{m:?}");
         assert!((m.on_short - 0.06).abs() < 0.015, "{m:?}");
+        assert!(m.depth > 20.0, "{m:?}");
     }
 
     #[test]
@@ -1063,5 +1470,95 @@ mod tests {
         let m = measure(&x, (800.0, 1200.0), BAND).unwrap();
         let p = m.env_period.expect("pulse period");
         assert!((p.at - 0.025).abs() < 0.001, "{p:?}");
+    }
+    /// Complex baseband at 24 kS/s: a signal and noise; `f(t)`, `a(t)` as
+    /// for [`audio`], `n` the noise per I and Q.
+    fn iq(f: impl Fn(f64) -> f64, a: impl Fn(f64) -> f64, n: f64, seed: u64) -> Vec<Complex32> {
+        let rate = 24_000.0;
+        let mut r = Rng(seed);
+        let mut ph = 0.0;
+        (0..iq_len(rate))
+            .map(|i| {
+                let t = i as f64 / rate;
+                ph += 2.0 * PI * f(t) / rate;
+                Complex32::new(
+                    (a(t) * ph.cos() + n * r.gauss()) as f32,
+                    (a(t) * ph.sin() + n * r.gauss()) as f32,
+                )
+            })
+            .collect()
+    }
+
+    /// IQ: frequencies from the centre, below it too; RTTY's figures as in
+    /// audio.
+    #[test]
+    fn iq_tone_and_rtty() {
+        let band = (-10_000.0, 10_000.0);
+        let x = iq(|_| -4321.0, |_| 0.3, 0.02, 21);
+        let m = measure_iq(&x, 24_000.0, (-4500.0, -4100.0), band).unwrap();
+        assert!((m.centre + 4321.0).abs() < 2.0 && m.line > 0.6, "{m:?}");
+        let mut r = Rng(22);
+        let bits: Vec<bool> = (0..400).map(|_| r.bit()).collect();
+        let x = iq(
+            |t| {
+                3000.0
+                    + if bits[(t * 50.0) as usize] {
+                        225.0
+                    } else {
+                        -225.0
+                    }
+            },
+            |_| 0.3,
+            0.02,
+            23,
+        );
+        let m = measure_iq(&x, 24_000.0, (2500.0, 3500.0), band).unwrap();
+        assert!((m.centre - 3000.0).abs() < 20.0, "{m:?}");
+        let sh = m.shift.expect("shift");
+        assert!((sh - 450.0).abs() < 8.0, "{m:?}");
+        let b = m.baud_freq.expect("rate");
+        assert!((b.at - 50.0).abs() < 0.5, "{b:?}");
+    }
+
+    /// OFDM (as DRM mode B: 206 carriers 46.875 Hz apart, 21.33 ms useful
+    /// symbols, a 5.33 ms guard copied from their ends): 9.7 kHz wide,
+    /// its useful symbol length in |R|.
+    #[test]
+    fn iq_ofdm_guard() {
+        let rate = 24_000.0;
+        let (tu, tg) = ((0.021_333 * rate) as usize, (0.005_333 * rate) as usize);
+        let k = 206;
+        let mut r = Rng(31);
+        let n = iq_len(rate);
+        let mut x = Vec::with_capacity(n + tu + tg);
+        let mut buf = vec![Complex32::new(0.0, 0.0); tu];
+        while x.len() < n {
+            for v in buf.iter_mut() {
+                *v = Complex32::new(0.0, 0.0);
+            }
+            for c in 0..k {
+                let bin = (c as i64 - k as i64 / 2).rem_euclid(tu as i64) as usize;
+                let ph = (r.u() * 4.0).floor() * PI / 2.0 + PI / 4.0;
+                buf[bin] = Complex32::from_polar(1.0, ph as f32);
+            }
+            fft(&mut buf, true);
+            x.extend_from_slice(&buf[tu - tg..]);
+            x.extend_from_slice(&buf);
+        }
+        x.truncate(n);
+        let p = x.iter().map(|v| v.norm_sqr()).sum::<f32>() / n as f32;
+        let x: Vec<Complex32> = x
+            .iter()
+            .map(|v| {
+                v / p.sqrt() * 0.3
+                    + Complex32::new(0.02 * r.gauss() as f32, 0.02 * r.gauss() as f32)
+            })
+            .collect();
+        let m = measure_iq(&x, rate, (-6000.0, 6000.0), (-10_000.0, 10_000.0)).unwrap();
+        assert!((m.hi - m.lo - 9700.0).abs() < 400.0, "{m:?}");
+        assert!(m.line < 0.05, "{m:?}");
+        assert!(m.papr > 5.5 && (m.kurt - 2.0).abs() < 0.3, "{m:?}");
+        let p = m.symbol.expect("the useful symbol in |R|");
+        assert!((p.at - 0.021_333).abs() < 0.0005, "{p:?}");
     }
 }

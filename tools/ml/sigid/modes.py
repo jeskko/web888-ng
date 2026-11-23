@@ -697,9 +697,148 @@ def hfdl(n, rng):
     return out
 
 
+
+# --- more amateur and utility data modes (2026-11-23) -----------------------------------------------
+def olivia(n, rng):
+    """Olivia / Contestia: M tones over a bandwidth B, the spacing and the
+    rate B / M; the tones smoothly keyed (their FEC'd symbols random)."""
+    m, bw = [(8, 250), (8, 500), (16, 500), (32, 1000), (16, 1000), (4, 250), (8, 1000), (64, 2000)][rng.integers(8)]
+    sp = bw / m
+    t = rng.integers(0, m, int(2 * n / FS * sp) + 4)
+    f = gauss_track(t, sp, sp, 1.0, 0) - (m - 1) / 2 * sp
+    return window(fm(f, rng), n, rng)
+
+
+def mfsk16(n, rng):
+    """MFSK8 / 16 / 32 / 64: 32 or 16 tones, the spacing equal to the rate."""
+    m, sp = [(16, 15.625), (16, 15.625), (32, 7.8125), (16, 31.25), (16, 62.5)][rng.integers(5)]
+    t = rng.integers(0, m, int(2 * n / FS * sp) + 4)
+    f = hold(t * sp - (m - 1) / 2 * sp, sp, int(len(t) * FS / sp))
+    return window(fm(f, rng), n, rng)
+
+
+def dominoex(n, rng):
+    """DominoEX / THOR: 18 tones, incremental frequency keying (each tone
+    2 + the nibble above the last, mod 18); the slow modes' spacing is
+    twice the rate."""
+    rate = rng.choice([3.90625, 5.3833, 7.8125, 10.766, 15.625, 21.533])
+    sp = rate * (2 if rate < 10 else 1)
+    k = int(2 * n / FS * rate) + 4
+    t = np.cumsum(2 + rng.integers(0, 16, k)) % 18
+    f = hold(t * sp - 8.5 * sp, rate, int(k * FS / rate))
+    return window(fm(f, rng), n, rng)
+
+
+def hell(n, rng):
+    """Feld Hell: on-off keying of a tone, 245 slots a second (a column is
+    14 slots, a glyph 7 columns, 2.5 glyphs a second): pixels of 2 slots
+    (8.2 ms) drawing letter-like strokes; 1 ms edges."""
+    slot = FS / 245.0
+    cols = []
+    while len(cols) * 14 * slot < 2 * n:
+        g = np.zeros((7, 14))
+        if rng.random() > 0.15:                         # else a space
+            for _ in range(rng.integers(2, 5)):
+                kind, a, b = rng.integers(3), rng.integers(0, 5), rng.integers(2, 11)
+                if kind == 0:
+                    g[a:a + 2, 2:12] = 1                # an upright
+                elif kind == 1:
+                    g[0:6, b:b + 2] = 1                 # a bar across
+                else:
+                    for i in range(6):                  # a diagonal
+                        g[i, min(12, 2 + 2 * i):min(14, 4 + 2 * i)] = 1
+        cols += list(g)
+    key = np.concatenate(cols)
+    key = key[np.minimum((np.arange(int(len(key) * slot)) / slot).astype(int), len(key) - 1)]
+    m = max(1, int(0.001 * FS))
+    w = np.hanning(2 * m + 1)
+    key = np.convolve(key, w / w.sum(), mode="same")
+    return window(key.astype(np.complex64), n, rng) * fm(np.zeros(n), rng)
+
+
+def _dpsk_carriers(n_sym, rate, offs, rng, order=4):
+    """Carriers at `offs` Hz, each DPSK at `rate` with raised-cosine symbols."""
+    sps = FS / rate
+    L = int(n_sym * sps)
+    tt = np.arange(L) / sps
+    k = np.floor(tt).astype(int)
+    frac = tt - k
+    x = np.zeros(L, np.complex64)
+    for f in offs:
+        ph = np.cumsum(rng.integers(0, order, n_sym + 1)) * TAU / order
+        a, b = np.exp(1j * ph[np.clip(k, 0, n_sym)]), np.exp(1j * ph[np.clip(k + 1, 0, n_sym)])
+        w = 0.5 - 0.5 * np.cos(np.pi * np.clip(frac * 2 - 1, 0, 1))  # the change in the second half
+        x += ((1 - w) * a + w * b) * np.exp(1j * (TAU * f * np.arange(L) / FS + rng.uniform(0, TAU)))
+    return x / np.sqrt(len(offs))
+
+
+def pactor(n, rng):
+    """PACTOR I-III in ARQ: a 1.25 s cycle, 0.96 s of data from one side
+    and a 0.12 s control signal back (the other station, at its level);
+    I: FSK 200 Hz, 100 or 200 Bd; II: two DPSK carriers 200 Hz apart;
+    III: up to 18 carriers 120 Hz apart, 100 Bd."""
+    kind = rng.integers(3)
+    cyc, data, cs = int(1.25 * FS), int(0.96 * FS), int(0.12 * FS)
+    nc = int(n / cyc) + 3
+    def burst(m):
+        if kind == 0:
+            baud = rng.choice([100.0, 200.0])
+            b = rng.integers(0, 2, int(m / FS * baud) + 2)
+            return fm(hold(np.where(b > 0, 100.0, -100.0), baud, m), rng)
+        if kind == 1:
+            return _dpsk_carriers(int(m / FS * 100) + 1, 100.0, [-100.0, 100.0], rng)[:m]
+        k = rng.integers(2, 19)
+        return _dpsk_carriers(int(m / FS * 100) + 1, 100.0, (np.arange(k) - (k - 1) / 2) * 120.0, rng)[:m]
+    other = 10 ** rng.uniform(-1.5, 0.5)
+    x = np.zeros(nc * cyc, np.complex64)
+    gap = rng.integers(int(0.02 * FS), cyc - data - cs)
+    for c in range(nc):
+        x[c * cyc:c * cyc + data] = burst(data)
+        a = c * cyc + data + gap
+        x[a:a + cs] = other * burst(cs)
+    return window(x, n, rng)
+
+
+def multitone(n, rng):
+    """Parallel-tone modems: MT63 (64 tones, 500/1000/2000 Hz), the
+    39-tone HF modem (56.25 Hz apart, 44.44 Bd, a pilot), OFDM data in a
+    voice channel (24-60 carriers, 2.3 kHz, as VARA HF): many carriers at
+    once, each DPSK."""
+    kind = rng.integers(3)
+    if kind == 0:
+        bw = rng.choice([500.0, 1000.0, 2000.0])
+        sp, rate, k = bw / 64, bw / 100, 64
+    elif kind == 1:
+        sp, rate, k = 56.25, 44.44, 39
+    else:
+        k = int(rng.integers(24, 61))
+        sp = 2300.0 / k
+        rate = sp * rng.uniform(0.7, 0.9)
+    offs = (np.arange(k) - (k - 1) / 2) * sp
+    x = _dpsk_carriers(int(2 * n / FS * rate) + 4, rate, offs, rng)
+    if kind == 1:
+        x = x + 0.5 * np.exp(1j * TAU * (offs[0] - 2 * sp) * np.arange(len(x)) / FS)
+    return bursts(x, n, rng) if rng.random() < 0.3 else window(x.astype(np.complex64), n, rng)
+
+
+def ale3g(n, rng):
+    """3G ALE (MIL-STD-188-141B): bursts of 2400 Bd 8-PSK (0.6-1.3 s, as its
+    burst waveforms), the replies after short gaps."""
+    x = np.zeros(2 * n, np.complex64)
+    a = int(rng.integers(0, int(0.5 * FS)))
+    while a < len(x):
+        m = int(rng.uniform(0.6, 1.3) * 2400)
+        b = _psk_wave(rng.integers(0, 8, m), rng)
+        b = b * (10 ** rng.uniform(-0.5, 0.5))
+        x[a:a + len(b)] = b[:len(x) - a]
+        a += len(b) + int(rng.uniform(0.1, 1.5) * FS)
+    return window(x, n, rng)
+
 CLASSES = ["noise", "carrier", "cw", "fsk", "psk31", "ft8", "ft4", "wspr", "ale", "stanag4285",
-           "mil110a", "sstv", "fax", "ssb", "am", "interference", "radar", "hfdl"]
+           "mil110a", "sstv", "fax", "ssb", "am", "interference", "radar", "hfdl",
+           "olivia", "mfsk", "dominoex", "hell", "pactor", "multitone", "ale3g"]
 GEN = [noise, carrier, cw, fsk, psk31, ft8, ft4, wspr, ale, stanag4285, mil110a, sstv, fax, ssb_voice, am,
-       interference, radar, hfdl]
+       interference, radar, hfdl, olivia, mfsk16, dominoex, hell, pactor, multitone, ale3g]
 # half the occupied width of each (Hz): how far a neighbour must stay
-HALF = [0, 5, 20, 450, 60, 300, 300, 100, 950, 1600, 1600, 650, 450, 1300, 2950, 1250, 2950, 1200]
+HALF = [0, 5, 20, 450, 60, 300, 300, 100, 950, 1600, 1600, 650, 450, 1300, 2950, 1250, 2950, 1200,
+        1050, 280, 200, 150, 1150, 1200, 1600]

@@ -3,9 +3,10 @@
 // #f=10099.0&m=usb), start audio, turn ID on, then ask about each listed
 // signal (its ? button) and print the answer (headline, sentences,
 // figures); with DRAG=F0,F1 also a shift-drag across that fraction of the
-// waterfall's width (after ZOOM wheel steps in at its middle). Screenshot
+// waterfall's width (after ZOOM wheel steps in at its middle); with WIDE=1
+// an answer's Wide look (IQ) too, and the tuning after it. Screenshot
 // whatis.png in OUT.
-//   CHROME=... [DRAG=0.45,0.55 [ZOOM=6]] node whatis.mjs URL [PASSBAND_LABEL]
+//   CHROME=... [DRAG=0.45,0.55 [ZOOM=6]] [WIDE=1] node whatis.mjs URL [PASSBAND_LABEL]
 import { launch, q, sleep, decoder, lit } from "./lib.mjs";
 const [url, bw = ""] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
@@ -46,6 +47,17 @@ for (let i = 0; i < rows; i++) {
   await p.ev(`[...document.querySelectorAll('.sigid tbody tr')][${i}]?.querySelector('button')?.click()`);
   console.log(`--- row ${i}: ${row}`);
   console.log(await answer());
+  if (process.env.WIDE) {
+    const before = await p.ev(`${q(".freq")}.textContent + ' ' + [...document.querySelectorAll('.mode button.on, button.on')].map((b) => b.textContent).slice(0, 3).join(',')`);
+    const has = await p.ev(`!![...document.querySelectorAll('.sig-ask button')].find((b) => b.textContent === 'Wide look')`);
+    if (!has) continue;
+    await p.ev(`[...document.querySelectorAll('.sig-ask button')].find((b) => b.textContent === 'Wide look').click()`);
+    await sleep(1500);
+    console.log(`--- wide look (was ${before}); now ${await p.ev(`${q(".freq")}.textContent`)}`);
+    console.log(await answer());
+    await sleep(1500);
+    console.log(`--- after: ${await p.ev(`${q(".freq")}.textContent + ' ' + [...document.querySelectorAll('button.on')].map((b) => b.textContent).slice(0, 3).join(',')`)}`);
+  }
 }
 if (process.env.DRAG) {
   const [f0, f1] = process.env.DRAG.split(",").map(Number);
