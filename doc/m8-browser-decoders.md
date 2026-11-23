@@ -30,7 +30,7 @@ panel, `crates/fsk/src/dsc.rs`, §2.8; time codes, `crates/timecode`,
 | 11 | **HFDL** (aircraft data link, 1800 Bd PSK; ARINC 635, dumphfdl GPL-3 as the reference) | new | squitters, logons, position reports and ACARS decoded, checked by their CRCs; aircraft positions and ground stations on the map (§2.6) |
 | 12 | **JS8** (JS8Call: FT8's waveform, its own code and frames; Normal, Fast, Turbo, Slow) | the FT8 decoder, generalised | heartbeats, directed messages and free text, frames joined per frequency; senders with a grid on the map (§2.7) |
 | 13 | later: ALE 2G, Olivia | new | — |
-| 14 | planned: **neural voice noise reduction** (§5.4) | the papers in §5.4; trained like the neural CW | SSB/AM voice clearer than the spectral subtraction (`crates/dsp/src/nr.rs`) by Whisper's word errors on real HF recordings, nothing invented at low SNR |
+| 14 | planned: **neural noise reduction**, one model each for SSB voice, CW and AM broadcast (§5.4) | the papers in §5.4; trained like the neural CW | SSB voice and AM speech clearer than the spectral subtraction (`crates/dsp/src/nr.rs`) by Whisper's word errors on real HF recordings, CW elements easier to copy by ear, AM music not damaged, nothing invented at low SNR |
 | 15 | planned: **label every signal** (§5.5) | the identifier and `measure.rs` | every signal in the waterfall's view marked with its class, kept up to date as the view moves |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
@@ -796,11 +796,22 @@ examples print the figures and the page's JSON for a WAV.
   dominoex, hell, pactor, multitone, ale3g); `calibrate.py` for its
   probabilities.
 
-### 5.4 Neural voice noise reduction (planned, 2026-11-23)
+### 5.4 Neural noise reduction: voice, CW, AM broadcast (planned, 2026-11-23)
 
-After the 25-class identifier. A mask-only network in the page's audio
-path (AudioWorklet, our own Rust inference like §5.1), as a third choice
-next to the server's spectral subtraction; no load on the unit.
+After the 25-class identifier. Small mask-only networks in the page's
+audio path (AudioWorklet, our own Rust inference like §5.1), as a third
+choice next to the server's spectral subtraction; no load on the unit.
+One model per kind of listening, picked by the mode: a voice model
+trained on speech treats a steady tone as noise and fades CW, carriers
+and data tones away (a known RNNoise trait). For listening only: the
+decoders keep taking the raw audio, which they read best.
+
+| mode | model | off for |
+|---|---|---|
+| USB / LSB | SSB voice (below) | — |
+| CW | CW (below) | — |
+| AM, SAM/SAL/SAR | AM broadcast, speech and music (below) | — |
+| anything else (data modes, FM, IQ) | none | — |
 
 **Papers (searched 2026-11-23):**
 
@@ -855,6 +866,56 @@ next to the server's spectral subtraction; no load on the unit.
   word errors (local whisper.cpp) plus PESQ/STOI from −10 to +10 dB,
   against `nr.rs` and RNNoise; listen below −7 dB for invented sound.
 * Effort: about the neural CW's; the data simulation is most of it.
+
+**CW model** (for copying by ear):
+
+* What a narrow filter and AGC can't do: soft-gate the noise between
+  elements inside the passband, take lightning crashes down without
+  chopping the keying, even out element levels through fading, and turn
+  auroral flutter (a rasping smear) back into a steady-pitch tone that
+  follows the measured envelope (a learned CW tone regenerator).
+* It must not decode and re-key: a clean tone wherever it thinks a dit
+  is would invent and drop elements at low SNR and sound sure of itself.
+  So soft gains 0..1 per time-frequency cell with a floor (−10..−15 dB:
+  weak elements still faintly heard, no dead silence), missed elements
+  costing more than leftover noise in training; the flutter regenerator
+  follows the envelope smoothly, never switching hard, so a doubtful
+  element stays doubtful.
+* Tiny (~10-30k weights: a few hundred Hz around the pitch). Training
+  data from the CW synthesiser (§5.1-5.2: fading, jitter, QRN, a second
+  station, auroral flutter); labels free.
+* Scoring: synthetic sets at known SNRs, elements kept / lost / invented,
+  raw vs processed; then human copying of the same recordings raw and
+  processed (the neural CW decoder's errors on the output only a rough
+  stand-in, as it trained on unprocessed audio).
+
+**AM broadcast model** (speech and music):
+
+* Already handled elsewhere, so not its job: steady heterodynes and
+  co-channel carrier beats (the auto notch, `crates/dsp/src/notch.rs`),
+  selective-fading distortion and splatter from one adjacent channel
+  (synchronous AM and its one-sideband modes, `demod::Sync`). The model
+  sits after the demodulator and the notch.
+* Its job: broadband hiss and atmospheric noise, crashes and clicks,
+  powerline buzz and switching-supply hash, adjacent-channel "monkey
+  chatter", drifting or wobbling whistles the notch doesn't catch.
+* Music is the hard part: tonal music looks like carriers, and noise
+  under it like music; mask models trained on speech make it sound
+  "underwater". So trained on music as well as speech, with gentle
+  gains and a strength control; never more than the hiss taken.
+* Training data: clean speech and music → AM modulation (broadcast
+  audio ~4.5 kHz, typical compression) → simulated HF channel (flat and
+  selective fading, carrier fades, noise, interference above) → our own
+  demodulator → input; target the clean audio band-limited the same.
+  Music licences matter for weights shipped in a GPL project: only CC0 /
+  CC-BY material (e.g. MUSAN's CC-BY parts, the CC-BY subset of FMA or
+  MTG-Jamendo), no non-commercial sets. Real AM recordings (our `onair`
+  and `/data/iq` sets) for noise and for scoring, as they have no clean
+  reference.
+* Scoring: speech by Whisper word errors; music by listening (ViSQOL as
+  a rough stand-in), against the auto notch + spectral subtraction.
+* The largest of the three (music data and its evaluation); after the
+  SSB voice and CW models.
 
 ### 5.5 Label every signal (planned, 2026-11-23)
 
