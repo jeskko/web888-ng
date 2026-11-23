@@ -1340,8 +1340,11 @@ fn chirp(m: &mut Measure, y: &[Complex32], fs: f64, noise: f64) {
         .iter()
         .filter(|f| (f.0 - med).abs() <= 0.15 * med.abs())
         .collect();
-    if alike.len() >= 3 && med.abs() >= 1000.0 {
-        let r2 = percentile(&alike.iter().map(|f| f.1).collect::<Vec<_>>(), 0.5);
+    let r2 = percentile(&alike.iter().map(|f| f.1).collect::<Vec<_>>(), 0.5);
+    // a radar repeats (10+ sweeps a second: 30+ in a window) and its
+    // sweeps are straight; a few short, rougher glides are a wideband
+    // modem's phase noise (STANAG 4285, fax, parallel-tone modems)
+    if alike.len() >= 8 && r2 >= 0.95 && med.abs() >= 1000.0 {
         let rate = (periods.len() >= 5).then(|| 1.0 / percentile(&periods, 0.5));
         m.chirp = Some(Chirp {
             slope: med,

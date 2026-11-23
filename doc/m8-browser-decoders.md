@@ -795,6 +795,31 @@ examples print the figures and the page's JSON for a WAV.
 * Seven classes added to the identifier's generators (olivia, mfsk,
   dominoex, hell, pactor, multitone, ale3g); `calibrate.py` for its
   probabilities.
+* **The 25-class model (2026-11-23)**:
+  * Fine-tuned from the 18-class one: 20k steps, 3.7 h, `--resume`
+    growing the last layer.
+  * Synthetic validation 97.5 %: 95.8 % at −6..0 dB, 98.4 % at
+    +15..+30 dB, every class 92 % or better (AM 91.7 % the lowest).
+  * Temperature 0.653 folded into the last layer: expected calibration
+    error 4.7 % → 0.75 %, so "90 %+" is right 99 % of the time.
+  * Real signals:
+    * The labelled windows from the 2026-10-22 recording are 18/18 (one
+      fixed in the text layer: a fading AM carrier the model called
+      WSPR, then fax; fax now needs its ~800 Hz black/white shift).
+    * The model now names the new modes itself, where it said fsk, cw,
+      mil110a or interference before; their answers went from "likely"
+      to "sure".
+    * SSB voice is ssb 0.66, where it was am 0.57.
+    * A plain carrier is carrier 0.92, where it was am 0.50.
+    * Weak LSB speech is still am 0.86, but the figures overrule it.
+  * Fixed along the way: false "sweeps" on wideband modems (STANAG 4285,
+    HFDL, fax, the 39-tone and Codan modems, 3-14 short rough glides).
+    A repeated sweep now needs 8+ alike bursts with median r² ≥ 0.95;
+    every radar here has 41+ at 0.996+.
+  * Also fixed: a sweep can't be wider than the signal it was measured
+    in (a 206 Hz AM carrier's "4 kHz" glide in the page).
+  * Open: the DWD RTTY reads 100 Bd in 1 of 12 windows of the recording
+    (t = 0, in a fade; 50 Bd in the other 11).
 
 ### 5.4 Neural noise reduction: voice, CW, AM broadcast (planned, 2026-11-23)
 

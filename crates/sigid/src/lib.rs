@@ -63,6 +63,13 @@ pub const CLASSES: &[&str] = &[
     "interference",
     "radar",
     "hfdl",
+    "olivia",
+    "mfsk",
+    "dominoex",
+    "hell",
+    "pactor",
+    "multitone",
+    "ale3g",
 ];
 
 static WEIGHTS: &[u8] = include_bytes!("../model/sigid.bin");

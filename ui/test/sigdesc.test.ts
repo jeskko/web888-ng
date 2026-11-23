@@ -28,7 +28,7 @@ const cases: [string, RegExp, string | null, string][] = [
   ["fax", /^HF fax/, "fax", "sure"],
   ["am", /^AM \(a carrier with both sidebands\)$/, "am", "sure"],
   ["amUsb", /sidebands on one side/, "am", "likely"],
-  ["ssb", /^Speech \(SSB voice\)$/, "ssb", "likely"],
+  ["ssb", /^Speech \(SSB voice\)$/, "ssb", "sure"],
   // on air, 2026-10-22: an AM station fading (not keying), weak LSB
   // speech, a weak WSPR signal (no AM), a busy FT8 sub-band with a carrier
   ["amFade", /^AM \(a carrier with both sidebands\)$/, "am", "sure"],
@@ -36,20 +36,20 @@ const cases: [string, RegExp, string | null, string][] = [
   ["wsprWeak", /^A narrow steady signal/, null, "unsure"],
   ["ft8Crowd", /FT8/, "ft8", "unsure"],
   // the 2026-11-23 classes (synthetic, modes.py)
-  ["olivia", /^Olivia or Contestia 8\/250$/, "olivia", "likely"],
-  ["mfsk16", /^MFSK16/, "mfsk", "likely"],
-  ["dominoex", /^DominoEX or THOR \(18 tones/, "dominoex", "likely"],
-  ["hell", /^Feld Hell/, "hell", "likely"],
-  ["pactor1", /^PACTOR-I \((100|200) Bd, 200 Hz shift/, "pactor", "likely"],
-  ["tone39", /^39-tone HF modem/, "multitone", "likely"],
-  ["ale3g", /^2400 Bd PSK in bursts \(as 3G ALE\)$/, "ale3g", "likely"],
+  ["olivia", /^Olivia or Contestia 8\/250$/, "olivia", "sure"],
+  ["mfsk16", /^MFSK16/, "mfsk", "sure"],
+  ["dominoex", /^DominoEX or THOR \(18 tones/, "dominoex", "sure"],
+  ["hell", /^Feld Hell/, "hell", "sure"],
+  ["pactor1", /^PACTOR-I \((100|200) Bd, 200 Hz shift/, "pactor", "sure"],
+  ["tone39", /^39-tone HF modem/, "multitone", "sure"],
+  ["ale3g", /^2400 Bd PSK in bursts \(as 3G ALE\)$/, "ale3g", "sure"],
   // utility signals by sigidwiki.com's figures (synthetic)
   ["g1_cis36_50_250", /fits CIS-36-50/, "fsk", "sure"],
   ["g1_cis36_36_125", /^FSK 36 Bd, 12\d Hz shift: fits CIS-36-50/, "fsk", "sure"],
   ["g1_f01_200_500", /fits the Russian F01 \/ F06/, "fsk", "sure"],
   ["g1_f11_100_625", /fits the Polish F11/, "fsk", "sure"],
-  ["g1_codan_data", /^Codan data modem/, "multitone", "likely"],
-  ["g1_codan_chirp", /^Codan CHIRP ALE/, "multitone", "likely"],
+  ["g1_codan_data", /^Codan data modem/, "multitone", "sure"],
+  ["g1_codan_chirp", /^Codan CHIRP ALE/, "multitone", "sure"],
   ["g1_chinese64", /fits Chinese-64 MFSK$/, "mfsk", "likely"],
 ];
 
@@ -111,12 +111,25 @@ test("sigdesc: the measured figures say what an analyst reads off them", () => {
   assert.ok(!features(an("ssb")).am);
   assert.ok(features(an("am")).am);
   assert.ok(features(an("amUsb")).amOneSide && !features(an("amUsb")).carrier);
-  const s = describe(an("ssb"), usb);
-  // the identifier said AM; the figures (no carrier) say otherwise
-  assert.ok(an("ssb").top[0][0] === "am");
-  assert.ok(s.text.some((x) => /syllable/.test(x)), s.text.join(" "));
+  assert.ok(describe(an("ssb"), usb).text.some((x) => /syllable/.test(x)));
+  // weak LSB speech: the identifier says AM; the figures (no carrier) say otherwise
+  const lsb = { rf: (h: number) => 7_000_000 - h, plan: null, markers: [] };
+  assert.equal(an("ssbWeak").top[0][0], "am");
+  const w = describe(an("ssbWeak"), lsb);
+  assert.match(w.title, /^Speech/);
+  assert.ok(w.text.some((x) => /don't bear out/.test(x)), w.text.join(" "));
   assert.ok(describe(an("stanag"), usb).text.some((x) => /repeats every 10[67]/.test(x)));
   assert.equal(fx.noise.an, null);
+});
+
+test("sigdesc: no sweep wider than the signal it was measured in", () => {
+  // as seen on air (7265 kHz, 2026-11-23): a 206 Hz AM carrier with a
+  // "4 kHz/s, 1.2 a second" glide fitted to its wobble
+  const a = { ...an("am"), lo: 1400, hi: 1606, fills: false, chirp: [4000, 9, 0.96, 0.2, 1.2] as [number, number, number, number, number] };
+  assert.equal(features(a).sweep, null);
+  assert.ok(!describe(a, usb).text.some((x) => /Sweeps/.test(x)));
+  // a real one stays (the 29B6 sounder: 12 kHz of sweep in 13.6 kHz)
+  assert.ok(features(an("radar_k29b6_sounder")).sweep);
 });
 
 test("sigdesc: LSB maps edges and drift to RF; the band plan and the labels", () => {

@@ -157,6 +157,9 @@ function sweepOf(a: SigAn): Features["sweep"] {
   const crossing = a.fills && Math.abs(c[0]) * c[3] >= 0.85 * (a.hi - a.lo);
   const pulsed = !once && !crossing && !inside && a.duty < 0.6 && (a.depth ?? 0) >= 15;
   const width = once ? null : pulsed ? Math.abs(c[0]) * c[3] : rate ? Math.abs(c[0]) / rate : null;
+  // a sweep can't be wider than the signal it was measured in (unless it
+  // crosses a window it fills): a narrow carrier's wobble, not a radar
+  if (!a.fills && width != null && width > 1.5 * (a.hi - a.lo)) return null;
   return { slope: c[0], rate, pulsed, width, once };
 }
 
@@ -512,6 +515,9 @@ function fits(c: SigClass, f: Features, a: SigAn, rf: number): boolean {
     case "fsk":
       // (two tones: a grid of more is MFSK)
       return f.shift != null || (f.mfsk == null && a.envCv < 0.25);
+    case "fax":
+      // black and white, about 800 Hz apart (a lone tone is not fax)
+      return f.shift != null && f.shift >= 500 && f.shift <= 1000;
     case "noise":
       return a.snr < 6;
     default:
