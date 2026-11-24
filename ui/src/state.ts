@@ -2092,7 +2092,7 @@ effect(() => {
  * turned on: on or off, its strength (0..1), and whether it applies now
  * (USB or LSB, 12 kHz mono audio). */
 export const nnOn = signal(load("nn") === "1");
-export const nnStrength = signal(Number(load("nnStrength") ?? "0.9"));
+export const nnStrength = signal(Number(load("nnStrength") ?? "1"));
 export const nnNet = signal<NeuralNr | null | undefined>(undefined);
 export const nnApplies = computed(() => {
   const s = st.value;

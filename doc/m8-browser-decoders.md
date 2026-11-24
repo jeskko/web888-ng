@@ -902,9 +902,10 @@ decoders keep taking the raw audio, which they read best.
 **SSB voice: first model in the page (2026-11-24).** `tools/ml/nr`
 (training, scoring), `crates/nr` (streaming inference, matches PyTorch),
 `crates/nr-wasm` and the **NN** button beside NB/NR (USB/LSB, 12 kHz
-audio; a strength slider; the decoders keep the raw audio). The model:
-a causal 256/128 STFT, conv + 2 GRU (96) + per-bin gains, 161k weights
-(315 KiB f16), 21 ms latency, ~15 M multiply-adds/s. Training data:
+audio; a strength slider; the decoders keep the raw audio). The first
+model (run 5): a causal 256/128 STFT, conv + 2 GRU (96) + per-bin gains,
+161k weights (315 KiB f16), 21 ms latency, ~15 M multiply-adds/s;
+replaced by run 6 the same day (below). Training data:
 LibriSpeech through a ham transmitter chain (EQ, compressor, clipper),
 ionochannel's HF path and receiver, and real KiwiSDR noise from the
 Paderborn train split (half the batches); SNR −20..+15 dB; batches made
@@ -940,6 +941,11 @@ recordings the user heard little difference, so the comparison moved to
 live signals: `nr-models.json` in the UI directory (none in a release)
 lists weight files, and a selector beside the NN slider switches between
 them (each model its own nr.wasm instance; `nr_load`).
+
+**Run 6 ships (2026-11-24):** on live signals on the unit the user found
+it clearly better than run 5. Built in since then (518 KiB f16, ~25 M
+multiply-adds/s), at 100 % strength by default (its target already keeps
+a noise floor).
 
 Next: our own recordings with the unit, a 24 kHz path, a larger model
 with more context, a noise-aware loss (weighing voice kept against
