@@ -97,6 +97,8 @@ def main():
     ap.add_argument("--bands", action="store_true", help="gains on 32 smooth bands, not per bin")
     ap.add_argument("--pitch", action="store_true", help="pitch (autocorrelation) features as input too")
     ap.add_argument("--residual", default="", help="dB range of noise kept in the target, e.g. 10,15 (none: clean)")
+    ap.add_argument("--pairs", type=float, default=0.0,
+                    help="share of each batch from real Paderborn pairs (pairbank.py, NR_PAIRS)")
     ap.add_argument("--sdw", type=float, default=0.0,
                     help="speech-distortion weighted loss with this noise weight mu (0: the plain loss)")
     ap.add_argument("--resume")
@@ -124,7 +126,8 @@ def main():
                                          persistent_workers=True, prefetch_factor=4)
     else:
         # whole batches made on the GPU by each worker (data.batch)
-        dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, residual, a.sdw > 0),
+        dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, residual, a.sdw > 0,
+                                                   a.pairs),
                                          batch_size=None,
                                          num_workers=a.workers, multiprocessing_context="spawn",
                                          persistent_workers=True, prefetch_factor=2)

@@ -963,6 +963,14 @@ trade-off along the same line: at these SNRs the model can't tell voice
 from noise in those cells, so the next gains need what it sees (real
 receptions, more context), not how it is scored.
 
+Run 9: run 7 fine-tuned with half of each batch from real Paderborn
+receptions (`pairbank.py`: 2776 train receptions, 100.8 h, median in-band
+SNR −2.6 dB; the target the clean source delayed by the reception's lag
+and through its estimated channel response). On the eval receptions it
+keeps more voice and takes more noise below 600 Hz (speech-to-pause 8.1
+against 5.5 dB at 300 Hz) but less contrast at 1-2 kHz; synthetic SI-SDR
+as run 7.
+
 Next: our own recordings with the unit, a 24 kHz path, a larger model
 with more context, a noise-aware loss (weighing voice kept against
 noise taken per bin by its SNR), fine-tuning on the Paderborn train

@@ -10,6 +10,7 @@ will be.
 | `common.py` | STFT (causal, 256/128, square-root Hann), features, model (the Rust inference must match) |
 | `data.py` | examples: LibriSpeech speech through a ham transmitter's chain (EQ, compressor, clipper), sent in SSB over an ionochannel HF path (fading, QRN, CW/RTTY/PSK31, carriers, man-made noise, mistuning, passband, AGC), with real KiwiSDR noise on part of them; the target is the same speech without the noise. `batch()` makes whole batches on the GPU |
 | `noisebank.py` | real HF noise: the pauses of the Paderborn database's train receptions, 96 h |
+| `pairbank.py` | real training pairs: Paderborn train receptions and the speech inside them (the clean source, delayed and through each reception's estimated channel response), 100 h; `train.py --pairs` mixes them into the batches |
 | `score.py` | Paderborn eval receptions raw and processed: word errors by Whisper, Vosk or Parakeet, STOI and ESTOI |
 | `stoi.py` | STOI and ESTOI (from the papers) |
 | `prep.py` | the speech bank: LibriSpeech FLAC → one 12 kS/s int16 file |

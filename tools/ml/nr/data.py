@@ -336,15 +336,37 @@ def interference_t(rows: int, rng, gen, U) -> torch.Tensor:
     return q
 
 
+class PairBank:
+    """Real receptions and the speech inside them (pairbank.py), 12 kS/s."""
+
+    def __init__(self, path: str | None = None):
+        path = path or os.environ.get("NR_PAIRS", "pairs")
+        self.x = np.memmap(path + ".x.i16", np.int16, "r")
+        self.s = np.memmap(path + ".s.i16", np.int16, "r")
+        self.idx = np.load(path + ".idx.npy")
+
+    def windows(self, rng, k: int, n: int) -> tuple[np.ndarray, np.ndarray]:
+        """k windows of n samples: (receptions, their speech), each at a
+        random level."""
+        xs, ss = np.empty((k, n), np.float32), np.empty((k, n), np.float32)
+        for i in range(k):
+            a, ln = self.idx[rng.integers(len(self.idx))]
+            j = a + rng.integers(0, ln - n)
+            g = 10 ** rng.uniform(-1, 0.5) / 1638.4
+            xs[i] = self.x[j:j + n] * g
+            ss[i] = self.s[j:j + n] * g
+        return xs, ss
+
+
 class GpuStream(torch.utils.data.IterableDataset):
     """Whole batches from batch(), each worker on the GPU with its own
     generator (use with batch_size=None and the 'spawn' context);
     returned on the CPU."""
 
     def __init__(self, seed: int, batch_size: int, snr=(-20.0, 15.0), p_real: float = 0.0, residual=None,
-                 split: bool = False):
+                 split: bool = False, p_pairs: float = 0.0):
         self.seed, self.batch_size, self.snr, self.p_real, self.residual = seed, batch_size, snr, p_real, residual
-        self.split = split
+        self.split, self.p_pairs = split, p_pairs
 
     def __iter__(self):
         w = torch.utils.data.get_worker_info()
@@ -353,10 +375,24 @@ class GpuStream(torch.utils.data.IterableDataset):
         gen = torch.Generator("cuda").manual_seed(self.seed * 1000 + wid)
         bank = Bank()
         noise = NoiseBank() if self.p_real > 0 else None
+        pairs = PairBank() if self.p_pairs > 0 else None
+        k = int(round(self.batch_size * self.p_pairs))
         while True:
-            out = batch(self.batch_size, rng, gen, bank, self.snr, noise=noise, p_real=self.p_real,
+            out = batch(self.batch_size - k, rng, gen, bank, self.snr, noise=noise, p_real=self.p_real,
                         residual=self.residual, split=self.split)
-            yield tuple(v.cpu() for v in out)
+            out = tuple(v.cpu() for v in out)
+            if k:
+                # real receptions: the target is their speech and, as for
+                # the synthetic ones, the noise kept that far below
+                xp, sp = pairs.windows(rng, k, N)
+                keep = (10 ** (-rng.uniform(*self.residual, (k, 1)) / 20) if self.residual
+                        else np.zeros((k, 1))).astype(np.float32)
+                xp, sp, keep = torch.from_numpy(xp), torch.from_numpy(sp), torch.from_numpy(keep)
+                if self.split:
+                    out = (torch.cat([out[0], xp]), torch.cat([out[1], sp]), torch.cat([out[2], keep]))
+                else:
+                    out = (torch.cat([out[0], xp]), torch.cat([out[1], sp + keep * (xp - sp)]))
+            yield out
 
 
 class Stream(torch.utils.data.IterableDataset):
