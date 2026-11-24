@@ -1987,6 +1987,21 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-nr"
+version = "0.17.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+]
+
+[[package]]
+name = "web888-nr-wasm"
+version = "0.17.0"
+dependencies = [
+ "web888-nr",
+]
+
+[[package]]
 name = "web888-opus-wasm"
 version = "0.17.0"
 dependencies = [

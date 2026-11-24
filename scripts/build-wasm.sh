@@ -9,8 +9,9 @@
 # (crates/js8-wasm) as js8.wasm, the
 # fax and SSTV decoders (crates/img-wasm) as img.wasm, the signal
 # identifier (crates/sigid-wasm) as sigid.wasm, the time-code receiver
-# (crates/timecode-wasm) as timecode.wasm and the audio's Opus decoder
-# (crates/opus-wasm) as opus.wasm.
+# (crates/timecode-wasm) as timecode.wasm, the audio's Opus decoder
+# (crates/opus-wasm) as opus.wasm and the neural SSB noise reduction
+# (crates/nr-wasm) as nr.wasm.
 #
 #   scripts/build-wasm.sh
 #
@@ -24,7 +25,7 @@ out=$src/ui/wasm
 # WebAssembly SIMD (128-bit): every browser since 2021-2023 (Safari 16.4);
 # the neural CW decoder's dot products vectorise with it
 export CARGO_TARGET_WASM32_UNKNOWN_UNKNOWN_RUSTFLAGS="-C target-feature=+simd128"
-crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm -p web888-psk-wasm -p web888-hfdl-wasm -p web888-js8-wasm -p web888-img-wasm -p web888-sigid-wasm -p web888-timecode-wasm -p web888-opus-wasm"
+crates="-p web888-jtty-wasm -p web888-digi-wasm -p web888-cw-wasm -p web888-fsk-wasm -p web888-psk-wasm -p web888-hfdl-wasm -p web888-js8-wasm -p web888-img-wasm -p web888-sigid-wasm -p web888-timecode-wasm -p web888-opus-wasm -p web888-nr-wasm"
 mkdir -p "$out"
 if [ -d "$(rustc --print sysroot 2>/dev/null)/lib/rustlib/$target" ]; then
 	(cd "$src" && cargo build --release --target $target $crates)
@@ -51,4 +52,5 @@ cp "$built/web888_img_wasm.wasm" "$out/img.wasm"
 cp "$built/web888_sigid_wasm.wasm" "$out/sigid.wasm"
 cp "$built/web888_timecode_wasm.wasm" "$out/timecode.wasm"
 cp "$built/web888_opus_wasm.wasm" "$out/opus.wasm"
-ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm" "$out/fsk.wasm" "$out/psk.wasm" "$out/hfdl.wasm" "$out/js8.wasm" "$out/img.wasm" "$out/sigid.wasm" "$out/timecode.wasm" "$out/opus.wasm"
+cp "$built/web888_nr_wasm.wasm" "$out/nr.wasm"
+ls -l "$out/jtty.wasm" "$out/digi.wasm" "$out/cw.wasm" "$out/fsk.wasm" "$out/psk.wasm" "$out/hfdl.wasm" "$out/js8.wasm" "$out/img.wasm" "$out/sigid.wasm" "$out/timecode.wasm" "$out/opus.wasm" "$out/nr.wasm"

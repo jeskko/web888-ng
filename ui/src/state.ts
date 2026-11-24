@@ -12,6 +12,7 @@ import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Codec, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { OpusDec } from "./audio/codec.ts";
+import { NeuralNr, NN_RATE } from "./audio/nrnet.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
@@ -297,7 +298,8 @@ export function connect(): void {
       sigAudio(f);
       recAudio(f);
       for (const t of audioTaps) t(f);
-      player.push(f.pcm, f.rate, f.stereo);
+      // the decoders above took the raw audio; the ears may get it cleaned
+      player.push(nnApply(f), f.rate, f.stereo);
     },
     onIq(f: IqFrame) {
       if (wideCentre.value !== f.centre) wideCentre.value = f.centre;
@@ -2086,6 +2088,39 @@ effect(() => {
   const have = st.value?.timestamps ?? false;
   if (st.value && want !== have) link?.send({ type: "audio", timestamps: want });
 });
+/** The neural SSB voice noise reduction (nr.wasm), loaded when first
+ * turned on: on or off, its strength (0..1), and whether it applies now
+ * (USB or LSB, 12 kHz mono audio). */
+export const nnOn = signal(load("nn") === "1");
+export const nnStrength = signal(Number(load("nnStrength") ?? "0.9"));
+export const nnNet = signal<NeuralNr | null | undefined>(undefined);
+export const nnApplies = computed(() => {
+  const s = st.value;
+  return !!s && (s.mode === "usb" || s.mode === "lsb") && (s.audio_rate ?? audioRate) === NN_RATE;
+});
+let nnLive = false;
+effect(() => {
+  save("nn", nnOn.value ? "1" : "0");
+  save("nnStrength", String(nnStrength.value));
+  if (nnOn.value && nnNet.peek() === undefined) {
+    nnNet.value = null;
+    void NeuralNr.load("nr.wasm").then((n) => {
+      if (n) nnNet.value = n;
+      else nnOn.value = false;
+    });
+  }
+  nnNet.value?.setStrength(nnStrength.value);
+});
+
+/** The audio for the player: through the network when it applies. */
+function nnApply(f: AudioFrame): Float32Array {
+  const net = nnNet.value;
+  const on = nnOn.value && !!net && nnApplies.value && !f.stereo && f.rate === NN_RATE;
+  if (on && !nnLive) net!.reset();
+  nnLive = on;
+  return on ? net!.process(f.pcm) : f.pcm;
+}
+
 /** The Opus decoder (opus.wasm), once loaded; null when it can't load. */
 export const opusDec = signal<OpusDec | null>(null);
 void OpusDec.load("opus.wasm").then((d) => (opusDec.value = d));

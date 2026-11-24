@@ -828,7 +828,7 @@ examples print the figures and the page's JSON for a WAV.
   * Open: the DWD RTTY reads 100 Bd in 1 of 12 windows of the recording
     (t = 0, in a fade; 50 Bd in the other 11).
 
-### 5.4 Neural noise reduction: voice, CW, AM broadcast (planned, 2026-11-23)
+### 5.4 Neural noise reduction: voice, CW, AM broadcast (SSB voice in the page 2026-11-24; CW and AM planned)
 
 After the 25-class identifier. Small mask-only networks in the page's
 audio path (AudioWorklet, our own Rust inference like §5.1), as a third
@@ -898,6 +898,39 @@ decoders keep taking the raw audio, which they read best.
   word errors (local whisper.cpp) plus PESQ/STOI from −10 to +10 dB,
   against `nr.rs` and RNNoise; listen below −7 dB for invented sound.
 * Effort: about the neural CW's; the data simulation is most of it.
+
+**SSB voice: first model in the page (2026-11-24).** `tools/ml/nr`
+(training, scoring), `crates/nr` (streaming inference, matches PyTorch),
+`crates/nr-wasm` and the **NN** button beside NB/NR (USB/LSB, 12 kHz
+audio; a strength slider; the decoders keep the raw audio). The model:
+a causal 256/128 STFT, conv + 2 GRU (96) + per-bin gains, 161k weights
+(315 KiB f16), 21 ms latency, ~15 M multiply-adds/s. Training data:
+LibriSpeech through a ham transmitter chain (EQ, compressor, clipper),
+ionochannel's HF path and receiver, and real KiwiSDR noise from the
+Paderborn train split (half the batches); SNR −20..+15 dB; batches made
+on the GPU (30k steps in ~35 min).
+
+What was learnt on the way, on Paderborn's eval receptions (200, 1000
+utterances; median in-band SNR −4.8 dB):
+
+* Synthetic noise only (runs 2-3): every recogniser read the processed
+  audio worse than the raw (Whisper 52 → 61-70 % WER at full strength);
+  ESTOI fell. More low-SNR training and a heavier penalty for removed
+  speech didn't change that.
+* Real noise in training (run 4): much closer (Whisper 61 %, Parakeet
+  51 %, Vosk 75 % at full strength; at strength 0.8: 53 / 40 / 69 %
+  against raw 52 / 38 / 71 %); STOI up a little, ESTOI level. Machines
+  trained on noisy speech gain little from a mask; the fragile one
+  (Vosk) gains.
+* Paderborn's voices are audiobook reading without a transmitter's
+  processing, unlike real SSB (the user, listening). Run 5 trained on
+  processed speech; on real 40 m phone (onair40) the user preferred it
+  over run 4, at 0.8 and at full strength depending on the signal, so
+  the strength stays the listener's.
+
+Next: a better real-SSB test set (only voiced, well-tuned clips), our
+own recordings with the unit, a 24 kHz path, fine-tuning on the
+Paderborn train pairs.
 
 **CW model** (for copying by ear):
 

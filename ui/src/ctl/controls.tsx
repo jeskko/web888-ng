@@ -14,6 +14,9 @@ import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEP
 import { isAm, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
+  nnApplies,
+  nnOn,
+  nnStrength,
   audioRates,
   cycleAm,
   followable,
@@ -363,6 +366,40 @@ export function AudioCtl() {
 const nbLevel = { v: 8 };
 const nrLevel = { v: 0.6 };
 
+/** The neural voice noise reduction in the page (USB/LSB at 12 kHz). */
+function NnCtl() {
+  const on = nnOn.value;
+  const ok = nnApplies.value;
+  return (
+    <>
+      <button
+        class={on && ok ? "on" : ""} aria-pressed={!!on}
+        disabled={!ok}
+        onClick={() => (nnOn.value = !on)}
+        title={ok
+          ? t("Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound")
+          : t("Neural noise reduction: for USB and LSB with 12 kHz audio")}
+      >
+        {/* i18n: NN = neural (network) noise reduction, a short button label */}
+        {tc("filter", "NN")}
+      </button>
+      {on && ok && (
+        <input
+          type="range"
+          min={0.3}
+          max={1}
+          step={0.05}
+          value={nnStrength.value}
+          aria-label={t("Neural noise reduction strength")}
+          aria-valuetext={`${(nnStrength.value * 100).toFixed(0)} %`}
+          onInput={(e) => (nnStrength.value = Number(e.currentTarget.value))}
+          title={t("Neural noise reduction strength {n} %", { n: (nnStrength.value * 100).toFixed(0) })}
+        />
+      )}
+    </>
+  );
+}
+
 /** Noise blanker, noise reduction, squelch. */
 export function DspCtl() {
   const s = st.value;
@@ -411,6 +448,7 @@ export function DspCtl() {
           title={t("Noise reduction strength {n} %", { n: (s.nr * 100).toFixed(0) })}
         />
       )}
+      <NnCtl />
       <button
         class={s.notch ? "on" : ""} aria-pressed={!!(s.notch)}
         onClick={() => setAudio({ notch: !s.notch })}

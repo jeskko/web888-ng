@@ -1,0 +1,11 @@
+[package]
+name = "web888-nr"
+description = "Neural noise reduction for SSB voice: a small mask-only network on 12 kS/s audio, streaming (trained in tools/ml/nr)"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+
+[dependencies]
+num-complex.workspace = true
+rustfft.workspace = true

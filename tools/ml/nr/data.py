@@ -187,9 +187,8 @@ def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise
     s = np.stack([bank.clip(rng, N) for _ in range(B)])
     s[rng.random(B) < 0.1] = 0.0                                     # noise only
     x = torch.from_numpy(s).to(dev)
-    # speech processor on 40 %
-    g = 10 ** U(B, 1, a=0.3, b=1.0)
-    x = torch.where(U(B, 1) < 0.4, torch.tanh(g * x / 3) * 3 / g * torch.sqrt(g), x)
+    # a ham transmitter's audio chain on 90 %, light to heavy
+    x = torch.where(U(B, 1) < 0.9, tx_audio(x, U), x)
     zs, zn = [], []
     real = torch.zeros(B, dtype=torch.bool, device=dev)     # rows with real noise (added after the receiver)
     snr_row = torch.zeros(B, 1, device=dev)
@@ -251,6 +250,43 @@ def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise
     gain = (prev[..., None] + (gk - prev)[..., None] * ramp).reshape(B, nb * b)[:, :N]
     lvl = 10 ** U(B, 1, a=-1.0, b=0.5)
     return (lvl * gain * (ys + yn).real).float(), (lvl * gain * ys.real).float()
+
+
+def tx_audio(x: torch.Tensor, U) -> torch.Tensor:
+    """An SSB transmitter's speech processing, per row at its own
+    settings: EQ (a presence peak of +3..+10 dB at 1.4-2.6 kHz, often a
+    low-mid dip), a compressor (threshold -10..-30 dB below the speech's
+    peaks, ratio 2-10, 5 ms attack, 30-300 ms release) and a clipper
+    (0-12 dB into it); output at unit active power."""
+    B, n = x.shape
+    dev = x.device
+    f = torch.fft.rfftfreq(n, 1 / FS, device=dev)[None, :]
+    lg = lambda fc, w: torch.log2(f.clamp_min(1.0) / fc) / w           # noqa: E731
+    pk = U(B, 1, a=3.0, b=10.0) * torch.exp(-0.5 * lg(U(B, 1, a=1400.0, b=2600.0), 0.6) ** 2)
+    dip = -U(B, 1, a=0.0, b=6.0) * (U(B, 1) < 0.6) * torch.exp(-0.5 * lg(U(B, 1, a=300.0, b=600.0), 0.7) ** 2)
+    x = torch.fft.irfft(torch.fft.rfft(x) * 10 ** ((pk + dip) / 20), n)
+    # compressor: the envelope from 5 ms peaks, released exponentially
+    blk = 60
+    m = n // blk
+    e = x[:, : m * blk].abs().reshape(B, m, blk).amax(-1)                  # (B, m) at 200/s
+    rel = U(B, 1, a=0.03, b=0.3) * FS / blk                                  # in blocks
+    k = torch.arange(64, device=dev)[None, :]
+    kern = torch.exp(-k / rel)
+    ef = torch.fft.irfft(torch.fft.rfft(e, 2 * m) * torch.fft.rfft(kern / kern.sum(1, keepdim=True), 2 * m), 2 * m)[:, :m]
+    env = torch.maximum(e, ef * 1.5).clamp_min(1e-6)
+    top = torch.quantile(env, 0.95, dim=1, keepdim=True)
+    thr = top * 10 ** (-U(B, 1, a=10.0, b=30.0) / 20)
+    ratio = U(B, 1, a=2.0, b=10.0)
+    gain = torch.where(env > thr, (env / thr) ** (1 / ratio - 1), torch.ones_like(env))
+    gain = torch.repeat_interleave(gain, blk, dim=1)
+    gain = torch.cat([gain, gain[:, -1:].expand(B, n - m * blk)], dim=1)
+    x = x * gain
+    # clipper
+    drive = 10 ** (U(B, 1, a=0.0, b=12.0) / 20)
+    pk = torch.quantile(x.abs(), 0.99, dim=1, keepdim=True).clamp_min(1e-6)
+    x = torch.tanh(drive * x / pk) * pk
+    p = active_power_t(x.to(torch.complex64))
+    return x / torch.sqrt(torch.where(p > 0, p, 1.0))[:, None]
 
 
 def active_power_t(z: torch.Tensor, block: int = 120) -> torch.Tensor:
