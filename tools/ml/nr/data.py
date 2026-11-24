@@ -174,7 +174,7 @@ class NoiseBank:
 
 
 def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise: NoiseBank | None = None,
-          p_real: float = 0.5, residual=None):
+          p_real: float = 0.5, residual=None, split: bool = False):
     """(inputs, targets) (B, N) float32 on gen's device: example()'s
     recipe for a whole batch at once with ionochannel.torch. What the
     torch functions take as one value (a preset, a passband, Vd, an
@@ -251,8 +251,13 @@ def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise
     lvl = 10 ** U(B, 1, a=-1.0, b=0.5)
     # the target: the speech, and (`residual`: a dB range) that much below
     # it the noise too, so that nothing is taken to silence
-    keep = 10 ** (-U(B, 1, a=residual[0], b=residual[1]) / 20) if residual else 0.0
-    return (lvl * gain * (ys + yn).real).float(), (lvl * gain * (ys + keep * yn).real).float()
+    keep = 10 ** (-U(B, 1, a=residual[0], b=residual[1]) / 20) if residual else torch.zeros(B, 1, device=dev)
+    x = (lvl * gain * (ys + yn).real).float()
+    if split:
+        # the speech alone and the share of the noise to keep, for a loss
+        # that weighs the two (train.py --sdw)
+        return x, (lvl * gain * ys.real).float(), keep.float()
+    return x, (lvl * gain * (ys + keep * yn).real).float()
 
 
 def tx_audio(x: torch.Tensor, U) -> torch.Tensor:
@@ -336,8 +341,10 @@ class GpuStream(torch.utils.data.IterableDataset):
     generator (use with batch_size=None and the 'spawn' context);
     returned on the CPU."""
 
-    def __init__(self, seed: int, batch_size: int, snr=(-20.0, 15.0), p_real: float = 0.0, residual=None):
+    def __init__(self, seed: int, batch_size: int, snr=(-20.0, 15.0), p_real: float = 0.0, residual=None,
+                 split: bool = False):
         self.seed, self.batch_size, self.snr, self.p_real, self.residual = seed, batch_size, snr, p_real, residual
+        self.split = split
 
     def __iter__(self):
         w = torch.utils.data.get_worker_info()
@@ -347,9 +354,9 @@ class GpuStream(torch.utils.data.IterableDataset):
         bank = Bank()
         noise = NoiseBank() if self.p_real > 0 else None
         while True:
-            x, y = batch(self.batch_size, rng, gen, bank, self.snr, noise=noise, p_real=self.p_real,
-                         residual=self.residual)
-            yield x.cpu(), y.cpu()
+            out = batch(self.batch_size, rng, gen, bank, self.snr, noise=noise, p_real=self.p_real,
+                        residual=self.residual, split=self.split)
+            yield tuple(v.cpu() for v in out)
 
 
 class Stream(torch.utils.data.IterableDataset):

@@ -953,6 +953,16 @@ SI-SDR on synthetic data, the same voice and noise gains on Paderborn
 within a fraction of a dB; on live signals the user found it a little
 better than run 6. Built in since then.
 
+Run 8: run 7 fine-tuned with a speech-distortion weighted loss (the
+gain on the speech alone against 1, on the noise alone against the kept
+floor, the noise term × 0.5; `train.py --sdw`). On Paderborn it kept
+~0.6 dB more voice above 1.5 kHz but took ~1 dB less noise and lost
+contrast below 1 kHz (speech-to-pause 3.5 against 5.5 dB at 300 Hz);
+synthetic SI-SDR 0.5-1.3 dB lower. Reweighting the loss moves the
+trade-off along the same line: at these SNRs the model can't tell voice
+from noise in those cells, so the next gains need what it sees (real
+receptions, more context), not how it is scored.
+
 Next: our own recordings with the unit, a 24 kHz path, a larger model
 with more context, a noise-aware loss (weighing voice kept against
 noise taken per bin by its SNR), fine-tuning on the Paderborn train

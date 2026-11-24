@@ -44,6 +44,21 @@ def loss_fn(net, x, y):
     return mag + 0.3 * cpx + LOST * lost
 
 
+def loss_sdw(net, x, s, keep, mu):
+    """Speech-distortion weighted: the gain on the speech alone against 1
+    and on the noise alone against `keep`, both on power-law compressed
+    magnitudes, the noise term weighted by mu (below 1: speech kept before
+    noise taken). Per cell the best gain is then (in the compressed
+    domain) (|S|^2c + mu keep^c |N|^2c) / (|S|^2c + mu |N|^2c): it leans
+    to keeping the voice where the voice is weak against the noise."""
+    X, S = stft(x), stft(s)
+    N = X - S
+    g = net.gains(x, X) ** C
+    ms, mn = S.abs() ** (2 * C), N.abs() ** (2 * C)
+    kc = keep[:, :, None] ** C
+    return (ms * (g - 1) ** 2).mean() + mu * (mn * (g - kc) ** 2).mean()
+
+
 def si_sdr(e, y):
     """(B, n) estimate and target → dB per row; rows with a silent target
     are NaN."""
@@ -82,6 +97,8 @@ def main():
     ap.add_argument("--bands", action="store_true", help="gains on 32 smooth bands, not per bin")
     ap.add_argument("--pitch", action="store_true", help="pitch (autocorrelation) features as input too")
     ap.add_argument("--residual", default="", help="dB range of noise kept in the target, e.g. 10,15 (none: clean)")
+    ap.add_argument("--sdw", type=float, default=0.0,
+                    help="speech-distortion weighted loss with this noise weight mu (0: the plain loss)")
     ap.add_argument("--resume")
     ap.add_argument("--eval", action="store_true")
     ap.add_argument("--out", default="/tmp/nr")
@@ -107,15 +124,16 @@ def main():
                                          persistent_workers=True, prefetch_factor=4)
     else:
         # whole batches made on the GPU by each worker (data.batch)
-        dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, residual), batch_size=None,
+        dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, residual, a.sdw > 0),
+                                         batch_size=None,
                                          num_workers=a.workers, multiprocessing_context="spawn",
                                          persistent_workers=True, prefetch_factor=2)
     opt = torch.optim.AdamW(net.parameters(), a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, a.lr, total_steps=a.steps, pct_start=0.05)
     best, t0, run = -1e9, time.time(), 0.0
-    for step, (x, y) in enumerate(dl, 1):
-        x, y = x.to(dev, non_blocking=True), y.to(dev, non_blocking=True)
-        loss = loss_fn(net, x, y)
+    for step, b in enumerate(dl, 1):
+        b = [v.to(dev, non_blocking=True) for v in b]
+        loss = loss_sdw(net, *b, a.sdw) if a.sdw > 0 else loss_fn(net, *b)
         opt.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(net.parameters(), 1.0)
