@@ -34,11 +34,12 @@ cd tools/ml/nr
 python3 prep.py LibriSpeech/train-clean-100 speech.i16     # ~100 h, 8.6 GB
 python3 prep.py LibriSpeech/dev-clean speech-dev.i16
 python3 noisebank.py ham_radio noise.i16                    # Paderborn train pauses
-# the shipped weights: run 6 (30k steps from scratch)
+# the shipped weights: run 7 (45k steps from scratch; run 6 was the same at
+# --hidden 128 and 30k steps)
 NR_SPEECH=speech.i16 NR_SPEECH_VAL=speech-dev.i16 NR_NOISE=noise.i16 nice -n 10 \
-  python3 train.py --steps 30000 --hidden 128 --bands --pitch --residual 10,15 --lost 4 \
-  --real-noise 0.5 --out /tmp/nr6
-python3 export.py /tmp/nr6/last.pt ../../../crates/nr/model
+  python3 train.py --steps 45000 --hidden 192 --bands --pitch --residual 10,15 --lost 4 \
+  --real-noise 0.5 --out /tmp/nr7
+python3 export.py /tmp/nr7/last.pt ../../../crates/nr/model
 cargo test -p web888-nr                                    # the Rust stream matches PyTorch
 venv/bin/python score.py ham_radio /tmp/nr6/last.pt --asr whisper,parakeet,vosk --floors 0,0.2
 python3 attn.py ham_radio /tmp/nr5/last.pt /tmp/nr6/last.pt   # voice kept, noise taken, per band

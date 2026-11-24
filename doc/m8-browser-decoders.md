@@ -947,6 +947,12 @@ it clearly better than run 5. Built in since then (518 KiB f16, ~25 M
 multiply-adds/s), at 100 % strength by default (its target already keeps
 a noise floor).
 
+**Run 7 ships (2026-11-24):** run 6's recipe with GRU 192 (539k
+weights, 1.06 MB f16, ~55 M multiply-adds/s), 45k steps: +0.3-0.5 dB
+SI-SDR on synthetic data, the same voice and noise gains on Paderborn
+within a fraction of a dB; on live signals the user found it a little
+better than run 6. Built in since then.
+
 Next: our own recordings with the unit, a 24 kHz path, a larger model
 with more context, a noise-aware loss (weighing voice kept against
 noise taken per bin by its SNR), fine-tuning on the Paderborn train
