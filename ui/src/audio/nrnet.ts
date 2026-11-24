@@ -11,6 +11,28 @@ interface NrExports {
   nr_process(n: number): void;
   nr_floor(f: number): void;
   nr_reset(): void;
+  nr_weights(n: number): number;
+  nr_load(n: number): number;
+}
+
+/** A model offered for comparison (nr-models.json in the UI directory,
+ * none in a release): its name and weights file (an nrnet.bin). */
+export interface NnModel {
+  name: string;
+  file: string;
+  note?: string;
+}
+
+/** The models to compare, or [] when the UI directory lists none. */
+export async function nnModels(): Promise<NnModel[]> {
+  try {
+    const r = await fetch("nr-models.json");
+    if (!r.ok) return [];
+    const m = (await r.json()) as NnModel[];
+    return Array.isArray(m) ? m.filter((v) => typeof v?.name === "string" && typeof v?.file === "string") : [];
+  } catch {
+    return [];
+  }
 }
 
 export const NN_RATE = 12000;
@@ -38,6 +60,21 @@ export class NeuralNr {
    * all of it). */
   setStrength(s: number): void {
     this.x.nr_floor(1 - Math.min(1, Math.max(0, s)));
+  }
+
+  /** Other weights (from `url`, an nrnet.bin) instead of the current
+   * ones; false if they don't load. */
+  async loadWeights(url: string): Promise<boolean> {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return false;
+      const b = new Uint8Array(await r.arrayBuffer());
+      const p = this.x.nr_weights(b.length);
+      new Uint8Array(this.x.memory.buffer, p, b.length).set(b);
+      return this.x.nr_load(b.length) === 1;
+    } catch {
+      return false;
+    }
   }
 
   /** A new stream: forget the last one. */

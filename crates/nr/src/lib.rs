@@ -9,9 +9,12 @@
 //! latency: an output hop needs the frame after it.
 //! Features: log10 of each bin's power minus a running level (2 s
 //! exponential mean of the frame's mean log power, started at the first
-//! frame), / 2, clamped to [-6, 6]. Network: a causal convolution over 3
-//! frames (ReLU), two GRU layers, a linear layer and a sigmoid. Must
-//! match `tools/ml/nr/common.py`.
+//! frame), / 2, clamped to [-6, 6]; and, if the network takes them, the
+//! pitch features (the normalised autocorrelation of the last 512
+//! samples at 24 lags of 30-200 samples). Network: a causal convolution
+//! over 3 frames (ReLU), two GRU layers, a linear layer and a sigmoid,
+//! to gains per bin or per band (then interpolated to the bins by the
+//! model's own matrix). Must match `tools/ml/nr/common.py`.
 
 use num_complex::Complex32;
 use rustfft::{Fft, FftPlanner};
@@ -142,16 +145,31 @@ impl Gru {
     }
 }
 
+/// The pitch feature's lags (samples; 400-60 Hz), as `PITCH_LAGS` in
+/// common.py.
+pub const PITCH_LAGS: [usize; 24] = [
+    30, 33, 35, 38, 42, 45, 49, 53, 58, 63, 68, 74, 81, 88, 95, 103, 112, 122, 132, 144, 156, 170,
+    184, 200,
+];
+/// The pitch window (samples).
+pub const PITCH_N: usize = 512;
+
 /// The network's weights.
 pub struct Net {
-    /// Convolution (H, BINS, 3) rearranged as (H, 3 × BINS): taps for
+    /// Convolution (H, nin, 3) rearranged as (H, 3 × nin): taps for
     /// frames t-2, t-1, t one after another.
     conv_w: Vec<f32>,
     conv_b: Vec<f32>,
     gru: [Gru; 2],
-    out_w: Vec<f32>, // (BINS, H)
+    out_w: Vec<f32>, // (nout, H)
     out_b: Vec<f32>,
+    /// Gains per band to gains per bin (nout = bands, BINS), if the
+    /// network gives bands.
+    band: Option<Vec<f32>>,
     h: usize,
+    /// Its input: BINS features, then the pitch features if any.
+    nin: usize,
+    nout: usize,
 }
 
 impl Net {
@@ -159,19 +177,20 @@ impl Net {
         let mut t = parse(bytes)?;
         let mut take = |k: &str| t.remove(k);
         let (cs, cw) = take("conv.weight")?;
-        let (h, cin, k) = (cs[0], cs[1], cs[2]);
-        if cin != BINS || k != 3 {
+        let (h, nin, k) = (cs[0], cs[1], cs[2]);
+        if (nin != BINS && nin != BINS + PITCH_LAGS.len()) || k != 3 {
             return None;
         }
-        let mut conv_w = vec![0f32; h * 3 * BINS];
+        let mut conv_w = vec![0f32; h * 3 * nin];
         for o in 0..h {
-            for c in 0..BINS {
+            for c in 0..nin {
                 for kk in 0..3 {
-                    conv_w[o * 3 * BINS + kk * BINS + c] = cw[(o * BINS + c) * 3 + kk];
+                    conv_w[o * 3 * nin + kk * nin + c] = cw[(o * nin + c) * 3 + kk];
                 }
             }
         }
         let conv_b = take("conv.bias")?.1;
+        let band = take("band");
         let mut gru = |l: usize, inp: usize| -> Option<Gru> {
             Some(Gru {
                 wih: take(&format!("gru.weight_ih_l{l}"))?.1,
@@ -185,13 +204,22 @@ impl Net {
         let gru = [gru(0, h)?, gru(1, h)?];
         let out_w = take("out.weight")?.1;
         let out_b = take("out.bias")?.1;
-        (out_w.len() == BINS * h && out_b.len() == BINS).then_some(Net {
+        let nout = out_b.len();
+        let ok = out_w.len() == nout * h
+            && match &band {
+                Some((s, _)) => s[..] == [nout, BINS],
+                None => nout == BINS,
+            };
+        ok.then_some(Net {
             conv_w,
             conv_b,
             gru,
             out_w,
             out_b,
+            band: band.map(|b| b.1),
             h,
+            nin,
+            nout,
         })
     }
 
@@ -209,11 +237,16 @@ pub struct Denoiser {
     fft: Arc<dyn Fft<f32>>,
     ifft: Arc<dyn Fft<f32>>,
     win: Vec<f32>,
+    pfft: Arc<dyn Fft<f32>>,
+    pifft: Arc<dyn Fft<f32>>,
+    pwin: Vec<f32>,
+    pbuf: Vec<Complex32>,
+    bgain: Vec<f32>,
     alpha: f32,
     /// 0..1: the share of what the network takes away that is kept
     /// (0: all of it goes).
     pub floor: f32,
-    inp: Vec<f32>,      // the last NFFT input samples
+    inp: Vec<f32>,      // the last PITCH_N input samples
     fill: usize,        // new samples in the current hop
     level: Option<f32>, // the running level
     feats: [Vec<f32>; 3],
@@ -242,12 +275,22 @@ impl Denoiser {
                         as f32
                 })
                 .collect(),
+            pfft: p.plan_fft_forward(2 * PITCH_N),
+            pifft: p.plan_fft_inverse(2 * PITCH_N),
+            pwin: (0..PITCH_N)
+                .map(|i| {
+                    (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / PITCH_N as f64).cos())
+                        as f32
+                })
+                .collect(),
+            pbuf: vec![Complex32::new(0.0, 0.0); 2 * PITCH_N],
+            bgain: vec![0.0; net.nout],
             alpha: 1.0 - (-(HOP as f32) / FS / LEVEL_S).exp(),
             floor: 0.0,
-            inp: vec![0.0; NFFT],
+            inp: vec![0.0; PITCH_N],
             fill: 0,
             level: None,
-            feats: [vec![0.0; BINS], vec![0.0; BINS], vec![0.0; BINS]],
+            feats: [vec![0.0; net.nin], vec![0.0; net.nin], vec![0.0; net.nin]],
             h: [vec![0.0; h], vec![0.0; h]],
             tail: vec![0.0; HOP],
             buf: vec![Complex32::new(0.0, 0.0); NFFT],
@@ -271,7 +314,7 @@ impl Denoiser {
     pub fn process(&mut self, x: &[f32]) -> Vec<f32> {
         let mut y = Vec::with_capacity(x.len());
         for &v in x {
-            self.inp[NFFT - HOP + self.fill] = v;
+            self.inp[PITCH_N - HOP + self.fill] = v;
             self.fill += 1;
             if self.fill == HOP {
                 self.frame();
@@ -287,7 +330,8 @@ impl Denoiser {
     /// One frame: the last NFFT inputs → the next HOP outputs.
     fn frame(&mut self) {
         let net = self.net;
-        for (b, (&v, &w)) in self.buf.iter_mut().zip(self.inp.iter().zip(&self.win)) {
+        let last = &self.inp[PITCH_N - NFFT..];
+        for (b, (&v, &w)) in self.buf.iter_mut().zip(last.iter().zip(&self.win)) {
             *b = Complex32::new(v * w, 0.0);
         }
         self.fft.process(&mut self.buf);
@@ -295,7 +339,7 @@ impl Denoiser {
         self.feats.rotate_left(1);
         let f = &mut self.feats[2];
         let mut mean = 0.0;
-        for (k, fk) in f.iter_mut().enumerate() {
+        for (k, fk) in f[..BINS].iter_mut().enumerate() {
             *fk = (self.buf[k].norm_sqr() + 1e-10).log10();
             mean += *fk;
         }
@@ -305,24 +349,59 @@ impl Denoiser {
             Some(m) => m + self.alpha * (mean - m),
         };
         self.level = Some(lev);
-        for fk in f.iter_mut() {
+        for fk in f[..BINS].iter_mut() {
             *fk = ((*fk - lev) / 2.0).clamp(-6.0, 6.0);
         }
+        if net.nin > BINS {
+            // pitch: the normalised autocorrelation of the last PITCH_N
+            // samples (Hann), at PITCH_LAGS, times 2
+            for (i, b) in self.pbuf.iter_mut().enumerate() {
+                *b = if i < PITCH_N {
+                    Complex32::new(self.inp[i] * self.pwin[i], 0.0)
+                } else {
+                    Complex32::new(0.0, 0.0)
+                };
+            }
+            self.pfft.process(&mut self.pbuf);
+            for b in self.pbuf.iter_mut() {
+                *b = Complex32::new(b.norm_sqr(), 0.0);
+            }
+            self.pifft.process(&mut self.pbuf);
+            let s = 1.0 / (2 * PITCH_N) as f32;
+            let r0 = self.pbuf[0].re * s;
+            for (j, &l) in PITCH_LAGS.iter().enumerate() {
+                f[BINS + j] = 2.0 * self.pbuf[l].re * s / (r0 + 1e-9);
+            }
+        }
         // network
+        let n = net.nin;
         for (o, c) in self.conv.iter_mut().enumerate() {
-            let w = &net.conv_w[o * 3 * BINS..(o + 1) * 3 * BINS];
+            let w = &net.conv_w[o * 3 * n..(o + 1) * 3 * n];
             let s = net.conv_b[o]
-                + dot(&w[..BINS], &self.feats[0])
-                + dot(&w[BINS..2 * BINS], &self.feats[1])
-                + dot(&w[2 * BINS..], &self.feats[2]);
+                + dot(&w[..n], &self.feats[0])
+                + dot(&w[n..2 * n], &self.feats[1])
+                + dot(&w[2 * n..], &self.feats[2]);
             *c = s.max(0.0);
         }
         let [h0, h1] = &mut self.h;
         net.gru[0].step(&self.conv, h0, &mut self.gi, &mut self.gh);
         net.gru[1].step(h0, h1, &mut self.gi, &mut self.gh);
-        for (k, g) in self.gain.iter_mut().enumerate() {
-            let m = sigmoid(net.out_b[k] + dot(&net.out_w[k * net.h..(k + 1) * net.h], h1));
-            *g = self.floor + (1.0 - self.floor) * m;
+        for (k, g) in self.bgain.iter_mut().enumerate() {
+            *g = sigmoid(net.out_b[k] + dot(&net.out_w[k * net.h..(k + 1) * net.h], h1));
+        }
+        match &net.band {
+            Some(m) => {
+                self.gain.fill(0.0);
+                for (j, &gb) in self.bgain.iter().enumerate() {
+                    for (g, &w) in self.gain.iter_mut().zip(&m[j * BINS..(j + 1) * BINS]) {
+                        *g += gb * w;
+                    }
+                }
+            }
+            None => self.gain.copy_from_slice(&self.bgain),
+        }
+        for g in self.gain.iter_mut() {
+            *g = self.floor + (1.0 - self.floor) * *g;
         }
         // the masked spectrum back (Hermitian: the upper half mirrors)
         for k in 0..BINS {

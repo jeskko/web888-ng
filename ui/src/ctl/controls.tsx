@@ -15,6 +15,8 @@ import { isAm, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
   nnApplies,
+  nnModel,
+  nnModelList,
   nnOn,
   nnStrength,
   audioRates,
@@ -395,6 +397,19 @@ function NnCtl() {
           onInput={(e) => (nnStrength.value = Number(e.currentTarget.value))}
           title={t("Neural noise reduction strength {n} %", { n: (nnStrength.value * 100).toFixed(0) })}
         />
+      )}
+      {on && ok && nnModelList.value.length > 0 && (
+        <select
+          value={nnModel.value}
+          aria-label={t("Neural noise reduction model")}
+          title={t("Neural noise reduction model (for comparing)")}
+          onChange={(e) => (nnModel.value = e.currentTarget.value)}
+        >
+          <option value="">{t("built-in")}</option>
+          {nnModelList.value.map((m) => (
+            <option key={m.name} value={m.name} title={m.note}>{m.name}</option>
+          ))}
+        </select>
       )}
     </>
   );

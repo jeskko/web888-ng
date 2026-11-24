@@ -17,17 +17,16 @@ import sys
 import numpy as np
 import torch
 
-from common import Net, enhance
+from common import enhance, load
 from data import Bank, example
 
 
 def main():
     ck, out = sys.argv[1], sys.argv[2]
     c = torch.load(ck, map_location="cpu")
-    m = Net(c.get("hidden", 96))
+    m = load(c, "cpu")
     sd = {k: v.half().float() for k, v in c["model"].items()}
     m.load_state_dict(sd)
-    m.eval()
     with open(f"{out}/nrnet.bin", "wb") as f:
         f.write(b"W8NRNET1")
         f.write(struct.pack("<I", len(sd)))

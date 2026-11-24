@@ -174,7 +174,7 @@ class NoiseBank:
 
 
 def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise: NoiseBank | None = None,
-          p_real: float = 0.5):
+          p_real: float = 0.5, residual=None):
     """(inputs, targets) (B, N) float32 on gen's device: example()'s
     recipe for a whole batch at once with ionochannel.torch. What the
     torch functions take as one value (a preset, a passband, Vd, an
@@ -187,15 +187,15 @@ def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise
     s = np.stack([bank.clip(rng, N) for _ in range(B)])
     s[rng.random(B) < 0.1] = 0.0                                     # noise only
     x = torch.from_numpy(s).to(dev)
-    # a ham transmitter's audio chain on 90 %, light to heavy
-    x = torch.where(U(B, 1) < 0.9, tx_audio(x, U), x)
+    # a ham transmitter's audio chain on 95 %, light to heavy
+    x = torch.where(U(B, 1) < 0.95, tx_audio(x, U), x)
     zs, zn = [], []
     real = torch.zeros(B, dtype=torch.bool, device=dev)     # rows with real noise (added after the receiver)
     snr_row = torch.zeros(B, 1, device=dev)
     for r0 in range(0, B, group):
         rows = min(group, B - r0)
         xg = x[r0:r0 + rows]
-        z = ict.Receiver(FS, (rng.uniform(100, 400), rng.uniform(2400, 3000))).apply(
+        z = ict.Receiver(FS, (rng.uniform(150, 500), rng.uniform(2100, 3000))).apply(
             ict._analytic(xg.to(torch.complex64), ic.channel.fast_len(2 * N))[:, :N])
         p = active_power_t(z)
         z = z / torch.sqrt(torch.where(p > 0, p, 1.0))[:, None]
@@ -249,22 +249,30 @@ def batch(B: int, rng, gen, bank: Bank, snr=(-20.0, 15.0), group: int = 8, noise
     ramp = torch.arange(1, b + 1, device=dev) / b
     gain = (prev[..., None] + (gk - prev)[..., None] * ramp).reshape(B, nb * b)[:, :N]
     lvl = 10 ** U(B, 1, a=-1.0, b=0.5)
-    return (lvl * gain * (ys + yn).real).float(), (lvl * gain * ys.real).float()
+    # the target: the speech, and (`residual`: a dB range) that much below
+    # it the noise too, so that nothing is taken to silence
+    keep = 10 ** (-U(B, 1, a=residual[0], b=residual[1]) / 20) if residual else 0.0
+    return (lvl * gain * (ys + yn).real).float(), (lvl * gain * (ys + keep * yn).real).float()
 
 
 def tx_audio(x: torch.Tensor, U) -> torch.Tensor:
     """An SSB transmitter's speech processing, per row at its own
-    settings: EQ (a presence peak of +3..+10 dB at 1.4-2.6 kHz, often a
-    low-mid dip), a compressor (threshold -10..-30 dB below the speech's
-    peaks, ratio 2-10, 5 ms attack, 30-300 ms release) and a clipper
-    (0-12 dB into it); output at unit active power."""
+    settings: the microphone and its EQ (a tilt of -4..+4 dB per octave
+    around 1 kHz, two peaks or dips of up to 6 dB at 150-3000 Hz, a
+    presence peak of +3..+10 dB at 1.4-2.6 kHz, often a low-mid dip), a
+    compressor (threshold -10..-40 dB below the speech's peaks, ratio
+    2-20, 5 ms attack, 30-300 ms release) and a clipper (0-18 dB into
+    it); output at unit active power."""
     B, n = x.shape
     dev = x.device
     f = torch.fft.rfftfreq(n, 1 / FS, device=dev)[None, :]
     lg = lambda fc, w: torch.log2(f.clamp_min(1.0) / fc) / w           # noqa: E731
     pk = U(B, 1, a=3.0, b=10.0) * torch.exp(-0.5 * lg(U(B, 1, a=1400.0, b=2600.0), 0.6) ** 2)
     dip = -U(B, 1, a=0.0, b=6.0) * (U(B, 1) < 0.6) * torch.exp(-0.5 * lg(U(B, 1, a=300.0, b=600.0), 0.7) ** 2)
-    x = torch.fft.irfft(torch.fft.rfft(x) * 10 ** ((pk + dip) / 20), n)
+    tilt = U(B, 1, a=-4.0, b=4.0) * torch.log2(f.clamp_min(50.0) / 1000.0)
+    mic = sum(U(B, 1, a=-6.0, b=6.0) * torch.exp(-0.5 * lg(U(B, 1, a=150.0, b=3000.0), U(B, 1, a=0.2, b=0.8)) ** 2)
+              for _ in range(2))
+    x = torch.fft.irfft(torch.fft.rfft(x) * 10 ** ((pk + dip + tilt + mic) / 20), n)
     # compressor: the envelope from 5 ms peaks, released exponentially
     blk = 60
     m = n // blk
@@ -275,14 +283,14 @@ def tx_audio(x: torch.Tensor, U) -> torch.Tensor:
     ef = torch.fft.irfft(torch.fft.rfft(e, 2 * m) * torch.fft.rfft(kern / kern.sum(1, keepdim=True), 2 * m), 2 * m)[:, :m]
     env = torch.maximum(e, ef * 1.5).clamp_min(1e-6)
     top = torch.quantile(env, 0.95, dim=1, keepdim=True)
-    thr = top * 10 ** (-U(B, 1, a=10.0, b=30.0) / 20)
-    ratio = U(B, 1, a=2.0, b=10.0)
+    thr = top * 10 ** (-U(B, 1, a=10.0, b=40.0) / 20)
+    ratio = U(B, 1, a=2.0, b=20.0)
     gain = torch.where(env > thr, (env / thr) ** (1 / ratio - 1), torch.ones_like(env))
     gain = torch.repeat_interleave(gain, blk, dim=1)
     gain = torch.cat([gain, gain[:, -1:].expand(B, n - m * blk)], dim=1)
     x = x * gain
     # clipper
-    drive = 10 ** (U(B, 1, a=0.0, b=12.0) / 20)
+    drive = 10 ** (U(B, 1, a=0.0, b=18.0) / 20)
     pk = torch.quantile(x.abs(), 0.99, dim=1, keepdim=True).clamp_min(1e-6)
     x = torch.tanh(drive * x / pk) * pk
     p = active_power_t(x.to(torch.complex64))
@@ -328,8 +336,8 @@ class GpuStream(torch.utils.data.IterableDataset):
     generator (use with batch_size=None and the 'spawn' context);
     returned on the CPU."""
 
-    def __init__(self, seed: int, batch_size: int, snr=(-20.0, 15.0), p_real: float = 0.0):
-        self.seed, self.batch_size, self.snr, self.p_real = seed, batch_size, snr, p_real
+    def __init__(self, seed: int, batch_size: int, snr=(-20.0, 15.0), p_real: float = 0.0, residual=None):
+        self.seed, self.batch_size, self.snr, self.p_real, self.residual = seed, batch_size, snr, p_real, residual
 
     def __iter__(self):
         w = torch.utils.data.get_worker_info()
@@ -339,7 +347,8 @@ class GpuStream(torch.utils.data.IterableDataset):
         bank = Bank()
         noise = NoiseBank() if self.p_real > 0 else None
         while True:
-            x, y = batch(self.batch_size, rng, gen, bank, self.snr, noise=noise, p_real=self.p_real)
+            x, y = batch(self.batch_size, rng, gen, bank, self.snr, noise=noise, p_real=self.p_real,
+                         residual=self.residual)
             yield x.cpu(), y.cpu()
 
 

@@ -19,7 +19,7 @@ import time
 import numpy as np
 import torch
 
-from common import Net, enhance, features, istft, stft
+from common import Net, enhance, istft, stft
 from data import GpuStream, Stream, fixed
 
 BANDS = {"-20..-10": (-20.0, -10.0), "-10..-3": (-10.0, -3.0), "-3..5": (-3.0, 5.0), "5..15": (5.0, 15.0)}
@@ -34,7 +34,7 @@ def comp(X):
 
 def loss_fn(net, x, y):
     X, Y = stft(x), stft(y)
-    g = net(features(X))
+    g = net.gains(x, X)
     E = X * g
     me, ce = comp(E)
     my, cy = comp(Y)
@@ -79,6 +79,9 @@ def main():
     ap.add_argument("--snr", default="-20,15", help="training SNR range in 2500 Hz (dB)")
     ap.add_argument("--real-noise", type=float, default=0.0,
                     help="share of batch groups with real HF noise (noisebank.py, NR_NOISE) instead of synthetic")
+    ap.add_argument("--bands", action="store_true", help="gains on 32 smooth bands, not per bin")
+    ap.add_argument("--pitch", action="store_true", help="pitch (autocorrelation) features as input too")
+    ap.add_argument("--residual", default="", help="dB range of noise kept in the target, e.g. 10,15 (none: clean)")
     ap.add_argument("--resume")
     ap.add_argument("--eval", action="store_true")
     ap.add_argument("--out", default="/tmp/nr")
@@ -86,9 +89,10 @@ def main():
     global LOST
     LOST = a.lost
     snr = tuple(float(v) for v in a.snr.split(","))
+    residual = tuple(float(v) for v in a.residual.split(",")) if a.residual else None
     dev = "cuda" if torch.cuda.is_available() else "cpu"
     os.makedirs(a.out, exist_ok=True)
-    net = Net(a.hidden).to(dev)
+    net = Net(a.hidden, a.bands, a.pitch).to(dev)
     if a.resume:
         net.load_state_dict(torch.load(a.resume, map_location=dev)["model"])
     print(f"{sum(p.numel() for p in net.parameters())} weights")
@@ -103,7 +107,7 @@ def main():
                                          persistent_workers=True, prefetch_factor=4)
     else:
         # whole batches made on the GPU by each worker (data.batch)
-        dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise), batch_size=None,
+        dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, residual), batch_size=None,
                                          num_workers=a.workers, multiprocessing_context="spawn",
                                          persistent_workers=True, prefetch_factor=2)
     opt = torch.optim.AdamW(net.parameters(), a.lr, weight_decay=1e-4)

@@ -11,6 +11,9 @@
 //! * `nr_floor(f)`: the share 0..1 of what the network takes away that is
 //!   kept (1 - strength)
 //! * `nr_reset()`: a new stream (after retuning, a gap)
+//! * `nr_load(n)`: other weights (an `nrnet.bin`, n bytes written at
+//!   `nr_weights(n)`) instead of the built-in ones, for comparing models;
+//!   1 if they load (a new stream, the floor kept), else 0
 
 use std::cell::RefCell;
 use web888_nr::{Denoiser, Net};
@@ -18,12 +21,14 @@ use web888_nr::{Denoiser, Net};
 struct State {
     nr: Denoiser,
     buf: Vec<f32>,
+    weights: Vec<u8>,
 }
 
 thread_local! {
     static STATE: RefCell<State> = RefCell::new(State {
         nr: Denoiser::new(Net::get()),
         buf: Vec::new(),
+        weights: Vec::new(),
     });
 }
 
@@ -52,4 +57,30 @@ pub extern "C" fn nr_floor(f: f32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn nr_reset() {
     STATE.with_borrow_mut(|s| s.nr.reset())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nr_weights(n: usize) -> *mut u8 {
+    STATE.with_borrow_mut(|s| {
+        s.weights.resize(n, 0);
+        s.weights.as_mut_ptr()
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nr_load(n: usize) -> u32 {
+    STATE.with_borrow_mut(|s| {
+        let n = n.min(s.weights.len());
+        match Net::load(&s.weights[..n]) {
+            Some(net) => {
+                // a model lives as long as the page (a few are loaded at most)
+                let floor = s.nr.floor;
+                s.nr = Denoiser::new(Box::leak(Box::new(net)));
+                s.nr.floor = floor;
+                s.weights = Vec::new();
+                1
+            }
+            None => 0,
+        }
+    })
 }

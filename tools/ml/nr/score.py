@@ -25,7 +25,7 @@ import numpy as np
 import torch
 from scipy.signal import resample_poly
 
-from common import Net, enhance
+from common import enhance, load
 from stoi import estoi, stoi
 
 MODEL = "/usr/share/whisper.cpp-model-small/ggml-small.bin"
@@ -141,8 +141,7 @@ def main():
     net = None
     if a.ckpt:
         c = torch.load(a.ckpt, map_location=dev)
-        net = Net(c.get("hidden", 96)).to(dev).eval()
-        net.load_state_dict(c["model"])
+        net = load(c, dev)
     conds = ["raw"] + ([f"nn{f}" for f in a.floors.split(",")] if net else [])
     tmp = tempfile.mkdtemp(prefix="nrscore")
     jobs = {c: [] for c in conds}

@@ -12,7 +12,7 @@ import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Codec, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { OpusDec } from "./audio/codec.ts";
-import { NeuralNr, NN_RATE } from "./audio/nrnet.ts";
+import { NeuralNr, NN_RATE, nnModels, type NnModel } from "./audio/nrnet.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
@@ -2098,19 +2098,53 @@ export const nnApplies = computed(() => {
   const s = st.value;
   return !!s && (s.mode === "usb" || s.mode === "lsb") && (s.audio_rate ?? audioRate) === NN_RATE;
 });
+/** Models to compare (nr-models.json in the UI directory; none in a
+ * release) and the one chosen ("" = the built-in one). Each gets its
+ * own nr.wasm instance, loaded once. */
+export const nnModelList = signal<NnModel[]>([]);
+export const nnModel = signal(load("nnModel") ?? "");
+const nnNets = new Map<string, NeuralNr | null>();
+let nnList: Promise<NnModel[]> | null = null;
+function nnListed(): Promise<NnModel[]> {
+  nnList ??= nnModels().then((m) => (nnModelList.value = m));
+  return nnList;
+}
+async function nnInstance(name: string): Promise<NeuralNr | null> {
+  if (nnNets.has(name)) return nnNets.get(name)!;
+  nnNets.set(name, null);
+  const m = (await nnListed()).find((v) => v.name === name);
+  const n = await NeuralNr.load("nr.wasm");
+  const ok = n && (name === "" || (m && (await n.loadWeights(m.file))));
+  nnNets.set(name, ok ? n : null);
+  return ok ? n : null;
+}
 let nnLive = false;
 effect(() => {
   save("nn", nnOn.value ? "1" : "0");
   save("nnStrength", String(nnStrength.value));
-  if (nnOn.value && nnNet.peek() === undefined) {
-    nnNet.value = null;
-    void NeuralNr.load("nr.wasm").then((n) => {
-      if (n) nnNet.value = n;
-      else nnOn.value = false;
+  save("nnModel", nnModel.value);
+  const name = nnModel.value;
+  if (!nnOn.value) return;
+  void nnListed();
+  const have = nnNets.get(name);
+  if (have) {
+    if (nnNet.peek() !== have) {
+      nnNet.value = have;
+      nnLive = false; // a new stream for the model switched to
+    }
+  } else if (have === undefined) {
+    void nnInstance(name).then((n) => {
+      if (n) {
+        if (nnModel.peek() === name) {
+          nnNet.value = n;
+          nnLive = false;
+        }
+      } else if (name === "") nnOn.value = false;
+      else nnModel.value = "";
     });
   }
-  nnNet.value?.setStrength(nnStrength.value);
 });
+effect(() => nnNet.value?.setStrength(nnStrength.value));
 
 /** The audio for the player: through the network when it applies. */
 function nnApply(f: AudioFrame): Float32Array {

@@ -928,9 +928,23 @@ utterances; median in-band SNR −4.8 dB):
   over run 4, at 0.8 and at full strength depending on the signal, so
   the strength stays the listener's.
 
-Next: a better real-SSB test set (only voiced, well-tuned clips), our
-own recordings with the unit, a 24 kHz path, fine-tuning on the
-Paderborn train pairs.
+Run 6 (the user found run 5 taking voice away where the noise is
+strongest): 32 smooth bands instead of per-bin gains, a pitch feature
+(autocorrelation over 60-400 Hz), a target keeping the noise 10-15 dB
+down, a richer transmitter chain (mic EQ, narrower filters, heavier
+compression); 265k weights. On Paderborn (`attn.py`: the gain in speech
+frames and in pauses, per band) it keeps the voice (−5..−10 dB against
+run 5's −9..−23) but takes only ~11 dB of noise: about what run 5 does
+at 70 % strength, with a little more contrast below 1.5 kHz. By ear on
+recordings the user heard little difference, so the comparison moved to
+live signals: `nr-models.json` in the UI directory (none in a release)
+lists weight files, and a selector beside the NN slider switches between
+them (each model its own nr.wasm instance; `nr_load`).
+
+Next: our own recordings with the unit, a 24 kHz path, a larger model
+with more context, a noise-aware loss (weighing voice kept against
+noise taken per bin by its SNR), fine-tuning on the Paderborn train
+pairs.
 
 **CW model** (for copying by ear):
 
