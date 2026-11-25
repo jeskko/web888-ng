@@ -11,6 +11,11 @@ bands, scored by SI-SDR improvement over the input.
 Batches are made on the GPU by worker processes (data.batch, ~0.6 s of
 mostly single-threaded work each, so 8 workers keep up); --cpu-data
 makes examples one at a time on CPU workers instead.
+
+--cw trains the CW model instead, on cwdata.py's examples (its own
+validation bands, SNR in 2500 Hz against the wanted station):
+
+    NR_NOISE=noise.i16 nice -n 10 python3 train.py --cw --hidden 64 --residual 10,15 --out /tmp/nr-cw
 """
 import argparse
 import os
@@ -22,6 +27,7 @@ import torch
 from common import Net, enhance, istft, stft
 from data import GpuStream, Stream, fixed
 
+CW_BANDS = {"-18..-10": (-18.0, -10.0), "-10..-3": (-10.0, -3.0), "-3..5": (-3.0, 5.0), "5..20": (5.0, 20.0)}
 BANDS = {"-20..-10": (-20.0, -10.0), "-10..-3": (-10.0, -3.0), "-3..5": (-3.0, 5.0), "5..15": (5.0, 15.0)}
 C = 0.3
 LOST = 1.0                       # the weight of speech taken away (--lost)
@@ -101,6 +107,7 @@ def main():
                     help="share of each batch from real Paderborn pairs (pairbank.py, NR_PAIRS)")
     ap.add_argument("--sdw", type=float, default=0.0,
                     help="speech-distortion weighted loss with this noise weight mu (0: the plain loss)")
+    ap.add_argument("--cw", action="store_true", help="the CW model (cwdata.py's examples)")
     ap.add_argument("--resume")
     ap.add_argument("--eval", action="store_true")
     ap.add_argument("--out", default="/tmp/nr")
@@ -116,12 +123,21 @@ def main():
         net.load_state_dict(torch.load(a.resume, map_location=dev)["model"])
     print(f"{sum(p.numel() for p in net.parameters())} weights")
     t0 = time.time()
-    sets = {k: fixed(128, 1000 + i, b) for i, (k, b) in enumerate(BANDS.items())}
+    if a.cw:
+        import cwdata
+        sets = {k: cwdata.fixed(128, 1000 + i, b) for i, (k, b) in enumerate(CW_BANDS.items())}
+    else:
+        sets = {k: fixed(128, 1000 + i, b) for i, (k, b) in enumerate(BANDS.items())}
     print(f"validation sets in {time.time() - t0:.0f} s")
     if a.eval:
         print(evaluate(net, sets, dev))
         return
-    if a.cpu_data:
+    if a.cw:
+        dl = torch.utils.data.DataLoader(cwdata.GpuStream(int(time.time()), a.batch, snr if a.snr != "-20,15" else
+                                                          (-18.0, 20.0), a.real_noise, residual),
+                                         batch_size=None, num_workers=a.workers, multiprocessing_context="spawn",
+                                         persistent_workers=True, prefetch_factor=2)
+    elif a.cpu_data:
         dl = torch.utils.data.DataLoader(Stream(int(time.time())), batch_size=a.batch, num_workers=a.workers,
                                          persistent_workers=True, prefetch_factor=4)
     else:

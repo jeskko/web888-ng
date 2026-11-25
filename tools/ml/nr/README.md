@@ -1,6 +1,6 @@
 # Neural noise reduction: training
 
-The SSB voice noise reduction planned in `doc/m8-browser-decoders.md`
+The SSB voice and CW noise reduction planned in `doc/m8-browser-decoders.md`
 §5.4 is trained here: a small mask-only network on 12 kS/s audio, for
 the page's audio path. Nothing here is shipped; the trained weights
 will be.
@@ -9,6 +9,8 @@ will be.
 |---|---|
 | `common.py` | STFT (causal, 256/128, square-root Hann), features, model (the Rust inference must match) |
 | `data.py` | examples: LibriSpeech speech through a ham transmitter's chain (EQ, compressor, clipper), sent in SSB over an ionochannel HF path (fading, QRN, CW/RTTY/PSK31, carriers, man-made noise, mistuning, passband, AGC), with real KiwiSDR noise on part of them; the target is the same speech without the noise. `batch()` makes whole batches on the GPU |
+| `cwdata.py` | CW examples: keyed stations (the CW decoder's synthesiser: text, speed, jitter) with their own fading, QRN or real noise, man-made noise, a CW or SSB filter, the AGC; the target is every keyed tone with the noise 10-15 dB down (`train.py --cw`) |
+| `cwscore.py` | a CW model on cwdata's examples by SNR: tones kept, tone cells lost, noise taken, SI-SDR |
 | `noisebank.py` | real HF noise: the pauses of the Paderborn database's train receptions, 96 h |
 | `pairbank.py` | real training pairs: Paderborn train receptions and the speech inside them (the clean source, delayed and through each reception's estimated channel response), 100 h; `train.py --pairs` mixes them into the batches |
 | `score.py` | Paderborn eval receptions raw and processed: word errors by Whisper, Vosk or Parakeet, STOI and ESTOI |
@@ -44,4 +46,9 @@ python3 export.py /tmp/nr7/last.pt ../../../crates/nr/model
 cargo test -p web888-nr                                    # the Rust stream matches PyTorch
 venv/bin/python score.py ham_radio /tmp/nr6/last.pt --asr whisper,parakeet,vosk --floors 0,0.2
 python3 attn.py ham_radio /tmp/nr5/last.pt /tmp/nr6/last.pt   # voice kept, noise taken, per band
+# the CW model (cwdata.py's examples; the shipped weights: cw1)
+NR_NOISE=noise.i16 nice -n 10 python3 train.py --cw --hidden 64 --residual 10,15 --lost 4 \
+  --real-noise 0.5 --workers 4 --out /tmp/cw1
+python3 export.py /tmp/cw1/last.pt ../../../crates/nr/model --cw   # nrnet-cw.bin
+NR_NOISE=noise.i16 python3 cwscore.py /tmp/cw1/last.pt --strength 1,2   # tones kept, noise taken, by SNR
 ```

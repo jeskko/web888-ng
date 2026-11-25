@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Neural noise reduction for SSB voice (M8, `doc/m8-browser-decoders.md`
+//! Neural noise reduction for SSB voice and CW (M8, `doc/m8-browser-decoders.md`
 //! §5.4): a small network trained in `tools/ml/nr` gives a gain in 0..1
 //! for every bin of a short-time spectrum; the audio is that spectrum
 //! times the gains. Mask only: it takes sound away and never adds any.
@@ -31,6 +31,9 @@ pub const LATENCY: usize = 2 * HOP - 1;
 
 /// The shipped weights (f16).
 pub static MODEL: &[u8] = include_bytes!("../model/nrnet.bin");
+/// The built-in CW model (for copying by ear: keeps every keyed tone,
+/// takes the noise between and around them).
+pub static MODEL_CW: &[u8] = include_bytes!("../model/nrnet-cw.bin");
 
 fn f16_to_f32(h: u16) -> f32 {
     let s = ((h >> 15) & 1) as u32;
@@ -227,6 +230,12 @@ impl Net {
     pub fn get() -> &'static Net {
         static NET: std::sync::OnceLock<Net> = std::sync::OnceLock::new();
         NET.get_or_init(|| Net::load(MODEL).expect("nrnet.bin"))
+    }
+
+    /// The built-in CW model.
+    pub fn get_cw() -> &'static Net {
+        static NET: std::sync::OnceLock<Net> = std::sync::OnceLock::new();
+        NET.get_or_init(|| Net::load(MODEL_CW).expect("nrnet-cw.bin"))
     }
 }
 
@@ -437,11 +446,19 @@ impl Denoiser {
 mod tests {
     use super::*;
 
-    /// The reference from export.py: input audio and the PyTorch output
+    /// The references from export.py: input audio and the PyTorch output
     /// (f16 weights, floor 0).
     #[test]
     fn matches_pytorch() {
-        let b: &[u8] = include_bytes!("../model/nrnet-ref.bin");
+        check(Net::get(), include_bytes!("../model/nrnet-ref.bin"));
+    }
+
+    #[test]
+    fn cw_matches_pytorch() {
+        check(Net::get_cw(), include_bytes!("../model/nrnet-cw-ref.bin"));
+    }
+
+    fn check(net: &'static Net, b: &[u8]) {
         assert_eq!(&b[..8], b"W8NRREF1");
         let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
         let f = |o: usize| -> Vec<f32> {
@@ -453,7 +470,7 @@ mod tests {
                 .collect()
         };
         let (x, want) = (f(12), f(12 + 4 * n));
-        let mut d = Denoiser::new(Net::get());
+        let mut d = Denoiser::new(net);
         // odd chunks, as the page's blocks come
         let mut y = Vec::new();
         for c in x.chunks(333) {

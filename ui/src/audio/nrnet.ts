@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The neural SSB voice noise reduction (nr.wasm, crates/nr-wasm): a small
-// network that takes away what it hears as noise, never adds anything.
+// The neural noise reduction for SSB voice and CW (nr.wasm,
+// crates/nr-wasm): a small network that takes away what it hears as
+// noise, never adds anything; one built-in model for each.
 // Runs on the page's thread just before the player (about 15 M
 // multiply-adds a second), on 12 kHz mono audio, 21 ms late; the decoders
 // keep taking the raw audio.
@@ -12,16 +13,22 @@ interface NrExports {
   nr_floor(f: number): void;
   nr_power(p: number): void;
   nr_reset(): void;
+  nr_builtin(k: number): number;
   nr_weights(n: number): number;
   nr_load(n: number): number;
 }
 
+/** What a model is for: SSB voice or CW. */
+export type NnKind = "voice" | "cw";
+
 /** A model offered for comparison (nr-models.json in the UI directory,
- * none in a release): its name and weights file (an nrnet.bin). */
+ * none in a release): its name, weights file (an nrnet.bin) and kind
+ * (voice when not given). */
 export interface NnModel {
   name: string;
   file: string;
   note?: string;
+  kind?: NnKind;
 }
 
 /** The models to compare, or [] when the UI directory lists none. */
@@ -63,6 +70,11 @@ export class NeuralNr {
   setStrength(s: number): void {
     this.x.nr_floor(1 - Math.min(1, Math.max(0, s)));
     this.x.nr_power(Math.min(3, Math.max(1, s)));
+  }
+
+  /** The built-in model for `kind` (a new stream). */
+  useBuiltin(kind: NnKind): boolean {
+    return this.x.nr_builtin(kind === "cw" ? 1 : 0) === 1;
   }
 
   /** Other weights (from `url`, an nrnet.bin) instead of the current

@@ -15,8 +15,9 @@ import { isAm, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
   audioGaps,
   nnApplies,
-  nnModel,
-  nnModelList,
+  nnChoice,
+  nnKind,
+  nnKindModels,
   nnOn,
   nnStrength,
   audioRates,
@@ -372,15 +373,20 @@ const nrLevel = { v: 0.6 };
 function NnCtl() {
   const on = nnOn.value;
   const ok = nnApplies.value;
+  const cw = nnKind.value === "cw";
+  const choice = nnChoice.value;
+  const models = nnKindModels.value;
   return (
     <>
       <button
         class={on && ok ? "on" : ""} aria-pressed={!!on}
         disabled={!ok}
         onClick={() => (nnOn.value = !on)}
-        title={ok
-          ? t("Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound")
-          : t("Neural noise reduction: for USB and LSB with 12 kHz audio")}
+        title={!ok
+          ? t("Neural noise reduction: for USB, LSB and CW with 12 kHz audio")
+          : cw
+          ? t("Neural noise reduction for CW, in this browser: keeps the keyed tones, takes away the noise between and around them, never adds sound")
+          : t("Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound")}
       >
         {/* i18n: NN = neural (network) noise reduction, a short button label */}
         {tc("filter", "NN")}
@@ -398,15 +404,15 @@ function NnCtl() {
           title={t("Neural noise reduction strength {n} %", { n: (nnStrength.value * 100).toFixed(0) })}
         />
       )}
-      {on && ok && nnModelList.value.length > 0 && (
+      {on && ok && models.length > 0 && (
         <select
-          value={nnModel.value}
+          value={choice.value}
           aria-label={t("Neural noise reduction model")}
           title={t("Neural noise reduction model (for comparing)")}
-          onChange={(e) => (nnModel.value = e.currentTarget.value)}
+          onChange={(e) => (choice.value = e.currentTarget.value)}
         >
           <option value="">{t("built-in")}</option>
-          {nnModelList.value.map((m) => (
+          {models.map((m) => (
             <option key={m.name} value={m.name} title={m.note}>{m.name}</option>
           ))}
         </select>

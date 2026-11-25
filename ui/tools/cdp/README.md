@@ -32,7 +32,7 @@ kill $P
 | `receiver.mjs` | audio start, zoom, click-tune, mode key; `W`/`H`/`DPR` | — |
 | `a11y.mjs` | accessibility: controls without a name, text contrast (WCAG AA), live regions, Tab order and focus rings; key g and a typed frequency, toggle states, dialogs (focus in and kept in, shortcuts quiet behind them, Escape, focus back), the key help, a drop-down's arrow keys, keyboard-reachable spot rows; `OUT` for the screenshot | — |
 | `codec.mjs` | the audio's codec: Opus, μ-law while the FT8 decoder is open, μ-law and PCM chosen; then the data saver on and off; the status bar's codec, audio and waterfall kbit/s and underruns at each step | — |
-| `nn.mjs` | the neural noise reduction (NN): disabled in AM, on in USB and LSB, the strength slider, nr.wasm fetched once; the underruns at each step | — |
+| `nn.mjs` | the neural noise reduction (NN): disabled in AM, on in USB, LSB and CW (the CW model), the strength slider (50 % and 250 %), the model selector, nr.wasm fetched once; the underruns at each step | — |
 | `soak.mjs` | status bar every minute while audio plays | — |
 | `config.mjs` | the listener's Config box: the moved controls gone from the header and footer, the name, sharing, data saver, colours, time marks and a label source each take effect and are stored, Escape closes it; the phone's More sheet shows the same; screenshots | — |
 | `keys.mjs` | the key help (`?`) at 1400×900, 1024×640 and phone sizes: anything sticking out of its box, the box inside the window; screenshots | — |

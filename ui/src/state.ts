@@ -12,7 +12,7 @@ import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Codec, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
 import { OpusDec } from "./audio/codec.ts";
-import { NeuralNr, NN_RATE, nnModels, type NnModel } from "./audio/nrnet.ts";
+import { NeuralNr, NN_RATE, nnModels, type NnKind, type NnModel } from "./audio/nrnet.ts";
 import { AM_MODES, FLAG_GAP, FLAG_OVERLOAD, MODES, NAME_MAX, wfSpan } from "./proto.ts";
 import { addSpots, type SpotSource } from "./spots.ts";
 import type { DxMapSpot, Layer, MapPoint } from "./map.ts";
@@ -2088,34 +2088,41 @@ effect(() => {
   const have = st.value?.timestamps ?? false;
   if (st.value && want !== have) link?.send({ type: "audio", timestamps: want });
 });
-/** The neural SSB voice noise reduction (nr.wasm), loaded when first
- * turned on: on or off, its strength (0..1), and whether it applies now
- * (USB or LSB, 12 kHz mono audio). */
+/** The neural noise reduction (nr.wasm), loaded when first turned on:
+ * on or off, its strength (0.3..3), and whether it applies now (USB or
+ * LSB: the SSB voice model; CW: the CW model; 12 kHz mono audio). */
 export const nnOn = signal(load("nn") === "1");
 export const nnStrength = signal(Number(load("nnStrength") ?? "1"));
 export const nnNet = signal<NeuralNr | null | undefined>(undefined);
+export const nnKind = computed<NnKind>(() => (st.value?.mode === "cw" ? "cw" : "voice"));
 export const nnApplies = computed(() => {
   const s = st.value;
-  return !!s && (s.mode === "usb" || s.mode === "lsb") && (s.audio_rate ?? audioRate) === NN_RATE;
+  return !!s && (s.mode === "usb" || s.mode === "lsb" || s.mode === "cw") && (s.audio_rate ?? audioRate) === NN_RATE;
 });
 /** Models to compare (nr-models.json in the UI directory; none in a
- * release) and the one chosen ("" = the built-in one). Each gets its
- * own nr.wasm instance, loaded once. */
+ * release) and the one chosen for each kind ("" = the built-in one).
+ * Each gets its own nr.wasm instance, loaded once. */
 export const nnModelList = signal<NnModel[]>([]);
 export const nnModel = signal(load("nnModel") ?? "");
+export const nnModelCw = signal(load("nnModelCw") ?? "");
+/** The chosen-model signal for the current kind. */
+export const nnChoice = computed(() => (nnKind.value === "cw" ? nnModelCw : nnModel));
+/** The models to compare for the current kind. */
+export const nnKindModels = computed(() => nnModelList.value.filter((m) => (m.kind ?? "voice") === nnKind.value));
 const nnNets = new Map<string, NeuralNr | null>();
 let nnList: Promise<NnModel[]> | null = null;
 function nnListed(): Promise<NnModel[]> {
   nnList ??= nnModels().then((m) => (nnModelList.value = m));
   return nnList;
 }
-async function nnInstance(name: string): Promise<NeuralNr | null> {
-  if (nnNets.has(name)) return nnNets.get(name)!;
-  nnNets.set(name, null);
-  const m = (await nnListed()).find((v) => v.name === name);
+async function nnInstance(kind: NnKind, name: string): Promise<NeuralNr | null> {
+  const key = `${kind}/${name}`;
+  if (nnNets.has(key)) return nnNets.get(key)!;
+  nnNets.set(key, null);
+  const m = (await nnListed()).find((v) => v.name === name && (v.kind ?? "voice") === kind);
   const n = await NeuralNr.load("nr.wasm");
-  const ok = n && (name === "" || (m && (await n.loadWeights(m.file))));
-  nnNets.set(name, ok ? n : null);
+  const ok = n && n.useBuiltin(kind) && (name === "" || (m && (await n.loadWeights(m.file))));
+  nnNets.set(key, ok ? n : null);
   return ok ? n : null;
 }
 let nnLive = false;
@@ -2123,24 +2130,28 @@ effect(() => {
   save("nn", nnOn.value ? "1" : "0");
   save("nnStrength", String(nnStrength.value));
   save("nnModel", nnModel.value);
-  const name = nnModel.value;
+  save("nnModelCw", nnModelCw.value);
+  const kind = nnKind.value;
+  const choice = nnChoice.value;
+  const name = choice.value;
   if (!nnOn.value) return;
   void nnListed();
-  const have = nnNets.get(name);
+  const key = `${kind}/${name}`;
+  const have = nnNets.get(key);
   if (have) {
     if (nnNet.peek() !== have) {
       nnNet.value = have;
       nnLive = false; // a new stream for the model switched to
     }
   } else if (have === undefined) {
-    void nnInstance(name).then((n) => {
+    void nnInstance(kind, name).then((n) => {
       if (n) {
-        if (nnModel.peek() === name) {
+        if (nnKind.peek() === kind && choice.peek() === name) {
           nnNet.value = n;
           nnLive = false;
         }
       } else if (name === "") nnOn.value = false;
-      else nnModel.value = "";
+      else choice.value = "";
     });
   }
 });

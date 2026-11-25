@@ -13,6 +13,8 @@
 //! * `nr_power(p)`: 1..4, the network's gain raised to p (strengths over
 //!   100 %: more of what it partly takes away goes)
 //! * `nr_reset()`: a new stream (after retuning, a gap)
+//! * `nr_builtin(k)`: a built-in model (0: SSB voice, the default; 1:
+//!   CW); a new stream, the floor and power kept; 1 if k is known
 //! * `nr_load(n)`: other weights (an `nrnet.bin`, n bytes written at
 //!   `nr_weights(n)`) instead of the built-in ones, for comparing models;
 //!   1 if they load (a new stream, the floor and power kept), else 0
@@ -70,6 +72,22 @@ pub extern "C" fn nr_power(p: f32) {
 #[unsafe(no_mangle)]
 pub extern "C" fn nr_reset() {
     STATE.with_borrow_mut(|s| s.nr.reset())
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nr_builtin(k: u32) -> u32 {
+    let net = match k {
+        0 => Net::get(),
+        1 => Net::get_cw(),
+        _ => return 0,
+    };
+    STATE.with_borrow_mut(|s| {
+        let (floor, power) = (s.nr.floor, s.nr.power);
+        s.nr = Denoiser::new(net);
+        s.nr.floor = floor;
+        s.nr.power = power;
+    });
+    1
 }
 
 #[unsafe(no_mangle)]

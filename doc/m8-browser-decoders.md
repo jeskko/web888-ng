@@ -828,7 +828,7 @@ examples print the figures and the page's JSON for a WAV.
   * Open: the DWD RTTY reads 100 Bd in 1 of 12 windows of the recording
     (t = 0, in a fade; 50 Bd in the other 11).
 
-### 5.4 Neural noise reduction: voice, CW, AM broadcast (SSB voice in the page 2026-11-24; CW and AM planned)
+### 5.4 Neural noise reduction: voice, CW, AM broadcast (SSB voice in the page 2026-11-24, CW 2026-11-25; AM planned)
 
 After the 25-class identifier. Small mask-only networks in the page's
 audio path (AudioWorklet, our own Rust inference like §5.1), as a third
@@ -997,6 +997,38 @@ pairs.
   raw vs processed; then human copying of the same recordings raw and
   processed (the neural CW decoder's errors on the output only a rough
   stand-in, as it trained on unprocessed audio).
+
+**CW: first model in the page (2026-11-25).** The voice model's network
+and stream (`crates/nr`) with CW weights: GRU 64, per-bin gains, no
+pitch features, 83k weights (162 KiB f16), built into nr.wasm beside
+the voice model (`nr_builtin`); the **NN** button uses it in CW mode,
+with the same strength (to 300 %) and a selector for `kind: "cw"`
+entries of nr-models.json. Not done yet: levelling fading and the
+flutter regenerator (a mask can't add sound).
+
+* Data (`tools/ml/nr/cwdata.py`, on the GPU, 0.25 s a batch of 64):
+  keying from the CW decoder's synthesiser (QSO text, 10-45 wpm, jitter,
+  dash ratio, Farnsworth), the wanted station at 300-1000 Hz and on 60 %
+  1-3 others anywhere in the passband (−20..+10 dB); each faded on its
+  own (none, QSB, auroral flutter on 12 %); QRN or (half) real Paderborn
+  noise at −18..+20 dB in 2500 Hz, at times switching-supply hash,
+  arcing, powerline bursts; a CW filter (200-500 or 500-1000 Hz) or SSB
+  one, the AGC. Every CW signal is something to hear: the target is all
+  of them plus the noise 10-15 dB down. Lost tone costs 4× (`--lost 4`).
+* Run cw1, 30k steps (65 min): SI-SDR +1.9 / +2.8 / +4.0 / +3.0 dB at
+  −18..−10 / −10..−3 / −3..5 / 5..20 dB. `cwscore.py` on the
+  time-frequency cells, strength 1 (and 2):
+
+  | SNR (2500 Hz) | tones kept | tone cells down > 6 dB | noise between |
+  |---|---|---|---|
+  | −18..−10 dB | −1.9 dB (−2.9) | 18 % (29 %) | −9.4 dB (−16.1) |
+  | −10..−3 dB | −1.1 dB (−1.7) | 15 % (24 %) | −9.1 dB (−16.1) |
+  | −3..+5 dB | −1.2 dB (−1.9) | 13 % (22 %) | −7.8 dB (−12.6) |
+  | +5..+20 dB | −0.7 dB (−1.2) | 6 % (10 %) | −7.7 dB (−12.4) |
+
+  The "down" cells are mostly element edges and cells where the tone
+  barely stands over the noise, not whole elements; listening on live
+  CW decides.
 
 **AM broadcast model** (speech and music):
 

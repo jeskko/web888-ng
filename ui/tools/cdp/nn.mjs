@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The neural noise reduction (NN): off in AM (disabled), on in USB and
-// LSB, the strength slider, nr.wasm fetched once; with nr-models.json in
+// The neural noise reduction (NN): off in AM (disabled), on in USB, LSB
+// and CW (the CW model: nr.wasm's built-in one), the strength slider, nr.wasm fetched once; with nr-models.json in
 // the UI directory, each model of the selector in turn; prints the button's
 // state (strength 50 % and 250 %), the player's underruns and page errors
 // at each step, and saves nn.png in OUT (default .).
@@ -46,6 +46,10 @@ for (const m of models) {
 await mode("LSB");
 await report("LSB");
 await p.shot(`${out}/nn.png`);
+await mode("CW");
+await report("CW");
+console.log("  CW models:", await p.ev(`[...(document.querySelector('select[aria-label="Neural noise reduction model"]')?.options ?? [])].map((o) => o.value || "built-in").join(" ") || "no selector"`));
+console.log("  title:", await p.ev(`${btn("NN")}.title`));
 await mode("AM");
 await report("AM again");
 await mode("USB");
