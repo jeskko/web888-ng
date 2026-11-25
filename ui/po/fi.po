@@ -67,7 +67,7 @@ msgstr "tai kirjoita salasana (yksi rivi, vähintään 8 merkkiä) SD-kortille t
 msgid "Admin password"
 msgstr "Ylläpidon salasana"
 
-#: src/admin/admin.tsx:94 src/ctl/controls.tsx:674 src/main.tsx:122
+#: src/admin/admin.tsx:94 src/ctl/controls.tsx:676 src/main.tsx:122
 msgid "Log in"
 msgstr "Kirjaudu"
 
@@ -778,7 +778,7 @@ msgstr "kuuntelu"
 msgid "also a receiver, as a listener"
 msgstr "myös vastaanotin, kuten kuuntelijalla"
 
-#: src/admin/admin.tsx:928 src/ctl/controls.tsx:903
+#: src/admin/admin.tsx:928 src/ctl/controls.tsx:905
 msgid "admin"
 msgstr "ylläpito"
 
@@ -2038,376 +2038,380 @@ msgid "Volume"
 msgstr "Äänenvoimakkuus"
 
 #: src/ctl/controls.tsx:386
-msgid "Neural noise reduction: for USB, LSB and CW with 12 kHz audio"
-msgstr "Neuraalinen kohinanvaimennus: USB:lle, LSB:lle ja CW:lle 12 kHz:n äänellä"
+msgid "Neural noise reduction: for USB, LSB, CW and AM (not SAS) with 12 kHz audio"
+msgstr "Neuraalinen kohinanvaimennus: USB:lle, LSB:lle, CW:lle ja AM:lle (ei SAS) 12 kHz:n äänellä"
 
 #: src/ctl/controls.tsx:388
 msgid "Neural noise reduction for CW, in this browser: keeps the keyed tones, takes away the noise between and around them, never adds sound"
 msgstr "Neuraalinen kohinanvaimennus CW:lle tässä selaimessa: säilyttää sähkötysäänet, poistaa kohinan niiden välistä ja ympäriltä, ei koskaan lisää ääntä"
 
-#: src/ctl/controls.tsx:389
+#: src/ctl/controls.tsx:390
+msgid "Neural noise reduction for AM broadcasts (speech and music), in this browser: takes away hiss, crackle, buzz and splatter, never adds sound"
+msgstr "Neuraalinen kohinanvaimennus AM-yleisradiolähetyksille (puhe ja musiikki) tässä selaimessa: poistaa kohinan, rätinän, surinan ja naapuriasemien roiskeet, ei koskaan lisää ääntä"
+
+#: src/ctl/controls.tsx:391
 msgid "Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound"
 msgstr "Neuraalinen kohinanvaimennus SSB-puheelle tässä selaimessa: poistaa sen, minkä se kuulee kohinana, ei koskaan lisää ääntä"
 
 #. NN = neural (network) noise reduction, a short button label
-#: src/ctl/controls.tsx:392
+#: src/ctl/controls.tsx:394
 msgctxt "filter"
 msgid "NN"
 msgstr "NN"
 
-#: src/ctl/controls.tsx:401
+#: src/ctl/controls.tsx:403
 msgid "Neural noise reduction strength"
 msgstr "Neuraalisen kohinanvaimennuksen voimakkuus"
 
-#: src/ctl/controls.tsx:404
+#: src/ctl/controls.tsx:406
 msgid "Neural noise reduction strength {n} %"
 msgstr "Neuraalisen kohinanvaimennuksen voimakkuus {n} %"
 
-#: src/ctl/controls.tsx:410
+#: src/ctl/controls.tsx:412
 msgid "Neural noise reduction model"
 msgstr "Neuraalisen kohinanvaimennuksen malli"
 
-#: src/ctl/controls.tsx:411
+#: src/ctl/controls.tsx:413
 msgid "Neural noise reduction model (for comparing)"
 msgstr "Neuraalisen kohinanvaimennuksen malli (vertailuun)"
 
-#: src/ctl/controls.tsx:414
+#: src/ctl/controls.tsx:416
 msgid "built-in"
 msgstr "sisäänrakennettu"
 
-#: src/ctl/controls.tsx:435
+#: src/ctl/controls.tsx:437
 msgid "Noise blanker: removes short impulses (ignition, switching noise)"
 msgstr "Pulssihäiriöiden poisto: poistaa lyhyet pulssit (sytytys, kytkentähäiriöt)"
 
-#: src/ctl/controls.tsx:446
+#: src/ctl/controls.tsx:448
 msgid "Blanker sensitivity"
 msgstr "Pulssihäiriöiden poiston herkkyys"
 
-#: src/ctl/controls.tsx:447
+#: src/ctl/controls.tsx:449
 msgid "impulses over {n} x the average"
 msgstr "pulssit, jotka ylittävät keskitason {n}-kertaisesti"
 
-#: src/ctl/controls.tsx:449
+#: src/ctl/controls.tsx:451
 msgid "Blanker sensitivity: impulses over {n} x the average"
 msgstr "Pulssihäiriöiden poiston herkkyys: pulssit, jotka ylittävät keskitason {n}-kertaisesti"
 
-#: src/ctl/controls.tsx:455
+#: src/ctl/controls.tsx:457
 msgid "Noise reduction: lowers steady background noise"
 msgstr "Kohinanvaimennus: vaimentaa tasaista taustakohinaa"
 
-#: src/ctl/controls.tsx:466
+#: src/ctl/controls.tsx:468
 msgid "Noise reduction strength"
 msgstr "Kohinanvaimennuksen voimakkuus"
 
-#: src/ctl/controls.tsx:469
+#: src/ctl/controls.tsx:471
 msgid "Noise reduction strength {n} %"
 msgstr "Kohinanvaimennuksen voimakkuus {n} %"
 
-#: src/ctl/controls.tsx:476
+#: src/ctl/controls.tsx:478
 msgid "Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW"
 msgstr "Automaattinen notch-suodin (lovisuodin): poistaa jatkuvat kantoaallot ja vihellykset (heterodyynit), jättää puheen ja CW:n"
 
 #. Notch = automatic notch filter removing steady carriers and whistles
-#: src/ctl/controls.tsx:479
+#: src/ctl/controls.tsx:481
 msgctxt "filter"
 msgid "Notch"
 msgstr "Notch"
 
-#: src/ctl/controls.tsx:484
+#: src/ctl/controls.tsx:486
 msgid "Squelch: mute while the signal is below the threshold (marked on the S-meter)"
 msgstr "Kohinasalpa: mykistää äänen, kun signaali on kynnyksen alapuolella (merkitty S-mittariin)"
 
-#: src/ctl/controls.tsx:495 src/ctl/controls.tsx:498 src/ctl/controls.tsx:775
+#: src/ctl/controls.tsx:497 src/ctl/controls.tsx:500 src/ctl/controls.tsx:777
 msgid "Squelch threshold"
 msgstr "Kohinasalvan kynnys"
 
-#: src/ctl/controls.tsx:522 src/ctl/controls.tsx:522
+#: src/ctl/controls.tsx:524 src/ctl/controls.tsx:524
 msgid "Zoom out (wheel)"
 msgstr "Loitonna (rulla)"
 
-#: src/ctl/controls.tsx:525
+#: src/ctl/controls.tsx:527
 msgid "Waterfall span"
 msgstr "Vesiputouksen näyttöleveys"
 
-#: src/ctl/controls.tsx:528 src/ctl/controls.tsx:528
+#: src/ctl/controls.tsx:530 src/ctl/controls.tsx:530
 msgid "Zoom in (wheel)"
 msgstr "Lähennä (rulla)"
 
-#: src/ctl/controls.tsx:531
+#: src/ctl/controls.tsx:533
 msgid "Centre the waterfall on the dial"
 msgstr "Keskitä vesiputous viritystaajuuteen"
 
 #. button: centre the waterfall on the dial frequency
-#: src/ctl/controls.tsx:533
+#: src/ctl/controls.tsx:535
 msgctxt "waterfall zoom"
 msgid "Centre"
 msgstr "Keskitä"
 
-#: src/ctl/controls.tsx:535
+#: src/ctl/controls.tsx:537
 msgid "Whole range"
 msgstr "Koko alue"
 
 #. button: zoom the waterfall out to the receiver's whole range
-#: src/ctl/controls.tsx:537
+#: src/ctl/controls.tsx:539
 msgctxt "waterfall zoom"
 msgid "Full"
 msgstr "Koko"
 
-#: src/ctl/controls.tsx:562
+#: src/ctl/controls.tsx:564
 msgid "Users and background decoders"
 msgstr "Käyttäjät ja taustadekooderit"
 
-#: src/ctl/controls.tsx:563
+#: src/ctl/controls.tsx:565
 msgid "Users {n}"
 msgstr "Käyttäjät {n}"
 
-#: src/ctl/controls.tsx:583
+#: src/ctl/controls.tsx:585
 msgid "user"
 msgstr "käyttäjä"
 
-#: src/ctl/controls.tsx:585 src/ctl/map.tsx:670
+#: src/ctl/controls.tsx:587 src/ctl/map.tsx:670
 msgid "mode"
 msgstr "lähetelaji"
 
-#: src/ctl/controls.tsx:590
+#: src/ctl/controls.tsx:592
 msgid "{name} (you)"
 msgstr "{name} (sinä)"
 
-#: src/ctl/controls.tsx:590 src/ctl/controls.tsx:606
+#: src/ctl/controls.tsx:592 src/ctl/controls.tsx:608
 msgid "user {id}"
 msgstr "käyttäjä {id}"
 
-#: src/ctl/controls.tsx:594 src/ctl/controls.tsx:607
+#: src/ctl/controls.tsx:596 src/ctl/controls.tsx:609
 msgid "private"
 msgstr "yksityinen"
 
-#: src/ctl/controls.tsx:604 src/ctl/controls.tsx:625
+#: src/ctl/controls.tsx:606 src/ctl/controls.tsx:627
 msgid "Click to tune there"
 msgstr "Viritä sinne napsauttamalla"
 
-#: src/ctl/controls.tsx:604
+#: src/ctl/controls.tsx:606
 msgid "Click to listen along"
 msgstr "Kuuntele mukana napsauttamalla"
 
-#: src/ctl/controls.tsx:604
+#: src/ctl/controls.tsx:606
 msgid "Their frequency is private"
 msgstr "Taajuus on yksityinen"
 
-#: src/ctl/controls.tsx:604
+#: src/ctl/controls.tsx:606
 msgid "Waiting for a receiver"
 msgstr "Odottaa vastaanotinta"
 
-#: src/ctl/controls.tsx:610 src/ctl/controls.tsx:628
+#: src/ctl/controls.tsx:612 src/ctl/controls.tsx:630
 msgid "waiting"
 msgstr "odottaa"
 
-#: src/ctl/controls.tsx:620
+#: src/ctl/controls.tsx:622
 msgid "background decoders"
 msgstr "taustadekooderit"
 
-#: src/ctl/controls.tsx:649
+#: src/ctl/controls.tsx:651
 msgid "Your receiver is ready."
 msgstr "Vastaanottimesi on valmis."
 
-#: src/ctl/controls.tsx:650
+#: src/ctl/controls.tsx:652
 msgid "Switch to it"
 msgstr "Vaihda siihen"
 
-#: src/ctl/controls.tsx:654
+#: src/ctl/controls.tsx:656
 msgid "Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue)."
 msgstr "Kuuntelet mukana: käyttäjä {id} (odotat omaa vastaanotinta, olet jonossa #{pos})."
 
-#: src/ctl/controls.tsx:655 src/ctl/timecode.tsx:73 src/ctl/timecode.tsx:73
+#: src/ctl/controls.tsx:657 src/ctl/timecode.tsx:73 src/ctl/timecode.tsx:73
 msgid "Stop"
 msgstr "Lopeta"
 
-#: src/ctl/controls.tsx:663
+#: src/ctl/controls.tsx:665
 msgid "Visitors without the password share one receiver, now in use: you are #{pos} in the queue, waterfall only until then."
 msgid_plural "Visitors without the password share {n} receivers, all in use: you are #{pos} in the queue, waterfall only until then."
 msgstr[0] "Vierailijat ilman salasanaa jakavat yhden vastaanottimen, joka on nyt käytössä: olet jonossa #{pos}, siihen asti vain vesiputous."
 msgstr[1] "Vierailijat ilman salasanaa jakavat {n} vastaanotinta, kaikki käytössä: olet jonossa #{pos}, siihen asti vain vesiputous."
 
-#: src/ctl/controls.tsx:669
+#: src/ctl/controls.tsx:671
 msgid "All receivers are in use: you are #{pos} in the queue, waterfall only until then."
 msgstr "Kaikki vastaanottimet ovat käytössä: olet jonossa #{pos}, siihen asti vain vesiputous."
 
-#: src/ctl/controls.tsx:670
+#: src/ctl/controls.tsx:672
 msgid "Click another user's marker (▼) on the scale to listen along."
 msgstr "Napsauta toisen käyttäjän merkkiä (▼) asteikolla kuunnellaksesi mukana."
 
-#: src/ctl/controls.tsx:692
+#: src/ctl/controls.tsx:694
 msgid "Waterfall colour range (dBFS)"
 msgstr "Vesiputouksen värialue (dBFS)"
 
 #. button: choose the waterfall colour range automatically
-#: src/ctl/controls.tsx:695
+#: src/ctl/controls.tsx:697
 msgctxt "colour range"
 msgid "Auto"
 msgstr "Autom."
 
 #. waterfall colour range slider: floor = the level shown as the darkest colour
-#: src/ctl/controls.tsx:699
+#: src/ctl/controls.tsx:701
 msgctxt "colour range"
 msgid "floor"
 msgstr "alaraja"
 
 #. waterfall colour range slider: top = the level shown as the brightest colour
-#: src/ctl/controls.tsx:711
+#: src/ctl/controls.tsx:713
 msgctxt "colour range"
 msgid "top"
 msgstr "yläraja"
 
-#: src/ctl/controls.tsx:733
+#: src/ctl/controls.tsx:735
 msgid "Peak hold: the highest level each frequency reached (pink), on the spectrum"
 msgstr "Huippuarvon pito: kunkin taajuuden suurin saavutettu taso (vaaleanpunainen) spektrissä"
 
 #. Peak = peak hold: the spectrum keeps the highest level each frequency reached
-#: src/ctl/controls.tsx:735
+#: src/ctl/controls.tsx:737
 msgctxt "spectrum"
 msgid "Peak"
 msgstr "Huippu"
 
-#: src/ctl/controls.tsx:738 src/ctl/controls.tsx:738
+#: src/ctl/controls.tsx:740 src/ctl/controls.tsx:740
 msgid "Clear the peaks"
 msgstr "Tyhjennä huiput"
 
-#: src/ctl/controls.tsx:742
+#: src/ctl/controls.tsx:744
 msgid "Save the spectrum and waterfall as a PNG image (with time marks and the frequency)"
 msgstr "Tallenna spektri ja vesiputous PNG-kuvana (aikamerkkien ja taajuuden kanssa)"
 
-#: src/ctl/controls.tsx:745
+#: src/ctl/controls.tsx:747
 msgid "Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)"
 msgstr "Äänispektri: äänen spektri ja vesiputous paneelissa (IQ-tilassa viritystaajuuden molemmat puolet)"
 
-#: src/ctl/controls.tsx:757
+#: src/ctl/controls.tsx:759
 msgid "RF attenuator in: every signal is {db} dB weaker (set by the receiver's owner, against overloads)"
 msgstr "RF-vaimennin päällä: jokainen signaali on {db} dB heikompi (vastaanottimen omistajan asettama ylikuormituksia vastaan)"
 
-#: src/ctl/controls.tsx:772 src/ctl/mobile.tsx:96
+#: src/ctl/controls.tsx:774 src/ctl/mobile.tsx:96
 msgid "Channel power before AGC (dBFS)"
 msgstr "Kanavan teho ennen AGC:tä (dBFS)"
 
-#: src/ctl/controls.tsx:778
+#: src/ctl/controls.tsx:780
 msgid "ADC overload"
 msgstr "ADC-ylikuormitus"
 
 #. OVL = overload: the ADC input is too strong
-#: src/ctl/controls.tsx:780 src/ctl/mobile.tsx:92
+#: src/ctl/controls.tsx:782 src/ctl/mobile.tsx:92
 msgid "OVL"
 msgstr "OVL"
 
-#: src/ctl/controls.tsx:782
+#: src/ctl/controls.tsx:784
 msgid "overloaded"
 msgstr "ylikuormittunut"
 
-#: src/ctl/controls.tsx:782
+#: src/ctl/controls.tsx:784
 msgid "no overload"
 msgstr "ei ylikuormitusta"
 
-#: src/ctl/controls.tsx:792
+#: src/ctl/controls.tsx:794
 msgid "connecting"
 msgstr "yhdistetään"
 
-#: src/ctl/controls.tsx:793
+#: src/ctl/controls.tsx:795
 msgid "open"
 msgstr "auki"
 
-#: src/ctl/controls.tsx:794
+#: src/ctl/controls.tsx:796
 msgid "closed"
 msgstr "suljettu"
 
-#: src/ctl/controls.tsx:795
+#: src/ctl/controls.tsx:797
 msgid "busy"
 msgstr "varattu"
 
-#: src/ctl/controls.tsx:796
+#: src/ctl/controls.tsx:798
 msgid "ended"
 msgstr "päättynyt"
 
 #. rtt = round-trip time to the receiver, in milliseconds
-#: src/ctl/controls.tsx:822
+#: src/ctl/controls.tsx:824
 msgid "rtt {v} ms"
 msgstr "rtt {v} ms"
 
-#: src/ctl/controls.tsx:826
+#: src/ctl/controls.tsx:828
 msgid "How the audio comes, and its data rate"
 msgstr "Äänen siirtotapa ja sen datanopeus"
 
-#: src/ctl/controls.tsx:827
+#: src/ctl/controls.tsx:829
 msgid "{codec} {v} kbit/s"
 msgstr "{codec} {v} kbit/s"
 
-#: src/ctl/controls.tsx:831
+#: src/ctl/controls.tsx:833
 msgid "The waterfall's data rate"
 msgstr "Vesiputouksen datanopeus"
 
 #. wf = waterfall
-#: src/ctl/controls.tsx:833
+#: src/ctl/controls.tsx:835
 msgid "wf {v} kbit/s"
 msgstr "vp {v} kbit/s"
 
-#: src/ctl/controls.tsx:837
+#: src/ctl/controls.tsx:839
 msgid "Audio buffer, underruns, playback trim"
 msgstr "Äänipuskuri, alivuodot, toistonopeuden hienosäätö"
 
 #. buf = audio buffer; underruns = the buffer ran empty and the sound broke up; ppm = parts per million (playback speed trim)
-#: src/ctl/controls.tsx:839
+#: src/ctl/controls.tsx:841
 msgid "buf {fill} ms · {under} underruns · {trim} ppm"
 msgstr "puskuri {fill} ms · alivuodot {under} · {trim} ppm"
 
-#: src/ctl/controls.tsx:847
+#: src/ctl/controls.tsx:849
 msgid "Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay."
 msgstr "Pelkän HTTP:n kautta selain sallii äänen vain sivun omassa säikeessä, ja puskurointia on enemmän. Sama sivu HTTPS:n kautta (laitteen oma varmenne: selain kysyy kerran) soi pienemmällä viiveellä."
 
-#: src/ctl/controls.tsx:848
+#: src/ctl/controls.tsx:850
 msgid "http audio (+delay):"
 msgstr "http-ääni (+viive):"
 
-#: src/ctl/controls.tsx:853
+#: src/ctl/controls.tsx:855
 msgid "Frames dropped (audio / waterfall), audio gaps"
 msgstr "Pudotetut kehykset (ääni / vesiputous), katkot äänessä"
 
-#: src/ctl/controls.tsx:854
+#: src/ctl/controls.tsx:856
 msgid "drops {audio}/{wf} · gaps {gaps}"
 msgstr "pudotetut {audio}/{wf} · katkot {gaps}"
 
-#: src/ctl/controls.tsx:861
+#: src/ctl/controls.tsx:863
 msgid "hardware falling behind"
 msgstr "laitteisto jää jälkeen"
 
-#: src/ctl/controls.tsx:864
+#: src/ctl/controls.tsx:866
 msgid "clock {v} ppm"
 msgstr "kello {v} ppm"
 
-#: src/ctl/controls.tsx:868
+#: src/ctl/controls.tsx:870
 msgid "The receiver's CPU load (all cores) and temperature"
 msgstr "Vastaanottimen suoritinkuorma (kaikki ytimet) ja lämpötila"
 
-#: src/ctl/controls.tsx:869
+#: src/ctl/controls.tsx:871
 msgid "cpu {v} %"
 msgstr "cpu {v} %"
 
-#: src/ctl/controls.tsx:881
+#: src/ctl/controls.tsx:883
 msgid "You listen as a visitor: {n} of the receivers are open without the password. Log in for any."
 msgstr "Kuuntelet vierailijana: {n} vastaanottimista on avoinna ilman salasanaa. Kirjaudu sisään käyttääksesi mitä tahansa."
 
-#: src/ctl/controls.tsx:883
+#: src/ctl/controls.tsx:885
 msgid "visitor: log in"
 msgstr "vierailija: kirjaudu"
 
-#: src/ctl/controls.tsx:895
+#: src/ctl/controls.tsx:897
 msgid "About this receiver: where it is, its antenna, its limits, privacy, licences"
 msgstr "Tietoja vastaanottimesta: sijainti, antenni, rajoitukset, yksityisyys, lisenssit"
 
-#: src/ctl/controls.tsx:897
+#: src/ctl/controls.tsx:899
 msgid "info"
 msgstr "tiedot"
 
-#: src/ctl/controls.tsx:900
+#: src/ctl/controls.tsx:902
 msgid "Keys and mouse (key ?)"
 msgstr "Näppäimet ja hiiri (näppäin ?)"
 
-#: src/ctl/controls.tsx:901
+#: src/ctl/controls.tsx:903
 msgid "keys"
 msgstr "näppäimet"
 
@@ -4894,7 +4898,7 @@ msgstr "salasana vaaditaan"
 msgid "login failed ({status})"
 msgstr "kirjautuminen epäonnistui ({status})"
 
-#: src/state.ts:720 src/state.ts:2388
+#: src/state.ts:720 src/state.ts:2399
 msgid "nothing was received"
 msgstr "mitään ei vastaanotettu"
 
@@ -4910,19 +4914,19 @@ msgstr "{name} ({s} s{lost})"
 msgid "named by the clock"
 msgstr "nimetty kellon mukaan"
 
-#: src/state.ts:2388
+#: src/state.ts:2399
 msgid "only silence was heard"
 msgstr "kuului vain hiljaisuutta"
 
-#: src/state.ts:2398
+#: src/state.ts:2409
 msgid ", {s} s of silence left out"
 msgstr ", {s} s hiljaisuutta jätetty pois"
 
-#: src/state.ts:2399
+#: src/state.ts:2410
 msgid "; ended when the audio format changed"
 msgstr "; päättyi äänimuodon vaihtuessa"
 
-#: src/state.ts:2400
+#: src/state.ts:2411
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
@@ -5044,3 +5048,6 @@ msgstr "Vesiputous: signaalin voimakkuus taajuuden ja ajan mukaan"
 
 #~ msgid "Neural noise reduction: for USB and LSB with 12 kHz audio"
 #~ msgstr "Neuraalinen kohinanvaimennus: USB:lle ja LSB:lle 12 kHz:n äänellä"
+
+#~ msgid "Neural noise reduction: for USB, LSB and CW with 12 kHz audio"
+#~ msgstr "Neuraalinen kohinanvaimennus: USB:lle, LSB:lle ja CW:lle 12 kHz:n äänellä"

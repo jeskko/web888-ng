@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-//! Neural noise reduction for SSB voice and CW (M8, `doc/m8-browser-decoders.md`
+//! Neural noise reduction for SSB voice, CW and AM broadcast (M8, `doc/m8-browser-decoders.md`
 //! §5.4): a small network trained in `tools/ml/nr` gives a gain in 0..1
 //! for every bin of a short-time spectrum; the audio is that spectrum
 //! times the gains. Mask only: it takes sound away and never adds any.
@@ -34,6 +34,9 @@ pub static MODEL: &[u8] = include_bytes!("../model/nrnet.bin");
 /// The built-in CW model (for copying by ear: keeps every keyed tone,
 /// takes the noise between and around them).
 pub static MODEL_CW: &[u8] = include_bytes!("../model/nrnet-cw.bin");
+/// The built-in AM broadcast model (speech and music, after the AM
+/// detector and the notch).
+pub static MODEL_AM: &[u8] = include_bytes!("../model/nrnet-am.bin");
 
 fn f16_to_f32(h: u16) -> f32 {
     let s = ((h >> 15) & 1) as u32;
@@ -236,6 +239,12 @@ impl Net {
     pub fn get_cw() -> &'static Net {
         static NET: std::sync::OnceLock<Net> = std::sync::OnceLock::new();
         NET.get_or_init(|| Net::load(MODEL_CW).expect("nrnet-cw.bin"))
+    }
+
+    /// The built-in AM broadcast model.
+    pub fn get_am() -> &'static Net {
+        static NET: std::sync::OnceLock<Net> = std::sync::OnceLock::new();
+        NET.get_or_init(|| Net::load(MODEL_AM).expect("nrnet-am.bin"))
     }
 }
 
@@ -456,6 +465,11 @@ mod tests {
     #[test]
     fn cw_matches_pytorch() {
         check(Net::get_cw(), include_bytes!("../model/nrnet-cw-ref.bin"));
+    }
+
+    #[test]
+    fn am_matches_pytorch() {
+        check(Net::get_am(), include_bytes!("../model/nrnet-am-ref.bin"));
     }
 
     fn check(net: &'static Net, b: &[u8]) {

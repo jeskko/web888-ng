@@ -10,6 +10,8 @@ will be.
 | `common.py` | STFT (causal, 256/128, square-root Hann), features, model (the Rust inference must match) |
 | `data.py` | examples: LibriSpeech speech through a ham transmitter's chain (EQ, compressor, clipper), sent in SSB over an ionochannel HF path (fading, QRN, CW/RTTY/PSK31, carriers, man-made noise, mistuning, passband, AGC), with real KiwiSDR noise on part of them; the target is the same speech without the noise. `batch()` makes whole batches on the GPU |
 | `cwdata.py` | CW examples: keyed stations (the CW decoder's synthesiser: text, speed, jitter) with their own fading, QRN or real noise, man-made noise, a CW or SSB filter, the AGC; the target is every keyed tone with the noise 10-15 dB down (`train.py --cw`) |
+| `amdata.py` | AM broadcast examples: speech and music through broadcast processing, AM, an ionochannel path, noise and neighbours, a DSB or SSB filter, the envelope or synchronous detector; the target is the same without the noise, the noise 10-15 dB down (`train.py --am`) |
+| `musicbank.py` | MUSAN's music at 12 kS/s, a held-out split by artist, a licence list per track (`--strict`: CC BY, CC0, public domain only) |
 | `cwscore.py` | a CW model on cwdata's examples by SNR: tones kept, tone cells lost, noise taken, SI-SDR |
 | `noisebank.py` | real HF noise: the pauses of the Paderborn database's train receptions, 96 h |
 | `pairbank.py` | real training pairs: Paderborn train receptions and the speech inside them (the clean source, delayed and through each reception's estimated channel response), 100 h; `train.py --pairs` mixes them into the batches |
@@ -51,4 +53,11 @@ NR_NOISE=noise.i16 nice -n 10 python3 train.py --cw --hidden 64 --residual 10,15
   --real-noise 0.5 --workers 4 --out /tmp/cw1
 python3 export.py /tmp/cw1/last.pt ../../../crates/nr/model --cw   # nrnet-cw.bin
 NR_NOISE=noise.i16 python3 cwscore.py /tmp/cw1/last.pt --strength 1,2   # tones kept, noise taken, by SNR
+# the AM model (amdata.py's examples; the shipped weights: am1); MUSAN from
+# openslr.org/17 (11 GB), its music part extracted
+python3 musicbank.py musan/music music.i16 music-val.i16   # 37 h + 5.8 h
+NR_SPEECH=speech.i16 NR_SPEECH_VAL=speech-dev.i16 NR_MUSIC=music.i16 NR_MUSIC_VAL=music-val.i16 \
+  NR_NOISE=noise.i16 nice -n 10 python3 train.py --am --steps 45000 --hidden 192 --pitch \
+  --residual 10,15 --lost 4 --real-noise 0.5 --workers 4 --out /tmp/am1
+NR_SPEECH=speech.i16 python3 export.py /tmp/am1/last.pt ../../../crates/nr/model --am   # nrnet-am.bin
 ```

@@ -373,7 +373,7 @@ const nrLevel = { v: 0.6 };
 function NnCtl() {
   const on = nnOn.value;
   const ok = nnApplies.value;
-  const cw = nnKind.value === "cw";
+  const kind = nnKind.value;
   const choice = nnChoice.value;
   const models = nnKindModels.value;
   return (
@@ -383,9 +383,11 @@ function NnCtl() {
         disabled={!ok}
         onClick={() => (nnOn.value = !on)}
         title={!ok
-          ? t("Neural noise reduction: for USB, LSB and CW with 12 kHz audio")
-          : cw
+          ? t("Neural noise reduction: for USB, LSB, CW and AM (not SAS) with 12 kHz audio")
+          : kind === "cw"
           ? t("Neural noise reduction for CW, in this browser: keeps the keyed tones, takes away the noise between and around them, never adds sound")
+          : kind === "am"
+          ? t("Neural noise reduction for AM broadcasts (speech and music), in this browser: takes away hiss, crackle, buzz and splatter, never adds sound")
           : t("Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound")}
       >
         {/* i18n: NN = neural (network) noise reduction, a short button label */}

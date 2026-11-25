@@ -1,5 +1,5 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The neural noise reduction for SSB voice and CW (nr.wasm,
+// The neural noise reduction for SSB voice, CW and AM broadcast (nr.wasm,
 // crates/nr-wasm): a small network that takes away what it hears as
 // noise, never adds anything; one built-in model for each.
 // Runs on the page's thread just before the player (about 15 M
@@ -18,8 +18,8 @@ interface NrExports {
   nr_load(n: number): number;
 }
 
-/** What a model is for: SSB voice or CW. */
-export type NnKind = "voice" | "cw";
+/** What a model is for: SSB voice, CW or AM broadcast. */
+export type NnKind = "voice" | "cw" | "am";
 
 /** A model offered for comparison (nr-models.json in the UI directory,
  * none in a release): its name, weights file (an nrnet.bin) and kind
@@ -45,6 +45,8 @@ export async function nnModels(): Promise<NnModel[]> {
 
 export const NN_RATE = 12000;
 
+const modules = new Map<string, Promise<WebAssembly.Module>>();
+
 export class NeuralNr {
   private x: NrExports;
 
@@ -55,9 +57,14 @@ export class NeuralNr {
   /** The network from `url` (nr.wasm), or null when it can't load. */
   static async load(url: string): Promise<NeuralNr | null> {
     try {
-      const r = await fetch(url);
-      if (!r.ok) return null;
-      const { instance } = await WebAssembly.instantiate(await r.arrayBuffer(), {});
+      // fetched and compiled once; each model gets its own instance
+      let m = modules.get(url);
+      if (!m) {
+        m = fetch(url).then(async (r) => (r.ok ? WebAssembly.compile(await r.arrayBuffer()) : Promise.reject(new Error(r.statusText))));
+        modules.set(url, m);
+        m.catch(() => modules.delete(url));
+      }
+      const instance = await WebAssembly.instantiate(await m, {});
       return new NeuralNr(instance.exports as unknown as NrExports);
     } catch {
       return null;
@@ -74,7 +81,7 @@ export class NeuralNr {
 
   /** The built-in model for `kind` (a new stream). */
   useBuiltin(kind: NnKind): boolean {
-    return this.x.nr_builtin(kind === "cw" ? 1 : 0) === 1;
+    return this.x.nr_builtin(kind === "cw" ? 1 : kind === "am" ? 2 : 0) === 1;
   }
 
   /** Other weights (from `url`, an nrnet.bin) instead of the current

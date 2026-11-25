@@ -1,12 +1,14 @@
 # SPDX-License-Identifier: GPL-3.0-or-later
 """Export a trained model for crates/nr:
 
-    python3 export.py /tmp/nr/best.pt ../../../crates/nr/model [--cw]
+    python3 export.py /tmp/nr/best.pt ../../../crates/nr/model [--cw | --am]
 
 writes nrnet.bin (the weights as f16) and nrnet-ref.bin (a reference: 2 s
 of input audio and the model's output for it, computed with the
 f16-rounded weights, for the Rust test); with --cw, a CW model as
-nrnet-cw.bin and nrnet-cw-ref.bin (the input from cwdata.py, on the GPU).
+nrnet-cw.bin and nrnet-cw-ref.bin (the input from cwdata.py, on the GPU);
+with --am, an AM model as nrnet-am.bin and nrnet-am-ref.bin (amdata.py's,
+speech only: NR_SPEECH).
 
 nrnet.bin: b"W8NRNET1", u32 tensor count, then per tensor: u16 name
 length, name (UTF-8), u8 dims, u32 each dim, f16 values (little endian).
@@ -24,8 +26,8 @@ from data import Bank, example
 
 def main():
     ck, out = sys.argv[1], sys.argv[2]
-    cw = "--cw" in sys.argv[3:]
-    stem = "nrnet-cw" if cw else "nrnet"
+    cw, am = "--cw" in sys.argv[3:], "--am" in sys.argv[3:]
+    stem = "nrnet-cw" if cw else "nrnet-am" if am else "nrnet"
     c = torch.load(ck, map_location="cpu")
     m = load(c, "cpu")
     sd = {k: v.half().float() for k, v in c["model"].items()}
@@ -44,6 +46,10 @@ def main():
         import cwdata
         x = cwdata.batch(1, np.random.default_rng(7), torch.Generator("cuda").manual_seed(7), (3.0, 4.0),
                          residual=None)[0][0].cpu().numpy()
+    elif am:
+        import amdata
+        x = amdata.batch(1, np.random.default_rng(7), torch.Generator("cuda").manual_seed(7), Bank(), None,
+                         (3.0, 4.0), residual=None)[0][0].cpu().numpy()
     else:
         x, _, _ = example(np.random.default_rng(7), Bank(), snr=(3.0, 4.0))
     x = torch.from_numpy(x[:24064])[None]           # 2 s, a whole number of hops

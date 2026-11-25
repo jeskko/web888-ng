@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
-// The neural noise reduction (NN): off in AM (disabled), on in USB, LSB
-// and CW (the CW model: nr.wasm's built-in one), the strength slider, nr.wasm fetched once; with nr-models.json in
+// The neural noise reduction (NN): disabled in SAS, on in USB, LSB, CW
+// (the CW model) and AM (the AM model; nr.wasm's built-in ones), the strength slider, nr.wasm fetched once; with nr-models.json in
 // the UI directory, each model of the selector in turn; prints the button's
 // state (strength 50 % and 250 %), the player's underruns and page errors
 // at each step, and saves nn.png in OUT (default .).
@@ -14,8 +14,13 @@ await sleep(3000);
 await p.ev("document.querySelector('.start')?.click()");
 await sleep(2000);
 const btn = (label) => `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${lit(label)})`;
+// AM, SAM, SAL, SAR and SAS share one button that cycles them
 const mode = async (m) => {
-  await p.ev(`${btn(m)}?.click()`);
+  for (let i = 0; i < 6; i++) {
+    const at = await p.ev(`(() => { const b = ${btn(m)}; if (b?.classList.contains("on")) return true; (b ?? document.querySelector("button.am")).click(); return false })()`);
+    if (at) break;
+    await sleep(700);
+  }
   await sleep(1500);
 };
 const report = async (what) => {
@@ -27,8 +32,8 @@ const report = async (what) => {
   const wasm = await p.ev(`performance.getEntriesByType("resource").filter((e) => e.name.endsWith("/nr.wasm")).length`);
   console.log(`${what}: NN ${b ? `${b[0] ? "disabled" : "enabled"}, ${b[1] ? "on" : "off"}` : "missing"}, slider ${slider}, nr.wasm fetched ${wasm}x, underruns ${under?.[1] ?? "?"}`);
 };
-await mode("AM");
-await report("AM");
+await mode("SAS");
+await report("SAS");
 await mode("USB");
 await report("USB");
 await p.ev(`${btn("NN")}.click()`);
@@ -51,7 +56,11 @@ await report("CW");
 console.log("  CW models:", await p.ev(`[...(document.querySelector('select[aria-label="Neural noise reduction model"]')?.options ?? [])].map((o) => o.value || "built-in").join(" ") || "no selector"`));
 console.log("  title:", await p.ev(`${btn("NN")}.title`));
 await mode("AM");
-await report("AM again");
+await report("AM");
+console.log("  AM models:", await p.ev(`[...(document.querySelector('select[aria-label="Neural noise reduction model"]')?.options ?? [])].map((o) => o.value || "built-in").join(" ") || "no selector"`));
+console.log("  title:", await p.ev(`${btn("NN")}.title`));
+await mode("SAM");
+await report("SAM");
 await mode("USB");
 await p.ev(`${btn("NN")}.click()`);
 await report("USB, NN off");

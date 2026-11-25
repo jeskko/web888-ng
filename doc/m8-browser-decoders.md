@@ -828,7 +828,7 @@ examples print the figures and the page's JSON for a WAV.
   * Open: the DWD RTTY reads 100 Bd in 1 of 12 windows of the recording
     (t = 0, in a fade; 50 Bd in the other 11).
 
-### 5.4 Neural noise reduction: voice, CW, AM broadcast (SSB voice in the page 2026-11-24, CW 2026-11-25; AM planned)
+### 5.4 Neural noise reduction: voice, CW, AM broadcast (SSB voice in the page 2026-11-24, CW and AM 2026-11-25)
 
 After the 25-class identifier. Small mask-only networks in the page's
 audio path (AudioWorklet, our own Rust inference like §5.1), as a third
@@ -1048,15 +1048,43 @@ flutter regenerator (a mask can't add sound).
   audio ~4.5 kHz, typical compression) → simulated HF channel (flat and
   selective fading, carrier fades, noise, interference above) → our own
   demodulator → input; target the clean audio band-limited the same.
-  Music licences matter for weights shipped in a GPL project: only CC0 /
-  CC-BY material (e.g. MUSAN's CC-BY parts, the CC-BY subset of FMA or
-  MTG-Jamendo), no non-commercial sets. Real AM recordings (our `onair`
+  Music licences: first planned as CC0 / CC-BY only; decided
+  (2026-11-25) that a mask model can't reproduce what it heard, so
+  share-alike and no-derivatives terms (they bind copies and
+  adaptations) don't apply to its weights, and all of MUSAN's music is
+  used (Creative Commons or public domain, none non-commercial; the
+  audio itself never leaves the workstation). A generative model would
+  use the CC0 / CC-BY part only (`musicbank.py --strict`). Real AM recordings (our `onair`
   and `/data/iq` sets) for noise and for scoring, as they have no clean
   reference.
 * Scoring: speech by Whisper word errors; music by listening (ViSQOL as
   a rough stand-in), against the auto notch + spectral subtraction.
 * The largest of the three (music data and its evaluation); after the
   SSB voice and CW models.
+
+**AM: first model in the page (2026-11-25).** The same network and
+stream with AM weights: GRU 192, per-bin gains (narrow whistles),
+pitch features, 558k weights (1.1 MB f16), built into nr.wasm beside
+the voice and CW models; the **NN** button uses it in AM, SAM, SAL and
+SAR (not SAS: two channels) with the same strength and a selector for
+`kind: "am"` entries. nr.wasm (2.8 MB with all three) is fetched and
+compiled once a page, an instance per model.
+
+* Data (`tools/ml/nr/amdata.py`, at 24 kS/s complex on the GPU):
+  LibriSpeech speech and MUSAN music (37 h, `musicbank.py`; 5.8 h of
+  other artists held out): 40 % music, 40 % speech, 10 % speech over
+  music, 10 % one turning into the other (a presenter between songs);
+  broadcast processing (tilt, compressor, clipper, 2.5-5 kHz lowpass),
+  30-100 % modulation, an ionochannel path or flat fading; QRN or real
+  noise at −5..+25 dB, neighbours 9/10 kHz away, whistles, CW,
+  switching-supply hash, arcing, powerline bursts; a DSB or one-sideband
+  filter, the envelope or synchronous detector with the carrier AGC.
+  The target is the same chain without the noise (the detector's
+  fading distortion stays) plus the noise 10-15 dB down.
+* Run am1, 45k steps (87 min): SI-SDR +6.0 / +5.2 / +4.7 / +3.0 dB at
+  −5..3 / 3..10 / 10..17 / 17..25 dB (validation: held-out speech and
+  music). Listening on live broadcasts decides; no music-specific
+  score yet.
 
 **Later, for fun: a generative voice model** (the user's idea,
 2026-11-23; looked into 2026-11-25). A voice restorer that may invent a

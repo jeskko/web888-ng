@@ -2090,14 +2090,23 @@ effect(() => {
 });
 /** The neural noise reduction (nr.wasm), loaded when first turned on:
  * on or off, its strength (0.3..3), and whether it applies now (USB or
- * LSB: the SSB voice model; CW: the CW model; 12 kHz mono audio). */
+ * LSB: the SSB voice model; CW: the CW model; AM, SAM, SAL, SAR: the AM
+ * broadcast model; 12 kHz mono audio). */
 export const nnOn = signal(load("nn") === "1");
 export const nnStrength = signal(Number(load("nnStrength") ?? "1"));
 export const nnNet = signal<NeuralNr | null | undefined>(undefined);
-export const nnKind = computed<NnKind>(() => (st.value?.mode === "cw" ? "cw" : "voice"));
+const NN_AM: Mode[] = ["am", "sam", "sal", "sar"];
+export const nnKind = computed<NnKind>(() => {
+  const m = st.value?.mode;
+  return m === "cw" ? "cw" : m && NN_AM.includes(m) ? "am" : "voice";
+});
 export const nnApplies = computed(() => {
   const s = st.value;
-  return !!s && (s.mode === "usb" || s.mode === "lsb" || s.mode === "cw") && (s.audio_rate ?? audioRate) === NN_RATE;
+  return (
+    !!s &&
+    (s.mode === "usb" || s.mode === "lsb" || s.mode === "cw" || NN_AM.includes(s.mode)) &&
+    (s.audio_rate ?? audioRate) === NN_RATE
+  );
 });
 /** Models to compare (nr-models.json in the UI directory; none in a
  * release) and the one chosen for each kind ("" = the built-in one).
@@ -2105,8 +2114,9 @@ export const nnApplies = computed(() => {
 export const nnModelList = signal<NnModel[]>([]);
 export const nnModel = signal(load("nnModel") ?? "");
 export const nnModelCw = signal(load("nnModelCw") ?? "");
+export const nnModelAm = signal(load("nnModelAm") ?? "");
 /** The chosen-model signal for the current kind. */
-export const nnChoice = computed(() => (nnKind.value === "cw" ? nnModelCw : nnModel));
+export const nnChoice = computed(() => ({ voice: nnModel, cw: nnModelCw, am: nnModelAm })[nnKind.value]);
 /** The models to compare for the current kind. */
 export const nnKindModels = computed(() => nnModelList.value.filter((m) => (m.kind ?? "voice") === nnKind.value));
 const nnNets = new Map<string, NeuralNr | null>();
@@ -2131,6 +2141,7 @@ effect(() => {
   save("nnStrength", String(nnStrength.value));
   save("nnModel", nnModel.value);
   save("nnModelCw", nnModelCw.value);
+  save("nnModelAm", nnModelAm.value);
   const kind = nnKind.value;
   const choice = nnChoice.value;
   const name = choice.value;
