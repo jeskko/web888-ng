@@ -51,6 +51,9 @@ const copyStatic = {
           console.warn(`no wasm/${f} (scripts/build-wasm.sh): ${what} won't load`);
         }
       }
+      // the generative voice restorer's weights (fetched when "Gen" is
+      // first turned on)
+      await copyFile("../crates/nr/model/nrgen.bin", `${out}/nrgen.bin`);
     });
   },
 };

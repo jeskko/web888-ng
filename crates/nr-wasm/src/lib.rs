@@ -19,9 +19,15 @@
 //! * `nr_load(n)`: other weights (an `nrnet.bin`, n bytes written at
 //!   `nr_weights(n)`) instead of the built-in ones, for comparing models;
 //!   1 if they load (a new stream, the floor and power kept), else 0
+//! * `nr_restore(n)`: the generative restorer (an `nrgen.bin`, n bytes
+//!   at `nr_weights(n)`) after the current mask model, which must have
+//!   the pitch features (the built-in voice model); 1 if it loads
+//! * `nr_mix(m)`: the restorer's share of the output, 0..1 (the rest
+//!   the mask's)
+//! * `nr_steps(k)`: the restorer's flow steps, 1..4 (2 at first)
 
 use std::cell::RefCell;
-use web888_nr::{Denoiser, Net};
+use web888_nr::{Denoiser, GenNet, Net, Restorer};
 
 struct State {
     nr: Denoiser,
@@ -115,6 +121,39 @@ pub extern "C" fn nr_load(n: usize) -> u32 {
                 1
             }
             None => 0,
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nr_restore(n: usize) -> u32 {
+    STATE.with_borrow_mut(|s| {
+        let n = n.min(s.weights.len());
+        let ok = match GenNet::load(&s.weights[..n]) {
+            Some(g) => s.nr.set_restorer(Some(Restorer::new(g))),
+            None => false,
+        };
+        s.weights = Vec::new();
+        ok as u32
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nr_mix(m: f32) {
+    STATE.with_borrow_mut(|s| {
+        s.nr.mix = if m.is_finite() {
+            m.clamp(0.0, 1.0)
+        } else {
+            1.0
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn nr_steps(k: u32) {
+    STATE.with_borrow_mut(|s| {
+        if let Some(r) = s.nr.restorer_mut() {
+            r.steps = k.clamp(1, 4) as usize;
         }
     })
 }

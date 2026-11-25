@@ -11,6 +11,11 @@ and by how hard the raw audio is; and STOI (stoi.py) against the clean
 source, a predictor of listeners' intelligibility rather than an ASR's.
 
     python3 score.py /data/nr/paderborn/ham_radio run/best.pt --files 200
+
+With --gen, the generative restorer (gen.py) on that mask model too, at
+each of --gen-steps; then the errors are also split into substituted,
+deleted and inserted words: an invented word is an insertion or a
+substitution, so a restorer must not raise those over the mask's.
 """
 import argparse
 import json
@@ -58,6 +63,27 @@ def edits(a: list[str], b: list[str]) -> int:
         for j, y in enumerate(b, 1):
             prev, d[j] = d[j], min(d[j] + 1, d[j - 1] + 1, prev + (x != y))
     return d[-1]
+
+
+def ops(a: list[str], b: list[str]) -> tuple[int, int, int]:
+    """(substitutions, deletions, insertions) of a least-edit alignment
+    of reference a to hypothesis b."""
+    n, m = len(a), len(b)
+    d = np.zeros((n + 1, m + 1), np.int32)
+    d[:, 0], d[0, :] = np.arange(n + 1), np.arange(m + 1)
+    for i in range(1, n + 1):
+        for j in range(1, m + 1):
+            d[i, j] = min(d[i - 1, j] + 1, d[i, j - 1] + 1, d[i - 1, j - 1] + (a[i - 1] != b[j - 1]))
+    i, j, sub, dl, ins = n, m, 0, 0, 0
+    while i > 0 or j > 0:
+        if i > 0 and j > 0 and d[i, j] == d[i - 1, j - 1] + (a[i - 1] != b[j - 1]):
+            sub += a[i - 1] != b[j - 1]
+            i, j = i - 1, j - 1
+        elif i > 0 and d[i, j] == d[i - 1, j] + 1:
+            dl, i = dl + 1, i - 1
+        else:
+            ins, j = ins + 1, j - 1
+    return sub, dl, ins
 
 
 def lag(clean: np.ndarray, x: np.ndarray, most: int = 800) -> int:
@@ -130,6 +156,8 @@ def main():
     ap.add_argument("--asr", default="whisper", help="recognisers, comma-separated: whisper, vosk, parakeet")
     ap.add_argument("--stoi-only", action="store_true", help="no Whisper: STOI only (fast)")
     ap.add_argument("--keep", action="store_true", help="keep the audio (else deleted at the end)")
+    ap.add_argument("--gen", help="the generative restorer's checkpoint (gen.py), after the mask model")
+    ap.add_argument("--gen-steps", default="1,2", help="its flow steps to score")
     a = ap.parse_args()
     ann = json.load(open(f"{a.db}/annotations.json"))
     txt = json.load(open(f"{a.db}/transcription.json"))
@@ -143,6 +171,11 @@ def main():
         c = torch.load(a.ckpt, map_location=dev)
         net = load(c, dev)
     conds = ["raw"] + ([f"nn{f}" for f in a.floors.split(",")] if net else [])
+    gen = None
+    if a.gen and net:
+        import gen as g
+        gen = g.load_gen(torch.load(a.gen, map_location=dev), dev)
+        conds += [f"gen{k}" for k in a.gen_steps.split(",")]
     tmp = tempfile.mkdtemp(prefix="nrscore")
     jobs = {c: [] for c in conds}
     refs = []
@@ -160,6 +193,8 @@ def main():
             with torch.no_grad():
                 for f in a.floors.split(","):
                     outs[f"nn{f}"] = enhance(net, xt, float(f))[0].cpu().numpy()
+                for k in a.gen_steps.split(",") if gen else []:
+                    outs[f"gen{k}"] = g.restore(gen, net, xt, int(k), seed=fi)[0].cpu().numpy()
         spans = [tuple(map(int, s.split(":"))) for s in ann[k]["activity"][0].split(", ")]
         for u, ((s0, s1), ref) in enumerate(zip(spans, txt[k])):
             i0, i1 = int(max(0, s0 / fs - MARGIN) * 12000), int((s1 / fs + MARGIN) * 12000)
@@ -198,6 +233,16 @@ def main():
                 n = sum(len(r) for r, ok in zip(refs, m) if ok)
                 row.append(f"{100 * e / max(1, n):9.1f}%")
             print(f"{name:16}" + "".join(row) + f"   ({int(m.sum())} utterances)")
+        if gen:
+            # invented words: insertions and substitutions, per reference word
+            print(f"substituted / deleted / inserted, {eng}")
+            for name, m in bands:
+                row = []
+                for c in conds:
+                    o = np.array([ops(r, h) for r, h, ok in zip(refs, hyp[c], m) if ok]).reshape(-1, 3).sum(0)
+                    n = max(1, sum(len(r) for r, ok in zip(refs, m) if ok))
+                    row.append(f"{100 * o[0] / n:4.0f}/{100 * o[1] / n:2.0f}/{100 * o[2] / n:2.0f}".rjust(10))
+                print(f"{name:16}" + "".join(row))
     print()
     print(f"{'STOI':16}" + "".join(f"{np.nanmean(st[c]):10.3f}" for c in conds))
     print(f"{'ESTOI':16}" + "".join(f"{np.nanmean(es[c]):10.3f}" for c in conds))

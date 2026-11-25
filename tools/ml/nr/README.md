@@ -20,6 +20,7 @@ will be.
 | `prep.py` | the speech bank: LibriSpeech FLAC → one 12 kS/s int16 file |
 | `train.py` | training; validation by SI-SDR improvement at four SNR bands |
 | `export.py` | `nrnet.bin` and `nrnet-ref.bin` for `crates/nr` (or a weights file for the page's model selector: list it in `nr-models.json` in the UI directory) |
+| `gen.py` | the generative voice restorer ("Gen" in the page, may invent): a conditional flow from the frozen mask model's output to clean speech in the same STFT; training and its validation (SI-SDR of the mask and of 1 and 2 flow steps) |
 | `attn.py` | the gain in speech frames and in pauses, per band, on real receptions |
 
 Speech: LibriSpeech (CC BY 4.0) `train-clean-100` for training,
@@ -60,4 +61,10 @@ NR_SPEECH=speech.i16 NR_SPEECH_VAL=speech-dev.i16 NR_MUSIC=music.i16 NR_MUSIC_VA
   NR_NOISE=noise.i16 nice -n 10 python3 train.py --am --steps 45000 --hidden 192 --pitch \
   --residual 10,15 --lost 4 --real-noise 0.5 --workers 4 --out /tmp/am1
 NR_SPEECH=speech.i16 python3 export.py /tmp/am1/last.pt ../../../crates/nr/model --am   # nrnet-am.bin
+# the generative voice restorer (the shipped weights: gen1, on run 7's mask)
+NR_SPEECH=speech.i16 NR_SPEECH_VAL=speech-dev.i16 NR_NOISE=noise.i16 nice -n 10 \
+  python3 gen.py --mask /tmp/nr7/last.pt --out /tmp/gen1                # 60k steps, 2.5 h
+NR_SPEECH=speech.i16 python3 export.py /tmp/gen1/last.pt ../../../crates/nr/model --gen /tmp/nr7/last.pt   # nrgen.bin
+venv/bin/python score.py ham_radio /tmp/nr7/last.pt --asr whisper,parakeet --floors 0 \
+  --gen /tmp/gen1/last.pt --gen-steps 1,2      # invented words: substitutions and insertions
 ```

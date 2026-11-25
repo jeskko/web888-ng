@@ -8,7 +8,9 @@ of input audio and the model's output for it, computed with the
 f16-rounded weights, for the Rust test); with --cw, a CW model as
 nrnet-cw.bin and nrnet-cw-ref.bin (the input from cwdata.py, on the GPU);
 with --am, an AM model as nrnet-am.bin and nrnet-am-ref.bin (amdata.py's,
-speech only: NR_SPEECH).
+speech only: NR_SPEECH); with --gen MASK, the generative restorer
+(gen.py) as nrgen.bin and nrgen-ref.bin (the restorer on MASK's output,
+both with f16-rounded weights, no start noise, 2 steps).
 
 nrnet.bin: b"W8NRNET1", u32 tensor count, then per tensor: u16 name
 length, name (UTF-8), u8 dims, u32 each dim, f16 values (little endian).
@@ -27,9 +29,17 @@ from data import Bank, example
 def main():
     ck, out = sys.argv[1], sys.argv[2]
     cw, am = "--cw" in sys.argv[3:], "--am" in sys.argv[3:]
-    stem = "nrnet-cw" if cw else "nrnet-am" if am else "nrnet"
+    gen = sys.argv[sys.argv.index("--gen") + 1] if "--gen" in sys.argv else None
+    stem = "nrnet-cw" if cw else "nrnet-am" if am else "nrgen" if gen else "nrnet"
     c = torch.load(ck, map_location="cpu")
-    m = load(c, "cpu")
+    if gen:
+        import gen as g
+        m = g.load_gen(c, "cpu")
+        mc = torch.load(gen, map_location="cpu")
+        mask = load(mc, "cpu")
+        mask.load_state_dict({k: v.half().float() for k, v in mc["model"].items()})
+    else:
+        m = load(c, "cpu")
     sd = {k: v.half().float() for k, v in c["model"].items()}
     m.load_state_dict(sd)
     with open(f"{out}/{stem}.bin", "wb") as f:
@@ -54,7 +64,7 @@ def main():
         x, _, _ = example(np.random.default_rng(7), Bank(), snr=(3.0, 4.0))
     x = torch.from_numpy(x[:24064])[None]           # 2 s, a whole number of hops
     with torch.no_grad():
-        y = enhance(m, x)[0]
+        y = g.restore(m, mask, x, 2, sigma=0.0)[0] if gen else enhance(m, x)[0]
     with open(f"{out}/{stem}-ref.bin", "wb") as f:
         f.write(b"W8NRREF1")
         f.write(struct.pack("<I", x.shape[1]))

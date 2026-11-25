@@ -16,6 +16,9 @@
 //! to gains per bin or per band (then interpolated to the bins by the
 //! model's own matrix). Must match `tools/ml/nr/common.py`.
 
+mod restore;
+pub use restore::{GenNet, Restorer};
+
 use num_complex::Complex32;
 use rustfft::{Fft, FftPlanner};
 use std::collections::HashMap;
@@ -267,6 +270,12 @@ pub struct Denoiser {
     /// At least 1: the network's gain raised to this before the floor (over 1:
     /// more of what it partly takes away goes; what it keeps stays).
     pub power: f32,
+    /// The generative restorer, if any (it needs a mask model with the
+    /// pitch features), and its share of the output (0..1, the rest the
+    /// mask's).
+    restore: Option<Restorer>,
+    pub mix: f32,
+    ebuf: Vec<Complex32>,
     inp: Vec<f32>,      // the last PITCH_N input samples
     fill: usize,        // new samples in the current hop
     level: Option<f32>, // the running level
@@ -309,6 +318,9 @@ impl Denoiser {
             alpha: 1.0 - (-(HOP as f32) / FS / LEVEL_S).exp(),
             floor: 0.0,
             power: 1.0,
+            restore: None,
+            mix: 1.0,
+            ebuf: vec![Complex32::new(0.0, 0.0); BINS],
             inp: vec![0.0; PITCH_N],
             fill: 0,
             level: None,
@@ -326,10 +338,31 @@ impl Denoiser {
 
     /// Back to the start (a new station, a gap).
     pub fn reset(&mut self) {
-        let (floor, power) = (self.floor, self.power);
+        let (floor, power, mix) = (self.floor, self.power, self.mix);
+        let mut restore = self.restore.take();
         *self = Denoiser::new(self.net);
         self.floor = floor;
         self.power = power;
+        self.mix = mix;
+        if let Some(r) = restore.as_mut() {
+            r.reset();
+        }
+        self.restore = restore;
+    }
+
+    /// Restore with `r` from the next frame on (None: the mask alone).
+    /// False (and nothing changed) if the mask model has no pitch
+    /// features.
+    pub fn set_restorer(&mut self, r: Option<Restorer>) -> bool {
+        if r.is_some() && self.net.nin == BINS {
+            return false;
+        }
+        self.restore = r;
+        true
+    }
+
+    pub fn restorer_mut(&mut self) -> Option<&mut Restorer> {
+        self.restore.as_mut()
     }
 
     /// Feed audio; returns as many samples as were fed, [`LATENCY`]
@@ -423,6 +456,15 @@ impl Denoiser {
             }
             None => self.gain.copy_from_slice(&self.bgain),
         }
+        if let Some(r) = self.restore.as_mut() {
+            // the restorer starts from the mask's own output (no floor,
+            // no power), as in training
+            for k in 0..BINS {
+                self.ebuf[k] = self.buf[k] * self.gain[k];
+            }
+            let f = &self.feats[2];
+            r.frame(&f[..BINS], &f[BINS..], lev, &mut self.ebuf);
+        }
         if self.power != 1.0 {
             for g in self.gain.iter_mut() {
                 *g = g.max(0.0).powf(self.power);
@@ -434,6 +476,12 @@ impl Denoiser {
         // the masked spectrum back (Hermitian: the upper half mirrors)
         for k in 0..BINS {
             self.buf[k] *= self.gain[k];
+        }
+        if self.restore.is_some() {
+            let m = self.mix.clamp(0.0, 1.0);
+            for k in 0..BINS {
+                self.buf[k] = self.buf[k] * (1.0 - m) + self.ebuf[k] * m;
+            }
         }
         for k in 1..NFFT / 2 {
             self.buf[NFFT - k] = self.buf[k].conj();
@@ -472,7 +520,25 @@ mod tests {
         check(Net::get_am(), include_bytes!("../model/nrnet-am-ref.bin"));
     }
 
+    /// The restorer on the shipped mask model (export.py --gen: no start
+    /// noise, 2 steps, all of its output).
+    #[test]
+    fn restorer_matches_pytorch() {
+        let mut r = Restorer::new(GenNet::load(include_bytes!("../model/nrgen.bin")).unwrap());
+        r.sigma = 0.0;
+        r.steps = 2;
+        check_with(
+            Net::get(),
+            include_bytes!("../model/nrgen-ref.bin"),
+            Some(r),
+        );
+    }
+
     fn check(net: &'static Net, b: &[u8]) {
+        check_with(net, b, None)
+    }
+
+    fn check_with(net: &'static Net, b: &[u8], r: Option<Restorer>) {
         assert_eq!(&b[..8], b"W8NRREF1");
         let n = u32::from_le_bytes(b[8..12].try_into().unwrap()) as usize;
         let f = |o: usize| -> Vec<f32> {
@@ -485,6 +551,9 @@ mod tests {
         };
         let (x, want) = (f(12), f(12 + 4 * n));
         let mut d = Denoiser::new(net);
+        if r.is_some() {
+            assert!(d.set_restorer(r));
+        }
         // odd chunks, as the page's blocks come
         let mut y = Vec::new();
         for c in x.chunks(333) {
