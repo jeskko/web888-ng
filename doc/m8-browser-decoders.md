@@ -1059,13 +1059,68 @@ flutter regenerator (a mask can't add sound).
   SSB voice and CW models.
 
 **Later, for fun: a generative voice model** (the user's idea,
-2026-11-23). After the mask models, a diffusion (or flow-matching)
-voice restorer that is allowed to invent a little: it would make weak
-SSB sound like a studio voice and will sometimes say things that weren't
-said (below about −7 dB, per the hallucination papers above). Only as a
-clearly labelled, separate choice ("restore (may invent)"), never the
-default and never feeding the decoders; size and speed in the browser
-to be seen.
+2026-11-23; looked into 2026-11-25). A voice restorer that may invent a
+little: weak SSB made to sound like a studio voice, at the price of now
+and then saying what wasn't said. Only as a clearly labelled, separate
+choice ("restore (may invent)"), never the default, never feeding the
+decoders.
+
+State of the art (searched 2026-11-25):
+
+* Streaming flow matching: Stream.FM (Welker et al., Hamburg,
+  [arXiv 2512.19442](https://arxiv.org/abs/2512.19442), TASLP 2026): a
+  frame-causal NCSN++-style CNN (28M weights, 53M with its predictor),
+  16 kHz, 32 ms algorithmic / 48 ms total latency (24 ms in a low-latency
+  variant), frame-wise buffered inference that matches offline causal
+  output with no recomputation; for denoising 1-2 network calls per
+  frame are as good as 4-5. About 282 GFLOP per second of audio per call:
+  real time on a desktop CPU only at one call. Code AGPL-3.0 (ideas only
+  for us). Hsieh & Braun ([2510.16997](https://arxiv.org/abs/2510.16997):
+  causal, 20 ms, ~5 steps as good as ~20) and Braun's mean flows
+  ([2605.16251](https://arxiv.org/abs/2605.16251): one step, real time)
+  go the same way.
+* One step from bridges or adversarial training: few-step adversarial
+  Schrödinger bridge ([2506.01460](https://arxiv.org/abs/2506.01460):
+  one step beats a 50-step bridge, most at low SNR), SB-RF
+  ([2606.05575](https://arxiv.org/abs/2606.05575)), VoiceBridge
+  ([2509.25275](https://arxiv.org/abs/2509.25275)); DeepFilterGAN
+  ([2505.23515](https://arxiv.org/abs/2505.23515): 3.6M weights, real
+  time, GAN-based stochastic regeneration).
+* StoRM (stochastic regeneration, Lemercier et al.; code MIT): a
+  predictive model first, a generative one refines its output; fewer
+  steps and fewer inventions than generation from noise alone.
+* Hallucination: PASE (AAAI) separates linguistic (wrong words) from
+  acoustic (another voice) hallucination; both grow fast at low SNR and
+  are rarely measured there. Stream.FM adds a SpeechBERTScore loss
+  against phonetic hallucination.
+
+Plan, sized for the page (the published models are 100-1000 times too
+heavy for wasm on one thread):
+
+* StoRM-shaped on what we have: the shipped mask model's output is the
+  starting point; a conditional flow (or bridge) from it, plus a little
+  noise, to the clean speech, in the same causal 256/128 STFT at 12 kS/s
+  (compressed complex spectrum), conditioned on the noisy spectrum and
+  the mask estimate. Same latency (21 ms), same streaming code.
+* Network: the mask model's family widened (causal conv + 2 GRU of
+  ~384, complex velocity per bin), ~2M weights, ~200 M multiply-adds per
+  second per call; 1-2 calls (Euler, or one step after adversarial or
+  mean-flow training). The budget, timed 2026-11-25 (Node, this
+  workstation, nr.wasm with SIMD128): the voice model (~50 M
+  multiply-adds/s) takes 18.9 ms per second of audio, the CW model 4.2
+  ms, i.e. ~2.7 G multiply-adds/s on one thread. So ~2M weights at two
+  calls is ~15 % of a desktop core, likely 50-75 % of a phone's: two
+  calls on desktops, one (or ~1M weights) on phones; WebGPU only if
+  that isn't enough.
+* Data: the voice model's (LibriSpeech through the transmitter chain,
+  ionochannel, real Paderborn noise and the real pairs), clean speech as
+  the target (no residual noise: this one may add).
+* Scoring with hallucination first: on Paderborn's eval receptions by
+  SNR bin, Parakeet and Whisper word errors against the reference text,
+  insertions and substitutions apart (invented words), the mask model and
+  the raw audio beside it; ESTOI; and listening below −7 dB for
+  confident nonsense. A strength control mixes it with the mask output.
+* After the AM model.
 
 ### 5.5 Label every signal (planned, 2026-11-23)
 
