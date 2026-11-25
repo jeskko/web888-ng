@@ -10,10 +10,12 @@
 //!   `web888_nr::LATENCY` samples late)
 //! * `nr_floor(f)`: the share 0..1 of what the network takes away that is
 //!   kept (1 - strength)
+//! * `nr_power(p)`: 1..4, the network's gain raised to p (strengths over
+//!   100 %: more of what it partly takes away goes)
 //! * `nr_reset()`: a new stream (after retuning, a gap)
 //! * `nr_load(n)`: other weights (an `nrnet.bin`, n bytes written at
 //!   `nr_weights(n)`) instead of the built-in ones, for comparing models;
-//!   1 if they load (a new stream, the floor kept), else 0
+//!   1 if they load (a new stream, the floor and power kept), else 0
 
 use std::cell::RefCell;
 use web888_nr::{Denoiser, Net};
@@ -55,6 +57,17 @@ pub extern "C" fn nr_floor(f: f32) {
 }
 
 #[unsafe(no_mangle)]
+pub extern "C" fn nr_power(p: f32) {
+    STATE.with_borrow_mut(|s| {
+        s.nr.power = if p.is_finite() {
+            p.clamp(1.0, 4.0)
+        } else {
+            1.0
+        }
+    })
+}
+
+#[unsafe(no_mangle)]
 pub extern "C" fn nr_reset() {
     STATE.with_borrow_mut(|s| s.nr.reset())
 }
@@ -74,9 +87,10 @@ pub extern "C" fn nr_load(n: usize) -> u32 {
         match Net::load(&s.weights[..n]) {
             Some(net) => {
                 // a model lives as long as the page (a few are loaded at most)
-                let floor = s.nr.floor;
+                let (floor, power) = (s.nr.floor, s.nr.power);
                 s.nr = Denoiser::new(Box::leak(Box::new(net)));
                 s.nr.floor = floor;
+                s.nr.power = power;
                 s.weights = Vec::new();
                 1
             }

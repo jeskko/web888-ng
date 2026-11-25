@@ -246,6 +246,9 @@ pub struct Denoiser {
     /// 0..1: the share of what the network takes away that is kept
     /// (0: all of it goes).
     pub floor: f32,
+    /// At least 1: the network's gain raised to this before the floor (over 1:
+    /// more of what it partly takes away goes; what it keeps stays).
+    pub power: f32,
     inp: Vec<f32>,      // the last PITCH_N input samples
     fill: usize,        // new samples in the current hop
     level: Option<f32>, // the running level
@@ -287,6 +290,7 @@ impl Denoiser {
             bgain: vec![0.0; net.nout],
             alpha: 1.0 - (-(HOP as f32) / FS / LEVEL_S).exp(),
             floor: 0.0,
+            power: 1.0,
             inp: vec![0.0; PITCH_N],
             fill: 0,
             level: None,
@@ -304,9 +308,10 @@ impl Denoiser {
 
     /// Back to the start (a new station, a gap).
     pub fn reset(&mut self) {
-        let floor = self.floor;
+        let (floor, power) = (self.floor, self.power);
         *self = Denoiser::new(self.net);
         self.floor = floor;
+        self.power = power;
     }
 
     /// Feed audio; returns as many samples as were fed, [`LATENCY`]
@@ -399,6 +404,11 @@ impl Denoiser {
                 }
             }
             None => self.gain.copy_from_slice(&self.bgain),
+        }
+        if self.power != 1.0 {
+            for g in self.gain.iter_mut() {
+                *g = g.max(0.0).powf(self.power);
+            }
         }
         for g in self.gain.iter_mut() {
             *g = self.floor + (1.0 - self.floor) * *g;

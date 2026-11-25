@@ -10,6 +10,7 @@ interface NrExports {
   nr_buffer(n: number): number;
   nr_process(n: number): void;
   nr_floor(f: number): void;
+  nr_power(p: number): void;
   nr_reset(): void;
   nr_weights(n: number): number;
   nr_load(n: number): number;
@@ -57,9 +58,11 @@ export class NeuralNr {
   }
 
   /** Strength 0..1: the share of what the network finds that goes (1:
-   * all of it). */
+   * all of it); over 1 (to 3), its gain raised to that power: more of
+   * what it partly takes away goes, what it keeps stays. */
   setStrength(s: number): void {
     this.x.nr_floor(1 - Math.min(1, Math.max(0, s)));
+    this.x.nr_power(Math.min(3, Math.max(1, s)));
   }
 
   /** Other weights (from `url`, an nrnet.bin) instead of the current

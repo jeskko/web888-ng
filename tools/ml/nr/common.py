@@ -12,7 +12,8 @@ Model: a causal convolution over 3 frames to H channels, two GRU layers
 of H, a linear layer to 129 gains (sigmoid). Mask only: the output is
 the input's spectrum times gains in 0..1, so it can take sound away but
 not add it. At run time a floor (the strength) keeps some of what it
-takes: g' = floor + (1 - floor) g.
+takes: g' = floor + (1 - floor) g; over 100 % the gain is raised to the
+strength instead (g' = g^s).
 """
 import math
 
@@ -144,8 +145,10 @@ def load(ck: dict, device) -> Net:
     return net.eval()
 
 
-def enhance(net: Net, x: torch.Tensor, floor: float = 0.0) -> torch.Tensor:
+def enhance(net: Net, x: torch.Tensor, floor: float = 0.0, power: float = 1.0) -> torch.Tensor:
     X = stft(x)
     g = net.gains(x, X)
+    if power != 1.0:
+        g = g.clamp(min=0) ** power
     g = floor + (1 - floor) * g
     return istft(X * g, x.shape[-1])

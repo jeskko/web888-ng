@@ -2,8 +2,8 @@
 // The neural noise reduction (NN): off in AM (disabled), on in USB and
 // LSB, the strength slider, nr.wasm fetched once; with nr-models.json in
 // the UI directory, each model of the selector in turn; prints the button's
-// state, the player's underruns and page errors at each step, and saves
-// nn.png in OUT (default .).
+// state (strength 50 % and 250 %), the player's underruns and page errors
+// at each step, and saves nn.png in OUT (default .).
 //   CHROME=... node nn.mjs URL
 import { launch, sleep, lit } from "./lib.mjs";
 const url = process.argv[2];
@@ -35,6 +35,8 @@ await p.ev(`${btn("NN")}.click()`);
 await report("USB, NN clicked");
 await p.ev(`(() => { const r = document.querySelector('input[aria-label="Neural noise reduction strength"]'); r.value = "0.5"; r.dispatchEvent(new Event("input", { bubbles: true })); })()`);
 await report("strength 50 %");
+await p.ev(`(() => { const r = document.querySelector('input[aria-label="Neural noise reduction strength"]'); r.value = "2.5"; r.dispatchEvent(new Event("input", { bubbles: true })); })()`);
+await report("strength 250 %");
 const models = await p.ev(`[...(document.querySelector('select[aria-label="Neural noise reduction model"]')?.options ?? [])].map((o) => o.value)`);
 for (const m of models) {
   await p.ev(`(() => { const s = document.querySelector('select[aria-label="Neural noise reduction model"]'); s.value = ${lit(m)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);

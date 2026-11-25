@@ -389,7 +389,7 @@ function NnCtl() {
         <input
           type="range"
           min={0.3}
-          max={1}
+          max={3}
           step={0.05}
           value={nnStrength.value}
           aria-label={t("Neural noise reduction strength")}
