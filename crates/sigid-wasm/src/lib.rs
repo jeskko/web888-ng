@@ -23,6 +23,12 @@
 //!   starts over), `sig_iq_held()` seconds held, `sig_iq_analyse(lo, hi,
 //!   band_lo, band_hi)` (Hz from the dial; the JSON as `sig_analyse`'s),
 //!   `sig_iq_reset()`
+//! * labelling every signal in the IQ held (a channelizer bin; "label
+//!   every signal"): `sig_skim_find(lo, hi)` takes the last 4.096 s and
+//!   finds the signals lo..hi Hz from the centre, JSON
+//!   `{"r":[[lo,hi,dB],..]}` strongest first (`{"r":null}` without 4.096
+//!   s); `sig_skim_id(hz)` names the one at `hz` in that window,
+//!   `{"top":[["ft8",0.93],..]}` (the three likeliest)
 
 use num_complex::Complex32;
 use std::cell::RefCell;
@@ -31,6 +37,7 @@ use std::fmt::Write;
 use web888_sigid::measure::Line;
 use web888_sigid::measure::iq_len;
 use web888_sigid::scan::{Analysis, Found, Scanner, analyse_iq};
+use web888_sigid::skim::Window;
 
 struct State {
     scanner: Scanner,
@@ -38,6 +45,7 @@ struct State {
     output: String,
     iq: VecDeque<Complex32>,
     iq_rate: f64,
+    skim: Option<Window>,
 }
 
 thread_local! {
@@ -47,6 +55,7 @@ thread_local! {
         output: String::new(),
         iq: VecDeque::new(),
         iq_rate: 0.0,
+        skim: None,
     });
 }
 
@@ -214,6 +223,48 @@ pub extern "C" fn sig_iq_analyse(lo: f64, hi: f64, band_lo: f64, band_hi: f64) -
     STATE.with_borrow_mut(|s| {
         let x: Vec<Complex32> = s.iq.iter().copied().collect();
         s.output = analysis_json(analyse_iq(&x, s.iq_rate, (lo, hi), (band_lo, band_hi)).as_ref());
+        s.output.len()
+    })
+}
+
+/// Signals found at most in a window (a 40 kHz bin).
+const SKIM_MAX: usize = 48;
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_skim_find(lo: f64, hi: f64) -> usize {
+    STATE.with_borrow_mut(|s| {
+        let x: Vec<Complex32> = s.iq.iter().copied().collect();
+        s.skim = Window::new(&x, s.iq_rate);
+        s.output = match &s.skim {
+            None => "{\"r\":null}".into(),
+            Some(w) => {
+                let r: Vec<String> = w
+                    .regions(lo, hi, SKIM_MAX)
+                    .iter()
+                    .map(|(a, b, db)| format!("[{},{},{}]", num(*a), num(*b), num(*db)))
+                    .collect();
+                format!("{{\"r\":[{}]}}", r.join(","))
+            }
+        };
+        s.output.len()
+    })
+}
+
+#[unsafe(no_mangle)]
+pub extern "C" fn sig_skim_id(hz: f64) -> usize {
+    STATE.with_borrow_mut(|s| {
+        s.output = match &s.skim {
+            None => "{\"top\":[]}".into(),
+            Some(w) => {
+                let top: Vec<String> = w
+                    .identify(hz)
+                    .iter()
+                    .take(3)
+                    .map(|(c, p)| format!("[\"{c}\",{p:.4}]"))
+                    .collect();
+                format!("{{\"top\":[{}]}}", top.join(","))
+            }
+        };
         s.output.len()
     })
 }

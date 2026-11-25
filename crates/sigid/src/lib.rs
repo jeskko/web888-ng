@@ -30,6 +30,7 @@
 
 pub mod measure;
 pub mod scan;
+pub mod skim;
 
 use num_complex::Complex32;
 use rustfft::FftPlanner;

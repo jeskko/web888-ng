@@ -250,25 +250,9 @@ pub fn analyse_iq(
 ) -> Option<Analysis> {
     let m = measure_iq(iq, rate, sel, band)?;
     let n = iq_len(rate);
-    let mut planner = FftPlanner::new();
     let mut a = iq[iq.len() - n..].to_vec();
-    planner.plan_fft_forward(n).process(&mut a);
-    // the same bins as the identifier's (both 4.096 s long)
-    let df = rate / n as f64;
-    let c = (m.centre / df).round() as i64;
-    let mut y = vec![Complex32::new(0.0, 0.0); N];
-    for (j, v) in y.iter_mut().enumerate() {
-        let k = c + j as i64 - (N / 2) as i64;
-        if ((k as f64) * df).abs() < 0.5 * rate {
-            *v = a[k.rem_euclid(n as i64) as usize];
-        }
-    }
-    y.rotate_left(N / 2);
-    planner.plan_fft_inverse(N).process(&mut y);
-    let g = 1.0 / n as f32;
-    for v in y.iter_mut() {
-        *v *= g;
-    }
+    FftPlanner::new().plan_fft_forward(n).process(&mut a);
+    let y = extract(&a, rate, m.centre);
     let top = crate::identify(&y);
     Some(Analysis { m, top })
 }
@@ -277,34 +261,56 @@ pub fn analyse_iq(
 fn regions(x: &[Complex32], lo: f64, hi: f64) -> Vec<(f64, f64, f64)> {
     const NF: usize = 512;
     let df = AUDIO_RATE / NF as f64;
-    let fft = FftPlanner::new().plan_fft_forward(NF);
-    let w: Vec<f32> = (0..NF)
-        .map(|i| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / NF as f64).cos()) as f32)
+    let p = welch(x, NF);
+    regions_in(&p[..NF / 2], 0.0, df, lo, hi, MAX)
+}
+
+/// Power spectrum averaged over Hann windows of `nf` (half overlap), in
+/// FFT order.
+pub(crate) fn welch(x: &[Complex32], nf: usize) -> Vec<f64> {
+    let fft = FftPlanner::new().plan_fft_forward(nf);
+    let w: Vec<f32> = (0..nf)
+        .map(|i| (0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / nf as f64).cos()) as f32)
         .collect();
-    let (k0, k1) = (
-        (lo / df).ceil() as usize,
-        ((hi / df).floor() as usize).min(NF / 2 - 1),
-    );
-    if k1 <= k0 + 4 {
-        return Vec::new();
-    }
-    let mut p = vec![0f64; NF];
-    let mut buf = vec![Complex32::new(0.0, 0.0); NF];
+    let mut p = vec![0f64; nf];
+    let mut buf = vec![Complex32::new(0.0, 0.0); nf];
     let mut i = 0;
-    while i + NF <= x.len() {
-        for k in 0..NF {
+    while i + nf <= x.len() {
+        for k in 0..nf {
             buf[k] = x[i + k] * w[k];
         }
         fft.process(&mut buf);
-        for k in 0..NF {
+        for k in 0..nf {
             p[k] += buf[k].norm_sqr() as f64;
         }
-        i += NF / 2;
+        i += nf / 2;
+    }
+    p
+}
+
+/// Signals in power spectrum `p` (bin k at `f0 + k df` Hz) between `lo`
+/// and `hi` Hz: (lo, hi, peak dB over the floor), strongest first, at
+/// most `max`. The extent from the spectrum smoothed over 5 bins (~117
+/// Hz at 23.4 Hz bins: a voice's or modem's band, not its harmonics), 4
+/// dB over the floor (the band's 40th percentile), gaps of up to 8 bins
+/// (~190 Hz) joined; a signal needs a bin 10 dB up.
+pub(crate) fn regions_in(
+    p: &[f64],
+    f0: f64,
+    df: f64,
+    lo: f64,
+    hi: f64,
+    max: usize,
+) -> Vec<(f64, f64, f64)> {
+    if p.is_empty() {
+        return Vec::new();
+    }
+    let k0 = ((lo - f0) / df).ceil().max(0.0) as usize;
+    let k1 = (((hi - f0) / df).floor().max(0.0) as usize).min(p.len() - 1);
+    if k1 <= k0 + 4 {
+        return Vec::new();
     }
     let db: Vec<f64> = (k0..=k1).map(|k| 10.0 * (p[k] + 1e-30).log10()).collect();
-    // the extent from the spectrum smoothed over 5 bins (117 Hz: a
-    // voice's or modem's band, not its harmonics), 4 dB over the floor,
-    // gaps of up to 8 bins (190 Hz) joined; a signal needs a bin 10 dB up
     let sm: Vec<f64> = (0..db.len())
         .map(|j| {
             let (a, b) = (j.saturating_sub(2), (j + 3).min(db.len()));
@@ -336,15 +342,39 @@ fn regions(x: &[Complex32], lo: f64, hi: f64) -> Vec<(f64, f64, f64)> {
         let peak = db[a..=b].iter().copied().fold(f64::MIN, f64::max) - floor;
         if peak >= 10.0 {
             out.push((
-                ((k0 + a) as f64 - 0.5) * df,
-                ((k0 + b) as f64 + 0.5) * df,
+                f0 + ((k0 + a) as f64 - 0.5) * df,
+                f0 + ((k0 + b) as f64 + 0.5) * df,
                 peak,
             ));
         }
     }
     out.sort_by(|a, b| b.2.total_cmp(&a.2));
-    out.truncate(MAX);
+    out.truncate(max);
     out
+}
+
+/// The identifier's input from the spectrum `a` (FFT order) of 4.096 s
+/// of complex baseband at `rate`: the N bins around `centre` Hz (the same
+/// bin width as the identifier's: both 4.096 s long), back to N samples
+/// at 6 kS/s with `centre` at 0 Hz.
+pub(crate) fn extract(a: &[Complex32], rate: f64, centre: f64) -> Vec<Complex32> {
+    let n = a.len();
+    let df = rate / n as f64;
+    let c = (centre / df).round() as i64;
+    let mut y = vec![Complex32::new(0.0, 0.0); N];
+    for (j, v) in y.iter_mut().enumerate() {
+        let k = c + j as i64 - (N / 2) as i64;
+        if ((k as f64) * df).abs() < 0.5 * rate {
+            *v = a[k.rem_euclid(n as i64) as usize];
+        }
+    }
+    y.rotate_left(N / 2);
+    FftPlanner::new().plan_fft_inverse(N).process(&mut y);
+    let g = 1.0 / n as f32;
+    for v in y.iter_mut() {
+        *v *= g;
+    }
+    y
 }
 
 /// The identifier's input: N samples at 6 kS/s, audio frequency `hz` at
