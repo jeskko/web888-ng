@@ -193,8 +193,9 @@ def main():
             with torch.no_grad():
                 for f in a.floors.split(","):
                     outs[f"nn{f}"] = enhance(net, xt, float(f))[0].cpu().numpy()
-                for k in a.gen_steps.split(",") if gen else []:
-                    outs[f"gen{k}"] = g.restore(gen, net, xt, int(k), seed=fi)[0].cpu().numpy()
+                # (not k: that is the reception's key)
+                for steps in a.gen_steps.split(",") if gen else []:
+                    outs[f"gen{steps}"] = g.restore(gen, net, xt, int(steps), seed=fi)[0].cpu().numpy()
         spans = [tuple(map(int, s.split(":"))) for s in ann[k]["activity"][0].split(", ")]
         for u, ((s0, s1), ref) in enumerate(zip(spans, txt[k])):
             i0, i1 = int(max(0, s0 / fs - MARGIN) * 12000), int((s1 / fs + MARGIN) * 12000)
