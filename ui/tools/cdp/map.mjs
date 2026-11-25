@@ -2,13 +2,13 @@
 // The map: opens it, counts the stations shown, takes screenshots in the
 // three projections, drags the great circle map and zooms, and hovers a station.
 //   CHROME=... node map.mjs URL OUT_PREFIX
-import { launch, q, sleep } from "./lib.mjs";
+import { decoder, launch, q, sleep } from "./lib.mjs";
 const [url, out = "/tmp/map"] = process.argv.slice(2);
 const p = await launch({ width: 1600, height: 900 });
 await p.goto(url);
 await sleep(5000);
 // open it (the browser profile may remember it open)
-await p.ev(`document.querySelector("aside.map") || [...document.querySelectorAll("header .tools button")].find((b) => b.textContent.trim() === "Map").click()`);
+if (!(await p.ev(`!!document.querySelector("aside.map")`))) await decoder(p, "Map");
 await sleep(1000);
 const setProj = (v) =>
   p.ev(`(() => { const s = ${q(".map .spots-bar select")}; s.value = "${v}"; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);

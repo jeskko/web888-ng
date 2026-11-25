@@ -5,7 +5,8 @@
 
 import { t } from "../i18n.ts";
 import { formatKhz } from "../fmt.ts";
-import { followable, freqMarkers, pickMarker, pickUser, st, users } from "../state.ts";
+import { followable, freqMarkers, openSig, pickMarker, pickUser, sigLabels, st, users, whatIs } from "../state.ts";
+import { CLASS_INFO } from "../sigid.ts";
 
 /** How many labels to list. */
 const MAX_LABELS = 8;
@@ -19,6 +20,10 @@ export function NearDial() {
     .slice(0, MAX_LABELS)
     .sort((a, b) => a.m.hz - b.m.hz);
   const others = users.value.filter(followable);
+  const sigs = [...sigLabels.value]
+    .sort((a, b) => Math.abs(a.rf - s.hz) - Math.abs(b.rf - s.hz))
+    .slice(0, MAX_LABELS)
+    .sort((a, b) => a.rf - b.rf);
   return (
     <section class="near-dial" aria-label={t("Near the dial")}>
       <h2>{t("Near the dial")}</h2>
@@ -33,6 +38,23 @@ export function NearDial() {
           ))}
         </ul>
       )}
+      {sigs.length > 0 && (
+        <ul aria-label={t("Signals named")}>
+          {sigs.map((g) => {
+            const info = CLASS_INFO[g.cls];
+            return (
+              <li key={g.id}>
+                <button
+                  data-sig={g.cls}
+                  onClick={() => (info.opens ? openSig({ id: g.id, rf: g.rf, rfLo: g.rfLo, rfHi: g.rfHi, hz: 0, db: g.db, top: [{ cls: g.cls, p: g.p }] }, g.cls) : whatIs(g.rfLo, g.rfHi))}
+                >
+                  {t("{f} kHz {what} {p} %", { f: formatKhz(Math.round(g.rf)), what: g.sure ? t(info.label) : `${t(info.label)}?`, p: Math.round(100 * g.p) })}
+                </button>
+              </li>
+            );
+          })}
+        </ul>
+      )}
       {others.length > 0 && (
         <ul aria-label={t("Other listeners")}>
           {others.map((u) => (
@@ -44,7 +66,7 @@ export function NearDial() {
           ))}
         </ul>
       )}
-      {!labels.length && !others.length && <p>{t("No labels or other listeners here.")}</p>}
+      {!labels.length && !others.length && !sigs.length && <p>{t("No labels or other listeners here.")}</p>}
     </section>
   );
 }

@@ -8,7 +8,10 @@
 // after an analysis, {wait: s, id} while it waits for audio, {error} if
 // it can't load. A wide look: {iq: Float32Array (I, Q interleaved), rate},
 // {iqReset: true}, {analyseIq: [lo, hi, bandLo, bandHi], id, gen} (Hz from
-// the dial).
+// the dial). Every signal in the IQ held (a bin; "label every signal"):
+// {skimFind: [lo, hi], id} -> {skimFound: [lo, hi, dB][] | null, id} (null:
+// under 4.096 s held), then {skimId: hz, id} -> {skimTop: [class, p][],
+// hz, id} for each signal wanted, from that window.
 
 import type { SigAn } from "../sigdesc.ts";
 import type { SigRun } from "../sigid.ts";
@@ -28,6 +31,8 @@ interface Sig {
   sig_iq_held(): number;
   sig_iq_reset(): void;
   sig_iq_analyse(lo: number, hi: number, bandLo: number, bandHi: number): number;
+  sig_skim_find(lo: number, hi: number): number;
+  sig_skim_id(hz: number): number;
 }
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
@@ -55,9 +60,19 @@ function answer(x: Sig): void {
   told = -1;
 }
 
+const out = (x: Sig, n: number) => JSON.parse(new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.sig_output(), n)));
+
 function handle(e: MessageEvent): void {
   const x = sig!;
   const d = e.data;
+  if (d?.skimFind) {
+    post({ skimFound: (out(x, x.sig_skim_find(d.skimFind[0], d.skimFind[1])) as { r: [number, number, number][] | null }).r, id: d.id });
+    return;
+  }
+  if (typeof d?.skimId === "number") {
+    post({ skimTop: (out(x, x.sig_skim_id(d.skimId)) as { top: [string, number][] }).top, hz: d.skimId, id: d.id });
+    return;
+  }
   if (d?.reset) {
     x.sig_reset();
     return;

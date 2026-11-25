@@ -363,8 +363,9 @@ custom AGC speed and the converter offset, which are server settings.
   pseudo-stereo) as a 16-bit WAV at the audio rate, 1 min to 1 h. *Skip
   silence* leaves out frames under -80 dBFS (squelch closed), so a long
   watch keeps only what was heard. A change of audio rate or to a
-  stereo mode ends the file. Separate from **Rec IQ** (the bin's IQ,
-  `doc/m8-browser-decoders.md` §7).
+  stereo mode ends the file. The IQ recording (the bin's IQ,
+  `doc/m8-browser-decoders.md` §7) is the other choice in the same
+  **Rec** box (§22).
 * **Key help** (key ?, or *keys* in the status bar): the keys and the
   mouse and touch gestures.
 * **Custom AGC speed** (**C** beside F/M/S): the hang time (0-2 s on the
@@ -745,3 +746,59 @@ fixes. Helpers in `src/a11y.ts`; check script `ui/tools/cdp/a11y.mjs`.
 * Not done: the frequency labels' kind colours on the spectrum (the kind
   is also in the label's tooltip and the near-dial list's text); a
   screen-reader test with NVDA/JAWS/VoiceOver by a real user.
+
+## 22. Fewer buttons in the bars (2026-11-25)
+
+Controls that were a row of buttons each are one button that opens a box
+(`ui/src/ctl/pop.tsx`: above the button in the footer, under it in the
+header; a click elsewhere or Escape closes it, the arrow keys inside
+move sliders, not the dial):
+
+* **Noise** (footer): NB, NR, NN and the notch, one row each with its
+  strength and value (a strength slider is greyed while its switch is
+  off); under NN the model choice and **Gen** (voice). The button names
+  what is on ("NR NN"), lit while anything is. SQL stays in the bar.
+* **WF** (footer): the waterfall's colour range, Auto and the floor and
+  top sliders with their values; the button shows "auto" or the range.
+* **Rec** (header): audio or IQ (when the server has bins) in one box,
+  the choice kept in the browser; a running recording shows its time
+  beside the button, and the other kind can start meanwhile.
+* **Stream** (header, "Opus · 12k"): the codec and the audio rate,
+  each with its explanation, in one box (the two drop-downs of §14).
+* **Panels** (header): everything that opens beside the waterfall,
+  checkboxes in one list: Spots, Map, AF (the audio spectrum, from the
+  footer) and, under a rule, the browser decoders (the Decoders list
+  before), and Signal labels (every signal in the view named on the
+  spectrum, `doc/m8-browser-decoders.md` §5.5). The button names what
+  is open while that is 12 characters or fewer ("Map AF"), else how
+  many ("Panels 3"). `cdp/lib.mjs`'s `decoder()` turns any of them
+  on or off; `map.mjs` and `access.mjs` use it for the map and AF.
+* The tuning step's automatic choice reads "auto" (the step it picks is
+  in the tooltip), so the selector is narrower.
+* The phone's More sheet lays the same controls out inline.
+* **High-DPI screens** (2x and more): the header and footer at 86 %,
+  the header's gaps 10 px and the S-meter's bar 96 px, so the header is
+  one row on a 14" MacBook Pro (1512 px wide at its default scaling) in
+  English, Finnish, Swedish and German (Finnish, the longest, needs
+  ~1490 px); the waterfall and the panels keep their size, so clicks
+  on them map as before. At 1x nothing changes (1400 px: two rows).
+
+Fix: at close zoom, the passband shown under the pointer (the "ghost")
+reached past the right edge of the waterfall and the view got a
+horizontal scroll bar. The pane now clips it (`overflow: hidden`).
+
+Fix: the FT8 panel showed a translator's note ("// i18n: Deep = ...")
+as text: a `//` comment among JSX children is text; now `{/* */}`.
+
+**Auto colour range damped** (`AutoRange` in `ui/src/view/range.ts`):
+the floor came from each line's 20th percentile through a 0.1-a-line
+average, so the colours wandered all the time (in a test with ±1.5 dB
+jitter and 5 % outlier lines: over 3.7 dB at 2.5 dB/s). Now the median
+of the last 2 s, smoothed over 4 s, and the colours hold until that is
+3 dB off, then glide there: the same test holds still, a real 6 dB rise
+is followed in ~6 s, a jump of over 10 dB (another band) in under 1 s,
+and a zoom starts afresh. On the unit: one 1 dB change in 60 s.
+
+Tests: `cdp/nn.mjs` opens the Noise box and prints the button's label
+and whether the strength slider is enabled; `iqrec.mjs`, `listener.mjs`,
+`access.mjs` and `codec.mjs` open the Rec and stream boxes.

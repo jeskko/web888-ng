@@ -110,7 +110,9 @@ console.log(`  A ${a}, B set to ${b}, swap -> ${back}, swap -> ${await dial()} |
 console.log("== audio recording");
 await p.ev(`${btn("Rec ▾")}.click()`);
 await sleep(200);
-await p.ev(`${q('.iqrec-pop button[data-arec="60"]')}.click()`);
+await p.ev(`[...document.querySelectorAll(".rec-kind button")].find((b) => b.textContent === "Audio")?.click()`);
+await sleep(100);
+await p.ev(`${q('.rec-ctl button[data-arec="60"]')}.click()`);
 await sleep(5000);
 console.log("  recording:", await p.ev(`${q("button.arec")}?.textContent`));
 await p.ev(`${q("button.arec")}.click()`);

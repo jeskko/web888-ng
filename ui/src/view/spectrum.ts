@@ -82,6 +82,23 @@ const LABEL_ROWS = 3;
 const LABEL_ROW_PX = 14;
 const LABEL_TOP_PX = 18;
 
+/** A signal named by "label every signal": its extent, a short name,
+ * drawn dimmed with "?" when not sure. */
+export interface SigMark<T = unknown> {
+  lo: number;
+  hi: number;
+  hz: number;
+  text: string;
+  colour: string;
+  sure: boolean;
+  item: T;
+}
+
+/** Signal label rows and row height (CSS px), under the frequency
+ * labels. */
+const SIG_ROWS = 2;
+const SIG_ROW_PX = 13;
+
 /** Height of the band ribbon (CSS px). */
 export const RIBBON_PX = 12;
 
@@ -125,6 +142,8 @@ export class Spectrum {
   spotHits: SpotHit[] = [];
   /** The frequency labels of the last draw. */
   labelHits: SpotHit[] = [];
+  /** The signal labels of the last draw. */
+  sigHits: SpotHit[] = [];
   /** The ribbon of the last draw, top pieces last; and its rows. */
   ribbonHits: RibbonHit[] = [];
   ribbonY: [number, number] = [0, 0];
@@ -207,6 +226,7 @@ export class Spectrum {
     skims: SkimBar[] = [],
     labels: FreqLabel[] = [],
     ribbon: RibbonPiece[] = [],
+    sigs: SigMark[] = [],
   ): void {
     const { ctx, canvas } = this;
     const w = canvas.width;
@@ -374,6 +394,45 @@ export class Spectrum {
         ctx.fillText(l.text, p.x, y0 + rowH - 5 * dpr);
         ctx.fillRect(Math.round(p.x), y0 + rowH - 2 * dpr, dpr, 3 * dpr);
         this.labelHits.push({ x0: p.x - tw / 2, x1: p.x + tw / 2, y0, y1: y0 + rowH, item: l.item });
+      }
+      ctx.textAlign = "start";
+      ctx.textBaseline = "middle";
+    }
+
+    // signal labels under the frequency labels: the name, a line along
+    // the signal's extent
+    this.sigHits = [];
+    if (sigs.length) {
+      ctx.font = `${10 * dpr}px system-ui, sans-serif`;
+      ctx.textBaseline = "alphabetic";
+      ctx.textAlign = "center";
+      const rowH = SIG_ROW_PX * dpr;
+      const top = (LABEL_TOP_PX + LABEL_ROWS * LABEL_ROW_PX + 4) * dpr;
+      const items = sigs
+        .map((g) => {
+          const text = g.sure ? g.text : `${g.text}?`;
+          return { item: { g, text }, x: x(g.hz), width: ctx.measureText(text).width };
+        })
+        .filter((g) => g.x >= 0 && g.x <= w);
+      for (const p of placeLabels(items, SIG_ROWS, 4 * dpr)) {
+        const { g, text } = p.item;
+        ctx.globalAlpha = g.sure ? 1 : 0.6;
+        const y0 = top + Math.max(p.row, 0) * rowH;
+        const x0 = Math.max(0, x(g.lo));
+        const x1 = Math.min(w, x(g.hi));
+        ctx.fillStyle = g.colour;
+        // the extent: under the name, or alone where no row had room
+        const ly = p.row < 0 ? top + SIG_ROWS * rowH : y0 + rowH - dpr;
+        ctx.fillRect(x0, ly, Math.max(2 * dpr, x1 - x0), dpr);
+        if (p.row >= 0) {
+          const tw = ctx.measureText(text).width;
+          ctx.fillStyle = "rgba(11, 14, 22, 0.75)";
+          ctx.fillRect(p.x - tw / 2 - dpr, y0, tw + 2 * dpr, rowH - 2 * dpr);
+          ctx.fillStyle = g.colour;
+          ctx.fillText(text, p.x, y0 + rowH - 4 * dpr);
+          this.sigHits.push({ x0: Math.min(p.x - tw / 2, x0), x1: Math.max(p.x + tw / 2, x1), y0, y1: y0 + rowH, item: g.item });
+        }
+        ctx.globalAlpha = 1;
       }
       ctx.textAlign = "start";
       ctx.textBaseline = "middle";

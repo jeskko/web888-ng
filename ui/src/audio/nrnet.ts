@@ -16,6 +16,9 @@ interface NrExports {
   nr_builtin(k: number): number;
   nr_weights(n: number): number;
   nr_load(n: number): number;
+  nr_restore(n: number): number;
+  nr_mix(m: number): void;
+  nr_steps(k: number): void;
 }
 
 /** What a model is for: SSB voice, CW or AM broadcast. */
@@ -77,6 +80,7 @@ export class NeuralNr {
   setStrength(s: number): void {
     this.x.nr_floor(1 - Math.min(1, Math.max(0, s)));
     this.x.nr_power(Math.min(3, Math.max(1, s)));
+    this.x.nr_mix(Math.min(1, Math.max(0, s)));
   }
 
   /** The built-in model for `kind` (a new stream). */
@@ -94,6 +98,24 @@ export class NeuralNr {
       const p = this.x.nr_weights(b.length);
       new Uint8Array(this.x.memory.buffer, p, b.length).set(b);
       return this.x.nr_load(b.length) === 1;
+    } catch {
+      return false;
+    }
+  }
+
+  /** The generative restorer (from `url`, an nrgen.bin) after the
+   * current mask model: it may add sound (and now and then words that
+   * weren't said); false if it doesn't load. */
+  async loadRestorer(url: string, steps: number): Promise<boolean> {
+    try {
+      const r = await fetch(url);
+      if (!r.ok) return false;
+      const b = new Uint8Array(await r.arrayBuffer());
+      const p = this.x.nr_weights(b.length);
+      new Uint8Array(this.x.memory.buffer, p, b.length).set(b);
+      if (this.x.nr_restore(b.length) !== 1) return false;
+      this.x.nr_steps(steps);
+      return true;
     } catch {
       return false;
     }

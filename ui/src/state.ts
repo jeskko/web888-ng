@@ -26,6 +26,7 @@ import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
 import { DIGI_KEEP, DIGI_RATE, MODES as DIGI_MODES, SampleClock, ServerClock, Slotter, budgetMs, toRows as digiRowsOf } from "./digi.ts";
 import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
+import { BIN_HALF, BIN_STEP, named, newSkim, nextHop, shown, visit, type SkimShown } from "./sigskim.ts";
 import { askPlan, describe as describeSig, type Desc, type SigAn } from "./sigdesc.ts";
 import { applySeconds, minuteUtc, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
@@ -303,6 +304,7 @@ export function connect(): void {
     },
     onIq(f: IqFrame) {
       if (wideCentre.value !== f.centre) wideCentre.value = f.centre;
+      skimIq(f); // first: the others may take the samples' buffer
       recIq(f);
       const both = cwWideNow() && rttyWideNow();
       if (cwWideNow()) cwIq(f, both ? f.iq.slice() : f.iq);
@@ -662,7 +664,8 @@ let wideBits: 8 | 16 = 8;
  * dial leaves the bin's middle 30 kHz, but not while recording: the
  * recording keeps its bin), stop when none does. 16-bit while recording. */
 function wideSync(): void {
-  const want = cwWideNow() || rttyWideNow() || recorder !== null;
+  const others = cwWideNow() || rttyWideNow() || recorder !== null;
+  const want = others || skimWant();
   const hz = st.value?.hz;
   if (!want) {
     if (wideAsked !== null) {
@@ -673,6 +676,21 @@ function wideSync(): void {
     return;
   }
   if (hz === undefined) return;
+  if (!others) {
+    // the labeller alone: the bin it hops to (at once into the view
+    // when the view has left it)
+    const v = skimView();
+    if (v && (skimTarget === null || skimTarget < v[0] - BIN_STEP || skimTarget > v[1] + BIN_STEP)) {
+      skimTarget = nextHop(skim, v[0], v[1], hz, Date.now());
+    }
+    const at = skimTarget ?? hz;
+    if (wideAsked !== at || wideBits !== 8) {
+      wideAsked = at;
+      wideBits = 8;
+      link?.send({ type: "wide", on: true, hz: at, bits: 8 });
+    }
+    return;
+  }
   const bits = recorder ? 16 : 8;
   const c = wideCentre.value ?? wideAsked;
   if (recorder && wideAsked !== null && bits === wideBits) return;
@@ -858,6 +876,148 @@ export function pickRtty(centre: number): void {
   const span = wfSpan(r.adc_hz, v.decim);
   if (Math.abs(centre - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: centre });
 }
+
+// ------------------------------------------- label every signal
+
+/** Every signal in the waterfall's view named on the spectrum: the
+ * identifier over channelizer bins hopped across the view (sigskim.ts;
+ * remembered). While a skimmer or a recording holds the bin, only that
+ * bin is labelled. */
+export const sigLabelsOn = signal(load("sigLabels") === "1");
+/** The labels to draw (in the view). */
+export const sigLabels = signal<SkimShown[]>([]);
+/** Signals named a visit at most (~0.3-0.5 s each in a worker). */
+const SKIM_NAMES = 8;
+let skim = newSkim();
+let skimWorker: Worker | null = null;
+/** The frequency asked for (null: the dial), the bin coming. */
+let skimTarget: number | null = null;
+let skimBin: number | null = null;
+/** Samples of this bin since the last look; 4.096 s held already. */
+let skimHeld = 0;
+let skimFull = false;
+let skimBusy = false;
+let skimSeq = 0;
+/** The namings asked for this look: offset (Hz) -> label id. */
+let skimAsked = new Map<number, number>();
+
+/** Labelled only in a view this wide or narrower (Hz): ~34 bins, a few
+ * minutes a sweep; wider, the names wouldn't fit either. */
+export const SKIM_MAX_SPAN = 1_000_000;
+
+function skimWant(): boolean {
+  return sigLabelsOn.value && wideAvail.value && skimView() !== null;
+}
+
+/** The waterfall's view (Hz), null if wider than SKIM_MAX_SPAN. */
+function skimView(): [number, number] | null {
+  const s = st.value;
+  const r = radio.value;
+  if (!s || !r) return null;
+  const span = wfSpan(r.adc_hz, s.wf.decim);
+  if (span > SKIM_MAX_SPAN) return null;
+  return [s.wf.center_hz - span / 2, s.wf.center_hz + span / 2];
+}
+
+function skimShow(): void {
+  const v = skimView();
+  sigLabels.value = v && sigLabelsOn.value ? shown(skim, v[0], v[1]) : [];
+}
+
+export function setSigLabels(on: boolean): void {
+  sigLabelsOn.value = on;
+  save("sigLabels", on ? "1" : "0");
+  if (!on) {
+    skimWorker?.terminate();
+    skimWorker = null;
+    skim = newSkim();
+    skimTarget = skimBin = null;
+    skimBusy = false;
+  } else {
+    const v = skimView();
+    skimTarget = v ? nextHop(skim, v[0], v[1], st.value!.hz, Date.now()) : null;
+  }
+  skimShow();
+  wideSync();
+}
+
+function skimStart(): Worker {
+  const w = new Worker("sigid-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { skimFound?: [number, number, number][] | null; skimTop?: [string, number][]; hz?: number; id?: number; error?: string };
+    if (d.error) sigError.value = d.error;
+    if (d.id !== skimSeq) return;
+    if (d.skimFound !== undefined) {
+      if (!d.skimFound || skimBin === null) {
+        skimBusy = false;
+        return;
+      }
+      const ids = visit(skim, skimBin, d.skimFound, Date.now(), SKIM_NAMES);
+      skimShow();
+      skimAsked = new Map();
+      for (const id of ids) {
+        const off = skim.labels.find((l) => l.id === id)!.rf - skimBin;
+        skimAsked.set(off, id);
+        w.postMessage({ skimId: off, id: skimSeq });
+      }
+      if (!ids.length) skimDone();
+    } else if (d.skimTop && d.hz !== undefined) {
+      const id = skimAsked.get(d.hz);
+      skimAsked.delete(d.hz);
+      if (id !== undefined) named(skim, id, d.skimTop, Date.now());
+      skimShow();
+      if (!skimAsked.size) skimDone();
+    }
+  };
+  return w;
+}
+
+/** A look done: the next bin, unless another reader holds this one (a
+ * view one bin wide stays: its next look in 2 s). */
+function skimDone(): void {
+  skimBusy = false;
+  if (cwWideNow() || rttyWideNow() || recorder !== null) return;
+  const v = skimView();
+  const s = st.value;
+  if (!v || !s) return;
+  const next = nextHop(skim, v[0], v[1], s.hz, Date.now());
+  if (next !== null && next !== skimTarget) {
+    skimTarget = next;
+    wideSync();
+  }
+}
+
+/** The bin's samples: to the worker; a look once 4.1 s of this bin are
+ * held (then every 2 s while it stays). */
+function skimIq(f: IqFrame): void {
+  if (!skimWant()) return;
+  skimWorker ??= skimStart();
+  if (f.centre !== skimBin) {
+    skimBin = f.centre;
+    skimHeld = 0;
+    skimFull = false;
+    skimSeq++; // a look under way was of the last bin
+    skimBusy = false;
+    skimWorker.postMessage({ iqReset: true });
+  }
+  const iq = f.iq.slice();
+  // (counted before the buffer goes to the worker: it's empty after)
+  skimHeld += iq.length / 2;
+  skimWorker.postMessage({ iq, rate: f.rate }, [iq.buffer]);
+  if (!skimBusy && skimHeld >= (skimFull ? 2 : 4.1) * f.rate) {
+    skimBusy = true;
+    skimHeld = 0;
+    skimFull = true;
+    skimWorker.postMessage({ skimFind: [-BIN_HALF, BIN_HALF], id: ++skimSeq });
+  }
+}
+
+// the labels drawn follow the view
+effect(() => {
+  void st.value?.wf;
+  void radio.value;
+  skimShow();
+});
 
 // the wide IQ stream follows the skimmers' settings and the dial (here,
 // after everything it reads is declared)
@@ -2119,19 +2279,29 @@ export const nnModelAm = signal(load("nnModelAm") ?? "");
 export const nnChoice = computed(() => ({ voice: nnModel, cw: nnModelCw, am: nnModelAm })[nnKind.value]);
 /** The models to compare for the current kind. */
 export const nnKindModels = computed(() => nnModelList.value.filter((m) => (m.kind ?? "voice") === nnKind.value));
+/** The generative voice restorer after the mask ("Gen": may invent;
+ * nrgen.bin, fetched when first wanted; USB and LSB only). */
+export const nnRestore = signal(load("nnRestore") === "1");
+const nnGen = computed(() => nnRestore.value && nnKind.value === "voice");
+/** Its flow steps: 2, or 1 on small devices (half the cost). */
+const NN_STEPS = (navigator.hardwareConcurrency ?? 8) <= 4 ? 1 : 2;
 const nnNets = new Map<string, NeuralNr | null>();
 let nnList: Promise<NnModel[]> | null = null;
 function nnListed(): Promise<NnModel[]> {
   nnList ??= nnModels().then((m) => (nnModelList.value = m));
   return nnList;
 }
-async function nnInstance(kind: NnKind, name: string): Promise<NeuralNr | null> {
-  const key = `${kind}/${name}`;
+async function nnInstance(kind: NnKind, name: string, gen: boolean): Promise<NeuralNr | null> {
+  const key = `${kind}/${name}${gen ? "+gen" : ""}`;
   if (nnNets.has(key)) return nnNets.get(key)!;
   nnNets.set(key, null);
   const m = (await nnListed()).find((v) => v.name === name && (v.kind ?? "voice") === kind);
   const n = await NeuralNr.load("nr.wasm");
-  const ok = n && n.useBuiltin(kind) && (name === "" || (m && (await n.loadWeights(m.file))));
+  const ok =
+    n &&
+    n.useBuiltin(kind) &&
+    (name === "" || (m && (await n.loadWeights(m.file)))) &&
+    (!gen || (await n.loadRestorer("nrgen.bin", NN_STEPS)));
   nnNets.set(key, ok ? n : null);
   return ok ? n : null;
 }
@@ -2142,12 +2312,14 @@ effect(() => {
   save("nnModel", nnModel.value);
   save("nnModelCw", nnModelCw.value);
   save("nnModelAm", nnModelAm.value);
+  save("nnRestore", nnRestore.value ? "1" : "0");
   const kind = nnKind.value;
+  const gen = nnGen.value;
   const choice = nnChoice.value;
   const name = choice.value;
   if (!nnOn.value) return;
   void nnListed();
-  const key = `${kind}/${name}`;
+  const key = `${kind}/${name}${gen ? "+gen" : ""}`;
   const have = nnNets.get(key);
   if (have) {
     if (nnNet.peek() !== have) {
@@ -2155,13 +2327,14 @@ effect(() => {
       nnLive = false; // a new stream for the model switched to
     }
   } else if (have === undefined) {
-    void nnInstance(kind, name).then((n) => {
+    void nnInstance(kind, name, gen).then((n) => {
       if (n) {
-        if (nnKind.peek() === kind && choice.peek() === name) {
+        if (nnKind.peek() === kind && choice.peek() === name && nnGen.peek() === gen) {
           nnNet.value = n;
           nnLive = false;
         }
-      } else if (name === "") nnOn.value = false;
+      } else if (gen) nnRestore.value = false;
+      else if (name === "") nnOn.value = false;
       else choice.value = "";
     });
   }

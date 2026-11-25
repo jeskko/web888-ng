@@ -80,7 +80,7 @@ export function DigiPanel() {
             </option>
           ))}
         </select>
-        // i18n: Deep = a slower, deeper decoder search that finds a few more weak messages
+        {/* i18n: Deep = a slower, deeper decoder search that finds a few more weak messages */}
         <label title={t("A deeper search: a few more decodes for two to four times the CPU")}>
           <input type="checkbox" checked={digiDeep.value} onChange={(e) => setDigiDeep((e.target as HTMLInputElement).checked)} /> {t("Deep")}
         </label>

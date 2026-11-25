@@ -98,9 +98,9 @@ export const lit = (s) => `decodeURIComponent("${encodeURIComponent(String(s))}"
 /** A selector as a JS expression for `type`. */
 export const q = (sel) => `document.querySelector(${lit(sel)})`;
 
-/** Turns a browser decoder on (or off) from the header's Decoders list,
- * by its label there ("FT8/FT4/WSPR", "CW", "RTTY", "PSK", "JS8", "HFDL",
- * "FAX/SSTV", "Signal ID", "JTTY"). */
+/** Turns a panel beside the waterfall on (or off) from the header's
+ * Panels list, by its label there ("Spots", "Map", "AF", "FT8/FT4/WSPR",
+ * "CW", "RTTY", "PSK", "JS8", "HFDL", "FAX/SSTV", "Signal ID", "JTTY"). */
 export async function decoder(p, label, on = true) {
   await p.ev(`document.querySelector(".decoders-pop") || document.querySelector("header button.decoders").click()`);
   await sleep(200);
@@ -112,7 +112,7 @@ export async function decoder(p, label, on = true) {
 /** Opens the map with only this browser's decodes shown (all bands, the
  * last 3 h), prints the stations on it, and saves `file`. */
 export async function mapShot(p, file) {
-  await p.ev(`document.querySelector("aside.map") || [...document.querySelectorAll("header .tools button")].find((b) => b.textContent.trim() === "Map").click()`);
+  if (!(await p.ev(`!!document.querySelector("aside.map")`))) await decoder(p, "Map");
   await sleep(2500);
   // one at a time: each change renders the bar again
   for (const n of ["Skimmers", "Browser", "DX spots"]) {

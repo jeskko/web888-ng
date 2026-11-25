@@ -20,6 +20,15 @@ html { font-size: 87.5%; }
 header, footer { background: var(--panel); border-color: var(--line); border-style: solid; border-width: 0; }
 header { display: flex; flex-wrap: wrap; align-items: center; gap: 8px 16px; padding: 6px 16px; border-bottom-width: 1px; }
 footer { border-top-width: 1px; }
+/* high-DPI screens (a 14" MacBook: 1512 px wide at 2x): the bars a
+   little smaller and tighter, so the header fits on one row in every
+   language; the text stays sharp. Only the bars: the waterfall and the
+   panels keep their size. */
+@media (min-resolution: 2dppx) {
+  header, footer { zoom: 0.86; }
+  header { gap: 8px 10px; }
+  header .smeter .bar { width: 96px; }
+}
 main { display: flex; flex: 1; min-height: 200px; }
 main .view { position: relative; flex: 1; min-width: 0; }
 
@@ -38,6 +47,7 @@ button.on { background: var(--accent-bg); border-color: var(--accent); box-shado
 button:disabled { opacity: 0.4; cursor: default; }
 label { display: flex; align-items: center; gap: 4px; color: var(--dim); }
 input[type="range"] { width: 90px; accent-color: var(--accent); }
+input[type="range"]:disabled { opacity: 0.35; }
 .num { font-variant-numeric: tabular-nums; color: var(--dim); min-width: 4ch; }
 
 .group button.am { min-width: 5ch; }
@@ -50,6 +60,7 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .decoders-pop label { display: contents; cursor: pointer; }
 .decoders-pop label > * { padding: 3px 0; align-self: center; }
 .decoders-pop .dim { font-size: 0.8571rem; }
+.decoders-head { grid-column: 1 / -1; margin-top: 6px; padding-top: 6px; border-top: 1px solid var(--line); color: var(--dim); font-size: 0.8571rem; }
 .iqrec-ctl { position: relative; }
 .tc-secs { margin: 4px 0 8px; font-size: 0.9286rem; letter-spacing: 1px; white-space: pre-wrap; }
 .tc-secs .weak { opacity: 0.45; }
@@ -57,13 +68,29 @@ input[type="range"] { width: 90px; accent-color: var(--accent); }
 .tc-min td { padding: 2px 6px 2px 0; vertical-align: top; white-space: nowrap; }
 .tc-min td:last-child { white-space: normal; }
 .iqrec.on { color: #ff6060; border-color: #ff6060; font-variant-numeric: tabular-nums; }
-.iqrec-pop { position: absolute; top: calc(100% + 6px); right: 0; z-index: 10; width: 27.4286rem; padding: 6px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-size: 0.9286rem; }
-.iqrec-pop p { margin: 4px 0; font-size: 0.8571rem; }
 .drop { position: relative; display: inline-block; }
+.pop { position: relative; }
+.pop-btn.open { border-color: var(--accent); }
+.pop-btn .num { min-width: 0; margin-left: 2px; }
+.pop-box { position: absolute; top: calc(100% + 6px); left: 0; z-index: 20; padding: 8px 10px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); font-size: 0.9286rem; width: max-content; max-width: min(30rem, calc(100vw - 32px)); }
+.pop-box.up { top: auto; bottom: calc(100% + 6px); }
+.pop-box.right { left: auto; right: 0; }
+.pop-box p { margin: 4px 0; font-size: 0.8571rem; }
+.pop-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
+.pop-head { color: var(--dim); min-width: 5ch; }
+.noise-grid, .wf-grid { display: grid; grid-template-columns: auto auto auto; gap: 6px 8px; align-items: center; }
+.noise-grid > button, .wf-grid > button { justify-self: stretch; }
+.noise-grid input[type="range"], .wf-grid input[type="range"] { width: 140px; }
+.noise-sub, .noise-note { grid-column: 2 / -1; display: flex; gap: 6px; align-items: center; }
+.noise-note { font-size: 0.8571rem; }
+.wf-grid label { justify-content: flex-end; }
+.rec-kind { display: inline-flex; margin-bottom: 4px; }
+.rec-ctl .pop-box { width: 27.4286rem; }
+.m-app .pop-box { position: static; width: auto; max-width: none; margin-top: 6px; }
+.noise-inline { flex-direction: column; align-items: flex-start; }
 .drop-btn.open { border-color: var(--accent); }
 .drop-pop { position: absolute; top: calc(100% + 4px); left: 0; z-index: 20; display: flex; flex-direction: column; gap: 2px; min-width: 100%; padding: 4px; background: var(--panel); border: 1px solid var(--line); border-radius: 6px; box-shadow: 0 6px 20px rgba(0, 0, 0, 0.5); }
 .drop-pop button { text-align: left; white-space: nowrap; }
-.m-app .iqrec-ctl .iqrec-pop { position: static; width: auto; margin-top: 6px; }
 .m-app .iqrec-ctl { flex-wrap: wrap; }
 .iqrec-row { display: flex; flex-wrap: wrap; gap: 6px 12px; margin: 6px 0; align-items: center; }
 .users-pop tr.pick { cursor: pointer; }
@@ -111,7 +138,7 @@ header .tools { margin-left: auto; }
 .lamp.lit { background: var(--bad); color: #10131a; border-color: var(--bad); font-weight: 700; }
 .lamp.att { color: var(--warn); border-color: var(--warn); }
 
-.pane { position: absolute; inset: 0; display: flex; flex-direction: column; }
+.pane { position: absolute; inset: 0; display: flex; flex-direction: column; overflow: hidden; }
 .pane canvas { display: block; width: 100%; touch-action: none; cursor: crosshair; }
 .pane .spectrum { flex: 0 0 30%; }
 .pane .waterfall { flex: 1; min-height: 0; }

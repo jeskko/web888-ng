@@ -7,7 +7,7 @@
 //   CHROME=... LISTENER_PW=... GUEST=1 OUT=/tmp/x node access.mjs URL
 import { readdirSync, statSync } from "node:fs";
 import { resolve } from "node:path";
-import { launch, q, sleep, lit } from "./lib.mjs";
+import { decoder, launch, q, sleep, lit } from "./lib.mjs";
 const [url] = process.argv.slice(2);
 const out = resolve(process.env.OUT ?? ".");
 const btn = (text, root = "document") =>
@@ -48,13 +48,15 @@ await sleep(1500);
 
 console.log("== IQ and the audio spectrum");
 await p.ev(`${btn("IQ")}.click()`);
-await p.ev(`${btn("AF")}.click()`);
+await decoder(p, "AF");
 await sleep(4000);
 console.log("  status:", await p.ev(`[...document.querySelectorAll(".status span")].map((s) => s.textContent).find((t) => /kbit/.test(t) && !/^wf/.test(t))`));
 let seen = new Set(readdirSync(out));
 await p.ev(`${btn("Rec ▾")}.click()`);
 await sleep(200);
-await p.ev(`${q('.iqrec-pop button[data-arec="60"]')}.click()`);
+await p.ev(`[...document.querySelectorAll(".rec-kind button")].find((b) => b.textContent === "Audio")?.click()`);
+await sleep(100);
+await p.ev(`${q('.rec-ctl button[data-arec="60"]')}.click()`);
 await sleep(3000);
 await p.ev(`${q("button.arec")}.click()`);
 await sleep(2500);

@@ -10,6 +10,7 @@ import { setFloor, setTop } from "../view/range.ts";
 import { helpOpen } from "./keys.tsx";
 import { infoOpen } from "./info.tsx";
 import { Drop } from "./drop.tsx";
+import { Pop } from "./pop.tsx";
 import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
@@ -19,6 +20,7 @@ import {
   nnKind,
   nnKindModels,
   nnOn,
+  nnRestore,
   nnStrength,
   audioRates,
   cycleAm,
@@ -149,10 +151,16 @@ export function StepCtl() {
   return (
     <div class="group" title={t("Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it")}>
       <button onClick={() => tune(stepTo(s.hz, step, -1))} aria-label={t("Tune down one step (key ←)")}>◀</button>
-      <select aria-label={t("Tuning step")} value={tuneStep.value} onChange={(e) => setTuneStep(Number(e.currentTarget.value))}>
+      <select
+        aria-label={t("Tuning step")}
+        title={tuneStep.value === 0 ? t("Tuning step: auto, {step} in this mode", { step: stepLabel(stepFor(s.mode)) }) : undefined}
+        value={tuneStep.value}
+        onChange={(e) => setTuneStep(Number(e.currentTarget.value))}
+      >
         {STEPS.map((v) => (
           <option key={v} value={v}>
-            {v === 0 ? t("auto ({step})", { step: stepLabel(stepFor(s.mode)) }) : stepLabel(v)}
+            {/* i18n: tuning step chosen by the mode (a narrow drop-down) */}
+            {v === 0 ? tc("tuning step", "auto") : stepLabel(v)}
           </option>
         ))}
       </select>
@@ -217,15 +225,48 @@ export function Bandwidth() {
         title={t("Passband: {lo} to {hi} Hz around the dial", { lo: s.lo, hi: s.hi })}
         items={presets.map((b) => ({ key: b.label, label: b.label, on: b === cur, pick: () => setPassband(b.lo, b.hi) }))}
       />
-      <CodecCtl drop />
-      {audioRates.value.includes(24000) && (
-        <Drop
-          label={`${s.audio_rate / 1000} kS/s`}
-          title={t("Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)")}
-          items={[12000, 24000].map((r) => ({ key: String(r), label: `${r / 1000} kS/s`, on: s.audio_rate === r, pick: () => setAudio({ audio_rate: r }) }))}
-        />
-      )}
+      <StreamCtl />
     </div>
+  );
+}
+
+/** How the audio comes and its rate, behind one button. */
+function StreamCtl() {
+  const s = st.value;
+  if (!s) return null;
+  const codec = codecShown();
+  const rates = audioRates.value.includes(24000);
+  if (!codec && !rates) return null;
+  const rate = `${s.audio_rate / 1000} kS/s`;
+  return (
+    <Pop
+      cls="stream-ctl"
+      label={codec ? `${codec.label} · ${s.audio_rate / 1000}k` : rate}
+      title={t("The audio stream: {what}, {rate}", { what: codec ? codec.title : "PCM", rate })}
+    >
+      {codec && (
+        <div class="pop-row">
+          <span class="pop-head">{t("Format")}</span>
+          <CodecCtl />
+        </div>
+      )}
+      {codec && <p class="dim">{codec.title}</p>}
+      {rates && (
+        <>
+          <div class="pop-row">
+            <span class="pop-head">{t("Rate")}</span>
+            <span class="seg">
+              {[12000, 24000].map((r) => (
+                <button key={r} class={s.audio_rate === r ? "on" : ""} aria-pressed={s.audio_rate === r} onClick={() => setAudio({ audio_rate: r })}>
+                  {r / 1000} kS/s
+                </button>
+              ))}
+            </span>
+          </div>
+          <p class="dim">{t("Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)")}</p>
+        </>
+      )}
+    </Pop>
   );
 }
 
@@ -239,36 +280,44 @@ const CODECS: { pref: CodecPref; label: string; title: string }[] = [
   { pref: "pcm16", label: "PCM", title: N_("PCM: 192 kbit/s, 16 bits, exactly as the receiver made it") },
 ];
 
-/** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM
- * (the data saver is in Config). `drop`: the codec as a drop-down. */
-export function CodecCtl({ drop = false }: { drop?: boolean }) {
+/** The codec choices offered, their labels (Opus paused: what comes
+ * instead) and the current one's; null without a choice. */
+function codecs() {
   const sc = serverCodecs.value;
   if (!sc.includes("mulaw") && !sc.includes("opus")) return null;
   const pref = codecPref.value;
   const now = codecNow.value;
   const shown = CODECS.filter((c) => c.pref !== "auto" || (sc.includes("opus") && opusDec.value));
-  const title =
+  const paused =
     pref === "auto" && now !== "opus"
       ? now === "pcm16"
         ? t("Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)")
         : t("Opus is paused: a decoder reads the audio (μ-law until it closes)")
-      : t("How the audio comes");
+      : null;
   const label = (c: (typeof CODECS)[number]) => (c.pref === "auto" && pref === "auto" && now !== "opus" ? `Opus (${now === "pcm16" ? "PCM" : "μ-law"})` : c.label);
   const cur = shown.find((c) => c.pref === pref) ?? shown[0];
+  return { pref, shown, paused, label, cur };
+}
+
+function codecShown(): { label: string; title: string } | null {
+  const c = codecs();
+  if (!c) return null;
+  return { label: c.label(c.cur), title: c.paused ? `${t(c.cur.title)}. ${c.paused}` : t(c.cur.title) };
+}
+
+/** How the audio comes: Opus (μ-law for the decoders), μ-law or PCM
+ * (the data saver is in Config). */
+export function CodecCtl() {
+  const c = codecs();
+  if (!c) return null;
   return (
-    <>
-      {drop ? (
-        <Drop cls="drop-codec" label={label(cur)} title={t("{what}. {codec}", { what: title, codec: t(cur.title) })} items={shown.map((c) => ({ key: c.pref, label: label(c), title: t(c.title), on: pref === c.pref, pick: () => setCodecPref(c.pref) }))} />
-      ) : (
-        <span class="seg" title={title}>
-          {shown.map((c) => (
-            <button key={c.pref} class={pref === c.pref ? "on" : ""} aria-pressed={!!(pref === c.pref)} title={t(c.title)} onClick={() => setCodecPref(c.pref)}>
-              {label(c)}
-            </button>
-          ))}
-        </span>
-      )}
-    </>
+    <span class="seg" title={c.paused ?? t("How the audio comes")}>
+      {c.shown.map((k) => (
+        <button key={k.pref} class={c.pref === k.pref ? "on" : ""} aria-pressed={!!(c.pref === k.pref)} title={t(k.title)} onClick={() => setCodecPref(k.pref)}>
+          {c.label(k)}
+        </button>
+      ))}
+    </span>
   );
 }
 
@@ -369,17 +418,19 @@ export function AudioCtl() {
 const nbLevel = { v: 8 };
 const nrLevel = { v: 0.6 };
 
-/** The neural voice noise reduction in the page (USB/LSB at 12 kHz). */
-function NnCtl() {
+/** The neural noise reduction in the page (USB/LSB, CW, AM at 12 kHz):
+ * a row of the noise box, and one under it for the model and Gen. */
+function NnRows() {
   const on = nnOn.value;
   const ok = nnApplies.value;
   const kind = nnKind.value;
   const choice = nnChoice.value;
   const models = nnKindModels.value;
+  const live = on && ok;
   return (
     <>
       <button
-        class={on && ok ? "on" : ""} aria-pressed={!!on}
+        class={live ? "on" : ""} aria-pressed={!!on}
         disabled={!ok}
         onClick={() => (nnOn.value = !on)}
         title={!ok
@@ -393,44 +444,61 @@ function NnCtl() {
         {/* i18n: NN = neural (network) noise reduction, a short button label */}
         {tc("filter", "NN")}
       </button>
-      {on && ok && (
-        <input
-          type="range"
-          min={0.3}
-          max={3}
-          step={0.05}
-          value={nnStrength.value}
-          aria-label={t("Neural noise reduction strength")}
-          aria-valuetext={`${(nnStrength.value * 100).toFixed(0)} %`}
-          onInput={(e) => (nnStrength.value = Number(e.currentTarget.value))}
-          title={t("Neural noise reduction strength {n} %", { n: (nnStrength.value * 100).toFixed(0) })}
-        />
-      )}
-      {on && ok && models.length > 0 && (
-        <select
-          value={choice.value}
-          aria-label={t("Neural noise reduction model")}
-          title={t("Neural noise reduction model (for comparing)")}
-          onChange={(e) => (choice.value = e.currentTarget.value)}
-        >
-          <option value="">{t("built-in")}</option>
-          {models.map((m) => (
-            <option key={m.name} value={m.name} title={m.note}>{m.name}</option>
-          ))}
-        </select>
+      <input
+        type="range"
+        min={0.3}
+        max={3}
+        step={0.05}
+        disabled={!live}
+        value={nnStrength.value}
+        aria-label={t("Neural noise reduction strength")}
+        aria-valuetext={`${(nnStrength.value * 100).toFixed(0)} %`}
+        onInput={(e) => (nnStrength.value = Number(e.currentTarget.value))}
+        title={t("Neural noise reduction strength {n} %", { n: (nnStrength.value * 100).toFixed(0) })}
+      />
+      <span class="num">{(nnStrength.value * 100).toFixed(0)} %</span>
+      {live && (kind === "voice" || models.length > 0) && (
+        <div class="noise-sub">
+          {kind === "voice" && (
+            <button
+              class={nnRestore.value ? "on" : ""} aria-pressed={nnRestore.value}
+              onClick={() => (nnRestore.value = !nnRestore.value)}
+              title={t("Restore (may invent): a generative model rebuilds the voice after the noise reduction; clearer, but now and then it adds sounds or words that weren't said. The decoders never hear it")}
+            >
+              {/* i18n: Gen = generative voice restorer, a short button label */}
+              {tc("filter", "Gen")}
+            </button>
+          )}
+          {models.length > 0 && (
+            <select
+              value={choice.value}
+              aria-label={t("Neural noise reduction model")}
+              title={t("Neural noise reduction model (for comparing)")}
+              onChange={(e) => (choice.value = e.currentTarget.value)}
+            >
+              <option value="">{t("built-in")}</option>
+              {models.map((m) => (
+                <option key={m.name} value={m.name} title={m.note}>{m.name}</option>
+              ))}
+            </select>
+          )}
+        </div>
       )}
     </>
   );
 }
 
-/** Noise blanker, noise reduction, squelch. */
-export function DspCtl() {
+/** Noise blanker, noise reduction, the neural one and the notch: a grid
+ * of a switch, its strength and the value. */
+function NoiseBody() {
   const s = st.value;
   if (!s) return null;
   if (s.nb > 0) nbLevel.v = s.nb;
   if (s.nr > 0) nrLevel.v = s.nr;
+  const nb = s.nb > 0 ? s.nb : nbLevel.v;
+  const nr = s.nr > 0 ? s.nr : nrLevel.v;
   return (
-    <div class="group">
+    <div class="noise-grid">
       <button
         class={s.nb > 0 ? "on" : ""} aria-pressed={!!(s.nb > 0)}
         onClick={() => setAudio({ nb: s.nb > 0 ? 0 : nbLevel.v })}
@@ -438,19 +506,19 @@ export function DspCtl() {
       >
         NB
       </button>
-      {s.nb > 0 && (
-        <input
-          type="range"
-          min={3}
-          max={30}
-          step={0.5}
-          value={33 - s.nb}
-          aria-label={t("Blanker sensitivity")}
-          aria-valuetext={t("impulses over {n} x the average", { n: s.nb.toFixed(1) })}
-          onInput={(e) => setAudio({ nb: 33 - Number(e.currentTarget.value) })}
-          title={t("Blanker sensitivity: impulses over {n} x the average", { n: s.nb.toFixed(1) })}
-        />
-      )}
+      <input
+        type="range"
+        min={3}
+        max={30}
+        step={0.5}
+        disabled={!(s.nb > 0)}
+        value={33 - nb}
+        aria-label={t("Blanker sensitivity")}
+        aria-valuetext={t("impulses over {n} x the average", { n: nb.toFixed(1) })}
+        onInput={(e) => setAudio({ nb: 33 - Number(e.currentTarget.value) })}
+        title={t("Blanker sensitivity: impulses over {n} x the average", { n: nb.toFixed(1) })}
+      />
+      <span class="num">{nb.toFixed(1)}×</span>
       <button
         class={s.nr > 0 ? "on" : ""} aria-pressed={!!(s.nr > 0)}
         onClick={() => setAudio({ nr: s.nr > 0 ? 0 : nrLevel.v })}
@@ -458,20 +526,20 @@ export function DspCtl() {
       >
         NR
       </button>
-      {s.nr > 0 && (
-        <input
-          type="range"
-          min={0.1}
-          max={1}
-          step={0.05}
-          value={s.nr}
-          aria-label={t("Noise reduction strength")}
-          aria-valuetext={`${(s.nr * 100).toFixed(0)} %`}
-          onInput={(e) => setAudio({ nr: Number(e.currentTarget.value) })}
-          title={t("Noise reduction strength {n} %", { n: (s.nr * 100).toFixed(0) })}
-        />
-      )}
-      <NnCtl />
+      <input
+        type="range"
+        min={0.1}
+        max={1}
+        step={0.05}
+        disabled={!(s.nr > 0)}
+        value={nr}
+        aria-label={t("Noise reduction strength")}
+        aria-valuetext={`${(nr * 100).toFixed(0)} %`}
+        onInput={(e) => setAudio({ nr: Number(e.currentTarget.value) })}
+        title={t("Noise reduction strength {n} %", { n: (nr * 100).toFixed(0) })}
+      />
+      <span class="num">{(nr * 100).toFixed(0)} %</span>
+      <NnRows />
       <button
         class={s.notch ? "on" : ""} aria-pressed={!!(s.notch)}
         onClick={() => setAudio({ notch: !s.notch })}
@@ -480,6 +548,16 @@ export function DspCtl() {
         {/* i18n: Notch = automatic notch filter removing steady carriers and whistles */}
         {tc("filter", "Notch")}
       </button>
+      <span class="dim noise-note">{t("carriers and whistles")}</span>
+    </div>
+  );
+}
+
+function SquelchCtl() {
+  const s = st.value;
+  if (!s) return null;
+  return (
+    <>
       <button
         class={s.squelch ? "on" : ""} aria-pressed={!!(s.squelch)}
         onClick={() => setAudio({ squelch: !s.squelch })}
@@ -502,6 +580,45 @@ export function DspCtl() {
           <span class="num">{s.squelch_db.toFixed(0)} dB</span>
         </>
       )}
+    </>
+  );
+}
+
+/** Noise blanker, noise reduction, NN, notch behind one button (what is
+ * on named on it), and the squelch. `inline`: all of it laid out (the
+ * phone's sheet). */
+export function DspCtl({ inline = false }: { inline?: boolean }) {
+  const s = st.value;
+  if (!s) return null;
+  if (inline) {
+    return (
+      <div class="group noise-inline">
+        <NoiseBody />
+        <div class="group">
+          <SquelchCtl />
+        </div>
+      </div>
+    );
+  }
+  const live = [
+    s.nb > 0 && "NB",
+    s.nr > 0 && "NR",
+    nnOn.value && nnApplies.value && tc("filter", "NN") + (nnRestore.value && nnKind.value === "voice" ? `+${tc("filter", "Gen")}` : ""),
+    s.notch && tc("filter", "Notch"),
+  ].filter(Boolean);
+  return (
+    <div class="group">
+      <Pop
+        cls="noise-ctl"
+        up
+        on={live.length > 0}
+        /* i18n: button opening the noise blanker, noise reduction, neural noise reduction and notch */
+        label={live.length ? live.join(" ") : tc("filter", "Noise")}
+        title={t("Noise blanker, noise reduction, neural noise reduction, notch")}
+      >
+        <NoiseBody />
+      </Pop>
+      <SquelchCtl />
     </div>
   );
 }
@@ -688,48 +805,76 @@ export function LeaseBanner() {
   );
 }
 
-export function ContrastCtl() {
+function ContrastBody() {
   const r = range.value;
   return (
-    <div class="group" title={t("Waterfall colour range (dBFS)")}>
-      <button class={r.auto ? "on" : ""} aria-pressed={!!(r.auto)} onClick={() => (range.value = { ...r, auto: !r.auto })}>
+    <div class="wf-grid">
+      <button class={r.auto ? "on" : ""} aria-pressed={!!(r.auto)} onClick={() => (range.value = { ...r, auto: !r.auto })} title={t("Choose the colour range by itself, from the noise floor and the strongest signals")}>
         {/* i18n: button: choose the waterfall colour range automatically */}
         {tc("colour range", "Auto")}
       </button>
-      <label>
+      <span />
+      <span />
+      <label for="wf-floor">
         {/* i18n: waterfall colour range slider: floor = the level shown as the darkest colour */}
         {tc("colour range", "floor")}
-        <input
-          type="range"
-          min={-170}
-          max={-20}
-          value={r.min}
-          aria-valuetext={`${r.min} dBFS`}
-          onInput={(e) => (range.value = { ...setFloor(r, Number(e.currentTarget.value)), auto: false })}
-        />
       </label>
-      <label>
+      <input
+        id="wf-floor"
+        type="range"
+        min={-170}
+        max={-20}
+        value={r.min}
+        aria-valuetext={`${r.min} dBFS`}
+        onInput={(e) => (range.value = { ...setFloor(r, Number(e.currentTarget.value)), auto: false })}
+      />
+      <span class="num">{r.min} dBFS</span>
+      <label for="wf-top">
         {/* i18n: waterfall colour range slider: top = the level shown as the brightest colour */}
         {tc("colour range", "top")}
-        <input
-          type="range"
-          min={-150}
-          max={0}
-          value={r.max}
-          aria-valuetext={`${r.max} dBFS`}
-          onInput={(e) => (range.value = { ...setTop(r, Number(e.currentTarget.value)), auto: false })}
-        />
       </label>
-      <span class="num">
-        {r.min}…{r.max}
-      </span>
+      <input
+        id="wf-top"
+        type="range"
+        min={-150}
+        max={0}
+        value={r.max}
+        aria-valuetext={`${r.max} dBFS`}
+        onInput={(e) => (range.value = { ...setTop(r, Number(e.currentTarget.value)), auto: false })}
+      />
+      <span class="num">{r.max} dBFS</span>
     </div>
   );
 }
 
-/** Peak hold, a snapshot and the audio spectrum (the waterfall's colours
- * and time marks are in Config). */
-export function LookCtl() {
+/** The waterfall's colour range: auto, floor and top behind a "WF"
+ * button (`inline`: laid out, the phone's sheet). */
+export function ContrastCtl({ inline = false }: { inline?: boolean }) {
+  const r = range.value;
+  if (inline) {
+    return (
+      <div class="group" title={t("Waterfall colour range (dBFS)")}>
+        <ContrastBody />
+      </div>
+    );
+  }
+  return (
+    <Pop
+      cls="wf-ctl"
+      up
+      /* i18n: WF = waterfall, a short button label (its colour range) */
+      label={<>{tc("waterfall", "WF")} <span class="num">{r.auto ? tc("colour range", "auto") : `${r.min}…${r.max}`}</span></>}
+      title={t("Waterfall colour range (dBFS)")}
+    >
+      <ContrastBody />
+    </Pop>
+  );
+}
+
+/** Peak hold and a snapshot; `af`: the audio spectrum too (the phone;
+ * in the header's Panels otherwise). The waterfall's colours and time
+ * marks are in Config. */
+export function LookCtl({ af = false }: { af?: boolean }) {
   return (
     <div class="group look">
       <button class={peakHold.value ? "on" : ""} aria-pressed={!!(peakHold.value)} onClick={() => setPeakHold(!peakHold.value)} title={t("Peak hold: the highest level each frequency reached (pink), on the spectrum")}>
@@ -744,9 +889,11 @@ export function LookCtl() {
       <button onClick={() => paneHooks.saveImage?.()} title={t("Save the spectrum and waterfall as a PNG image (with time marks and the frequency)")}>
         PNG
       </button>
-      <button class={afOn.value ? "on" : ""} aria-pressed={!!(afOn.value)} onClick={() => setAf(!afOn.value)} title={t("Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)")}>
-        AF
-      </button>
+      {af && (
+        <button class={afOn.value ? "on" : ""} aria-pressed={!!(afOn.value)} onClick={() => setAf(!afOn.value)} title={t("Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)")}>
+          AF
+        </button>
+      )}
     </div>
   );
 }

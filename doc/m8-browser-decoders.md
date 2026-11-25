@@ -31,7 +31,7 @@ panel, `crates/fsk/src/dsc.rs`, §2.8; time codes, `crates/timecode`,
 | 12 | **JS8** (JS8Call: FT8's waveform, its own code and frames; Normal, Fast, Turbo, Slow) | the FT8 decoder, generalised | heartbeats, directed messages and free text, frames joined per frequency; senders with a grid on the map (§2.7) |
 | 13 | later: ALE 2G, Olivia | new | — |
 | 14 | planned: **neural noise reduction**, one model each for SSB voice, CW and AM broadcast (§5.4) | the papers in §5.4; trained like the neural CW | SSB voice and AM speech clearer than the spectral subtraction (`crates/dsp/src/nr.rs`) by Whisper's word errors on real HF recordings, CW elements easier to copy by ear, AM music not damaged, nothing invented at low SNR |
-| 15 | planned: **label every signal** (§5.5) | the identifier and `measure.rs` | every signal in the waterfall's view marked with its class, kept up to date as the view moves |
+| 15 | **label every signal** (done, first version, §5.5) | the identifier and `measure.rs` | every signal in the waterfall's view marked with its class, kept up to date as the view moves |
 
 Order: 1 and 2 first (code exists to port, most asked), then 4 and 3
 (images, a new panel type), then the rest.
@@ -1150,16 +1150,110 @@ heavy for wasm on one thread):
   confident nonsense. A strength control mixes it with the mask output.
 * After the AM model.
 
-### 5.5 Label every signal (planned, 2026-11-23)
+**Gen: the restorer in the page (2026-11-25).** `tools/ml/nr/gen.py`,
+`crates/nr/src/restore.rs`, the **Gen** button in the Noise box (voice,
+with NN on). As planned above, StoRM-shaped:
 
-Instead of asking about one signal, mark every signal in the waterfall's
-view with its class. First version reuses what exists: find signals in
-the view (the skimmers' peaks / `measure.rs` extents), run the
-identifier and the signatures of `sigdesc.ts` on each (audio where it
-covers them, wide look or a bin for the rest), merge across updates,
-draw short labels over the waterfall (sure / likely / unsure as with
-"What is this?"). Later, if worth it: a detector on the waterfall image
-itself (boxes + classes in one pass).
+* Spectra divided by the noisy input's running level and compressed
+  (c = Z |Z|^-0.5), real and imaginary parts side by side.
+* Conditioning once a frame: the noisy features, the mask output's log
+  power against the same level, the pitch features; a causal
+  convolution over 3 frames to 256, two GRU layers of 256.
+* Flow head once a step: [GRU output, the mask output's spectrum, the
+  state, a time embedding] → 512 → 512 → 258 (SiLU). Path from the mask
+  output plus 0.2 noise to the clean speech, straight; Euler, 1-2 steps.
+* run 7's mask frozen (at floor 0); 1.81M weights; `nrgen.bin` 3.5 MB
+  (f16), fetched when Gen is first turned on, not in `nr.wasm`.
+* gen1: 60k steps, 2.5 h. Validation, SI-SDR improvement by input SNR:
+
+  | SNR (dB) | mask | Gen, 1 step | Gen, 2 steps |
+  |---|---|---|---|
+  | −20..−10 | +4.1 | +7.6 | +6.3 |
+  | −10..−3 | +5.4 | +8.2 | +7.7 |
+  | −3..5 | +6.3 | +8.2 | +8.0 |
+  | 5..15 | +6.3 | +7.5 | +7.4 |
+
+  One step is better everywhere (the second step moves further from the
+  mask output, towards a sample rather than the mean).
+* Cost in `nr.wasm` (Node, this workstation): the mask alone 17 ms a
+  second of audio, with Gen at 1 step 64 ms, at 2 steps 74 ms. The page
+  takes 2 steps where the browser reports more than 4 cores, else 1.
+* The strength slider mixes Gen with the mask output (below 100 %); the
+  decoders never get Gen's audio. The Rust stream matches PyTorch
+  (`restorer_matches_pytorch`, noise off, 2 steps).
+* Invented words: `score.py --gen` (Paderborn eval receptions, Whisper and
+  Parakeet, word errors split into substitutions, deletions and
+  insertions, beside the mask and the raw audio): results to follow.
+
+### 5.5 Label every signal (2026-11-26, first version)
+
+Plan (2026-11-23): instead of asking about one signal, mark every signal
+in the waterfall's view with its class. Later, if worth it: a detector
+on the waterfall image itself (boxes + classes in one pass).
+
+First version, in the browser: **Signal labels** in the header's Panels
+list (when the server has bins). The identifier over channelizer bins,
+hopped across the view:
+
+* **Source**: the wide IQ stream of §6 (one per session, 8-bit, ~1
+  Mbit/s): a bin, 60 kS/s, clean within ±20 kHz of its centre. The page
+  asks for the bin nearest a frequency it picks; while CW or RTTY Wide or
+  an IQ recording holds the stream, only that bin (around the dial) is
+  labelled.
+* **A look** (`crates/sigid/src/skim.rs`, `sig_skim_find` and
+  `sig_skim_id` in `sigid.wasm`, a second sigid worker): the last 4.096
+  s of the bin; the signals in ±20 kHz found as the passband scanner
+  finds them (the same 23.4 Hz bins, the same 4 dB extent and 10 dB peak
+  over the floor, gaps of 190 Hz joined; `scan::regions_in`, shared),
+  then up to 8 of them identified, new ones first (strongest first),
+  then the longest ago, each from one FFT of the whole window (the
+  identifier's 6 kHz around the signal: `scan::extract`, shared with
+  the wide look). Natively 35 ms to find and ~90 ms a signal; in
+  `sigid.wasm` (Node) 35 ms and ~370 ms.
+* **Hops** (`ui/src/sigskim.ts`, pure and tested): bins every 30 kHz over
+  the view; the next is the one visited longest ago (never visited
+  first), nearer the dial on a tie; a view one bin wide stays, with a new
+  look every 2 s. Only in views 1 MHz wide or narrower (`SKIM_MAX_SPAN`:
+  ~34 bins, a few minutes a sweep). Leaving the view, the next hop goes
+  into the new one at once.
+* **Labels kept by RF** across looks: a signal found again (overlap over
+  half the narrower one's width) keeps its label; its class
+  probabilities are averaged half and half with each new naming; one not
+  found in 2 looks of its range goes; 600 kept at most, 10 minutes.
+* **Drawn** on the spectrum in two rows under the frequency labels: the
+  class name over a line along the signal's extent, coloured by kind
+  (amateur data blue, CW yellow, voice green, FSK orange, utility and
+  military data purple, pictures pink, carriers, interference and radars
+  grey); under 60 % dimmed with "?" (the second guess in the tooltip);
+  under 30 % or noise not drawn. A click opens its decoder (or tunes to
+  a voice or AM), else "What is this?". The 8 nearest the dial are also
+  listed in the near-the-dial list (keyboard, screen readers, tests).
+
+On air (the unit, 2026-11-26 around 00:40 UTC, 40 m):
+
+* 120 kHz view (4 bins): within 90 s CW at 7009.5, 7010.7 and 7026.3
+  kHz, the FT8 crowd at 7074-7077 kHz (74 % on the first look, then
+  95-99 %), PACTOR at 7051.5 kHz; "Hell?" 45 % on a weak signal at 7007.
+* 480 kHz view (16 bins): 6948-7240 kHz covered in 4 minutes: AM
+  broadcasters at 7225, 7230 and 7240 kHz (66-98 %), an OTH radar around
+  6980 kHz (97 %), CW and FT8 as above.
+* Offline (`cargo run -p web888-sigid --example skimcs8`: 60 kS/s bins cut
+  from the 4 MS/s recordings of 2026-11-15): the same regions and classes
+  as the Python scan of that recording (`/data/iq/sigid-wide`).
+
+Left:
+
+* Several AM broadcasters side by side join into one region and are
+  named at its middle (7245-7255 kHz: "SSB voice"); a broadcast's weak
+  sidebands can split from its carrier. Regions wider than ~6 kHz need
+  their own rule (split at carriers, or the measured AM mirror).
+* A weak carrier's name changes between looks (AM, radar, interference,
+  WSPR at 7210 kHz): the half-and-half average forgets fast; a slower
+  average, or the figures of `measure.rs` (as "What is this?" uses them),
+  for steady labels.
+* FT8/FT4 slots: a look in the gap between slots sees little; averaging
+  over looks covers it.
+* Not on the phone yet (its More sheet has no switch).
 
 ## 6. Wide skimming (item 9): done (2026-11-15)
 

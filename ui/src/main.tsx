@@ -22,7 +22,7 @@ import {
   ZoomCtl,
 } from "./ctl/controls.tsx";
 import { MobileApp, PlayIcon } from "./ctl/mobile.tsx";
-import { SpotPanel, SpotsCtl } from "./ctl/spots.tsx";
+import { SpotPanel } from "./ctl/spots.tsx";
 import { JttyPanel } from "./ctl/jtty.tsx";
 import { CwPanel } from "./ctl/cw.tsx";
 import { RttyPanel } from "./ctl/rtty.tsx";
@@ -32,10 +32,9 @@ import { Js8Panel } from "./ctl/js8.tsx";
 import { ImgPanel } from "./ctl/img.tsx";
 import { DigiPanel } from "./ctl/digi.tsx";
 import { SigPanel } from "./ctl/sigid.tsx";
-import { MapCtl, MapPanel } from "./ctl/map.tsx";
-import { DecodersCtl } from "./ctl/decoders.tsx";
-import { IqRecCtl } from "./ctl/iqrec.tsx";
-import { AudioRecCtl } from "./ctl/audiorec.tsx";
+import { MapPanel } from "./ctl/map.tsx";
+import { PanelsCtl } from "./ctl/decoders.tsx";
+import { RecCtl } from "./ctl/rec.tsx";
 import { TcPanel } from "./ctl/timecode.tsx";
 import { ConfigCtl, ConfigPanel } from "./ctl/config.tsx";
 import { MemCtl, memOpen, VfoCtl } from "./ctl/memories.tsx";
@@ -186,12 +185,9 @@ function App() {
         <SMeter />
         {/* what opens beside the waterfall, and sharing */}
         <div class="group tools">
-          <SpotsCtl />
-          <MapCtl />
-          <DecodersCtl />
+          <PanelsCtl />
           <MemCtl />
-          <AudioRecCtl />
-          <IqRecCtl />
+          <RecCtl />
           <PropCtl />
           <ConfigCtl />
         </div>

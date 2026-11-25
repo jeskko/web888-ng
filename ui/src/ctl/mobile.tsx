@@ -310,11 +310,11 @@ function More({ close }: { close: () => void }) {
       </div>
       <AudioRecCtl />
       <h4>{t("Noise")}</h4>
-      <DspCtl />
+      <DspCtl inline />
       <h4>{t("Waterfall")}</h4>
       <ZoomCtl />
-      <ContrastCtl />
-      <LookCtl />
+      <ContrastCtl inline />
+      <LookCtl af />
       <h4>{t("Memories")}</h4>
       <MemCtl inline />
       <h3>{t("Configuration")}</h3>

@@ -13,34 +13,50 @@ import { formatKhz, snap, stepTo } from "../fmt.ts";
 import { t } from "../i18n.ts";
 import { wfSpan } from "../proto.ts";
 import { WheelSteps, wheelPx } from "../wheelzoom.ts";
-import type { Mode, SkimMark, Spot, UserMark } from "../proto.ts";
+import type { Mode, SkimMark, Spot, UserMark, WfLine } from "../proto.ts";
 import { latest, utcTime } from "../spots.ts";
-import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, palette, paneHooks, peakHold, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, server, setView, skimmers, snapOf, spots, st, stepOf, tune, users, wfTimes, whatIs } from "../state.ts";
+import { bandPlan, dataSaver, followable, freqMarkers, lease, limits, myName, onLine, palette, paneHooks, peakHold, pickMarker, pickSkimmer, pickSpot, pickUser, radio, range, ribbonOn, server, setView, sigLabels, openSig, skimmers, snapOf, spots, st, stepOf, tune, users, wfTimes, whatIs } from "../state.ts";
 import { markerColour, markerTitle, ribbon, type FreqMarker, type RibbonPiece } from "../markers.ts";
-import { pick } from "./range.ts";
+import { CLASS_INFO } from "../sigid.ts";
+import { classColour, type SkimShown } from "../sigskim.ts";
+import { AutoRange, pick, usable } from "./range.ts";
 import { MARK_PX, modeColour, noiseFloor, SCALE_PX, SKIM_PX, Spectrum } from "./spectrum.ts";
 import { Waterfall } from "./waterfall.ts";
 import { timeTicks } from "./wfticks.ts";
 
-/** Auto colour range: follows the noise floor of recent lines. */
-const auto = { min: NaN, max: NaN, n: 0 };
+/** Auto colour range: follows the noise floor of recent lines, damped. */
+const auto = new AutoRange();
+let autoN = 0;
 
-function trackRange(floor: number): void {
-  if (!Number.isFinite(floor)) return;
-  const want = { min: floor - 8, max: floor + 50 };
-  if (Number.isNaN(auto.min)) Object.assign(auto, want);
-  auto.min += 0.1 * (want.min - auto.min);
-  auto.max += 0.1 * (want.max - auto.max);
+function trackRange(l: WfLine): void {
+  auto.push(noiseFloor(l), performance.now(), { f0: l.f0, df: l.df, n: l.levels.length });
   // the sliders don't need 20 updates a second
-  if (++auto.n % 10 === 0 && range.value.auto) {
-    range.value = { min: Math.round(auto.min), max: Math.round(auto.max), auto: true };
+  const r = auto.range;
+  if (++autoN % 10 === 0 && range.value.auto && usable(r) && (Math.round(r.min) !== range.value.min || Math.round(r.max) !== range.value.max)) {
+    range.value = { min: Math.round(r.min), max: Math.round(r.max), auto: true };
   }
+}
+
+/** A signal label's tooltip: what it is, how sure, what a click does. */
+function sigTitle(g: SkimShown): string {
+  const info = CLASS_INFO[g.cls];
+  const what = g.alt ? t("{a} or {b}?", { a: t(info.label), b: t(CLASS_INFO[g.alt].label) }) : t(info.label);
+  const act = info.opens === "ssb" || info.opens === "am" ? t("click to tune to it") : info.opens ? t("click to open its decoder") : t("click for a closer look");
+  return t("{what} ({p} %), {khz} kHz, {width} Hz wide, {db} dB: {hint}; {act}", {
+    what,
+    p: Math.round(100 * g.p),
+    khz: formatKhz(Math.round(g.rf)),
+    width: Math.round(g.rfHi - g.rfLo),
+    db: g.db.toFixed(0),
+    hint: t(info.hint),
+    act,
+  });
 }
 
 function currentRange(): { min: number; max: number } {
   const r = range.value;
   // whatever is wrong with one, the others still draw
-  return r.auto ? pick(auto, r) : pick(r, auto);
+  return r.auto ? pick(auto.range, r) : pick(r, auto.range);
 }
 
 export function Pane() {
@@ -75,7 +91,7 @@ export function Pane() {
     onLine((l) => {
       wf?.push(l);
       spec.push(l);
-      trackRange(noiseFloor(l));
+      trackRange(l);
       dirty = true;
     });
 
@@ -147,7 +163,7 @@ export function Pane() {
       spec.clearPeak();
       dirty = true;
     };
-    const unsubLabels = [freqMarkers, bandPlan, ribbonOn].map((sig) =>
+    const unsubLabels = [freqMarkers, bandPlan, ribbonOn, sigLabels].map((sig) =>
       sig.subscribe(() => {
         dirty = true;
       }),
@@ -237,7 +253,8 @@ export function Pane() {
       const labels = direct ? freqMarkers.value.map((m) => ({ hz: m.hz, text: m.name, colour: markerColour(m), item: m })) : [];
       const plan = ribbonOn.value && direct ? bandPlan.value : null;
       const rib = plan ? ribbon(plan, v.start, v.start + v.span) : [];
-      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars, labels, rib);
+      const sigs = sigLabels.value.map((g) => ({ lo: g.rfLo, hi: g.rfHi, hz: g.rf, text: t(CLASS_INFO[g.cls].label), colour: classColour(g.cls), sure: g.sure, item: g }));
+      spec.draw(v.start, v.span, min, max, { dial: s.hz, lo: s.lo, hi: s.hi, name: myName.value }, dpr, marks, shown, bars, labels, rib, sigs);
     };
     raf = requestAnimationFrame(frame);
     const unsubRange = range.subscribe(() => {
@@ -347,6 +364,15 @@ export function Pane() {
       const h = spec.labelHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
       return h ? (h.item as FreqMarker) : null;
     };
+    /** The signal label under a pointer on the spectrum, if any. */
+    const sigAt = (e: PointerEvent): SkimShown | null => {
+      if (e.currentTarget !== sc) return null;
+      const rect = sc.getBoundingClientRect();
+      const px = (e.clientX - rect.left) * dpr;
+      const py = (e.clientY - rect.top) * dpr;
+      const h = spec.sigHits.find((h) => px >= h.x0 && px <= h.x1 && py >= h.y0 && py <= h.y1);
+      return h ? (h.item as SkimShown) : null;
+    };
     /** The band ribbon's piece under a pointer (the topmost), if any. */
     const ribbonAt = (e: PointerEvent): RibbonPiece | null => {
       if (e.currentTarget !== sc) return null;
@@ -424,6 +450,13 @@ export function Pane() {
         pickMarker(l);
         return;
       }
+      const g = sigAt(e);
+      if (g) {
+        // its decoder (or tuned to a voice), else a closer look
+        if (CLASS_INFO[g.cls].opens) openSig({ id: g.id, rf: g.rf, rfLo: g.rfLo, rfHi: g.rfHi, hz: 0, db: g.db, top: [{ cls: g.cls, p: g.p }] }, g.cls);
+        else whatIs(g.rfLo, g.rfHi);
+        return;
+      }
       drag = { x: e.clientX, center: s.wf.center_hz, moved: false, id: e.pointerId };
       (e.currentTarget as Element).setPointerCapture(e.pointerId);
     };
@@ -449,7 +482,8 @@ export function Pane() {
         const m = k ? null : markAt(e);
         const p = k || m ? null : spotAt(e);
         const l = k || m || p ? null : labelAt(e);
-        const rp = k || m || p || l ? null : ribbonAt(e);
+        const g = k || m || p || l ? null : sigAt(e);
+        const rp = k || m || p || l || g ? null : ribbonAt(e);
         const own = lease.value?.granted;
         sc.title = k
           ? t("{mode} skimmer, dial {khz} kHz{waiting}: click to tune there", {
@@ -463,11 +497,13 @@ export function Pane() {
               ? `${utcTime(p.t)} ${p.mode} ${formatKhz(p.hz)} kHz ${p.snr} dB: ${p.msg}`
               : l
                 ? markerTitle(l)
-                : rp
+                : g
+                  ? sigTitle(g)
+                  : rp
                   ? rp.title
                   : "";
-        sc.style.cursor = k || m || p || l ? "pointer" : "";
-        showGhost(k || m || p || l ? null : e.clientX);
+        sc.style.cursor = k || m || p || l || g ? "pointer" : "";
+        showGhost(k || m || p || l || g ? null : e.clientX);
       }
       const s = st.value;
       const v = view();

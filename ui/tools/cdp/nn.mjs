@@ -1,6 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // The neural noise reduction (NN): disabled in SAS, on in USB, LSB, CW
-// (the CW model) and AM (the AM model; nr.wasm's built-in ones), the strength slider, nr.wasm fetched once; with nr-models.json in
+// (the CW model) and AM (the AM model; nr.wasm's built-in ones), the strength slider, Gen (the
+// generative restorer, nrgen.bin fetched once), nr.wasm fetched once; with nr-models.json in
 // the UI directory, each model of the selector in turn; prints the button's
 // state (strength 50 % and 250 %), the player's underruns and page errors
 // at each step, and saves nn.png in OUT (default .).
@@ -14,6 +15,9 @@ await sleep(3000);
 await p.ev("document.querySelector('.start')?.click()");
 await sleep(2000);
 const btn = (label) => `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === ${lit(label)})`;
+// NB, NR, NN and the notch are in the Noise button's box: open it (the
+// clicks here don't close it)
+const noise = () => p.ev(`(() => { if (!document.querySelector(".noise-ctl .pop-box")) document.querySelector(".noise-ctl .pop-btn").click() })()`);
 // AM, SAM, SAL, SAR and SAS share one button that cycles them
 const mode = async (m) => {
   for (let i = 0; i < 6; i++) {
@@ -25,12 +29,15 @@ const mode = async (m) => {
 };
 const report = async (what) => {
   await sleep(4000);
+  await noise();
+  await sleep(200);
   const s = await p.ev("document.querySelector('.status').textContent");
   const under = s.match(/(\d+)\s*underruns/);
   const b = await p.ev(`(() => { const b = ${btn("NN")}; return b ? [b.disabled, b.classList.contains("on"), b.title] : null })()`);
-  const slider = await p.ev(`!!document.querySelector('input[aria-label="Neural noise reduction strength"]')`);
+  const slider = await p.ev(`(() => { const r = document.querySelector('input[aria-label="Neural noise reduction strength"]'); return r ? (r.disabled ? "disabled" : "enabled") : "missing" })()`);
   const wasm = await p.ev(`performance.getEntriesByType("resource").filter((e) => e.name.endsWith("/nr.wasm")).length`);
-  console.log(`${what}: NN ${b ? `${b[0] ? "disabled" : "enabled"}, ${b[1] ? "on" : "off"}` : "missing"}, slider ${slider}, nr.wasm fetched ${wasm}x, underruns ${under?.[1] ?? "?"}`);
+  const label = await p.ev(`document.querySelector(".noise-ctl .pop-btn")?.textContent`);
+  console.log(`${what}: [${label}] NN ${b ? `${b[0] ? "disabled" : "enabled"}, ${b[1] ? "on" : "off"}` : "missing"}, slider ${slider}, nr.wasm fetched ${wasm}x, underruns ${under?.[1] ?? "?"}`);
 };
 await mode("SAS");
 await report("SAS");
@@ -42,6 +49,12 @@ await p.ev(`(() => { const r = document.querySelector('input[aria-label="Neural 
 await report("strength 50 %");
 await p.ev(`(() => { const r = document.querySelector('input[aria-label="Neural noise reduction strength"]'); r.value = "2.5"; r.dispatchEvent(new Event("input", { bubbles: true })); })()`);
 await report("strength 250 %");
+// the generative restorer (voice only): its weights fetched once, on
+await p.ev(`${btn("Gen")}.click()`);
+await report("Gen on");
+console.log("  Gen:", await p.ev(`(() => { const b = ${btn("Gen")}; return b ? (b.classList.contains("on") ? "on" : "off") : "missing" })()`), "| nrgen.bin fetched", await p.ev(`performance.getEntriesByType("resource").filter((e) => e.name.endsWith("/nrgen.bin")).length`), "x");
+await p.ev(`${btn("Gen")}.click()`);
+await report("Gen off");
 const models = await p.ev(`[...(document.querySelector('select[aria-label="Neural noise reduction model"]')?.options ?? [])].map((o) => o.value)`);
 for (const m of models) {
   await p.ev(`(() => { const s = document.querySelector('select[aria-label="Neural noise reduction model"]'); s.value = ${lit(m)}; s.dispatchEvent(new Event("change", { bubbles: true })); })()`);

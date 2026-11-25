@@ -17,10 +17,10 @@ const status = async (what) => {
   const codec = s.match(/(pcm16|mulaw|opus)\s*(\d+)\s*kbit\/s/);
   const wf = s.match(/wf\s*(\d+)\s*kbit\/s/);
   const under = s.match(/(\d+)\s*underruns/);
-  const seg = await p.ev("document.querySelector('.drop-codec .drop-btn')?.textContent");
+  const seg = await p.ev("document.querySelector('.stream-ctl .pop-btn')?.textContent");
   console.log(`${what}: ${codec ? `${codec[1]} ${codec[2]} kbit/s` : "no codec in the status bar"}, wf ${wf?.[1] ?? "?"} kbit/s, underruns ${under?.[1] ?? "?"}; codec button: ${seg}`);
 };
-// the codec is a drop-down (open it first); the saver is a checkbox in
+// the codec is in the stream button's box (open it first); the saver is a checkbox in
 // the Config box
 const configBtn = `[...document.querySelectorAll("button")].find((b) => b.textContent.trim() === "Config")`;
 const choose = async (label) => {
@@ -31,9 +31,10 @@ const choose = async (label) => {
     await p.ev(`${configBtn}?.click() ?? document.querySelector(".config-box .info-x")?.click()`);
     return;
   }
-  await p.ev(`document.querySelector('.drop-codec .drop-btn').click()`);
+  await p.ev(`document.querySelector('.stream-ctl .pop-btn').click()`);
   await sleep(100);
-  await p.ev(`[...document.querySelectorAll(".drop-codec .drop-pop button")].find((b) => b.textContent.startsWith(${lit(label)})).click()`);
+  await p.ev(`[...document.querySelectorAll(".stream-ctl .pop-box .seg button")].find((b) => b.textContent.startsWith(${lit(label)})).click()`);
+  await p.ev(`document.querySelector('.stream-ctl .pop-btn').click()`);
 };
 await status("start");
 await p.shot(`${out}/codec.png`);
