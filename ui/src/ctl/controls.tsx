@@ -11,9 +11,13 @@ import { helpOpen } from "./keys.tsx";
 import { infoOpen } from "./info.tsx";
 import { Drop } from "./drop.tsx";
 import { Pop } from "./pop.tsx";
-import { bandwidths, formatKhz, parseFreq, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
+import { bandwidths, formatKhz, parseFreq, PBT_MAX, shownOffset, stepFor, stepLabel, STEPS, stepTo } from "../fmt.ts";
 import { isAm, wfSpan, type AgcSpeed, type Mode } from "../proto.ts";
 import {
+  passBase,
+  pbt,
+  pickPassband,
+  setPbt,
   audioGaps,
   nnApplies,
   nnChoice,
@@ -213,20 +217,100 @@ export function ModeBar() {
 }
 
 export function Bandwidth() {
-  const s = st.value;
-  if (!s) return null;
-  const presets = bandwidths(s.mode, s.audio_rate);
-  const cur = presets.find((b) => s.lo === b.lo && s.hi === b.hi);
   return (
     <div class="group">
-      <Drop
-        cls="drop-bw"
-        label={cur?.label ?? `${((s.hi - s.lo) / 1000).toFixed(1)}k`}
-        title={t("Passband: {lo} to {hi} Hz around the dial", { lo: s.lo, hi: s.hi })}
-        items={presets.map((b) => ({ key: b.label, label: b.label, on: b === cur, pick: () => setPassband(b.lo, b.hi) }))}
-      />
+      <FilterCtl />
       <StreamCtl />
     </div>
+  );
+}
+
+/** One twin-PBT slider (Hz): double-click or the wheel too. */
+function PbtSlider({ label, value, set, title }: { label: string; value: number; set: (v: number) => void; title: string }) {
+  const sign = value > 0 ? "+" : "";
+  return (
+    <>
+      <span class="pop-head" title={title}>{label}</span>
+      <input
+        type="range"
+        min={-PBT_MAX}
+        max={PBT_MAX}
+        step={10}
+        value={value}
+        aria-label={label}
+        aria-valuetext={`${sign}${value} Hz`}
+        title={title}
+        onInput={(e) => set(Number(e.currentTarget.value))}
+        onDblClick={() => set(0)}
+        onWheel={(e) => {
+          e.preventDefault();
+          set(value + (e.deltaY < 0 ? 50 : -50));
+        }}
+      />
+      <span class="num">{sign}{value} Hz</span>
+    </>
+  );
+}
+
+/** The passband: presets, and twin passband tuning (PBT 1 moves the low
+ * edge, PBT 2 the high one, Shift both). */
+export function FilterBody() {
+  const s = st.value;
+  const base = passBase();
+  if (!s || !base) return null;
+  const presets = bandwidths(s.mode, s.audio_rate);
+  const cur = presets.find((b) => base.lo === b.lo && base.hi === b.hi);
+  const o = pbt.value;
+  const mid = Math.round((o.lo + o.hi) / 2);
+  return (
+    <>
+      <div class="pop-row">
+        <span class="pop-head">{t("Width")}</span>
+        <span class="seg">
+          {presets.map((b) => (
+            <button key={b.label} class={b === cur ? "on" : ""} aria-pressed={b === cur} onClick={() => pickPassband(b.lo, b.hi)}>
+              {b.label}
+            </button>
+          ))}
+        </span>
+      </div>
+      <div class="pbt-grid">
+        {/* i18n: PBT = passband tuning (as on Icom radios); 1 = the lower edge's knob */}
+        <PbtSlider label={t("PBT 1")} value={o.lo} set={(v) => setPbt(v, o.hi)} title={t("Twin passband tuning: moves the passband's lower edge (in frequency, as on the waterfall). Double-click: back to 0")} />
+        {/* i18n: PBT = passband tuning; 2 = the upper edge's knob */}
+        <PbtSlider label={t("PBT 2")} value={o.hi} set={(v) => setPbt(o.lo, v)} title={t("Twin passband tuning: moves the passband's upper edge (in frequency, as on the waterfall). Double-click: back to 0")} />
+        {/* i18n: IF shift: both passband edges moved together */}
+        <PbtSlider label={tc("passband tuning", "Shift")} value={mid} set={(v) => setPbt(o.lo + v - mid, o.hi + v - mid)} title={t("Moves both edges together (IF shift). Double-click: back to 0")} />
+      </div>
+      <div class="pop-row">
+        <button disabled={!o.lo && !o.hi} onClick={() => setPbt(0, 0)} title={t("Twin passband tuning back to the preset")}>
+          {/* i18n: back to 0 (as Icom's "PBT clear"), not "empty" */}
+          {tc("passband tuning", "Clear")}
+        </button>
+        <span class="dim num">{t("{lo} to {hi} Hz around the dial", { lo: s.lo, hi: s.hi })}</span>
+      </div>
+    </>
+  );
+}
+
+function FilterCtl() {
+  const s = st.value;
+  const base = passBase();
+  if (!s || !base) return null;
+  const cur = bandwidths(s.mode, s.audio_rate).find((b) => base.lo === b.lo && base.hi === b.hi);
+  const moved = !!(pbt.value.lo || pbt.value.hi);
+  const width = `${((s.hi - s.lo) / 1000).toFixed(1)}k`;
+  return (
+    <Pop
+      cls="filter-ctl"
+      on={moved}
+      label={moved || !cur ? width : cur.label}
+      title={moved
+        ? t("Passband: {lo} to {hi} Hz around the dial, twin PBT {a} / {b} Hz", { lo: s.lo, hi: s.hi, a: pbt.value.lo, b: pbt.value.hi })
+        : t("Passband: {lo} to {hi} Hz around the dial", { lo: s.lo, hi: s.hi })}
+    >
+      <FilterBody />
+    </Pop>
   );
 }
 

@@ -348,7 +348,13 @@ impl AudioChain {
         }
         let fs = spec.rate;
         if spec.channel() != old.channel() {
-            self.filter = Self::filter(&spec, self.droop);
+            // same length (the edges moved, the transitions didn't): the
+            // history kept and the new response faded in, so a passband
+            // knob (twin PBT) turns without clicks
+            let taps = design(spec.channel(), spec.rate, self.droop);
+            if !self.filter.set_taps(&taps) {
+                self.filter = Self::filter(&spec, self.droop);
+            }
         }
         if decim_pass(&spec) != decim_pass(&old) {
             let r = (self.rx_rate / fs).round() as usize;

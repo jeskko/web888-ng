@@ -91,6 +91,20 @@ export function clamp(x: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, x));
 }
 
+/** Twin passband tuning's reach: each edge moves this far (Hz). */
+export const PBT_MAX = 2000;
+
+/** The passband with twin PBT applied: `base` (a preset, or a passband a
+ * decoder set) with its low edge moved by `off.lo` and its high edge by
+ * `off.hi`, kept as the server keeps it (edges within 5 kHz at 12 kS/s,
+ * at least 50 Hz wide; the low edge wins when they meet). */
+export function pbtEdges(base: { lo: number; hi: number }, off: { lo: number; hi: number }, rate = 12000): [number, number] {
+  const e = (5000 * rate) / 12000;
+  const lo = clamp(base.lo + off.lo, -e, e - 50);
+  const hi = clamp(base.hi + off.hi, lo + 50, e);
+  return [lo, hi];
+}
+
 /** Passband presets (Hz, lo..hi relative to the dial) per mode. */
 export function bandwidths(mode: Mode, rate = 12000): { label: string; lo: number; hi: number }[] {
   const wide = rate >= 24000;

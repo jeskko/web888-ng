@@ -802,3 +802,33 @@ and a zoom starts afresh. On the unit: one 1 dB change in 60 s.
 Tests: `cdp/nn.mjs` opens the Noise box and prints the button's label
 and whether the strength slider is enabled; `iqrec.mjs`, `listener.mjs`,
 `access.mjs` and `codec.mjs` open the Rec and stream boxes.
+
+## 23. Twin passband tuning (2026-11-26)
+
+The passband button in the header is a popup now: the presets (**Width**),
+and Icom-style twin PBT. **PBT 1** moves the passband's lower edge,
+**PBT 2** its upper edge (in frequency, as on the waterfall: in LSB too),
+**Shift** both together (IF shift); ±2 kHz in 10 Hz steps, the wheel
+moves 50 Hz, a double-click puts one back to 0, **Clear** all. The
+button shows the width as it is, lit while PBT is in use.
+
+* The offsets sit on a base passband: the preset picked (a preset pick
+  keeps them, as Icom's PBT stays across filter changes) or the passband
+  in use at the first turn. A mode change, or a passband set exactly (a
+  decoder's, a band plan's, `setPassband`), clears them. Edges are kept
+  as the server keeps them (`fmt.ts` `pbtEdges`: within 5 kHz of the dial
+  at 12 kS/s, at least 50 Hz wide).
+* Browser only, no protocol change: the `mode` request's `lo`/`hi`. While
+  a knob turns, a request goes at most every 80 ms; the last always goes.
+* Server: a passband change used to build a new channel filter with an
+  empty history (a gap and a click each time). The filter's length
+  depends only on the mode's transition width, so within a mode
+  `OverlapSave::set_taps` now keeps the history and fades from the old
+  response to the new over one block (about 60 ms at 12 kS/s); another
+  length (a mode with other transitions) still builds anew. Tests:
+  `overlap_save_set_taps_keeps_history`, `overlap_save_set_taps_no_glitch`.
+* Mobile: the presets and the sliders in More → Passband; the dock's
+  width button cycles the presets with PBT kept.
+* Checked on the unit (`ui/tools/cdp/pbt.mjs`): each knob, Shift, a fast
+  sweep (the last value wins), a preset under PBT, Clear, a mode change;
+  the header still fits in every language (fi 1464 of 1512 px).

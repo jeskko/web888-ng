@@ -215,3 +215,79 @@ fn am_demod_depth() {
     let depth = real_amp(tail, 1000.0, fs) / carrier;
     assert!((depth - 0.5).abs() < 0.005, "depth {depth}");
 }
+
+/// The same taps set again: the output doesn't change at all (the history
+/// is kept); taps of another length are refused.
+#[test]
+fn overlap_save_set_taps_keeps_history() {
+    let fs = 12_000.0;
+    let spec = |lo, hi| ChannelSpec {
+        lo_hz: lo,
+        hi_hz: hi,
+        transition_hz: 200.0,
+        atten_db: 80.0,
+    };
+    let taps = design(spec(300.0, 2700.0), fs, Droop::None);
+    let x: Vec<C32> = (0..20_000)
+        .map(|i| {
+            C32::from_polar(
+                1.0,
+                2.0 * std::f32::consts::PI * 1000.0 * i as f32 / fs as f32 + (i % 7) as f32 * 0.1,
+            )
+        })
+        .collect();
+    let (mut a, mut b) = (OverlapSave::new(&taps), OverlapSave::new(&taps));
+    let (mut ya, mut yb) = (Vec::new(), Vec::new());
+    a.process(&x[..7000], &mut ya);
+    b.process(&x[..7000], &mut yb);
+    assert!(b.set_taps(&taps));
+    a.process(&x[7000..], &mut ya);
+    b.process(&x[7000..], &mut yb);
+    assert_eq!(ya.len(), yb.len());
+    for (p, q) in ya.iter().zip(&yb) {
+        assert!((p - q).norm() < 1e-5);
+    }
+    let other = design(
+        ChannelSpec {
+            transition_hz: 500.0,
+            ..spec(300.0, 2700.0)
+        },
+        fs,
+        Droop::None,
+    );
+    assert_ne!(other.len(), taps.len());
+    assert!(!b.set_taps(&other));
+}
+
+/// A passband edge moved while a tone inside both passbands plays: its
+/// level stays steady through the change (no gap, no click).
+#[test]
+fn overlap_save_set_taps_no_glitch() {
+    let fs = 12_000.0;
+    let spec = |lo, hi| ChannelSpec {
+        lo_hz: lo,
+        hi_hz: hi,
+        transition_hz: 200.0,
+        atten_db: 80.0,
+    };
+    let t1 = design(spec(300.0, 2700.0), fs, Droop::None);
+    let t2 = design(spec(800.0, 2200.0), fs, Droop::None);
+    assert_eq!(t1.len(), t2.len());
+    let x: Vec<C32> = (0..24_000)
+        .map(|i| {
+            C32::from_polar(
+                1.0,
+                2.0 * std::f32::consts::PI * 1500.0 * i as f32 / fs as f32,
+            )
+        })
+        .collect();
+    let mut f = OverlapSave::new(&t1);
+    let mut y = Vec::new();
+    f.process(&x[..12_000], &mut y);
+    assert!(f.set_taps(&t2));
+    f.process(&x[12_000..], &mut y);
+    // past the start-up transient, every sample of the tone is at 1
+    for (i, v) in y.iter().enumerate().skip(t1.len() + 100) {
+        assert!((v.norm() - 1.0).abs() < 0.01, "sample {i}: {}", v.norm());
+    }
+}

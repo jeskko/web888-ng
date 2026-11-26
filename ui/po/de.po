@@ -23,7 +23,7 @@ msgstr "Takt"
 msgid "Sessions"
 msgstr "Sitzungen"
 
-#: src/admin/admin.tsx:21 src/admin/admin.tsx:844 src/ctl/config.tsx:144 src/ctl/config.tsx:149 src/ctl/mobile.tsx:320
+#: src/admin/admin.tsx:21 src/admin/admin.tsx:844 src/ctl/config.tsx:144 src/ctl/config.tsx:149 src/ctl/mobile.tsx:325
 msgid "Configuration"
 msgstr "Konfiguration"
 
@@ -67,7 +67,7 @@ msgstr "oder legen Sie das Passwort (eine Zeile, mindestens 8 Zeichen) in {file}
 msgid "Admin password"
 msgstr "Admin-Passwort"
 
-#: src/admin/admin.tsx:94 src/ctl/controls.tsx:793 src/main.tsx:121
+#: src/admin/admin.tsx:94 src/ctl/controls.tsx:877 src/main.tsx:121
 msgid "Log in"
 msgstr "Anmelden"
 
@@ -778,7 +778,7 @@ msgstr "hören"
 msgid "also a receiver, as a listener"
 msgstr "auch ein Empfänger, wie für Hörer"
 
-#: src/admin/admin.tsx:928 src/ctl/controls.tsx:1052
+#: src/admin/admin.tsx:928 src/ctl/controls.tsx:1136
 msgid "admin"
 msgstr "Verwaltung"
 
@@ -1304,7 +1304,7 @@ msgid "(RMS {s})"
 msgstr "(RMS {s})"
 
 #. the crystal's rate error that chrony corrects; skew = its uncertainty
-#: src/admin/clock.tsx:160 src/admin/clock.tsx:183 src/ctl/mobile.tsx:259
+#: src/admin/clock.tsx:160 src/admin/clock.tsx:183 src/ctl/mobile.tsx:262
 msgid "Frequency"
 msgstr "Frequenz"
 
@@ -1662,7 +1662,7 @@ msgstr "kein Textfeld"
 msgid "Audio spectrum"
 msgstr "Audiospektrum"
 
-#: src/ctl/afspec.tsx:155 src/ctl/afspec.tsx:155 src/ctl/map.tsx:614 src/ctl/map.tsx:614 src/ctl/mobile.tsx:232 src/ctl/sigid.tsx:78 src/ctl/sigid.tsx:78 src/ctl/spots.tsx:82 src/ctl/spots.tsx:82
+#: src/ctl/afspec.tsx:155 src/ctl/afspec.tsx:155 src/ctl/map.tsx:614 src/ctl/map.tsx:614 src/ctl/mobile.tsx:235 src/ctl/sigid.tsx:78 src/ctl/sigid.tsx:78 src/ctl/spots.tsx:82 src/ctl/spots.tsx:82
 msgid "Close"
 msgstr "Schließen"
 
@@ -1815,7 +1815,7 @@ msgstr "Dekodierten Text vorlesen"
 msgid "a screen reader speaks new CW, RTTY, PSK and JS8 text every few seconds"
 msgstr "ein Screenreader liest neuen CW-, RTTY-, PSK- und JS8-Text alle paar Sekunden vor"
 
-#: src/ctl/config.tsx:97 src/ctl/mobile.tsx:314
+#: src/ctl/config.tsx:97 src/ctl/mobile.tsx:319
 msgid "Waterfall"
 msgstr "Wasserfall"
 
@@ -1847,624 +1847,677 @@ msgstr "Schließen (Escape)"
 msgid "Kept in this browser."
 msgstr "In diesem Browser gespeichert."
 
-#: src/ctl/controls.tsx:96
+#: src/ctl/controls.tsx:100
 msgid "Frequency to tune, in kHz (7074) or MHz (7.074M); Enter tunes, Escape cancels"
 msgstr "Abzustimmende Frequenz in kHz (7074) oder MHz (7.074M); Enter stimmt ab, Escape bricht ab"
 
-#: src/ctl/controls.tsx:97
+#: src/ctl/controls.tsx:101
 msgid "kHz, or 7.074M"
 msgstr "kHz, oder 7.074M"
 
-#: src/ctl/controls.tsx:119
+#: src/ctl/controls.tsx:123
 msgid "Wheel over a digit to step it, click to type"
 msgstr "Mausrad über einer Ziffer verstellt sie, Klicken zum Eintippen"
 
-#: src/ctl/controls.tsx:120
+#: src/ctl/controls.tsx:124
 msgid "Frequency {f} kHz. Press to type another (key g)"
 msgstr "Frequenz {f} kHz. Drücken, um eine andere einzugeben (Taste g)"
 
-#: src/ctl/controls.tsx:152
+#: src/ctl/controls.tsx:156
 msgid "Tuning step: buttons, arrow keys (shift: x10) and shift+wheel step to its grid; clicks on the waterfall snap to it"
 msgstr "Schrittweite: Schaltflächen, Pfeiltasten (Umschalt: ×10) und Umschalt+Mausrad rasten auf ihr Raster ein; Klicks in den Wasserfall ebenfalls"
 
-#: src/ctl/controls.tsx:153
+#: src/ctl/controls.tsx:157
 msgid "Tune down one step (key ←)"
 msgstr "Einen Schritt tiefer abstimmen (Taste ←)"
 
-#: src/ctl/controls.tsx:155
+#: src/ctl/controls.tsx:159
 msgid "Tuning step"
 msgstr "Schrittweite"
 
-#: src/ctl/controls.tsx:156
+#: src/ctl/controls.tsx:160
 msgid "Tuning step: auto, {step} in this mode"
 msgstr "Abstimmschritt: automatisch, {step} in dieser Betriebsart"
 
 #. tuning step chosen by the mode (a narrow drop-down)
-#: src/ctl/controls.tsx:163
+#: src/ctl/controls.tsx:167
 msgctxt "tuning step"
 msgid "auto"
 msgstr "auto"
 
-#: src/ctl/controls.tsx:167
+#: src/ctl/controls.tsx:171
 msgid "Tune up one step (key →)"
 msgstr "Einen Schritt höher abstimmen (Taste →)"
 
-#: src/ctl/controls.tsx:173
+#: src/ctl/controls.tsx:177
 msgid "AM, envelope detector"
 msgstr "AM, Hüllkurvendemodulator"
 
-#: src/ctl/controls.tsx:174
+#: src/ctl/controls.tsx:178
 msgid "Synchronous AM: locked to the carrier, both sidebands (less distortion in fading)"
 msgstr "Synchron-AM: auf den Träger eingerastet, beide Seitenbänder (weniger Verzerrung bei Schwund)"
 
-#: src/ctl/controls.tsx:175
+#: src/ctl/controls.tsx:179
 msgid "Synchronous AM, lower sideband only (away from interference above)"
 msgstr "Synchron-AM, nur unteres Seitenband (weg von Störungen oberhalb)"
 
-#: src/ctl/controls.tsx:176
+#: src/ctl/controls.tsx:180
 msgid "Synchronous AM, upper sideband only (away from interference below)"
 msgstr "Synchron-AM, nur oberes Seitenband (weg von Störungen unterhalb)"
 
-#: src/ctl/controls.tsx:177
+#: src/ctl/controls.tsx:181
 msgid "Synchronous AM stereo: lower sideband left, upper right"
 msgstr "Synchron-AM Stereo: unteres Seitenband links, oberes rechts"
 
-#: src/ctl/controls.tsx:186
+#: src/ctl/controls.tsx:190
 msgid "{mode} (key {key})"
 msgstr "{mode} (Taste {key})"
 
-#: src/ctl/controls.tsx:193
+#: src/ctl/controls.tsx:197
 msgid "{what}. Click again (or key a) for AM, SAM, SAL, SAR, SAS in turn."
 msgstr "{what}. Erneut klicken (oder Taste a) für AM, SAM, SAL, SAR, SAS der Reihe nach."
 
-#: src/ctl/controls.tsx:200
+#: src/ctl/controls.tsx:204
 msgid "Narrow-band FM (VHF voice; key f)"
 msgstr "Schmalband-FM (UKW-Sprechfunk; Taste f)"
 
-#: src/ctl/controls.tsx:207
+#: src/ctl/controls.tsx:211
 msgid "I/Q: the channel itself, I left and Q right, around the dial (±5 kHz, ±10 kHz at 24 kS/s): for Rec (an I/Q WAV for SDR programs) or the audio spectrum. Sent as PCM. Key i"
 msgstr "I/Q: der Kanal selbst, I links und Q rechts, um die Abstimmfrequenz (±5 kHz, ±10 kHz bei 24 kS/s): für Aufn. (eine I/Q-WAV für SDR-Programme) oder das Audiospektrum. Als PCM übertragen. Taste i"
 
-#: src/ctl/controls.tsx:225
+#: src/ctl/controls.tsx:268 src/sigdesc.ts:663
+msgid "Width"
+msgstr "Breite"
+
+#. PBT = passband tuning (as on Icom radios); 1 = the lower edge's knob
+#: src/ctl/controls.tsx:279
+msgid "PBT 1"
+msgstr "PBT 1"
+
+#. PBT = passband tuning (as on Icom radios); 1 = the lower edge's knob
+#: src/ctl/controls.tsx:279
+msgid "Twin passband tuning: moves the passband's lower edge (in frequency, as on the waterfall). Double-click: back to 0"
+msgstr "Doppel-PBT: verschiebt die untere Kante des Durchlassbereichs (in der Frequenz, wie im Wasserfall). Doppelklick: zurück auf 0"
+
+#. PBT = passband tuning; 2 = the upper edge's knob
+#: src/ctl/controls.tsx:281
+msgid "PBT 2"
+msgstr "PBT 2"
+
+#. PBT = passband tuning; 2 = the upper edge's knob
+#: src/ctl/controls.tsx:281
+msgid "Twin passband tuning: moves the passband's upper edge (in frequency, as on the waterfall). Double-click: back to 0"
+msgstr "Doppel-PBT: verschiebt die obere Kante des Durchlassbereichs (in der Frequenz, wie im Wasserfall). Doppelklick: zurück auf 0"
+
+#. IF shift: both passband edges moved together
+#: src/ctl/controls.tsx:283
+msgctxt "passband tuning"
+msgid "Shift"
+msgstr "IF-Shift"
+
+#. IF shift: both passband edges moved together
+#: src/ctl/controls.tsx:283
+msgid "Moves both edges together (IF shift). Double-click: back to 0"
+msgstr "Verschiebt beide Kanten gemeinsam (IF-Shift). Doppelklick: zurück auf 0"
+
+#: src/ctl/controls.tsx:286
+msgid "Twin passband tuning back to the preset"
+msgstr "Doppel-PBT zurück auf die Voreinstellung"
+
+#. back to 0 (as Icom's "PBT clear"), not "empty"
+#: src/ctl/controls.tsx:288
+msgctxt "passband tuning"
+msgid "Clear"
+msgstr "Zurücksetzen"
+
+#: src/ctl/controls.tsx:290
+msgid "{lo} to {hi} Hz around the dial"
+msgstr "{lo} bis {hi} Hz um die Abstimmfrequenz"
+
+#: src/ctl/controls.tsx:309
+msgid "Passband: {lo} to {hi} Hz around the dial, twin PBT {a} / {b} Hz"
+msgstr "Durchlassbereich: {lo} bis {hi} Hz um die Abstimmfrequenz, Doppel-PBT {a} / {b} Hz"
+
+#: src/ctl/controls.tsx:310
 msgid "Passband: {lo} to {hi} Hz around the dial"
 msgstr "Durchlassbereich: {lo} bis {hi} Hz um die Abstimmfrequenz"
 
-#: src/ctl/controls.tsx:245
+#: src/ctl/controls.tsx:329
 msgid "The audio stream: {what}, {rate}"
 msgstr "Der Audiostrom: {what}, {rate}"
 
-#: src/ctl/controls.tsx:249
+#: src/ctl/controls.tsx:333
 msgid "Format"
 msgstr "Format"
 
-#: src/ctl/controls.tsx:257
+#: src/ctl/controls.tsx:341
 msgid "Rate"
 msgstr "Abtastrate"
 
-#: src/ctl/controls.tsx:266
+#: src/ctl/controls.tsx:350
 msgid "Audio rate: 12 kS/s (passband to ±5 kHz) or 24 kS/s (to ±10 kHz: broadcast AM, NBFM, I/Q; twice the data)"
 msgstr "Audio-Abtastrate: 12 kS/s (Durchlassbereich bis ±5 kHz) oder 24 kS/s (bis ±10 kHz: AM-Rundfunk, NBFM, I/Q; doppelte Datenmenge)"
 
-#: src/ctl/controls.tsx:277
+#: src/ctl/controls.tsx:361
 msgid "Opus: 24-48 kbit/s, for slow or metered connections. While a decoder reads the audio, μ-law instead (Opus would cost it weak signals)"
 msgstr "Opus: 24–48 kbit/s, für langsame oder volumenbegrenzte Verbindungen. Solange ein Dekoder das Audio liest, stattdessen μ-law (Opus würde ihn schwache Signale kosten)"
 
-#: src/ctl/controls.tsx:279
+#: src/ctl/controls.tsx:363
 msgid "μ-law: 96 kbit/s, as good as PCM for listening and for the decoders"
 msgstr "μ-law: 96 kbit/s, so gut wie PCM zum Hören und für die Dekoder"
 
-#: src/ctl/controls.tsx:280
+#: src/ctl/controls.tsx:364
 msgid "PCM: 192 kbit/s, 16 bits, exactly as the receiver made it"
 msgstr "PCM: 192 kbit/s, 16 Bit, genau wie vom Empfänger erzeugt"
 
-#: src/ctl/controls.tsx:294
+#: src/ctl/controls.tsx:378
 msgid "Opus is paused: I/Q comes as PCM (Opus and μ-law would bend I and Q apart)"
 msgstr "Opus pausiert: I/Q kommt als PCM (Opus und μ-law würden I und Q gegeneinander verzerren)"
 
-#: src/ctl/controls.tsx:295
+#: src/ctl/controls.tsx:379
 msgid "Opus is paused: a decoder reads the audio (μ-law until it closes)"
 msgstr "Opus pausiert: Ein Dekoder liest das Audio (μ-law, bis er geschlossen wird)"
 
-#: src/ctl/controls.tsx:314
+#: src/ctl/controls.tsx:398
 msgid "How the audio comes"
 msgstr "Wie das Audio übertragen wird"
 
-#: src/ctl/controls.tsx:329
+#: src/ctl/controls.tsx:413
 msgid "Automatic gain control (AM: follows the carrier)"
 msgstr "Automatische Verstärkungsregelung (AM: folgt dem Träger)"
 
-#: src/ctl/controls.tsx:333
+#: src/ctl/controls.tsx:417
 msgid "AGC recovery after the carrier fades: fast follows it at once (the noise rises in each fade), medium and slow hold the gain through quick fades; custom: your own hang and decay"
 msgstr "AGC-Erholung nach Trägerschwund: schnell folgt sofort (das Rauschen steigt bei jedem Schwundeinbruch), mittel und langsam halten die Verstärkung über kurze Schwundeinbrüche; benutzerdefiniert: eigene Haltezeit und Abklingrate"
 
-#: src/ctl/controls.tsx:333
+#: src/ctl/controls.tsx:417
 msgid "AGC recovery: fast, medium, slow, or custom (your own hang time and decay)"
 msgstr "AGC-Erholung: schnell, mittel, langsam oder benutzerdefiniert (eigene Haltezeit und Abklingrate)"
 
-#: src/ctl/controls.tsx:343
+#: src/ctl/controls.tsx:427
 msgid "Hang: how long the gain is held after the signal drops"
 msgstr "Haltezeit: wie lange die Verstärkung gehalten wird, nachdem das Signal abfällt"
 
 #. AGC hang = how long the gain is held after the signal drops
-#: src/ctl/controls.tsx:345
+#: src/ctl/controls.tsx:429
 msgctxt "AGC"
 msgid "hang"
 msgstr "Haltezeit"
 
-#: src/ctl/controls.tsx:357
+#: src/ctl/controls.tsx:441
 msgid "Decay: how fast the gain comes back after the hang (dB a second)"
 msgstr "Abklingrate: wie schnell die Verstärkung nach der Haltezeit zurückkehrt (dB je Sekunde)"
 
 #. AGC decay = how fast the gain comes back after the hang time
-#: src/ctl/controls.tsx:359
+#: src/ctl/controls.tsx:443
 msgctxt "AGC"
 msgid "decay"
 msgstr "Abklingrate"
 
-#: src/ctl/controls.tsx:374
+#: src/ctl/controls.tsx:458
 msgid "Maximum AGC gain"
 msgstr "Maximale AGC-Verstärkung"
 
-#: src/ctl/controls.tsx:374
+#: src/ctl/controls.tsx:458
 msgid "Fixed gain"
 msgstr "Feste Verstärkung"
 
 #. slider label: maximum gain of the AGC, or the fixed gain when AGC is off
-#: src/ctl/controls.tsx:376
+#: src/ctl/controls.tsx:460
 msgctxt "AGC"
 msgid "max"
 msgstr "max"
 
 #. slider label: maximum gain of the AGC, or the fixed gain when AGC is off
-#: src/ctl/controls.tsx:376
+#: src/ctl/controls.tsx:460
 msgctxt "AGC"
 msgid "gain"
 msgstr "Verst."
 
-#: src/ctl/controls.tsx:391
+#: src/ctl/controls.tsx:475
 msgid "Pseudo-stereo (headphones): signals placed by pitch, lower to the left and higher to the right (in SSB around the passband's middle pitch); LSB is mirrored to match the waterfall"
 msgstr "Pseudo-Stereo (Kopfhörer): Signale nach Tonhöhe platziert, tiefere links und höhere rechts (in SSB um die mittlere Tonhöhe des Durchlassbereichs); LSB ist passend zum Wasserfall gespiegelt"
 
 #. button: pseudo-stereo, signals spread left and right by their pitch
-#: src/ctl/controls.tsx:394
+#: src/ctl/controls.tsx:478
 msgctxt "pseudo-stereo"
 msgid "Stereo"
 msgstr "Stereo"
 
-#: src/ctl/controls.tsx:397 src/ctl/mobile.tsx:207 src/ctl/mobile.tsx:208
+#: src/ctl/controls.tsx:481 src/ctl/mobile.tsx:210 src/ctl/mobile.tsx:211
 msgid "Mute"
 msgstr "Stumm"
 
 #. Vol = Volume (short, on a button); Muted = the sound is muted
-#: src/ctl/controls.tsx:399
+#: src/ctl/controls.tsx:483
 msgid "Muted"
 msgstr "Stumm"
 
 #. Vol = Volume (short, on a button); Muted = the sound is muted
-#: src/ctl/controls.tsx:399
+#: src/ctl/controls.tsx:483
 msgctxt "volume"
 msgid "Vol"
 msgstr "Lautst."
 
-#: src/ctl/controls.tsx:407 src/ctl/controls.tsx:410
+#: src/ctl/controls.tsx:491 src/ctl/controls.tsx:494
 msgid "Volume"
 msgstr "Lautstärke"
 
-#: src/ctl/controls.tsx:437
+#: src/ctl/controls.tsx:521
 msgid "Neural noise reduction: for USB, LSB, CW and AM (not SAS) with 12 kHz audio"
 msgstr "Neuronale Rauschunterdrückung: für USB, LSB, CW und AM (nicht SAS) mit 12-kHz-Audio"
 
-#: src/ctl/controls.tsx:439
+#: src/ctl/controls.tsx:523
 msgid "Neural noise reduction for CW, in this browser: keeps the keyed tones, takes away the noise between and around them, never adds sound"
 msgstr "Neuronale Rauschunterdrückung für CW, in diesem Browser: behält die getasteten Töne, entfernt das Rauschen zwischen und um sie, fügt nie Klang hinzu"
 
-#: src/ctl/controls.tsx:441
+#: src/ctl/controls.tsx:525
 msgid "Neural noise reduction for AM broadcasts (speech and music), in this browser: takes away hiss, crackle, buzz and splatter, never adds sound"
 msgstr "Neuronale Rauschunterdrückung für AM-Rundfunk (Sprache und Musik), in diesem Browser: entfernt Rauschen, Knistern, Brummen und Splatter, fügt nie Klang hinzu"
 
-#: src/ctl/controls.tsx:442
+#: src/ctl/controls.tsx:526
 msgid "Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound"
 msgstr "Neuronale Rauschunterdrückung für SSB-Sprache, in diesem Browser: entfernt, was sie als Rauschen hört, fügt nie Klang hinzu"
 
 #. NN = neural (network) noise reduction, a short button label
-#: src/ctl/controls.tsx:445 src/ctl/controls.tsx:606
+#: src/ctl/controls.tsx:529 src/ctl/controls.tsx:690
 msgctxt "filter"
 msgid "NN"
 msgstr "NN"
 
-#: src/ctl/controls.tsx:454
+#: src/ctl/controls.tsx:538
 msgid "Neural noise reduction strength"
 msgstr "Stärke der neuronalen Rauschunterdrückung"
 
-#: src/ctl/controls.tsx:457
+#: src/ctl/controls.tsx:541
 msgid "Neural noise reduction strength {n} %"
 msgstr "Stärke der neuronalen Rauschunterdrückung {n} %"
 
-#: src/ctl/controls.tsx:466
+#: src/ctl/controls.tsx:550
 msgid "Restore (may invent): a generative model rebuilds the voice after the noise reduction; clearer, but now and then it adds sounds or words that weren't said. The decoders never hear it"
 msgstr "Wiederherstellen (kann erfinden): ein generatives Modell baut die Stimme nach der Rauschunterdrückung neu auf; klarer, aber hin und wieder fügt es Laute oder Wörter hinzu, die nicht gesagt wurden. Die Decoder hören es nie"
 
 #. Gen = generative voice restorer, a short button label
-#: src/ctl/controls.tsx:469 src/ctl/controls.tsx:606
+#: src/ctl/controls.tsx:553 src/ctl/controls.tsx:690
 msgctxt "filter"
 msgid "Gen"
 msgstr "Gen"
 
-#: src/ctl/controls.tsx:475
+#: src/ctl/controls.tsx:559
 msgid "Neural noise reduction model"
 msgstr "Modell der neuronalen Rauschunterdrückung"
 
-#: src/ctl/controls.tsx:476
+#: src/ctl/controls.tsx:560
 msgid "Neural noise reduction model (for comparing)"
 msgstr "Modell der neuronalen Rauschunterdrückung (zum Vergleichen)"
 
-#: src/ctl/controls.tsx:479
+#: src/ctl/controls.tsx:563
 msgid "built-in"
 msgstr "eingebaut"
 
-#: src/ctl/controls.tsx:505
+#: src/ctl/controls.tsx:589
 msgid "Noise blanker: removes short impulses (ignition, switching noise)"
 msgstr "Störaustaster: entfernt kurze Impulse (Zündfunken, Schaltstörungen)"
 
-#: src/ctl/controls.tsx:516
+#: src/ctl/controls.tsx:600
 msgid "Blanker sensitivity"
 msgstr "Empfindlichkeit des Störaustasters"
 
-#: src/ctl/controls.tsx:517
+#: src/ctl/controls.tsx:601
 msgid "impulses over {n} x the average"
 msgstr "Impulse über dem {n}-Fachen des Mittelwerts"
 
-#: src/ctl/controls.tsx:519
+#: src/ctl/controls.tsx:603
 msgid "Blanker sensitivity: impulses over {n} x the average"
 msgstr "Empfindlichkeit des Störaustasters: Impulse über dem {n}-Fachen des Mittelwerts"
 
-#: src/ctl/controls.tsx:525
+#: src/ctl/controls.tsx:609
 msgid "Noise reduction: lowers steady background noise"
 msgstr "Rauschminderung: senkt gleichmäßiges Hintergrundrauschen"
 
-#: src/ctl/controls.tsx:536
+#: src/ctl/controls.tsx:620
 msgid "Noise reduction strength"
 msgstr "Stärke der Rauschminderung"
 
-#: src/ctl/controls.tsx:539
+#: src/ctl/controls.tsx:623
 msgid "Noise reduction strength {n} %"
 msgstr "Stärke der Rauschminderung {n} %"
 
-#: src/ctl/controls.tsx:546
+#: src/ctl/controls.tsx:630
 msgid "Automatic notch: removes steady carriers and whistles (heterodynes), leaves speech and CW"
 msgstr "Automatisches Notchfilter: entfernt Dauerträger und Pfeiftöne (Überlagerungspfeifen), lässt Sprache und CW übrig"
 
 #. Notch = automatic notch filter removing steady carriers and whistles
-#: src/ctl/controls.tsx:549 src/ctl/controls.tsx:607
+#: src/ctl/controls.tsx:633 src/ctl/controls.tsx:691
 msgctxt "filter"
 msgid "Notch"
 msgstr "Notch"
 
-#: src/ctl/controls.tsx:551
+#: src/ctl/controls.tsx:635
 msgid "carriers and whistles"
 msgstr "Träger und Pfeiftöne"
 
-#: src/ctl/controls.tsx:564
+#: src/ctl/controls.tsx:648
 msgid "Squelch: mute while the signal is below the threshold (marked on the S-meter)"
 msgstr "Rauschsperre: stummschalten, solange das Signal unter der Schwelle liegt (am S-Meter markiert)"
 
-#: src/ctl/controls.tsx:575 src/ctl/controls.tsx:578 src/ctl/controls.tsx:924
+#: src/ctl/controls.tsx:659 src/ctl/controls.tsx:662 src/ctl/controls.tsx:1008
 msgid "Squelch threshold"
 msgstr "Schwelle der Rauschsperre"
 
 #. button opening the noise blanker, noise reduction, neural noise reduction and notch
-#: src/ctl/controls.tsx:616
+#: src/ctl/controls.tsx:700
 msgctxt "filter"
 msgid "Noise"
 msgstr "Rauschen"
 
-#: src/ctl/controls.tsx:617
+#: src/ctl/controls.tsx:701
 msgid "Noise blanker, noise reduction, neural noise reduction, notch"
 msgstr "Störaustaster, Rauschminderung, neuronale Rauschminderung, Notch"
 
-#: src/ctl/controls.tsx:641 src/ctl/controls.tsx:641
+#: src/ctl/controls.tsx:725 src/ctl/controls.tsx:725
 msgid "Zoom out (wheel)"
 msgstr "Herauszoomen (Mausrad)"
 
-#: src/ctl/controls.tsx:644
+#: src/ctl/controls.tsx:728
 msgid "Waterfall span"
 msgstr "Darstellungsbreite des Wasserfalls"
 
-#: src/ctl/controls.tsx:647 src/ctl/controls.tsx:647
+#: src/ctl/controls.tsx:731 src/ctl/controls.tsx:731
 msgid "Zoom in (wheel)"
 msgstr "Hineinzoomen (Mausrad)"
 
-#: src/ctl/controls.tsx:650
+#: src/ctl/controls.tsx:734
 msgid "Centre the waterfall on the dial"
 msgstr "Den Wasserfall auf die Abstimmfrequenz zentrieren"
 
 #. button: centre the waterfall on the dial frequency
-#: src/ctl/controls.tsx:652
+#: src/ctl/controls.tsx:736
 msgctxt "waterfall zoom"
 msgid "Centre"
 msgstr "Mitte"
 
-#: src/ctl/controls.tsx:654
+#: src/ctl/controls.tsx:738
 msgid "Whole range"
 msgstr "Gesamter Bereich"
 
 #. button: zoom the waterfall out to the receiver's whole range
-#: src/ctl/controls.tsx:656
+#: src/ctl/controls.tsx:740
 msgctxt "waterfall zoom"
 msgid "Full"
 msgstr "Gesamt"
 
-#: src/ctl/controls.tsx:681
+#: src/ctl/controls.tsx:765
 msgid "Users and background decoders"
 msgstr "Nutzer und Hintergrund-Dekoder"
 
-#: src/ctl/controls.tsx:682
+#: src/ctl/controls.tsx:766
 msgid "Users {n}"
 msgstr "Nutzer {n}"
 
-#: src/ctl/controls.tsx:702
+#: src/ctl/controls.tsx:786
 msgid "user"
 msgstr "Nutzer"
 
-#: src/ctl/controls.tsx:704 src/ctl/map.tsx:670
+#: src/ctl/controls.tsx:788 src/ctl/map.tsx:670
 msgid "mode"
 msgstr "Mode"
 
-#: src/ctl/controls.tsx:709
+#: src/ctl/controls.tsx:793
 msgid "{name} (you)"
 msgstr "{name} (Sie)"
 
-#: src/ctl/controls.tsx:709 src/ctl/controls.tsx:725
+#: src/ctl/controls.tsx:793 src/ctl/controls.tsx:809
 msgid "user {id}"
 msgstr "Nutzer {id}"
 
-#: src/ctl/controls.tsx:713 src/ctl/controls.tsx:726
+#: src/ctl/controls.tsx:797 src/ctl/controls.tsx:810
 msgid "private"
 msgstr "privat"
 
-#: src/ctl/controls.tsx:723 src/ctl/controls.tsx:744
+#: src/ctl/controls.tsx:807 src/ctl/controls.tsx:828
 msgid "Click to tune there"
 msgstr "Klicken zum Abstimmen"
 
-#: src/ctl/controls.tsx:723
+#: src/ctl/controls.tsx:807
 msgid "Click to listen along"
 msgstr "Klicken zum Mithören"
 
-#: src/ctl/controls.tsx:723
+#: src/ctl/controls.tsx:807
 msgid "Their frequency is private"
 msgstr "Die Frequenz ist privat"
 
-#: src/ctl/controls.tsx:723
+#: src/ctl/controls.tsx:807
 msgid "Waiting for a receiver"
 msgstr "Wartet auf einen Empfänger"
 
-#: src/ctl/controls.tsx:729 src/ctl/controls.tsx:747
+#: src/ctl/controls.tsx:813 src/ctl/controls.tsx:831
 msgid "waiting"
 msgstr "wartet"
 
-#: src/ctl/controls.tsx:739
+#: src/ctl/controls.tsx:823
 msgid "background decoders"
 msgstr "Hintergrund-Dekoder"
 
-#: src/ctl/controls.tsx:768
+#: src/ctl/controls.tsx:852
 msgid "Your receiver is ready."
 msgstr "Ihr Empfänger ist bereit."
 
-#: src/ctl/controls.tsx:769
+#: src/ctl/controls.tsx:853
 msgid "Switch to it"
 msgstr "Wechseln"
 
-#: src/ctl/controls.tsx:773
+#: src/ctl/controls.tsx:857
 msgid "Listening along with user {id} (waiting for a receiver of your own, #{pos} in the queue)."
 msgstr "Sie hören bei Nutzer {id} mit (warten auf einen eigenen Empfänger, Platz {pos} in der Warteschlange)."
 
-#: src/ctl/controls.tsx:774 src/ctl/timecode.tsx:73 src/ctl/timecode.tsx:73
+#: src/ctl/controls.tsx:858 src/ctl/timecode.tsx:73 src/ctl/timecode.tsx:73
 msgid "Stop"
 msgstr "Beenden"
 
-#: src/ctl/controls.tsx:782
+#: src/ctl/controls.tsx:866
 msgid "Visitors without the password share one receiver, now in use: you are #{pos} in the queue, waterfall only until then."
 msgid_plural "Visitors without the password share {n} receivers, all in use: you are #{pos} in the queue, waterfall only until then."
 msgstr[0] "Besucher ohne Passwort teilen sich einen Empfänger, der gerade belegt ist: Sie sind auf Platz {pos} der Warteschlange, bis dahin nur Wasserfall."
 msgstr[1] "Besucher ohne Passwort teilen sich {n} Empfänger, alle belegt: Sie sind auf Platz {pos} der Warteschlange, bis dahin nur Wasserfall."
 
-#: src/ctl/controls.tsx:788
+#: src/ctl/controls.tsx:872
 msgid "All receivers are in use: you are #{pos} in the queue, waterfall only until then."
 msgstr "Alle Empfänger sind belegt: Sie sind auf Platz {pos} der Warteschlange, bis dahin nur Wasserfall."
 
-#: src/ctl/controls.tsx:789
+#: src/ctl/controls.tsx:873
 msgid "Click another user's marker (▼) on the scale to listen along."
 msgstr "Klicken Sie auf die Markierung (▼) eines anderen Nutzers auf der Skala, um mitzuhören."
 
-#: src/ctl/controls.tsx:812
+#: src/ctl/controls.tsx:896
 msgid "Choose the colour range by itself, from the noise floor and the strongest signals"
 msgstr "Den Farbbereich selbst wählen, nach dem Grundrauschen und den stärksten Signalen"
 
 #. button: choose the waterfall colour range automatically
-#: src/ctl/controls.tsx:814
+#: src/ctl/controls.tsx:898
 msgctxt "colour range"
 msgid "Auto"
 msgstr "Auto"
 
 #. waterfall colour range slider: floor = the level shown as the darkest colour
-#: src/ctl/controls.tsx:820
+#: src/ctl/controls.tsx:904
 msgctxt "colour range"
 msgid "floor"
 msgstr "Untergrenze"
 
 #. waterfall colour range slider: top = the level shown as the brightest colour
-#: src/ctl/controls.tsx:834
+#: src/ctl/controls.tsx:918
 msgctxt "colour range"
 msgid "top"
 msgstr "Obergrenze"
 
-#: src/ctl/controls.tsx:856 src/ctl/controls.tsx:867
+#: src/ctl/controls.tsx:940 src/ctl/controls.tsx:951
 msgid "Waterfall colour range (dBFS)"
 msgstr "Farbbereich des Wasserfalls (dBFS)"
 
 #. WF = waterfall, a short button label (its colour range)
-#: src/ctl/controls.tsx:866
+#: src/ctl/controls.tsx:950
 msgctxt "waterfall"
 msgid "WF"
 msgstr "WF"
 
 #. WF = waterfall, a short button label (its colour range)
-#: src/ctl/controls.tsx:866
+#: src/ctl/controls.tsx:950
 msgctxt "colour range"
 msgid "auto"
 msgstr "auto"
 
-#: src/ctl/controls.tsx:880
+#: src/ctl/controls.tsx:964
 msgid "Peak hold: the highest level each frequency reached (pink), on the spectrum"
 msgstr "Spitzenwerthaltung: der höchste Pegel, den jede Frequenz erreicht hat (rosa), im Spektrum"
 
 #. Peak = peak hold: the spectrum keeps the highest level each frequency reached
-#: src/ctl/controls.tsx:882
+#: src/ctl/controls.tsx:966
 msgctxt "spectrum"
 msgid "Peak"
 msgstr "Spitze"
 
-#: src/ctl/controls.tsx:885 src/ctl/controls.tsx:885
+#: src/ctl/controls.tsx:969 src/ctl/controls.tsx:969
 msgid "Clear the peaks"
 msgstr "Spitzenwerte löschen"
 
-#: src/ctl/controls.tsx:889
+#: src/ctl/controls.tsx:973
 msgid "Save the spectrum and waterfall as a PNG image (with time marks and the frequency)"
 msgstr "Spektrum und Wasserfall als PNG-Bild speichern (mit Zeitmarken und der Frequenz)"
 
-#: src/ctl/controls.tsx:893 src/ctl/decoders.tsx:54
+#: src/ctl/controls.tsx:977 src/ctl/decoders.tsx:54
 msgid "Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)"
 msgstr "Audiospektrum: Spektrum und Wasserfall des Audios in einem Fenster (in IQ beide Seiten der Abstimmfrequenz)"
 
-#: src/ctl/controls.tsx:906
+#: src/ctl/controls.tsx:990
 msgid "RF attenuator in: every signal is {db} dB weaker (set by the receiver's owner, against overloads)"
 msgstr "HF-Abschwächer ein: Jedes Signal ist {db} dB schwächer (vom Betreiber des Empfängers gesetzt, gegen Übersteuerung)"
 
-#: src/ctl/controls.tsx:921 src/ctl/mobile.tsx:96
+#: src/ctl/controls.tsx:1005 src/ctl/mobile.tsx:97
 msgid "Channel power before AGC (dBFS)"
 msgstr "Kanalleistung vor der AGC (dBFS)"
 
-#: src/ctl/controls.tsx:927
+#: src/ctl/controls.tsx:1011
 msgid "ADC overload"
 msgstr "ADC-Übersteuerung"
 
 #. OVL = overload: the ADC input is too strong
-#: src/ctl/controls.tsx:929 src/ctl/mobile.tsx:92
+#: src/ctl/controls.tsx:1013 src/ctl/mobile.tsx:93
 msgid "OVL"
 msgstr "OVL"
 
-#: src/ctl/controls.tsx:931
+#: src/ctl/controls.tsx:1015
 msgid "overloaded"
 msgstr "übersteuert"
 
-#: src/ctl/controls.tsx:931
+#: src/ctl/controls.tsx:1015
 msgid "no overload"
 msgstr "keine Übersteuerung"
 
-#: src/ctl/controls.tsx:941
+#: src/ctl/controls.tsx:1025
 msgid "connecting"
 msgstr "Verbindung wird hergestellt"
 
-#: src/ctl/controls.tsx:942
+#: src/ctl/controls.tsx:1026
 msgid "open"
 msgstr "offen"
 
-#: src/ctl/controls.tsx:943
+#: src/ctl/controls.tsx:1027
 msgid "closed"
 msgstr "geschlossen"
 
-#: src/ctl/controls.tsx:944
+#: src/ctl/controls.tsx:1028
 msgid "busy"
 msgstr "belegt"
 
-#: src/ctl/controls.tsx:945
+#: src/ctl/controls.tsx:1029
 msgid "ended"
 msgstr "beendet"
 
 #. rtt = round-trip time to the receiver, in milliseconds
-#: src/ctl/controls.tsx:971
+#: src/ctl/controls.tsx:1055
 msgid "rtt {v} ms"
 msgstr "RTT {v} ms"
 
-#: src/ctl/controls.tsx:975
+#: src/ctl/controls.tsx:1059
 msgid "How the audio comes, and its data rate"
 msgstr "Wie das Audio übertragen wird, und seine Datenrate"
 
-#: src/ctl/controls.tsx:976
+#: src/ctl/controls.tsx:1060
 msgid "{codec} {v} kbit/s"
 msgstr "{codec} {v} kbit/s"
 
-#: src/ctl/controls.tsx:980
+#: src/ctl/controls.tsx:1064
 msgid "The waterfall's data rate"
 msgstr "Die Datenrate des Wasserfalls"
 
 #. wf = waterfall
-#: src/ctl/controls.tsx:982
+#: src/ctl/controls.tsx:1066
 msgid "wf {v} kbit/s"
 msgstr "WF {v} kbit/s"
 
-#: src/ctl/controls.tsx:986
+#: src/ctl/controls.tsx:1070
 msgid "Audio buffer, underruns, playback trim"
 msgstr "Audiopuffer, Unterläufe, Wiedergabekorrektur"
 
 #. buf = audio buffer; underruns = the buffer ran empty and the sound broke up; ppm = parts per million (playback speed trim)
-#: src/ctl/controls.tsx:988
+#: src/ctl/controls.tsx:1072
 msgid "buf {fill} ms · {under} underruns · {trim} ppm"
 msgstr "Puffer {fill} ms · {under} Unterläufe · {trim} ppm"
 
-#: src/ctl/controls.tsx:996
+#: src/ctl/controls.tsx:1080
 msgid "Over plain HTTP the browser allows audio only on the page's own thread, with more buffering. The same page over HTTPS (the unit's own certificate: the browser asks once) plays with less delay."
 msgstr "Über einfaches HTTP erlaubt der Browser Audio nur im eigenen Thread der Seite, mit mehr Pufferung. Dieselbe Seite über HTTPS (mit dem eigenen Zertifikat des Geräts: der Browser fragt einmal) spielt mit weniger Verzögerung."
 
-#: src/ctl/controls.tsx:997
+#: src/ctl/controls.tsx:1081
 msgid "http audio (+delay):"
 msgstr "HTTP-Audio (+Verzögerung):"
 
-#: src/ctl/controls.tsx:1002
+#: src/ctl/controls.tsx:1086
 msgid "Frames dropped (audio / waterfall), audio gaps"
 msgstr "Verworfene Frames (Audio / Wasserfall), Audiolücken"
 
-#: src/ctl/controls.tsx:1003
+#: src/ctl/controls.tsx:1087
 msgid "drops {audio}/{wf} · gaps {gaps}"
 msgstr "Verluste {audio}/{wf} · Lücken {gaps}"
 
-#: src/ctl/controls.tsx:1010
+#: src/ctl/controls.tsx:1094
 msgid "hardware falling behind"
 msgstr "Hardware kommt nicht hinterher"
 
-#: src/ctl/controls.tsx:1013
+#: src/ctl/controls.tsx:1097
 msgid "clock {v} ppm"
 msgstr "Takt {v} ppm"
 
-#: src/ctl/controls.tsx:1017
+#: src/ctl/controls.tsx:1101
 msgid "The receiver's CPU load (all cores) and temperature"
 msgstr "CPU-Last (alle Kerne) und Temperatur des Empfängers"
 
-#: src/ctl/controls.tsx:1018
+#: src/ctl/controls.tsx:1102
 msgid "cpu {v} %"
 msgstr "CPU {v} %"
 
-#: src/ctl/controls.tsx:1030
+#: src/ctl/controls.tsx:1114
 msgid "You listen as a visitor: {n} of the receivers are open without the password. Log in for any."
 msgstr "Sie hören als Besucher: {n} der Empfänger sind ohne Passwort offen. Melden Sie sich an, um jeden zu nutzen."
 
-#: src/ctl/controls.tsx:1032
+#: src/ctl/controls.tsx:1116
 msgid "visitor: log in"
 msgstr "Besucher: anmelden"
 
-#: src/ctl/controls.tsx:1044
+#: src/ctl/controls.tsx:1128
 msgid "About this receiver: where it is, its antenna, its limits, privacy, licences"
 msgstr "Über diesen Empfänger: Standort, Antenne, Beschränkungen, Datenschutz, Lizenzen"
 
-#: src/ctl/controls.tsx:1046
+#: src/ctl/controls.tsx:1130
 msgid "info"
 msgstr "Info"
 
-#: src/ctl/controls.tsx:1049
+#: src/ctl/controls.tsx:1133
 msgid "Keys and mouse (key ?)"
 msgstr "Tasten und Maus (Taste ?)"
 
-#: src/ctl/controls.tsx:1050
+#: src/ctl/controls.tsx:1134
 msgid "keys"
 msgstr "Tasten"
 
@@ -3404,7 +3457,7 @@ msgstr "Globus"
 msgid "Mercator"
 msgstr "Mercator"
 
-#: src/ctl/map.tsx:591 src/ctl/map.tsx:591 src/ctl/mobile.tsx:284
+#: src/ctl/map.tsx:591 src/ctl/map.tsx:591 src/ctl/mobile.tsx:287
 msgid "Band"
 msgstr "Band"
 
@@ -3544,67 +3597,67 @@ msgstr "Frequenzspeicher (Taste m)"
 msgid "Mem"
 msgstr "Speicher"
 
-#: src/ctl/mobile.tsx:78
+#: src/ctl/mobile.tsx:79
 msgid "Enter a frequency"
 msgstr "Frequenz eingeben"
 
-#: src/ctl/mobile.tsx:153
+#: src/ctl/mobile.tsx:154
 msgid "Wheel resolution"
 msgstr "Auflösung des Abstimmrads"
 
 #. the dial step per click of the VFO wheel, shown small above its value
-#: src/ctl/mobile.tsx:155
+#: src/ctl/mobile.tsx:156
 msgctxt "wheel"
 msgid "step"
 msgstr "Schritt"
 
-#: src/ctl/mobile.tsx:191
+#: src/ctl/mobile.tsx:194
 msgid "Down one step"
 msgstr "Einen Schritt abwärts"
 
-#: src/ctl/mobile.tsx:194
+#: src/ctl/mobile.tsx:197
 msgid "Up one step"
 msgstr "Einen Schritt aufwärts"
 
-#: src/ctl/mobile.tsx:197
+#: src/ctl/mobile.tsx:200 src/ctl/mobile.tsx:315
 msgid "Passband"
 msgstr "Durchlassbereich"
 
-#: src/ctl/mobile.tsx:201
+#: src/ctl/mobile.tsx:204
 msgid "Bands"
 msgstr "Bänder"
 
-#: src/ctl/mobile.tsx:207 src/ctl/mobile.tsx:208
+#: src/ctl/mobile.tsx:210 src/ctl/mobile.tsx:211
 msgid "Unmute"
 msgstr "Ton ein"
 
-#: src/ctl/mobile.tsx:213 src/ctl/mobile.tsx:213 src/main.tsx:155
+#: src/ctl/mobile.tsx:216 src/ctl/mobile.tsx:216 src/main.tsx:155
 msgid "Start audio"
 msgstr "Audio starten"
 
-#: src/ctl/mobile.tsx:217 src/ctl/mobile.tsx:305
+#: src/ctl/mobile.tsx:220 src/ctl/mobile.tsx:308
 msgid "More"
 msgstr "Mehr"
 
-#: src/ctl/mobile.tsx:262
+#: src/ctl/mobile.tsx:265
 msgid "now"
 msgstr "aktuell"
 
 #. what to record: the audio
-#: src/ctl/mobile.tsx:306 src/ctl/rec.tsx:50
+#: src/ctl/mobile.tsx:309 src/ctl/rec.tsx:50
 msgid "Audio"
 msgstr "Audio"
 
 #. signal classes the identifier names (label) and what each is (hint); mode names stay English, bd/Bd = baud (symbol rate)
-#: src/ctl/mobile.tsx:312 src/sigid.ts:42
+#: src/ctl/mobile.tsx:317 src/sigid.ts:42
 msgid "Noise"
 msgstr "Rauschen"
 
-#: src/ctl/mobile.tsx:318
+#: src/ctl/mobile.tsx:323
 msgid "Memories"
 msgstr "Speicher"
 
-#: src/ctl/mobile.tsx:322
+#: src/ctl/mobile.tsx:327
 msgid "Users"
 msgstr "Nutzer"
 
@@ -4775,10 +4828,6 @@ msgid "Centre"
 msgstr "Mitte"
 
 #: src/sigdesc.ts:663
-msgid "Width"
-msgstr "Breite"
-
-#: src/sigdesc.ts:663
 msgid "{width} ({w90} holds 90 % of the power)"
 msgstr "{width} ({w90} enthalten 90 % der Leistung)"
 
@@ -4970,7 +5019,7 @@ msgstr "Passwort erforderlich"
 msgid "login failed ({status})"
 msgstr "Anmeldung fehlgeschlagen ({status})"
 
-#: src/state.ts:738 src/state.ts:2572
+#: src/state.ts:738 src/state.ts:2649
 msgid "nothing was received"
 msgstr "es wurde nichts empfangen"
 
@@ -4986,19 +5035,19 @@ msgstr "{name} ({s} s{lost})"
 msgid "named by the clock"
 msgstr "nach der Uhr benannt"
 
-#: src/state.ts:2572
+#: src/state.ts:2649
 msgid "only silence was heard"
 msgstr "es war nur Stille zu hören"
 
-#: src/state.ts:2582
+#: src/state.ts:2659
 msgid ", {s} s of silence left out"
 msgstr ", {s} s Stille ausgelassen"
 
-#: src/state.ts:2583
+#: src/state.ts:2660
 msgid "; ended when the audio format changed"
 msgstr "; beendet, als sich das Audioformat änderte"
 
-#: src/state.ts:2584
+#: src/state.ts:2661
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 

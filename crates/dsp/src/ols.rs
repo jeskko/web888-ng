@@ -15,6 +15,9 @@ pub struct OverlapSave {
     buf: Vec<C32>,
     work: Vec<C32>,
     scratch: Vec<C32>,
+    /// New taps' spectrum (`set_taps`), faded in over the next block.
+    next: Option<Vec<C32>>,
+    old: Vec<C32>,
 }
 
 impl OverlapSave {
@@ -31,11 +34,7 @@ impl OverlapSave {
         assert!(n.is_power_of_two() && n > m);
         let fwd = crate::fft_plan(n, false);
         let inv = crate::fft_plan(n, true);
-        let mut hf = vec![C32::new(0.0, 0.0); n];
-        hf[..m].copy_from_slice(taps);
-        fwd.process(&mut hf);
-        let k = 1.0 / n as f32;
-        hf.iter_mut().for_each(|x| *x *= k);
+        let hf = Self::spectrum(taps, n, &fwd);
         let scratch = vec![
             C32::new(0.0, 0.0);
             fwd.get_inplace_scratch_len()
@@ -50,7 +49,30 @@ impl OverlapSave {
             buf: vec![C32::new(0.0, 0.0); m - 1],
             work: vec![C32::new(0.0, 0.0); n],
             scratch,
+            next: None,
+            old: Vec::new(),
         }
+    }
+
+    fn spectrum(taps: &[C32], n: usize, fwd: &Arc<dyn Fft<f32>>) -> Vec<C32> {
+        let mut hf = vec![C32::new(0.0, 0.0); n];
+        hf[..taps.len()].copy_from_slice(taps);
+        fwd.process(&mut hf);
+        let k = 1.0 / n as f32;
+        hf.iter_mut().for_each(|x| *x *= k);
+        hf
+    }
+
+    /// New taps of the same length, keeping the history: the next block's
+    /// output fades from the old filter's to the new one's (no gap, no
+    /// click; the delay stays). Returns false (nothing changed) if the
+    /// length differs.
+    pub fn set_taps(&mut self, taps: &[C32]) -> bool {
+        if taps.len() != self.m {
+            return false;
+        }
+        self.next = Some(Self::spectrum(taps, self.n, &self.fwd));
+        true
     }
 
     /// Group delay in samples (linear-phase taps).
@@ -68,12 +90,36 @@ impl OverlapSave {
                 self.work.copy_from_slice(&self.buf);
                 self.fwd
                     .process_with_scratch(&mut self.work, &mut self.scratch);
-                for (w, h) in self.work.iter_mut().zip(&self.hf) {
-                    *w *= h;
+                if let Some(next) = self.next.take() {
+                    // the block through both filters, faded across it
+                    self.old.clear();
+                    self.old
+                        .extend(self.work.iter().zip(&self.hf).map(|(w, h)| w * h));
+                    self.inv
+                        .process_with_scratch(&mut self.old, &mut self.scratch);
+                    self.hf = next;
+                    for (w, h) in self.work.iter_mut().zip(&self.hf) {
+                        *w *= h;
+                    }
+                    self.inv
+                        .process_with_scratch(&mut self.work, &mut self.scratch);
+                    let k = 1.0 / block as f32;
+                    for (i, (o, n)) in self.old[self.m - 1..]
+                        .iter()
+                        .zip(&self.work[self.m - 1..])
+                        .enumerate()
+                    {
+                        let a = (i as f32 + 0.5) * k;
+                        out.push(o * (1.0 - a) + n * a);
+                    }
+                } else {
+                    for (w, h) in self.work.iter_mut().zip(&self.hf) {
+                        *w *= h;
+                    }
+                    self.inv
+                        .process_with_scratch(&mut self.work, &mut self.scratch);
+                    out.extend_from_slice(&self.work[self.m - 1..]);
                 }
-                self.inv
-                    .process_with_scratch(&mut self.work, &mut self.scratch);
-                out.extend_from_slice(&self.work[self.m - 1..]);
                 self.buf.drain(..block);
             }
         }

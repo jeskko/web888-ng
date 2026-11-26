@@ -1,7 +1,7 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { formatKhz, parseFreq, tickStep, snap, bandwidths, stepTo } from "../src/fmt.ts";
+import { formatKhz, parseFreq, tickStep, snap, bandwidths, stepTo, pbtEdges } from "../src/fmt.ts";
 import { formatHash, parseHash } from "../src/hash.ts";
 import { MODES } from "../src/proto.ts";
 
@@ -43,4 +43,18 @@ test("steps land on the grid", () => {
   assert.equal(stepTo(7_074_350, 1000, -1), 7_074_000);
   assert.equal(stepTo(990_000, 9000, 1), 999_000);
   assert.equal(stepTo(7_074_000, 10, 1), 7_074_010);
+});
+
+test("twin PBT moves each edge, kept as the server keeps it", () => {
+  const usb = { lo: 300, hi: 2700 };
+  assert.deepEqual(pbtEdges(usb, { lo: 0, hi: 0 }), [300, 2700]);
+  // PBT 1 narrows from below, PBT 2 from above, both together shift
+  assert.deepEqual(pbtEdges(usb, { lo: 400, hi: 0 }), [700, 2700]);
+  assert.deepEqual(pbtEdges(usb, { lo: 0, hi: -500 }), [300, 2200]);
+  assert.deepEqual(pbtEdges(usb, { lo: 200, hi: 200 }), [500, 2900]);
+  // edges that meet: the low one wins, 50 Hz wide
+  assert.deepEqual(pbtEdges(usb, { lo: 2000, hi: -1000 }), [2300, 2350]);
+  // within 5 kHz of the dial at 12 kS/s, 10 kHz at 24
+  assert.deepEqual(pbtEdges({ lo: -4000, hi: 4000 }, { lo: -2000, hi: 2000 }), [-5000, 5000]);
+  assert.deepEqual(pbtEdges({ lo: -4000, hi: 4000 }, { lo: -2000, hi: 2000 }, 24000), [-6000, 6000]);
 });

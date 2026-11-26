@@ -78,6 +78,9 @@ input[type="range"]:disabled { opacity: 0.35; }
 .pop-box p { margin: 4px 0; font-size: 0.8571rem; }
 .pop-row { display: flex; align-items: center; gap: 8px; margin: 4px 0; }
 .pop-head { color: var(--dim); min-width: 5ch; }
+.pbt-grid { display: grid; grid-template-columns: auto auto auto; gap: 6px 8px; align-items: center; margin: 6px 0; }
+.pbt-grid input[type="range"] { width: 160px; }
+.pbt-grid .num { min-width: 8ch; text-align: right; }
 .noise-grid, .wf-grid { display: grid; grid-template-columns: auto auto auto; gap: 6px 8px; align-items: center; }
 .noise-grid > button, .wf-grid > button { justify-self: stretch; }
 .noise-grid input[type="range"], .wf-grid input[type="range"] { width: 140px; }

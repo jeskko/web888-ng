@@ -7,7 +7,7 @@ import { batch, computed, effect, signal } from "@preact/signals";
 import { t } from "./i18n.ts";
 import { Player, type PlayerStats } from "./audio/player.ts";
 import { bandOf, type Band } from "./bands.ts";
-import { clamp, formatKhz, setShownOffset, shownOffset, snapFor, stepFor } from "./fmt.ts";
+import { clamp, formatKhz, PBT_MAX, pbtEdges, setShownOffset, shownOffset, snapFor, stepFor } from "./fmt.ts";
 import { formatHash, parseHash } from "./hash.ts";
 import { Conn, wsUrl, type ConnState } from "./net.ts";
 import type { AudioFrame, AudioReq, Codec, IqFrame, Limits, Mode, RadioInfo, SkimMark, Spot, State, Status, UserMark, WfLine, WfReq } from "./proto.ts";
@@ -1913,6 +1913,7 @@ export function openSig(row: SigRow, cls: SigClass): void {
 }
 
 export function setMode(mode: Mode): void {
+  pbtReset();
   link?.send({ type: "mode", mode });
 }
 
@@ -1930,15 +1931,91 @@ export function cycleAm(): void {
 export function setModePassband(mode: Mode, lo: number, hi: number): void {
   const s = st.value;
   if (!s) return;
+  pbtReset();
   update({ mode, lo, hi });
   link?.send({ type: "mode", mode, lo, hi, pitch: s.pitch });
 }
 
+/** A passband exactly (a decoder's, a band plan's): twin PBT cleared. */
 export function setPassband(lo: number, hi: number): void {
+  pbtReset();
+  sendPassband(lo, hi);
+}
+
+function sendPassband(lo: number, hi: number): void {
   const s = st.value;
   if (!s) return;
   update({ lo, hi });
   link?.send({ type: "mode", mode: s.mode, lo, hi, pitch: s.pitch });
+}
+
+/** Twin passband tuning (Icom-style PBT1/PBT2): how far the low and the
+ * high edge are moved (Hz) from the base passband: the preset picked, or
+ * the passband set before the first turn. A preset pick keeps them; a
+ * mode change or a passband set exactly (decoders) clears them. */
+export const pbt = signal<{ lo: number; hi: number }>({ lo: 0, hi: 0 });
+let pbtBase: { mode: Mode; lo: number; hi: number } | null = null;
+let pbtTimer: ReturnType<typeof setTimeout> | null = null;
+let pbtSent = 0;
+
+function pbtReset(): void {
+  pbtBase = null;
+  if (pbtTimer) clearTimeout(pbtTimer);
+  pbtTimer = null;
+  if (pbt.value.lo || pbt.value.hi) pbt.value = { lo: 0, hi: 0 };
+}
+
+/** The passband twin PBT works from (the one shown as the preset). */
+export function passBase(): { lo: number; hi: number } | null {
+  const s = st.value;
+  if (!s) return null;
+  return pbtBase && pbtBase.mode === s.mode ? pbtBase : { lo: s.lo, hi: s.hi };
+}
+
+/** Sends the passband with twin PBT applied: at once, then at most every
+ * 80 ms while a knob turns (the last value always goes). */
+function pbtApply(): void {
+  const s = st.value;
+  const b = passBase();
+  if (!s || !b) return;
+  const [lo, hi] = pbtEdges(b, pbt.value, s.audio_rate);
+  update({ lo, hi });
+  const go = () => {
+    pbtTimer = null;
+    pbtSent = performance.now();
+    const v = st.value;
+    const bb = passBase();
+    if (!v || !bb) return;
+    const [l, h] = pbtEdges(bb, pbt.value, v.audio_rate);
+    sendPassband(l, h);
+  };
+  if (pbtTimer) return;
+  const wait = 80 - (performance.now() - pbtSent);
+  if (wait <= 0) go();
+  else pbtTimer = setTimeout(go, wait);
+}
+
+/** Twin PBT moved (Hz offsets of the low and high edge; 0, 0: clear). */
+export function setPbt(lo: number, hi: number): void {
+  const s = st.value;
+  if (!s) return;
+  if (!pbtBase || pbtBase.mode !== s.mode) pbtBase = { mode: s.mode, lo: s.lo, hi: s.hi };
+  pbt.value = { lo: clampPbt(lo), hi: clampPbt(hi) };
+  pbtApply();
+}
+
+const clampPbt = (v: number) => Math.round(clamp(v, -PBT_MAX, PBT_MAX));
+
+/** A preset picked: twin PBT, if set, stays on top of it. */
+export function pickPassband(lo: number, hi: number): void {
+  const s = st.value;
+  if (!s) return;
+  if (!pbt.value.lo && !pbt.value.hi) {
+    setPassband(lo, hi);
+    return;
+  }
+  pbtBase = { mode: s.mode, lo, hi };
+  pbtApply();
 }
 
 export function setAgc(agc: boolean, gain_db?: number): void {

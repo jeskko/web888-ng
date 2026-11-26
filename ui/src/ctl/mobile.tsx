@@ -24,7 +24,8 @@ import {
   radio,
   rssi,
   setMode,
-  setPassband,
+  passBase,
+  pickPassband,
   setVolume,
   setWheelStep,
   spotsOpen,
@@ -48,7 +49,7 @@ import { PropCtl, PropPanel } from "./prop.tsx";
 import { AfPanel } from "./afspec.tsx";
 import { AudioRecCtl } from "./audiorec.tsx";
 import { SpotPanel, SpotsCtl } from "./spots.tsx";
-import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, LeaseBanner, LookCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
+import { AttLamp, AudioCtl, CodecCtl, ContrastCtl, DspCtl, FilterBody, LeaseBanner, LookCtl, StatusBar, UsersCtl, ZoomCtl } from "./controls.tsx";
 import { NearDial } from "./neardial.tsx";
 
 type SheetName = "keypad" | "bands" | "more" | null;
@@ -166,11 +167,13 @@ function Dock({ open }: { open: (s: SheetName) => void }) {
   const cycleBw = () => {
     if (!s) return;
     const list = bandwidths(s.mode, s.audio_rate);
-    const i = list.findIndex((b) => b.lo === s.lo && b.hi === s.hi);
+    const b0 = passBase() ?? s;
+    const i = list.findIndex((b) => b.lo === b0.lo && b.hi === b0.hi);
     const n = list[(i + 1) % list.length];
-    setPassband(n.lo, n.hi);
+    pickPassband(n.lo, n.hi);
   };
-  const bw = s ? bandwidths(s.mode, s.audio_rate).find((b) => b.lo === s.lo && b.hi === s.hi)?.label : undefined;
+  const b0 = s ? (passBase() ?? s) : null;
+  const bw = s && b0 ? bandwidths(s.mode, s.audio_rate).find((b) => b.lo === b0.lo && b.hi === b0.hi)?.label : undefined;
   return (
     <div class="m-dock">
       <div class="m-keys">
@@ -309,6 +312,8 @@ function More({ close }: { close: () => void }) {
         <CodecCtl />
       </div>
       <AudioRecCtl />
+      <h4>{t("Passband")}</h4>
+      <FilterBody />
       <h4>{t("Noise")}</h4>
       <DspCtl inline />
       <h4>{t("Waterfall")}</h4>

@@ -63,6 +63,7 @@ kill $P
 | `whatis.mjs` | "what is this?": ID on, each listed signal's ? and its answer (headline, sentences, figures); `DRAG=F0,F1` (after `ZOOM` wheel steps) a shift-drag across that part of the waterfall | real signals (the 60 s recording: DWD RTTY 10100.8 kHz, 40 m SSB and AM) |
 | `iqrec.mjs` | IQ recording from the page: Rec, IQ, a length (2nd argument, s) and `FORMAT=cs16\|wav`; the file lands in `OUT` | a server with bins (`--bins 16` with the iq backend; give `--iq-rate` of the file) |
 | `fit.mjs` | the header on one row in every language on a fullscreen 14" MacBook Pro (1512 × 982, 2x; other sizes as arguments): rows and the width needed; exits 1 if one wraps. Run after UI changes to the bars | any server |
+| `pbt.mjs` | twin passband tuning: moves PBT 1, PBT 2 and Shift, a fast sweep, a preset under PBT, Clear and a mode change, printing the passband the server answers with after each | any server |
 | `timecode.mjs` | the Time panel: tunes a station from its list (`DCF77\|77500`; `-` keeps the URL's tuning), prints the panel every 30 s | a time station in the passband (live, or a recording of the unit's LF bin upsampled to 1.92 MS/s, `--bins 16`) |
 
 Set passwords in the throwaway config with
