@@ -1255,10 +1255,42 @@ with NN on). As planned above, StoRM-shaped:
   but what it brings back is wrong (substitutions 35 → 40-46 %,
   insertions up): loud isn't intelligible. gen3f is in
   `crates/nr/model` (server bd69b21) and on the unit for listening; still
-  13 points behind the mask. Next: the joint fine-tune with the mask
-  (the mask trained on the same zeroed targets may hold the restorer
-  back too: a mask retrain on `pairs-fill` is worth a check), then
-  longer runs from gen3f.
+  13 points behind the mask.
+* **Plan, revised (2026-11-26, after a second opinion).**
+  1. Diagnostics first (cheap):
+     a. steps 1/2/4/8/16 on gen3f (40 receptions): 2 steps has always
+        scored worse and quieter than 1, which a working flow shouldn't.
+        Better with more steps: discretisation, distil to one step. No
+        better: it's a shrinking regressor; drop the flow for a direct
+        predictor;
+     b. the real pairs' alignment: per reception, the frequency offset
+        and the lag at the start against the end (pairbank.py models
+        neither mistuning nor drift; a target 20-50 Hz or a few ms off
+        teaches blur, i.e. substitutions);
+     c. scoring as the page is used: gen3f blended with the mask at
+        30/50/70 % (the strength slider), Vosk besides Whisper and
+        Parakeet; gendiag against the clean target, not the mask (the
+        mask's upper bands are mostly residual noise).
+  2. The normaliser: `scale_of` (and Gen's mask-output feature) take the
+     running mean of log power over all 129 bins, so the stopband's
+     depth sets it: the gap between mean-of-log and log-of-mean is
+     35.7 dB on synthetic batches and 21.7 dB on real pairs, and
+     in-band compressed magnitudes come out ~14 dB lower on real data
+     (p95 4.6 against 10.2). Level from the passband's mean power
+     instead; a Gen-only change (the mask predicts ratios), mirrored in
+     `restore.rs` with its own level. Fine-tune from gen3f and one run
+     from scratch.
+  3. From 1b: offset, lag drift and a slow gain track applied to the
+     pair targets if they're off.
+  4. From 1a: one-step distillation, or a direct predictor.
+  5. Perceptual loss: a frozen speech encoder's features (WavLM or
+     wav2vec 2.0) between the 1-step output and the clean target, in
+     place of the level hinge (which made it louder, not clearer).
+     Licence and download to be cleared with the user first. Whisper
+     and Parakeet stay scorers only.
+  6. The joint fine-tune with the mask; the mask retrain on `pairs-fill`
+     last if at all (a mask can't bring back buried speech; a filled
+     target mainly teaches it to pass noise there).
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
