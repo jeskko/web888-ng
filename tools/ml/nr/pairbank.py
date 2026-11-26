@@ -32,7 +32,12 @@ import os
 import sys
 from multiprocessing import Pool
 
-import numpy as np
+# one BLAS thread per worker: the pool already fills the cores (16
+# workers each with a full BLAS pool put ~200 threads on 16 cores)
+for _v in ("OPENBLAS_NUM_THREADS", "OMP_NUM_THREADS", "MKL_NUM_THREADS"):
+    os.environ.setdefault(_v, "1")
+
+import numpy as np  # noqa: E402
 from scipy.ndimage import uniform_filter1d
 from scipy.signal import resample_poly, welch
 
@@ -60,20 +65,25 @@ def envelopes(v: np.ndarray, fs: int) -> np.ndarray:
 def own_lag(ex: np.ndarray, ec: np.ndarray, a: int, b: int, d: int) -> int:
     """The lag (samples) of the utterance in samples a..b of the clean
     source: the envelope correlation's best within ENV_REACH frames of
-    the global lag d."""
+    the global lag d. All lags at once: the products by correlation, the
+    windows' (mean-removed) norms from cumulative sums."""
+    from scipy.signal import correlate
     fa, fb = a // ENV_HOP, b // ENV_HOP
+    L = fb - fa
     seg = ec[:, fa:fb] - ec[:, fa:fb].mean(1, keepdims=True)
-    best, at = -2.0, 0
-    for dl in range(-ENV_REACH, ENV_REACH + 1):
-        i0 = fa + d // ENV_HOP + dl
-        if i0 < 0 or i0 + (fb - fa) > ex.shape[1]:
-            continue
-        w = ex[:, i0:i0 + fb - fa]
-        w = w - w.mean(1, keepdims=True)
-        r = (w * seg).sum() / (np.linalg.norm(w) * np.linalg.norm(seg) + 1e-12)
-        if r > best:
-            best, at = r, dl
-    return d + at * ENV_HOP
+    lo = max(0, fa + d // ENV_HOP - ENV_REACH)
+    hi = min(ex.shape[1] - L, fa + d // ENV_HOP + ENV_REACH)
+    if L <= 0 or hi < lo:
+        return d
+    win = ex[:, lo:hi + L]
+    # seg is zero-mean per band, so the window's mean drops out of the product
+    num = sum(correlate(win[k], seg[k], mode="valid") for k in range(len(seg)))
+    c1 = np.concatenate([np.zeros((len(win), 1)), np.cumsum(win, 1)], 1)
+    c2 = np.concatenate([np.zeros((len(win), 1)), np.cumsum(win ** 2, 1)], 1)
+    s1, s2 = c1[:, L:] - c1[:, :-L], c2[:, L:] - c2[:, :-L]
+    wn = np.sqrt(np.maximum((s2 - s1 ** 2 / L).sum(0), 0.0))
+    r = num / (wn * np.linalg.norm(seg) + 1e-12)
+    return d + (lo + int(np.argmax(r)) - fa - d // ENV_HOP) * ENV_HOP
 
 
 def one(args):
