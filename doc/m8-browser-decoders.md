@@ -1181,9 +1181,29 @@ with NN on). As planned above, StoRM-shaped:
 * The strength slider mixes Gen with the mask output (below 100 %); the
   decoders never get Gen's audio. The Rust stream matches PyTorch
   (`restorer_matches_pytorch`, noise off, 2 steps).
-* Invented words: `score.py --gen` (Paderborn eval receptions, Whisper and
-  Parakeet, word errors split into substitutions, deletions and
-  insertions, beside the mask and the raw audio): results to follow.
+* **On real receptions it fails** (`score.py --gen`, 200 Paderborn eval
+  receptions, 1000 utterances; word errors, and substituted / deleted /
+  inserted words per 100 reference words):
+
+  | | raw | mask (NN) | Gen 1 step | Gen 2 steps |
+  |---|---|---|---|---|
+  | Whisper WER, all | 52.4 % | 52.5 % | 83.5 % | 85.3 % |
+  | Whisper, raw WER < 30 % | 15.3 % | 17.7 % | 67.2 % | 72.3 % |
+  | Whisper sub/del/ins | 30/17/5 | 30/17/5 | 35/44/5 | 31/51/3 |
+  | Parakeet WER, all | 37.6 % | 38.9 % | 72.7 % | 77.9 % |
+  | Parakeet sub/del/ins | 23/12/3 | 24/11/3 | 28/43/2 | 25/51/2 |
+  | ESTOI | 0.341 | 0.351 | 0.202 | 0.161 |
+
+  It doesn't invent words (insertions don't rise); it loses them:
+  deletions 17 → 44-51 %, and the most even on the cleanest receptions
+  (raw WER under 30 %: 15 → 67 %). The synthetic gain (+3 dB SI-SDR
+  over the mask) doesn't carry over: trained on synthetic channels only
+  (no real pairs, `--pairs`), it blurs real speech it hasn't seen.
+  Gen is off by default; proposed (2026-11-26, the user to decide):
+  hidden in releases until a model scores at least as well as the mask
+  here. Next: the real pairs in its
+  training, a check of its input on Paderborn's 8 kS/s band, then a
+  listen.
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
