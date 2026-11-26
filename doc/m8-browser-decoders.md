@@ -1201,8 +1201,37 @@ with NN on). As planned above, StoRM-shaped:
   (no real pairs, `--pairs`), it blurs real speech it hasn't seen.
   Gen is off by default; proposed (2026-11-26, the user to decide):
   hidden in releases until a model scores at least as well as the mask
-  here. Next: the real pairs in its
-  training, a check of its input on Paderborn's 8 kS/s band, then a
+  here.
+* **Why, and the second round (2026-11-26).** `gendiag.py` (band power
+  against the mask's output, in speech and in pauses): gen1 is
+  23-26 dB under the mask in speech on real receptions, and 3-11 dB under
+  clean even on synthetic data (the worst at low SNR). With 1-2 Euler
+  steps the flow averages a phase it can't know, and the complex
+  spectrum shrinks; SI-SDR is scale-invariant and hid it. Two changes,
+  three runs of 40k steps each (`--mask run7`):
+  `--mag` (flow on the compressed magnitude, the noisy phase kept, as
+  the mask does) and `--pairs 0.5` (half of each batch real Paderborn
+  pairs).
+
+  | Gen, 1 step | Whisper WER | sub/del/ins | Parakeet WER | ESTOI | synthetic level vs clean |
+  |---|---|---|---|---|---|
+  | mask (NN), for reference | 52.5 % | 30/17/5 | 38.9 % | 0.351 | |
+  | gen1 (complex) | 83.5 % | 35/44/5 | 72.7 % | 0.202 | −3…−11 dB |
+  | gen2c (complex + pairs) | 90.6 % | 42/42/6 | 72.4 % | 0.151 | −3…−9 dB |
+  | gen2mn (magnitude) | 80.8 % | 33/43/5 | 70.8 % | 0.242 | −1…−4.5 dB |
+  | gen2m (magnitude + pairs) | **71.0 %** | 39/26/7 | **59.8 %** | 0.307 | −1…−4.6 dB |
+
+  The magnitude form fixes the level on synthetic data, but on real
+  receptions without pairs it is still about 22 dB under the mask in
+  every band (the gap is between synthetic and real channels, not the
+  phase). The pairs help the magnitude form (deletions 43 → 26 %) and
+  hurt the complex one. gen2m, the best, against the mask by band
+  (150-500 / 500-1k / 1-2k / 2-3.5k Hz): speech −8 / −16 / −30 / −37 dB,
+  pauses −46…−65 dB. It keeps the low band and strips the consonant
+  bands and the pauses (substitutions 30 → 39 %). None ships;
+  `crates/nr/model` keeps gen1, and the Rust restorer reads both forms.
+  Next: a per-band level loss against the mask's output on the real
+  pairs, then the joint fine-tune with the mask (magnitude form), then a
   listen.
 
 ### 5.5 Label every signal (2026-11-26, first version)
