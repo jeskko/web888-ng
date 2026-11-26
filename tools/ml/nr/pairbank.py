@@ -10,8 +10,16 @@ noise in 300-2700 Hz (in-band SNR >= -10 dB) are kept.
 Both at 12 kS/s, one int16 file each (noisy and speech, the same scale
 per reception) and an index (.idx.npy: start, length).
 
-    python3 pairbank.py /data/nr/paderborn/ham_radio pairs
+    python3 pairbank.py /data/nr/paderborn/ham_radio pairs [--align] [--fill]
     # -> pairs.x.i16, pairs.s.i16, pairs.idx.npy
+
+With --align, each utterance (the annotation's activity spans) at its own
+lag, found from band log-power envelopes (phase-free) within 300 ms of
+the reception's global lag; otherwise one global lag from waveform
+correlation, which a few Hz of mistuning (the SSB phase turning a few
+times a second) misleads: in 60 train receptions half the utterances
+were 10 ms or more off, some 40-60 ms, and the lag drifts within a
+file (online receivers' buffering and clocks).
 
 With --fill (for the restorer, gen.py): where the speech is buried
 (no response measured) inside 300-2700 Hz, the median of the response
@@ -34,8 +42,42 @@ MIN_SNR = -10.0
 FILL = (300.0, 2700.0)
 
 
+ENV_HOP = 16                                   # samples at 8 kS/s: 2 ms
+ENV_REACH = 150                                # envelope lags tried each way (300 ms)
+
+
+def envelopes(v: np.ndarray, fs: int) -> np.ndarray:
+    """(8, frames): band log-power envelopes in 300-2700 Hz, each less its
+    mean; phase-free, so a turning SSB phase doesn't matter."""
+    from scipy.signal import stft
+    f, _, Z = stft(v, fs, nperseg=128, noverlap=128 - ENV_HOP)
+    p = np.abs(Z) ** 2
+    edges = np.linspace(300, 2700, 9)
+    e = np.stack([np.log10(p[(f >= a) & (f < b)].sum(0) + 1e-9) for a, b in zip(edges[:-1], edges[1:])])
+    return e - e.mean(1, keepdims=True)
+
+
+def own_lag(ex: np.ndarray, ec: np.ndarray, a: int, b: int, d: int) -> int:
+    """The lag (samples) of the utterance in samples a..b of the clean
+    source: the envelope correlation's best within ENV_REACH frames of
+    the global lag d."""
+    fa, fb = a // ENV_HOP, b // ENV_HOP
+    seg = ec[:, fa:fb] - ec[:, fa:fb].mean(1, keepdims=True)
+    best, at = -2.0, 0
+    for dl in range(-ENV_REACH, ENV_REACH + 1):
+        i0 = fa + d // ENV_HOP + dl
+        if i0 < 0 or i0 + (fb - fa) > ex.shape[1]:
+            continue
+        w = ex[:, i0:i0 + fb - fa]
+        w = w - w.mean(1, keepdims=True)
+        r = (w * seg).sum() / (np.linalg.norm(w) * np.linalg.norm(seg) + 1e-12)
+        if r > best:
+            best, at = r, dl
+    return d + at * ENV_HOP
+
+
 def one(args):
-    db, path, fill = args
+    db, path, fill, align = args
     k = path.rsplit("__", 1)[1][:-4]
     ann = json.load(open(f"{db}/annotations.json"))[k]
     x, fs = read_wav(path)
@@ -43,15 +85,28 @@ def one(args):
     n = min(len(x), len(c))
     x, c = x[:n].astype(np.float64), c[:n].astype(np.float64)
     d = lag(c, x)
+    spans = [tuple(map(int, s.split(":"))) for s in ann["activity"][0].split(", ")]
+    if align:
+        ex, ec = envelopes(x, fs), envelopes(c, fs)
+        lags = [own_lag(ex, ec, max(0, a), min(n, b), d) if b - a >= fs // 2 else d for a, b in spans]
+    else:
+        lags = [d] * len(spans)
     ca = np.zeros(n)
-    if d >= 0:
+    if align:
+        # each utterance (and the silence up to halfway to its neighbours)
+        # moved by its own lag
+        cuts = [0] + [(spans[i][1] + spans[i + 1][0]) // 2 for i in range(len(spans) - 1)] + [n]
+        for (u0, u1), L in zip(zip(cuts[:-1], cuts[1:]), lags):
+            j0, j1 = max(0, u0 + L), min(n, u1 + L)
+            if j1 > j0:
+                ca[j0:j1] = c[j0 - L:j1 - L]
+    elif d >= 0:
         ca[d:] = c[:n - d]
     else:
         ca[:n + d] = c[-d:]
     act = np.zeros(n, bool)
-    for s in ann["activity"][0].split(", "):
-        a, b = map(int, s.split(":"))
-        act[max(0, a + d):min(n, b + d)] = True
+    for (a, b), L in zip(spans, lags):
+        act[max(0, a + L):min(n, b + L)] = True
     if act.sum() < fs or (~act).sum() < fs:
         return None
     f, px = welch(x[act], fs, nperseg=256)
@@ -83,13 +138,13 @@ def one(args):
 
 
 def main():
-    args = [v for v in sys.argv[1:] if v != "--fill"]
-    fill = "--fill" in sys.argv
+    args = [v for v in sys.argv[1:] if v not in ("--fill", "--align")]
+    fill, align = "--fill" in sys.argv, "--align" in sys.argv
     db, out = args[0], args[1]
     files = sorted(os.path.join(d, f) for d, _, fs in os.walk(f"{db}/noisy/train") for f in fs if f.endswith(".wav"))
     idx, pos, snrs = [], 0, []
     with open(out + ".x.i16", "wb") as fx, open(out + ".s.i16", "wb") as fs_, Pool(min(16, os.cpu_count() or 1)) as pool:
-        for r in pool.imap(one, [(db, f, fill) for f in files], chunksize=8):
+        for r in pool.imap(one, [(db, f, fill, align) for f in files], chunksize=8):
             if r is None:
                 continue
             x, s, snr = r

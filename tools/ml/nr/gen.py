@@ -5,7 +5,7 @@ mask model's causal STFT (common.py), StoRM-shaped (the mask output is
 where the flow starts, so few steps and few inventions).
 
 Spectra are normalised and compressed: per frame divided by the noisy
-input's running level (common.level, as an amplitude), then
+input's running level (lev_of, as an amplitude; --norm), then
 c = X |X|^(B - 1) with B = 0.5; real and imaginary parts side by side
 (2 x 129).
 
@@ -52,10 +52,20 @@ NT = 16                                        # time embedding: sin and cos of 
 LEVEL_BANDS = ((150, 500), (500, 1000), (1000, 2000), (2000, 3500))
 
 
-def scale_of(X: torch.Tensor) -> torch.Tensor:
+def lev_of(X: torch.Tensor, norm: str = "log") -> torch.Tensor:
+    """(B, T): the noisy input's running level (log10 power). "log": of
+    the frames' mean log power over all bins (the mask model's; the empty
+    bins outside the receiver's passband pull it down, by 36 dB on
+    synthetic batches and 22 dB on real receptions); "mean": of the log
+    of their mean power (the passband's level, whatever the stopband)."""
+    p = X.real ** 2 + X.imag ** 2
+    m = torch.log10(p + 1e-10).mean(-1) if norm == "log" else torch.log10(p.mean(-1) + 1e-10)
+    return level(m)
+
+
+def scale_of(X: torch.Tensor, norm: str = "log") -> torch.Tensor:
     """(B, T, 1): the noisy input's running level as an amplitude."""
-    lp = torch.log10(X.real ** 2 + X.imag ** 2 + 1e-10)
-    return torch.pow(10.0, level(lp.mean(-1)) / 2)[:, :, None]
+    return torch.pow(10.0, lev_of(X, norm) / 2)[:, :, None]
 
 
 def comp(X: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
@@ -92,9 +102,10 @@ class Gen(nn.Module):
     """`mag`: the flow on the compressed magnitude only (BINS values a
     frame), the noisy phase kept; else the complex spectrum (2 BINS)."""
 
-    def __init__(self, hidden: int = 256, width: int = 512, mag: bool = False):
+    def __init__(self, hidden: int = 256, width: int = 512, mag: bool = False, norm: str = "log"):
         super().__init__()
         self.mag = mag
+        self.norm = norm
         d = BINS if mag else 2 * BINS
         nin = 2 * BINS + len(PITCH_LAGS)
         self.conv = nn.Conv1d(nin, hidden, 3)
@@ -111,9 +122,9 @@ class Gen(nn.Module):
 
     def cond(self, x: torch.Tensor, X: torch.Tensor, E: torch.Tensor) -> torch.Tensor:
         """Audio x (B, n), its stft X and the mask output's E → (B, T, H)."""
-        fx = features(X)
         lp = torch.log10(X.real ** 2 + X.imag ** 2 + 1e-10)
-        lev = level(lp.mean(-1))[:, :, None]
+        lev = lev_of(X, self.norm)[:, :, None]
+        fx = features(X) if self.norm == "log" else torch.clamp((lp - lev) / 2, -6, 6)
         fe = torch.clamp((torch.log10(E.real ** 2 + E.imag ** 2 + 1e-10) - lev) / 2, -6, 6)
         f = torch.cat([fx, fe, pitch_features(x)], -1)
         h = F.relu(self.conv(F.pad(f.transpose(1, 2), (2, 0)))).transpose(1, 2)
@@ -136,7 +147,7 @@ def restore(gen: Gen, mask, x: torch.Tensor, steps: int = 2, seed: int = 0, sigm
     """Audio (B, n) → restored audio (B, n)."""
     X = stft(x)
     E = mask_out(mask, x, X)
-    s = scale_of(X)
+    s = scale_of(X, gen.norm)
     ce = gen.comp(E, s)
     h = gen.cond(x, X, E)
     g = torch.Generator(x.device).manual_seed(seed)
@@ -162,7 +173,7 @@ def loss_fn(gen, mask, x, y, w_level=0.0, margin=10.0):
     (returned apart, for the log)."""
     X, S = stft(x), stft(y)
     E = mask_out(mask, x, X)
-    s = scale_of(X)
+    s = scale_of(X, gen.norm)
     ce, cs = gen.comp(E, s), gen.comp(S, s)
     h = gen.cond(x, X, E)
     t = torch.rand(ce.shape[:-1] + (1,), device=x.device)
@@ -183,7 +194,7 @@ def loss_fn(gen, mask, x, y, w_level=0.0, margin=10.0):
 
 def load_gen(ck: dict, device) -> Gen:
     a = ck.get("args", {})
-    g = Gen(a.get("hidden", 256), a.get("width", 512), a.get("mag", False)).to(device)
+    g = Gen(a.get("hidden", 256), a.get("width", 512), a.get("mag", False), a.get("norm", "log")).to(device)
     g.load_state_dict(ck["model"])
     return g.eval()
 
@@ -226,6 +237,9 @@ def main():
     ap.add_argument("--pairs", type=float, default=0.0,
                     help="share of each batch from real Paderborn pairs (pairbank.py, NR_PAIRS)")
     ap.add_argument("--mag", action="store_true", help="the magnitude only, the noisy phase kept")
+    ap.add_argument("--norm", choices=["log", "mean"], default="log",
+                    help="the running level spectra are normalised by (lev_of): log = the mask model's, "
+                         "mean = the passband's (the page's restore.rs reads only log so far)")
     ap.add_argument("--level", type=float, default=0.0, help="the level hinge's weight (0: none)")
     ap.add_argument("--level-margin", type=float, default=10.0, help="dB under the mask's output allowed")
     ap.add_argument("--resume")
@@ -236,7 +250,7 @@ def main():
     mask = load(torch.load(a.mask, map_location=dev), dev)
     for p in mask.parameters():
         p.requires_grad_(False)
-    gen = Gen(a.hidden, a.width, a.mag).to(dev)
+    gen = Gen(a.hidden, a.width, a.mag, a.norm).to(dev)
     if a.resume:
         gen.load_state_dict(torch.load(a.resume, map_location=dev)["model"])
     print(f"{sum(p.numel() for p in gen.parameters())} weights")

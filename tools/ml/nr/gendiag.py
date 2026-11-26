@@ -3,7 +3,8 @@
 (Paderborn eval): band power against the mask output in speech and in
 pauses, and the band envelopes' spread in speech against the clean
 source's (smeared speech: less; a restorer 20 dB too quiet shows here,
-not in SI-SDR).
+not in SI-SDR), and the spectral balance in speech (each band against
+500-1000 Hz) against the clean source's (lost consonant bands: lower).
 
     python3 gendiag.py ham_radio MASK.pt GEN.pt 40
 """
@@ -27,8 +28,8 @@ def bandpow(x, fs=12000):
     f, t, Z = sstft(x, fs, nperseg=256, noverlap=128)
     P = np.abs(Z) ** 2
     return np.stack([P[(f >= a) & (f < b)].sum(0) for a, b in BANDS]), t
-acc = {c: {"sp": [], "pa": [], "dyn": []} for c in ["raw", "nn0", "gen1", "gen2"]}
-cdyn = []
+acc = {c: {"sp": [], "pa": [], "dyn": [], "tilt": []} for c in ["raw", "nn0", "gen1", "gen2"]}
+cdyn, ctilt = [], []
 for fi, path in enumerate(files):
     k = path.rsplit("__", 1)[1][:-4]
     x8, fs = read_wav(path)
@@ -53,12 +54,18 @@ for fi, path in enumerate(files):
     Pc, _ = bandpow(cal)
     lg = lambda P: 10 * np.log10(P + 1e-12)
     cdyn.append(lg(Pc[:, sp]).std(1))
+    # spectral balance in speech: each band against 500-1000 Hz (no gain
+    # to fit: the clean source's scale is its own)
+    tilt = lambda P: lg(P[:, sp].mean(1)) - lg(P[1, sp].mean())  # noqa: E731
+    ctilt.append(tilt(Pc))
     for c, y in outs.items():
         P, _ = bandpow(y)
         acc[c]["sp"].append(lg(P[:, sp]).mean(1) - lg(Pm[:, sp]).mean(1))
         acc[c]["pa"].append(lg(P[:, ~sp]).mean(1) - lg(Pm[:, ~sp]).mean(1))
         acc[c]["dyn"].append(lg(P[:, sp]).std(1))
+        acc[c]["tilt"].append(tilt(P))
 print("bands (Hz):", BANDS)
-print("clean: envelope std in speech (dB):", np.round(np.mean(cdyn, 0), 1))
+print("clean: envelope std in speech (dB):", np.round(np.mean(cdyn, 0), 1),
+      " balance (dB against 500-1000 Hz):", np.round(np.mean(ctilt, 0), 1))
 for c, a in acc.items():
-    print(f"{c:5} speech vs mask {np.round(np.mean(a['sp'], 0), 1)}  pauses vs mask {np.round(np.mean(a['pa'], 0), 1)}  envelope std {np.round(np.mean(a['dyn'], 0), 1)}")
+    print(f"{c:5} speech vs mask {np.round(np.mean(a['sp'], 0), 1)}  pauses vs mask {np.round(np.mean(a['pa'], 0), 1)}  envelope std {np.round(np.mean(a['dyn'], 0), 1)}  balance {np.round(np.mean(a['tilt'], 0), 1)}")

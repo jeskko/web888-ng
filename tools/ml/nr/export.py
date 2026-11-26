@@ -35,6 +35,9 @@ def main():
     if gen:
         import gen as g
         m = g.load_gen(c, "cpu")
+        # crates/nr/src/restore.rs takes the mask's running level
+        if m.norm != "log":
+            sys.exit(f"--norm {m.norm}: restore.rs reads only the 'log' level so far")
         mc = torch.load(gen, map_location="cpu")
         mask = load(mc, "cpu")
         mask.load_state_dict({k: v.half().float() for k, v in mc["model"].items()})

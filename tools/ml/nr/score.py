@@ -158,6 +158,9 @@ def main():
     ap.add_argument("--keep", action="store_true", help="keep the audio (else deleted at the end)")
     ap.add_argument("--gen", help="the generative restorer's checkpoint (gen.py), after the mask model")
     ap.add_argument("--gen-steps", default="1,2", help="its flow steps to score")
+    ap.add_argument("--gen-mix", default="1",
+                    help="shares of the restorer in a blend with the mask output (as the page's strength "
+                         "slider below 100 %%), comma-separated; each below 1 scored as genKxPCT")
     a = ap.parse_args()
     ann = json.load(open(f"{a.db}/annotations.json"))
     txt = json.load(open(f"{a.db}/transcription.json"))
@@ -175,7 +178,8 @@ def main():
     if a.gen and net:
         import gen as g
         gen = g.load_gen(torch.load(a.gen, map_location=dev), dev)
-        conds += [f"gen{k}" for k in a.gen_steps.split(",")]
+        mixes = [float(v) for v in a.gen_mix.split(",")]
+        conds += [f"gen{k}" + ("" if m >= 1 else f"x{round(100 * m)}") for k in a.gen_steps.split(",") for m in mixes]
     tmp = tempfile.mkdtemp(prefix="nrscore")
     jobs = {c: [] for c in conds}
     refs = []
@@ -195,7 +199,12 @@ def main():
                     outs[f"nn{f}"] = enhance(net, xt, float(f))[0].cpu().numpy()
                 # (not k: that is the reception's key)
                 for steps in a.gen_steps.split(",") if gen else []:
-                    outs[f"gen{steps}"] = g.restore(gen, net, xt, int(steps), seed=fi)[0].cpu().numpy()
+                    r = g.restore(gen, net, xt, int(steps), seed=fi)[0].cpu().numpy()
+                    m0 = outs["nn0"] if "nn0" in outs else enhance(net, xt, 0.0)[0].cpu().numpy()
+                    for m in mixes:
+                        n = min(len(r), len(m0))
+                        outs[f"gen{steps}" + ("" if m >= 1 else f"x{round(100 * m)}")] = (
+                            r if m >= 1 else m * r[:n] + (1 - m) * m0[:n])
         spans = [tuple(map(int, s.split(":"))) for s in ann[k]["activity"][0].split(", ")]
         for u, ((s0, s1), ref) in enumerate(zip(spans, txt[k])):
             i0, i1 = int(max(0, s0 / fs - MARGIN) * 12000), int((s1 / fs + MARGIN) * 12000)

@@ -1291,6 +1291,21 @@ with NN on). As planned above, StoRM-shaped:
   6. The joint fine-tune with the mask; the mask retrain on `pairs-fill`
      last if at all (a mask can't bring back buried speech; a filled
      target mainly teaches it to pass noise there).
+* **Pair alignment, measured (2026-11-26).** Mistuning is small: in 30
+  train receptions the offset is −0.7…+3.7 Hz (p10-p90), none over
+  20 Hz. But at SSB that turns the phase a few times a second, so the
+  clean source correlates with the reception as a waveform at only
+  0.08 (median): the real targets are good for magnitudes, useless for
+  phase (why the pairs hurt the complex Gen). And pairbank.py's one
+  waveform-correlation lag per reception is off: phase-free (band
+  envelopes, `pairalign.py`) half the utterances sit 10 ms or more from
+  it, some 40-60 ms (the global lag itself wrong), and the lag drifts
+  within a file (online receivers' buffering and clocks): a frame or
+  more of smear in the magnitude targets. `pairbank.py --align` places
+  each utterance at its own envelope lag (`/data/iq/nr/pairs-fa`, with
+  --fill). The mask run7 used no pairs, so it isn't affected.
+  `gen.py --norm mean` takes the level from the log of the mean power;
+  export.py refuses it until restore.rs reads it too.
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
