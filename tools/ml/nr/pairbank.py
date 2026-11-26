@@ -12,6 +12,12 @@ per reception) and an index (.idx.npy: start, length).
 
     python3 pairbank.py /data/nr/paderborn/ham_radio pairs
     # -> pairs.x.i16, pairs.s.i16, pairs.idx.npy
+
+With --fill (for the restorer, gen.py): where the speech is buried
+(no response measured) inside 300-2700 Hz, the median of the response
+measured there instead of none. The default target is the speech heard
+over the noise (right for the mask model, which can't bring back what's
+buried); a restorer taught that deletes the buried consonant bands.
 """
 import json
 import os
@@ -25,10 +31,11 @@ from scipy.signal import resample_poly, welch
 from score import lag, read_wav
 
 MIN_SNR = -10.0
+FILL = (300.0, 2700.0)
 
 
 def one(args):
-    db, path = args
+    db, path, fill = args
     k = path.rsplit("__", 1)[1][:-4]
     ann = json.load(open(f"{db}/annotations.json"))[k]
     x, fs = read_wav(path)
@@ -56,8 +63,14 @@ def one(args):
         return None
     # where the speech doesn't stand 10 % over the noise, the estimate is
     # noise itself: no response there
-    h2 = np.where(px - pn > 0.1 * pn, (px - pn) / (pc + 1e-20), 0.0)
+    heard = px - pn > 0.1 * pn
+    h2 = np.where(heard, (px - pn) / (pc + 1e-20), 0.0)
     h2 = np.maximum(uniform_filter1d(h2, 5), 0.0)
+    if fill:
+        inb = (f >= FILL[0]) & (f <= FILL[1])
+        meas = inb & heard
+        if meas.any():
+            h2 = np.where(inb & ~heard, np.median(h2[meas]), h2)
     # the response on the whole file's spectrum (zero phase)
     m = 1 << int(np.ceil(np.log2(2 * n)))
     fm = np.fft.rfftfreq(m, 1 / fs)
@@ -70,11 +83,13 @@ def one(args):
 
 
 def main():
-    db, out = sys.argv[1], sys.argv[2]
+    args = [v for v in sys.argv[1:] if v != "--fill"]
+    fill = "--fill" in sys.argv
+    db, out = args[0], args[1]
     files = sorted(os.path.join(d, f) for d, _, fs in os.walk(f"{db}/noisy/train") for f in fs if f.endswith(".wav"))
     idx, pos, snrs = [], 0, []
     with open(out + ".x.i16", "wb") as fx, open(out + ".s.i16", "wb") as fs_, Pool(min(16, os.cpu_count() or 1)) as pool:
-        for r in pool.imap(one, [(db, f) for f in files], chunksize=8):
+        for r in pool.imap(one, [(db, f, fill) for f in files], chunksize=8):
             if r is None:
                 continue
             x, s, snr = r

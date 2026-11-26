@@ -22,6 +22,12 @@ c = X |X|^(B - 1) with B = 0.5; real and imaginary parts side by side
   x_t = (1 - t) x0 + t x1, the head learns x1 - x0. Restoring: Euler
   from x0 in K steps (1 or 2 in the page).
 
+* Level (--level L): on the 1-step output x0 + v(x0, 0), per band
+  (LEVEL_BANDS) and frame where the target has speech, a hinge on being
+  more than --level-margin dB under the mask's output, L x (dB / 10).
+  Flow matching alone came out 22-37 dB under the mask on real
+  receptions (the consonant bands most), though level on synthetic ones.
+
 Training (run7's mask model frozen, data.py's examples with a clean
 target):
 
@@ -43,6 +49,7 @@ from common import BINS, PITCH_LAGS, features, istft, level, load, pitch_feature
 BETA = 0.5
 SIGMA = 0.2
 NT = 16                                        # time embedding: sin and cos of 16 frequencies
+LEVEL_BANDS = ((150, 500), (500, 1000), (1000, 2000), (2000, 3500))
 
 
 def scale_of(X: torch.Tensor) -> torch.Tensor:
@@ -141,7 +148,18 @@ def restore(gen: Gen, mask, x: torch.Tensor, steps: int = 2, seed: int = 0, sigm
     return istft(gen.decomp(xt, s, E), x.shape[-1])
 
 
-def loss_fn(gen, mask, x, y):
+def band_pow(gen, c: torch.Tensor) -> torch.Tensor:
+    """A compressed spectrum (as gen.comp's) → (B, T, len(LEVEL_BANDS))
+    power, on the same normalisation."""
+    m2 = c ** 2 if gen.mag else c[..., :BINS] ** 2 + c[..., BINS:] ** 2
+    p = m2 ** 2                                 # |Z|^(2 B) squared, B = 0.5
+    hz = torch.arange(BINS, device=c.device) * (6000.0 / (BINS - 1))
+    return torch.stack([p[..., (hz >= a) & (hz < b)].sum(-1) for a, b in LEVEL_BANDS], -1)
+
+
+def loss_fn(gen, mask, x, y, w_level=0.0, margin=10.0):
+    """The flow-matching loss and, with w_level > 0, the level hinge
+    (returned apart, for the log)."""
     X, S = stft(x), stft(y)
     E = mask_out(mask, x, X)
     s = scale_of(X)
@@ -150,7 +168,17 @@ def loss_fn(gen, mask, x, y):
     t = torch.rand(ce.shape[:-1] + (1,), device=x.device)
     x0 = ce + SIGMA * torch.randn_like(ce)
     xt = (1 - t) * x0 + t * cs
-    return ((gen.velocity(h, ce, xt, t) - (cs - x0)) ** 2).mean()
+    fm = ((gen.velocity(h, ce, xt, t) - (cs - x0)) ** 2).mean()
+    if w_level <= 0:
+        return fm, torch.zeros((), device=x.device)
+    x1 = x0 + gen.velocity(h, ce, x0, torch.zeros_like(t))
+    pg, pm, ps = band_pow(gen, x1), band_pow(gen, ce), band_pow(gen, cs)
+    # speech: frames within 20 dB of the target's loudest (all bands)
+    tot = ps.sum(-1)
+    sp = (tot > 0.01 * tot.amax(1, keepdim=True)).float()[..., None]
+    short = F.relu(torch.log10(pm + 1e-8) - margin / 10 - torch.log10(pg + 1e-8))
+    lv = (short * sp).sum() / (sp.sum() * len(LEVEL_BANDS) + 1)
+    return fm + w_level * lv, lv
 
 
 def load_gen(ck: dict, device) -> Gen:
@@ -198,6 +226,8 @@ def main():
     ap.add_argument("--pairs", type=float, default=0.0,
                     help="share of each batch from real Paderborn pairs (pairbank.py, NR_PAIRS)")
     ap.add_argument("--mag", action="store_true", help="the magnitude only, the noisy phase kept")
+    ap.add_argument("--level", type=float, default=0.0, help="the level hinge's weight (0: none)")
+    ap.add_argument("--level-margin", type=float, default=10.0, help="dB under the mask's output allowed")
     ap.add_argument("--resume")
     ap.add_argument("--out", default="/tmp/gen")
     a = ap.parse_args()
@@ -217,20 +247,21 @@ def main():
                                      persistent_workers=True, prefetch_factor=2)
     opt = torch.optim.AdamW(gen.parameters(), a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, a.lr, total_steps=a.steps, pct_start=0.05)
-    t0, run = time.time(), 0.0
+    t0, run, run_lv = time.time(), 0.0, 0.0
     print("SI-SDR improvement per band: mask / restored in 1 / 2 steps (1 step's level against the clean speech)")
     for step, b in enumerate(dl, 1):
         x, y = (v.to(dev, non_blocking=True) for v in b)
-        loss = loss_fn(gen, mask, x, y)
+        loss, lv = loss_fn(gen, mask, x, y, a.level, a.level_margin)
         opt.zero_grad()
         loss.backward()
         torch.nn.utils.clip_grad_norm_(gen.parameters(), 1.0)
         opt.step()
         sched.step()
         run = 0.98 * run + 0.02 * loss.item() if step > 1 else loss.item()
+        run_lv = 0.98 * run_lv + 0.02 * lv.item() if step > 1 else lv.item()
         if step % 1000 == 0 or step == a.steps:
             r = evaluate(gen, mask, sets)
-            print(f"{step:6d} loss {run:.4f} " + " ".join(f"{k} {'/'.join(f'{v:+.1f}' for v in r[k][:-1])} ({r[k][-1]:+.1f} dB)" for k in r)
+            print(f"{step:6d} loss {run:.4f} level {10 * run_lv:.1f} dB " + " ".join(f"{k} {'/'.join(f'{v:+.1f}' for v in r[k][:-1])} ({r[k][-1]:+.1f} dB)" for k in r)
                   + f"  {time.time() - t0:.0f} s", flush=True)
             torch.save({"model": gen.state_dict(), "step": step, "val": r, "args": vars(a)}, f"{a.out}/last.pt")
         if step >= a.steps:
