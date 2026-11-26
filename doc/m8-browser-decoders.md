@@ -1230,9 +1230,35 @@ with NN on). As planned above, StoRM-shaped:
   pauses −46…−65 dB. It keeps the low band and strips the consonant
   bands and the pauses (substitutions 30 → 39 %). None ships;
   `crates/nr/model` keeps gen1, and the Rust restorer reads both forms.
-  Next: a per-band level loss against the mask's output on the real
-  pairs, then the joint fine-tune with the mask (magnitude form), then a
-  listen.
+* **Third round (2026-11-26).** The real pairs' target (`pairbank.py`)
+  is the clean source through each reception's measured response, and
+  zero where the speech isn't heard over the noise: in 83 train
+  receptions 10 % of 300-1000 Hz, 74 % of 1-2 kHz and 92 % of 2-2.7 kHz.
+  Right for the mask (it can't bring back what's buried); a restorer
+  taught it deletes the consonant bands. `pairbank.py --fill` fills the
+  buried part of 300-2700 Hz with the median response measured
+  (`/data/iq/nr/pairs-fill`, the same 2776 receptions). `gen.py --level
+  L`: a hinge on the 1-step output more than 10 dB under the mask's
+  output per band in the target's speech frames. Each from gen2m, 20k
+  steps:
+
+  | Gen, 1 step | Whisper WER | sub/del/ins | Parakeet WER | ESTOI | speech vs mask by band (dB) |
+  |---|---|---|---|---|---|
+  | mask (NN) | 52.5 % | 30/17/5 | 38.9 % | 0.351 | 0 |
+  | gen2m | 71.0 % | 39/26/7 | 59.8 % | 0.307 | −8 / −16 / −30 / −37 |
+  | gen3a (level, old pairs) | 73.9 % | 46/19/9 | 59.5 % | 0.298 | 0 / −3 / −5 / −6 |
+  | gen3af (level, filled pairs) | 65.9 % | 40/19/7 | 53.6 % | 0.328 | 0 / −3 / −4 / −5 |
+  | **gen3f (filled pairs)** | **65.0 %** | 35/25/5 | **53.2 %** | **0.348** | −8 / −14 / −19 / −20 |
+
+  The filled target is the better half: fewer words lost without more
+  wrong or invented. The level hinge brings the level up to the mask's,
+  but what it brings back is wrong (substitutions 35 → 40-46 %,
+  insertions up): loud isn't intelligible. gen3f is in
+  `crates/nr/model` (server bd69b21) and on the unit for listening; still
+  13 points behind the mask. Next: the joint fine-tune with the mask
+  (the mask trained on the same zeroed targets may hold the restorer
+  back too: a mask retrain on `pairs-fill` is worth a check), then
+  longer runs from gen3f.
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
