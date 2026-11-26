@@ -21,6 +21,7 @@ will be.
 | `train.py` | training; validation by SI-SDR improvement at four SNR bands |
 | `export.py` | `nrnet.bin` and `nrnet-ref.bin` for `crates/nr` (or a weights file for the page's model selector: list it in `nr-models.json` in the UI directory) |
 | `gen.py` | the generative voice restorer ("Gen" in the page, may invent): a conditional flow from the frozen mask model's output to clean speech in the same STFT; training and its validation (SI-SDR of the mask and of 1 and 2 flow steps) |
+| `gendiag.py` | a restorer against the mask on real receptions: band power in speech and pauses, envelope spread against the clean source (level losses SI-SDR doesn't see) |
 | `attn.py` | the gain in speech frames and in pauses, per band, on real receptions |
 
 Speech: LibriSpeech (CC BY 4.0) `train-clean-100` for training,
@@ -64,6 +65,9 @@ NR_SPEECH=speech.i16 python3 export.py /tmp/am1/last.pt ../../../crates/nr/model
 # the generative voice restorer (the shipped weights: gen1, on run 7's mask)
 NR_SPEECH=speech.i16 NR_SPEECH_VAL=speech-dev.i16 NR_NOISE=noise.i16 nice -n 10 \
   python3 gen.py --mask /tmp/nr7/last.pt --out /tmp/gen1                # 60k steps, 2.5 h
+# (gen1 fails on real receptions: 23 dB too quiet, words lost; being
+# replaced by --mag, the magnitude only with the noisy phase, and
+# --pairs 0.5, half of each batch real receptions, NR_PAIRS=pairs)
 NR_SPEECH=speech.i16 python3 export.py /tmp/gen1/last.pt ../../../crates/nr/model --gen /tmp/nr7/last.pt   # nrgen.bin
 venv/bin/python score.py ham_radio /tmp/nr7/last.pt --asr whisper,parakeet --floors 0 \
   --gen /tmp/gen1/last.pt --gen-steps 1,2      # invented words: substitutions and insertions

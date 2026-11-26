@@ -15,6 +15,9 @@ c = X |X|^(B - 1) with B = 0.5; real and imaginary parts side by side
   over 3 frames to H, two GRU layers of H.
 * Flow head, once a step: [GRU output, the mask output's spectrum c_E,
   the state x, a time embedding] → MLP (W, W) → velocity (2 x 129).
+  With --mag the same on the compressed magnitude only (129), the noisy
+  phase kept (the complex flow at 1-2 steps averages phase it can't
+  know, and comes out 3-11 dB too quiet, more at low SNR).
 * Path: x0 = c_E + SIGMA eps, x1 = c_S (the clean speech), straight:
   x_t = (1 - t) x0 + t x1, the head learns x1 - x0. Restoring: Euler
   from x0 in K steps (1 or 2 in the page).
@@ -55,6 +58,17 @@ def comp(X: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
     return torch.cat([Z.real, Z.imag], -1)
 
 
+def comp_mag(X: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
+    """(B, T, BINS) complex → (B, T, BINS) compressed magnitude, normalised by s."""
+    return (X.abs() / s).clamp_min(1e-9) ** BETA
+
+
+def decomp_mag(c: torch.Tensor, s: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
+    """The magnitude back, with the phase of X (the noisy input's)."""
+    ph = X / X.abs().clamp_min(1e-9)
+    return c.clamp_min(0) ** (1 / BETA) * s * ph
+
+
 def decomp(c: torch.Tensor, s: torch.Tensor) -> torch.Tensor:
     Z = torch.complex(c[..., :BINS], c[..., BINS:])
     m = Z.abs().clamp_min(1e-9)
@@ -68,14 +82,25 @@ def temb(t: torch.Tensor) -> torch.Tensor:
 
 
 class Gen(nn.Module):
-    def __init__(self, hidden: int = 256, width: int = 512):
+    """`mag`: the flow on the compressed magnitude only (BINS values a
+    frame), the noisy phase kept; else the complex spectrum (2 BINS)."""
+
+    def __init__(self, hidden: int = 256, width: int = 512, mag: bool = False):
         super().__init__()
+        self.mag = mag
+        d = BINS if mag else 2 * BINS
         nin = 2 * BINS + len(PITCH_LAGS)
         self.conv = nn.Conv1d(nin, hidden, 3)
         self.gru = nn.GRU(hidden, hidden, 2, batch_first=True)
-        self.h1 = nn.Linear(hidden + 4 * BINS + 2 * NT, width)
+        self.h1 = nn.Linear(hidden + 2 * d + 2 * NT, width)
         self.h2 = nn.Linear(width, width)
-        self.h3 = nn.Linear(width, 2 * BINS)
+        self.h3 = nn.Linear(width, d)
+
+    def comp(self, X, s):
+        return comp_mag(X, s) if self.mag else comp(X, s)
+
+    def decomp(self, c, s, X):
+        return decomp_mag(c, s, X) if self.mag else decomp(c, s)
 
     def cond(self, x: torch.Tensor, X: torch.Tensor, E: torch.Tensor) -> torch.Tensor:
         """Audio x (B, n), its stft X and the mask output's E → (B, T, H)."""
@@ -105,21 +130,22 @@ def restore(gen: Gen, mask, x: torch.Tensor, steps: int = 2, seed: int = 0, sigm
     X = stft(x)
     E = mask_out(mask, x, X)
     s = scale_of(X)
-    ce = comp(E, s)
+    ce = gen.comp(E, s)
     h = gen.cond(x, X, E)
     g = torch.Generator(x.device).manual_seed(seed)
     xt = ce + sigma * torch.randn(ce.shape, generator=g, device=x.device)
     for k in range(steps):
         t = torch.full(ce.shape[:-1] + (1,), k / steps, device=x.device)
         xt = xt + gen.velocity(h, ce, xt, t) / steps
-    return istft(decomp(xt, s), x.shape[-1])
+    # (the mask output's phase is the noisy input's: its gains are real)
+    return istft(gen.decomp(xt, s, E), x.shape[-1])
 
 
 def loss_fn(gen, mask, x, y):
     X, S = stft(x), stft(y)
     E = mask_out(mask, x, X)
     s = scale_of(X)
-    ce, cs = comp(E, s), comp(S, s)
+    ce, cs = gen.comp(E, s), gen.comp(S, s)
     h = gen.cond(x, X, E)
     t = torch.rand(ce.shape[:-1] + (1,), device=x.device)
     x0 = ce + SIGMA * torch.randn_like(ce)
@@ -129,7 +155,7 @@ def loss_fn(gen, mask, x, y):
 
 def load_gen(ck: dict, device) -> Gen:
     a = ck.get("args", {})
-    g = Gen(a.get("hidden", 256), a.get("width", 512)).to(device)
+    g = Gen(a.get("hidden", 256), a.get("width", 512), a.get("mag", False)).to(device)
     g.load_state_dict(ck["model"])
     return g.eval()
 
@@ -148,7 +174,10 @@ def evaluate(gen, mask, sets, steps=(1, 2)):
         for K in steps:
             e = torch.cat([restore(gen, mask, x[i:i + 64], K) for i in range(0, len(x), 64)])
             r.append(float(np.nanmean((si_sdr(e, y) - base).cpu().numpy())))
-        res[k] = r
+            if K == steps[0]:
+                # its level against the clean speech (SI-SDR doesn't see it)
+                lev = float(10 * torch.log10((e ** 2).mean() / (y ** 2).mean()).item())
+        res[k] = r + [lev]
     gen.train()
     return res
 
@@ -166,6 +195,9 @@ def main():
     ap.add_argument("--workers", type=int, default=8)
     ap.add_argument("--snr", default="-20,15")
     ap.add_argument("--real-noise", type=float, default=0.5)
+    ap.add_argument("--pairs", type=float, default=0.0,
+                    help="share of each batch from real Paderborn pairs (pairbank.py, NR_PAIRS)")
+    ap.add_argument("--mag", action="store_true", help="the magnitude only, the noisy phase kept")
     ap.add_argument("--resume")
     ap.add_argument("--out", default="/tmp/gen")
     a = ap.parse_args()
@@ -174,19 +206,19 @@ def main():
     mask = load(torch.load(a.mask, map_location=dev), dev)
     for p in mask.parameters():
         p.requires_grad_(False)
-    gen = Gen(a.hidden, a.width).to(dev)
+    gen = Gen(a.hidden, a.width, a.mag).to(dev)
     if a.resume:
         gen.load_state_dict(torch.load(a.resume, map_location=dev)["model"])
     print(f"{sum(p.numel() for p in gen.parameters())} weights")
     sets = {k: fixed(128, 1000 + i, b) for i, (k, b) in enumerate(BANDS.items())}
     snr = tuple(float(v) for v in a.snr.split(","))
-    dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, None),
+    dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, None, p_pairs=a.pairs),
                                      batch_size=None, num_workers=a.workers, multiprocessing_context="spawn",
                                      persistent_workers=True, prefetch_factor=2)
     opt = torch.optim.AdamW(gen.parameters(), a.lr, weight_decay=1e-4)
     sched = torch.optim.lr_scheduler.OneCycleLR(opt, a.lr, total_steps=a.steps, pct_start=0.05)
     t0, run = time.time(), 0.0
-    print("SI-SDR improvement per band: mask / restored in 1 / 2 steps")
+    print("SI-SDR improvement per band: mask / restored in 1 / 2 steps (1 step's level against the clean speech)")
     for step, b in enumerate(dl, 1):
         x, y = (v.to(dev, non_blocking=True) for v in b)
         loss = loss_fn(gen, mask, x, y)
@@ -198,7 +230,7 @@ def main():
         run = 0.98 * run + 0.02 * loss.item() if step > 1 else loss.item()
         if step % 1000 == 0 or step == a.steps:
             r = evaluate(gen, mask, sets)
-            print(f"{step:6d} loss {run:.4f} " + " ".join(f"{k} {'/'.join(f'{v:+.1f}' for v in r[k])}" for k in r)
+            print(f"{step:6d} loss {run:.4f} " + " ".join(f"{k} {'/'.join(f'{v:+.1f}' for v in r[k][:-1])} ({r[k][-1]:+.1f} dB)" for k in r)
                   + f"  {time.time() - t0:.0f} s", flush=True)
             torch.save({"model": gen.state_dict(), "step": step, "val": r, "args": vars(a)}, f"{a.out}/last.pt")
         if step >= a.steps:

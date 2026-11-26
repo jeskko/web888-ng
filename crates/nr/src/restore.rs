@@ -11,6 +11,11 @@
 //! as an amplitude, its magnitude to the power 0.5) a head (an MLP of
 //! two hidden layers, SiLU) gives the velocity, `steps` Euler steps; the
 //! frame's spectrum is c⁻¹(x). Must match gen.py.
+//!
+//! Two forms, told apart by the weights (the head's output): the complex
+//! spectrum (2 BINS values a frame, real and imaginary parts), or the
+//! magnitude only (BINS; gen.py --mag), the mask output's phase kept
+//! (the noisy input's: the mask's gains are real).
 
 use crate::{BINS, Gru, PITCH_LAGS, dot, parse};
 use num_complex::Complex32;
@@ -42,6 +47,8 @@ pub struct GenNet {
     h3: Linear,
     h: usize,
     nin: usize,
+    /// Values a frame: 2 BINS (complex) or BINS (magnitude only).
+    d: usize,
 }
 
 impl GenNet {
@@ -82,10 +89,11 @@ impl GenNet {
             })
         };
         let (h1, h2, h3) = (lin("h1")?, lin("h2")?, lin("h3")?);
-        let ok = h1.inp == h + 4 * BINS + 2 * NT
+        let d = h3.b.len();
+        let ok = (d == BINS || d == 2 * BINS)
+            && h1.inp == h + 2 * d + 2 * NT
             && h2.inp == h1.b.len()
-            && h3.inp == h2.b.len()
-            && h3.b.len() == 2 * BINS;
+            && h3.inp == h2.b.len();
         ok.then_some(GenNet {
             conv_w,
             conv_b,
@@ -95,7 +103,13 @@ impl GenNet {
             h3,
             h,
             nin,
+            d,
         })
+    }
+
+    /// The magnitude-only form.
+    pub fn mag(&self) -> bool {
+        self.d == BINS
     }
 }
 
@@ -121,7 +135,7 @@ pub struct Restorer {
 impl Restorer {
     pub fn new(net: GenNet) -> Restorer {
         let (h, nin) = (net.h, net.nin);
-        let (w1, w2) = (net.h1.b.len(), net.h2.b.len());
+        let (w1, w2, d) = (net.h1.b.len(), net.h2.b.len(), net.d);
         Restorer {
             steps: 2,
             sigma: SIGMA,
@@ -131,10 +145,10 @@ impl Restorer {
             conv: vec![0.0; h],
             gi: vec![0.0; 3 * h],
             gh: vec![0.0; 3 * h],
-            z: vec![0.0; h + 4 * BINS + 2 * NT],
+            z: vec![0.0; h + 2 * d + 2 * NT],
             a: vec![0.0; w1],
             b: vec![0.0; w2],
-            v: vec![0.0; 2 * BINS],
+            v: vec![0.0; d],
             net,
         }
     }
@@ -186,26 +200,30 @@ impl Restorer {
         net.gru[0].step(&self.conv, h0, &mut self.gi, &mut self.gh);
         net.gru[1].step(h0, h1, &mut self.gi, &mut self.gh);
         // c(E) and the start
-        let h = net.h;
+        let (h, d, mag) = (net.h, net.d, net.mag());
         let scale = 10f32.powf(lev / 2.0);
         self.z[..h].copy_from_slice(&self.hs[1]);
-        let (ce, rest) = self.z[h..].split_at_mut(2 * BINS);
+        let (ce, rest) = self.z[h..].split_at_mut(d);
         for (k, ek) in e.iter().enumerate() {
-            let zk = *ek / scale;
-            let c = zk * zk.norm().max(1e-9).powf(-0.5);
-            ce[k] = c.re;
-            ce[BINS + k] = c.im;
+            if mag {
+                ce[k] = (ek.norm() / scale).max(1e-9).sqrt();
+            } else {
+                let zk = *ek / scale;
+                let c = zk * zk.norm().max(1e-9).powf(-0.5);
+                ce[k] = c.re;
+                ce[BINS + k] = c.im;
+            }
         }
-        rest[..2 * BINS].copy_from_slice(ce);
+        rest[..d].copy_from_slice(ce);
         if self.sigma > 0.0 {
-            for k in 0..2 * BINS {
+            for k in 0..d {
                 let g = self.gauss();
-                self.z[h + 2 * BINS + k] += self.sigma * g;
+                self.z[h + d + k] += self.sigma * g;
             }
         }
         let steps = self.steps.clamp(1, 4);
-        let x0 = h + 2 * BINS;
-        let t0 = h + 4 * BINS;
+        let x0 = h + d;
+        let t0 = h + 2 * d;
         for s in 0..steps {
             let t = s as f32 / steps as f32;
             for i in 0..NT {
@@ -223,14 +241,19 @@ impl Restorer {
                 *v *= sigmoid(*v);
             }
             net.h3.apply(&self.b, &mut self.v);
-            for k in 0..2 * BINS {
+            for k in 0..d {
                 self.z[x0 + k] += self.v[k] / steps as f32;
             }
         }
         // c⁻¹
         for (k, ek) in e.iter_mut().enumerate() {
-            let zk = Complex32::new(self.z[x0 + k], self.z[x0 + BINS + k]);
-            *ek = zk * zk.norm().max(1e-9) * scale;
+            if mag {
+                let m = self.z[x0 + k].max(0.0);
+                *ek = *ek / ek.norm().max(1e-9) * (m * m * scale);
+            } else {
+                let zk = Complex32::new(self.z[x0 + k], self.z[x0 + BINS + k]);
+                *ek = zk * zk.norm().max(1e-9) * scale;
+            }
         }
     }
 }
