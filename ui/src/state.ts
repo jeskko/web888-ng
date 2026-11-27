@@ -2360,8 +2360,10 @@ export const nnKindModels = computed(() => nnModelList.value.filter((m) => (m.ki
  * nrgen.bin, fetched when first wanted; USB and LSB only). */
 export const nnRestore = signal(load("nnRestore") === "1");
 const nnGen = computed(() => nnRestore.value && nnKind.value === "voice");
-/** Its flow steps: 2, or 1 on small devices (half the cost). */
-const NN_STEPS = (navigator.hardwareConcurrency ?? 8) <= 4 ? 1 : 2;
+/** Its flow steps: 1. More scored worse on every model so far (gen3f,
+ * Whisper WER: 1 step 61.9 %, 2 64.8 %, 4 70.1 %; m8 §5.4), and the
+ * direct predictors are trained for exactly one. */
+const NN_STEPS = 1;
 const nnNets = new Map<string, NeuralNr | null>();
 let nnList: Promise<NnModel[]> | null = null;
 function nnListed(): Promise<NnModel[]> {
