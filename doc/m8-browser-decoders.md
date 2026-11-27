@@ -1323,15 +1323,23 @@ with NN on). As planned above, StoRM-shaped:
     A light blend costs the big recognisers about a point and helps
     the small one: a low slider default is sensible.
   - Balance against 500-1000 Hz in speech (bands 0.3-0.5 / 0.5-1 / 1-2
-    / 2-2.7 kHz): clean +3.1 / 0 / −1.1 / −1.3 dB, the mask +3.1 / 0 /
-    −4.0 / −6.6, gen3f +6.5 / 0 / −8.1 / −14.5. Gen tilts the spectrum
-    down, more than the mask does.
+    / 2-3.5 kHz): the clean source +3.2 / 0 / −5.1 / −9.1 dB, the raw
+    reception +3.1 / 0 / −1.1 / −1.3, the mask +3.1 / 0 / −4.0 / −6.6,
+    gen3f +6.5 / 0 / −8.1 / −14.5. Gen is ~3 dB light at 1-2 kHz and
+    ~5 dB at 2-3.5 kHz against the clean source; the mask is a little
+    heavy there (residual noise). (Corrected 2026-11-27: the first
+    write-up took the raw row for the clean one.) Gen's band envelopes
+    swing as much as the clean source's (std 22 / 20 / 18 / 15 dB
+    against 19.5 / 18.3 / 16 / 15.7; the mask 9 / 7 / 5 / 4), so much
+    of "quieter than the mask in speech" is the mask's residual noise
+    in the gaps.
 
   Then three runs on the aligned pairs (`pairs-fa`: 2781 receptions,
   101 h; the alignment search vectorised, 33 min to build):
 
   | Gen, 1 step | Whisper WER | sub/del/ins | Parakeet WER | STOI | ESTOI | speech vs mask (dB) | balance (dB) |
   |---|---|---|---|---|---|---|---|
+  | clean source | | | | | | | +3.2 / 0 / −5.1 / −9.1 |
   | mask (NN) | 52.5 % | 30/17/5 | 38.9 % | 0.552 | 0.351 | 0 | +3.1 / 0 / −4.0 / −6.6 |
   | gen3f | 65.0 % | 35/25/5 | 53.2 % | | 0.348 | −8 / −14 / −19 / −20 | +6.5 / 0 / −8.1 / −14.5 |
   | **gen4a** (gen3f + aligned pairs, 20k) | **60.9 %** | 33/23/5 | 48.9 % | **0.600** | **0.364** | −8 / −14 / −18 / −19 | +5.9 / 0 / −7.7 / −14.1 |
