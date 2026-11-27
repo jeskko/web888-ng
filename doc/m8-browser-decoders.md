@@ -1356,6 +1356,45 @@ with NN on). As planned above, StoRM-shaped:
   restore.rs. Next: the direct predictor (step 4), whose loss can aim at
   the tilt and level directly; the perceptual loss (step 5) waits for
   the licence decision.
+* **Fifth round (2026-11-27): the direct predictor and the feature
+  loss.** The page ran Gen at 2 steps on desktops; it runs 1 everywhere
+  now (better on every model, half the cost). `gen.py --direct` trains
+  exactly that step, x0 + v(x0, 0) from the same noisy start, as a
+  predictor (restore.rs unchanged):
+  - the compressed magnitudes' squared error;
+  - `--band`: each example's band energies (8 bands, 150-3500 Hz) over
+    its speech frames against the clean target, two-sided |dB|/10.
+    Per frame it doesn't work: band levels between formants swing tens
+    of dB on residual noise, and half the 4-s pair windows have no
+    speech (zero targets but for int16 rounding, +138 dB "errors");
+    such examples (target 30 dB under the input) are left out;
+  - `--feat`: a frozen wav2vec 2.0 Base (`sslfeat.py`: written out,
+    only the weights downloaded, torchaudio's copy of the fairseq
+    release, MIT; LibriSpeech 960 h, CC BY 4.0; WavLM Base+ passed over
+    for its GigaSpeech hours, whose access terms weren't confirmed).
+    The L1 distance of the conv features and the first 4 layers, each
+    over the target's mean magnitude, between the output and the target
+    magnitude, both with the noisy phase; 16 examples a batch, 2-s
+    crops, bf16 (GPU memory: 10.6 GB peak on 12).
+
+  Each 20k steps from gen4a, aligned pairs:
+
+  | Gen, 1 step | Whisper WER | sub/del/ins | Parakeet WER | STOI | ESTOI | speech vs mask (dB) | balance (dB) |
+  |---|---|---|---|---|---|---|---|
+  | clean source | | | | | | | +3.2 / 0 / −5.1 / −9.1 |
+  | mask (NN) | 52.5 % | 30/17/5 | 38.9 % | 0.552 | 0.351 | 0 | +3.1 / 0 / −4.0 / −6.6 |
+  | gen4a | 60.9 % | 33/23/5 | 48.9 % | 0.600 | 0.364 | −8 / −14 / −18 / −19 | +5.9 / 0 / −7.7 / −14.1 |
+  | gen5d (direct, band) | 62.4 % | 35/22/6 | 49.4 % | 0.603 | **0.386** | −9 / −14 / −16 / −20 | +5.4 / 0 / −5.5 / −12.1 |
+  | gen5f (+ feat × 1) | 61.7 % | 34/22/6 | 47.7 % | 0.602 | 0.384 | −7 / −14 / −17 / −19 | +5.3 / 0 / −5.4 / −12.1 |
+  | **gen5f3** (+ feat × 3) | **60.7 %** | 33/23/6 | **47.7 %** | 0.600 | 0.375 | −7 / −14 / −17 / −19 | +5.5 / 0 / −5.6 / −12.6 |
+
+  The direct form alone gives the best ESTOI yet and the level within
+  1 dB of the clean speech on the synthetic sets, the 1-2 kHz band
+  2 dB closer to the clean balance; words don't follow. The feature
+  loss buys words back, more with more weight (×1 → ×3: Whisper −1.0,
+  Parakeet ±0). gen5f3 is in `crates/nr/model` (server c7ae809) and on
+  the unit; still 8 points behind the mask on Whisper. Running: × 10
+  from gen5f3, and × 3 from scratch (40k).
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
