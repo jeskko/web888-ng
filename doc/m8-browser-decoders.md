@@ -127,6 +127,13 @@ Everything detected from the signal, with manual overrides:
   the 40 m/30 m recording: DWD 10100.8 kHz locks within 15 s as 50 Bd,
   450 Hz, 5N1.5, mark lower, ITA2 (as datarx), with the Baltic sea
   forecast as text.
+* **Slow narrow FSK (2026-11-28)**: RDL 18.1 kHz (50 Bd, 75 Hz shift,
+  sync) was found and analysed right (4-of-7 code, words spread evenly
+  over all 35: enciphered, nothing to read) but never listed: the ident
+  gate wanted SNR ≥ −3 dB in 2500 Hz, and a clean 50-Bd signal at 11 dB
+  per bit reads −5.7 dB. The gate now also passes ≥ 10 dB per bit (in
+  the baud's bandwidth). Same idents as before on three 10-min 5 MHz
+  recordings.
 * **A contest as a test set (2026-11-15)**: 10 minutes of the WAE DX
   RTTY contest recorded off air on 20 m and 40 m (HackRF, 4 MS/s), RTTY
   segments cut to 40 kS/s IQ and skimmed (`--example replay`; 600 s in

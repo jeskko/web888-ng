@@ -457,9 +457,13 @@ impl Skimmer {
                     if let Some(q) = &r.params {
                         s.lo = q.f_lo;
                         s.hi = q.f_hi;
-                        // identified but not decodable: only clear two-tone signals
+                        // identified but not decodable: only clear two-tone
+                        // signals. Clear per bit too: the 2500-Hz SNR sinks
+                        // with the rate (a clean 50-Bd station, RDL 18.1 kHz
+                        // at 11 dB per bit, reads -5.7 dB)
+                        let snr_bit = q.snr + 10.0 * (2500.0 / q.baud).log10();
                         if q.mode == Mode::Sync
-                            && q.snr >= -3.0
+                            && (q.snr >= -3.0 || snr_bit >= 10.0)
                             && (q.charset != "framing unknown"
                                 || (q.snr >= 0.0 && r.baud_fit >= 0.6))
                         {
