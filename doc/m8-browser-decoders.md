@@ -1306,6 +1306,48 @@ with NN on). As planned above, StoRM-shaped:
   --fill). The mask run7 used no pairs, so it isn't affected.
   `gen.py --norm mean` takes the level from the log of the mean power;
   export.py refuses it until restore.rs reads it too.
+* **Fourth round (2026-11-27).** Diagnostics on gen3f first:
+  - Steps (Whisper WER, 40 receptions; the mask 49.1 %): 1 step
+    61.9 %, 2 64.8 %, 4 70.1 %, 8 74.1 %, 16 77.4 %. Monotonically
+    worse: a shrinking regressor, not a flow held back by
+    discretisation. Step 4 is a direct predictor, not distillation.
+  - Blends with the mask, as the strength slider makes them (1000
+    utterances):
+
+    | WER | mask | 30 % | 50 % | 70 % | 100 % |
+    |---|---|---|---|---|---|
+    | Whisper | 52.5 % | 53.5 % | 53.9 % | 56.5 % | 65.0 % |
+    | Parakeet | 38.9 % | 40.0 % | 41.6 % | 44.4 % | 53.2 % |
+    | Vosk | 68.7 % | **67.2 %** | 67.6 % | 68.7 % | 75.4 % |
+
+    A light blend costs the big recognisers about a point and helps
+    the small one: a low slider default is sensible.
+  - Balance against 500-1000 Hz in speech (bands 0.3-0.5 / 0.5-1 / 1-2
+    / 2-2.7 kHz): clean +3.1 / 0 / −1.1 / −1.3 dB, the mask +3.1 / 0 /
+    −4.0 / −6.6, gen3f +6.5 / 0 / −8.1 / −14.5. Gen tilts the spectrum
+    down, more than the mask does.
+
+  Then three runs on the aligned pairs (`pairs-fa`: 2781 receptions,
+  101 h; the alignment search vectorised, 33 min to build):
+
+  | Gen, 1 step | Whisper WER | sub/del/ins | Parakeet WER | STOI | ESTOI | speech vs mask (dB) | balance (dB) |
+  |---|---|---|---|---|---|---|---|
+  | mask (NN) | 52.5 % | 30/17/5 | 38.9 % | 0.552 | 0.351 | 0 | +3.1 / 0 / −4.0 / −6.6 |
+  | gen3f | 65.0 % | 35/25/5 | 53.2 % | | 0.348 | −8 / −14 / −19 / −20 | +6.5 / 0 / −8.1 / −14.5 |
+  | **gen4a** (gen3f + aligned pairs, 20k) | **60.9 %** | 33/23/5 | 48.9 % | **0.600** | **0.364** | −8 / −14 / −18 / −19 | +5.9 / 0 / −7.7 / −14.1 |
+  | gen4n (gen3f + aligned, `--norm mean`, 20k) | 66.4 % | 37/23/7 | 51.6 % | 0.590 | 0.341 | −8 / −13 / −17 / −19 | +6.0 / 0 / −7.8 / −14.8 |
+  | gen4s (scratch, aligned, `--norm mean`, 40k) | 62.9 % | 34/23/6 | **47.8 %** | 0.595 | 0.362 | −9 / −14 / −18 / −20 | +5.3 / 0 / −7.5 / −15.1 |
+
+  The alignment alone gave 4 points on both recognisers and the first
+  Gen above the mask on STOI/ESTOI. The passband level didn't touch the
+  quietness or the tilt (gen4n and gen4s as quiet and as tilted as
+  gen4a): the normaliser isn't the cause. Fine-tuning onto a changed
+  normaliser costs (gen4n); from scratch it's level with gen4a. gen4a
+  (log level, nothing to change in restore.rs) is in `crates/nr/model`
+  and on the unit. `--norm mean` stays an option, not mirrored in
+  restore.rs. Next: the direct predictor (step 4), whose loss can aim at
+  the tilt and level directly; the perceptual loss (step 5) waits for
+  the licence decision.
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
