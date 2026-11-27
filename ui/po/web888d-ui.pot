@@ -5294,7 +5294,7 @@ msgstr ""
 msgid "login failed ({status})"
 msgstr ""
 
-#: src/state.ts:738 src/state.ts:2649
+#: src/state.ts:738 src/state.ts:2651
 msgid "nothing was received"
 msgstr ""
 
@@ -5312,20 +5312,20 @@ msgstr ""
 msgid "named by the clock"
 msgstr ""
 
-#: src/state.ts:2649
+#: src/state.ts:2651
 msgid "only silence was heard"
 msgstr ""
 
-#: src/state.ts:2659
+#: src/state.ts:2661
 #, placeholders
 msgid ", {s} s of silence left out"
 msgstr ""
 
-#: src/state.ts:2660
+#: src/state.ts:2662
 msgid "; ended when the audio format changed"
 msgstr ""
 
-#: src/state.ts:2661
+#: src/state.ts:2663
 #, placeholders
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr ""

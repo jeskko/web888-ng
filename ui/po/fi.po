@@ -5019,7 +5019,7 @@ msgstr "salasana vaaditaan"
 msgid "login failed ({status})"
 msgstr "kirjautuminen epäonnistui ({status})"
 
-#: src/state.ts:738 src/state.ts:2649
+#: src/state.ts:738 src/state.ts:2651
 msgid "nothing was received"
 msgstr "mitään ei vastaanotettu"
 
@@ -5035,19 +5035,19 @@ msgstr "{name} ({s} s{lost})"
 msgid "named by the clock"
 msgstr "nimetty kellon mukaan"
 
-#: src/state.ts:2649
+#: src/state.ts:2651
 msgid "only silence was heard"
 msgstr "kuului vain hiljaisuutta"
 
-#: src/state.ts:2659
+#: src/state.ts:2661
 msgid ", {s} s of silence left out"
 msgstr ", {s} s hiljaisuutta jätetty pois"
 
-#: src/state.ts:2660
+#: src/state.ts:2662
 msgid "; ended when the audio format changed"
 msgstr "; päättyi äänimuodon vaihtuessa"
 
-#: src/state.ts:2661
+#: src/state.ts:2663
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
