@@ -1,7 +1,9 @@
 // SPDX-License-Identifier: GPL-3.0-or-later
 // Web Worker: the DGPS beacon skimmer (crates/dgps-wasm, dgps.wasm) off the
 // page's thread. In: {pcm: Float32Array, gen} (12 kHz mono), {band: [lo,
-// hi]} (audio Hz) or {reset: true}. Out: {run: DgpsRun, gen} on new messages
+// hi]} (audio Hz), {wide: {rate, lo, hi} | null} (IQ from a channelizer
+// bin, or back to audio), {iq: Float32Array (I, Q interleaved), gen} or
+// {reset: true}. Out: {run: DgpsRun, gen} on new messages
 // and every 2 s, {error} if it can't load.
 
 import type { DgpsRun } from "../dgps.ts";
@@ -13,6 +15,9 @@ interface Dgps {
   dgps_output(): number;
   dgps_band(lo: number, hi: number): void;
   dgps_reset(): void;
+  dgps_wide(rate: number, lo: number, hi: number): void;
+  dgps_buffer_iq(n: number): number;
+  dgps_push_iq(n: number): number;
 }
 
 const post = (m: unknown) => (self as unknown as Worker).postMessage(m);
@@ -25,6 +30,23 @@ function handle(e: MessageEvent): void {
   const d = e.data;
   if (d?.reset) {
     x.dgps_reset();
+    return;
+  }
+  if (d && "wide" in d) {
+    if (d.wide) x.dgps_wide(d.wide.rate, d.wide.lo, d.wide.hi);
+    else x.dgps_wide(0, 0, 0);
+    return;
+  }
+  if (d?.iq) {
+    const iq = d.iq as Float32Array;
+    const n = iq.length >> 1;
+    const p = x.dgps_buffer_iq(n);
+    new Float32Array(x.memory.buffer, p, 2 * n).set(iq);
+    const m = x.dgps_push_iq(n);
+    if (m > 0) {
+      const json = new TextDecoder().decode(new Uint8Array(x.memory.buffer, x.dgps_output(), m));
+      post({ run: JSON.parse(json) as DgpsRun, gen: d.gen });
+    }
     return;
   }
   if (d?.band) {

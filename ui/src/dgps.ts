@@ -11,6 +11,27 @@ import { N_ } from "./i18n.ts";
  * health, station ID, baud]. */
 export type DgpsAlmRow = [number, number, number, number, number, number, number];
 
+/** A satellite's correction as the worker posts it: [ID, correction m
+ * (null: don't use), its rate m/s, UDRE 0-3, IOD]. */
+export type DgpsSatRow = [number, number | null, number, number, number];
+
+/** A satellite's corrections from one beacon. */
+export interface DgpsSat {
+  /** "G" GPS, "R" GLONASS. */
+  sys: "G" | "R";
+  prn: number;
+  /** Pseudorange correction (m; null: the station says don't use it)
+   * and its rate (m/s), when received (UTC s). */
+  prc: number | null;
+  rrc: number;
+  /** User differential range error: 0 ≤1 m, 1 1-4 m, 2 4-8 m, 3 >8 m. */
+  udre: number;
+  iod: number;
+  t: number;
+  /** [UTC s, correction m], the last DGPS_HISTORY seconds. */
+  hist: [number, number][];
+}
+
 /** What the worker posts. */
 export type DgpsEv =
   | { k: "lock"; id: number; hz: number; baud: number }
@@ -26,8 +47,8 @@ export type DgpsEv =
       health: number;
       ok: number;
       n: number;
-      gps?: number[];
-      glo?: number[];
+      gps?: DgpsSatRow[];
+      glo?: DgpsSatRow[];
       pos?: [number, number, number];
       alm?: DgpsAlmRow[];
       text?: string;
@@ -70,9 +91,8 @@ export interface DgpsBeacon {
   types: Record<number, number>;
   msgs: number;
   complete: number;
-  /** Satellites in the last corrections. */
-  gps: number[];
-  glo: number[];
+  /** Corrections by satellite ("G12", "R5"). */
+  sats: Record<string, DgpsSat>;
   /** The reference station (type 3). */
   pos: LatLon | null;
   /** Text messages (16, 36), newest last. */
@@ -86,6 +106,11 @@ export interface DgpsBeacon {
 
 /** A beacon gone from the skimmer stays listed this long (s). */
 export const DGPS_LINGER = 600;
+/** Corrections kept per satellite for the plot (s). */
+export const DGPS_HISTORY = 900;
+/** A satellite not corrected for this long is left out (s; it set). */
+export const DGPS_SAT_AGE = 120;
+
 /** Text messages kept per beacon. */
 export const DGPS_TEXTS = 5;
 
@@ -137,8 +162,7 @@ export function applyDgps(prev: DgpsBeacon[], run: DgpsRun, now: number, rf: (hz
           types: {},
           msgs: 0,
           complete: 0,
-          gps: [],
-          glo: [],
+          sats: {},
           pos: null,
           texts: [],
           alm: [],
@@ -156,8 +180,19 @@ export function applyDgps(prev: DgpsBeacon[], run: DgpsRun, now: number, rf: (hz
     s.types = { ...s.types, [e.type]: (s.types[e.type] ?? 0) + 1 };
     s.msgs++;
     if (e.ok === e.n) s.complete++;
-    if (e.gps) s.gps = e.gps;
-    if (e.glo) s.glo = e.glo;
+    if (e.gps || e.glo) {
+      const sats = { ...s.sats };
+      for (const [sys, rows] of [["G", e.gps ?? []], ["R", e.glo ?? []]] as const) {
+        for (const [prn, prc, rrc, udre, iod] of rows) {
+          const key = `${sys}${prn}`;
+          const old = sats[key];
+          const hist = (old?.hist ?? []).filter(([t]) => now - t <= DGPS_HISTORY);
+          if (prc !== null) hist.push([now, prc]);
+          sats[key] = { sys, prn, prc, rrc, udre, iod, t: now, hist };
+        }
+      }
+      s.sats = sats;
+    }
     if (e.pos) s.pos = [e.pos[0], e.pos[1]];
     if (e.text !== undefined && e.text.trim() && s.texts[s.texts.length - 1] !== e.text) s.texts = [...s.texts, e.text].slice(-DGPS_TEXTS);
     if (e.alm) {
@@ -187,4 +222,31 @@ export function applyDgps(prev: DgpsBeacon[], run: DgpsRun, now: number, rf: (hz
 /** "59.97° N 24.38° E". */
 export function latLonText([lat, lon]: LatLon): string {
   return `${Math.abs(lat).toFixed(2)}° ${lat >= 0 ? "N" : "S"} ${Math.abs(lon).toFixed(2)}° ${lon >= 0 ? "E" : "W"}`;
+}
+
+/** A beacon's satellites corrected lately, GPS then GLONASS, by number. */
+export function dgpsSats(b: DgpsBeacon, now: number): DgpsSat[] {
+  return Object.values(b.sats)
+    .filter((x) => now - x.t <= DGPS_SAT_AGE)
+    .sort((a, c) => (a.sys === c.sys ? a.prn - c.prn : a.sys === "G" ? -1 : 1));
+}
+
+/** UDRE classes as ranges, for titles. */
+export const UDRE = ["≤ 1 m", "1–4 m", "4–8 m", "> 8 m"];
+
+/** An SVG polyline's points: `hist` over the last `span` s to `now`, in a
+ * w × h box, the y range at least ±`min` m around its middle. */
+export function sparkPoints(hist: [number, number][], now: number, span: number, w: number, h: number, min = 1): string {
+  if (hist.length === 0) return "";
+  const ys = hist.map(([, y]) => y);
+  let lo = Math.min(...ys);
+  let hi = Math.max(...ys);
+  if (hi - lo < 2 * min) {
+    const m = (hi + lo) / 2;
+    lo = m - min;
+    hi = m + min;
+  }
+  return hist
+    .map(([t, y]) => `${(w * (1 - (now - t) / span)).toFixed(1)},${(h - 1 - ((h - 2) * (y - lo)) / (hi - lo)).toFixed(1)}`)
+    .join(" ");
 }

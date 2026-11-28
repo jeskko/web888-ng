@@ -1683,7 +1683,7 @@ msgstr "1 min"
 msgid "5 min"
 msgstr "5 min"
 
-#: src/ctl/audiorec.tsx:14
+#: src/ctl/audiorec.tsx:14 src/ctl/dgps.tsx:48
 msgid "15 min"
 msgstr "15 min"
 
@@ -2526,12 +2526,12 @@ msgid "Decode CW (Morse) from this receiver's audio, in this browser: every keye
 msgstr "Dekoodaa CW:tä (sähkötystä) tämän vastaanottimen äänestä tässä selaimessa: jokainen päästökaistan sähkötyssignaali"
 
 #. Wide = skim a 40 kHz slice of spectrum (a channelizer bin of the receiver's filter bank) instead of the narrow audio passband
-#: src/ctl/cw.tsx:41 src/ctl/rtty.tsx:57
+#: src/ctl/cw.tsx:41 src/ctl/dgps.tsx:162 src/ctl/rtty.tsx:57
 msgid "Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband"
 msgstr "Dekoodaa 40 kHz viritystaajuuden ympäriltä (kanavoijan kanava suoraan vastaanottimelta, ~1 Mbit/s) äänen päästökaistan sijaan"
 
 #. Wide = skim a 40 kHz slice of spectrum (a channelizer bin) instead of the narrow audio passband
-#: src/ctl/cw.tsx:44 src/ctl/rtty.tsx:60
+#: src/ctl/cw.tsx:44 src/ctl/dgps.tsx:164 src/ctl/rtty.tsx:60
 msgid "Wide"
 msgstr "Laaja"
 
@@ -2548,19 +2548,19 @@ msgstr "Neuro"
 msgid "Clear the text"
 msgstr "Tyhjennä teksti"
 
-#: src/ctl/cw.tsx:52 src/ctl/dgps.tsx:118 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
+#: src/ctl/cw.tsx:52 src/ctl/dgps.tsx:168 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
 msgid "Clear"
 msgstr "Tyhjennä"
 
-#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/dgps.tsx:120 src/ctl/dgps.tsx:120 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
+#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/dgps.tsx:170 src/ctl/dgps.tsx:170 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
 msgid "Stop decoding"
 msgstr "Lopeta dekoodaus"
 
-#: src/ctl/cw.tsx:61 src/ctl/rtty.tsx:73
+#: src/ctl/cw.tsx:61 src/ctl/dgps.tsx:177 src/ctl/rtty.tsx:73
 msgid "Skimming {lo}–{hi} kHz"
 msgstr "Dekoodataan {lo}–{hi} kHz"
 
-#: src/ctl/cw.tsx:61 src/ctl/rtty.tsx:73
+#: src/ctl/cw.tsx:61 src/ctl/dgps.tsx:177 src/ctl/rtty.tsx:73
 msgid "Waiting for the wide IQ…"
 msgstr "Odotetaan laajaa IQ-dataa…"
 
@@ -2685,84 +2685,118 @@ msgid "Decoders in this browser"
 msgstr "Dekooderit tässä selaimessa"
 
 #. a DGPS station's own report on its corrections
-#: src/ctl/dgps.tsx:16
+#: src/ctl/dgps.tsx:21
 msgid "healthy"
 msgstr "kunnossa"
 
-#: src/ctl/dgps.tsx:17
+#: src/ctl/dgps.tsx:22
 msgid "not monitored"
 msgstr "ei valvottu"
 
-#: src/ctl/dgps.tsx:18
+#: src/ctl/dgps.tsx:23
 msgid "unhealthy"
 msgstr "viallinen"
 
+#. pseudorange corrections = the metres a receiver adds to its measured distance to each satellite
 #: src/ctl/dgps.tsx:40
+msgid "Corrections: {n} satellites"
+msgstr "Korjaukset: {n} satelliittia"
+
+#. column heads: the satellite (G GPS, R GLONASS and its number), its pseudorange correction, the correction's rate of change, UDRE = user differential range error class
+#: src/ctl/dgps.tsx:44
+msgid "sat"
+msgstr "sat"
+
+#: src/ctl/dgps.tsx:45
+msgid "Pseudorange correction: added to the measured range"
+msgstr "Pseudoetäisyyskorjaus: lisätään mitattuun etäisyyteen"
+
+#: src/ctl/dgps.tsx:45
+msgid "m"
+msgstr "m"
+
+#: src/ctl/dgps.tsx:46
+msgid "Its rate of change"
+msgstr "Sen muutosnopeus"
+
+#: src/ctl/dgps.tsx:46
+msgid "cm/s"
+msgstr "cm/s"
+
+#: src/ctl/dgps.tsx:47
+msgid "User differential range error: how good the correction is"
+msgstr "Käyttäjän differentiaalinen etäisyysvirhe: kuinka hyvä korjaus on"
+
+#: src/ctl/dgps.tsx:48
+msgid "The correction over the last 15 minutes"
+msgstr "Korjaus viimeisten 15 minuutin ajalta"
+
+#: src/ctl/dgps.tsx:56
+msgid "don't use"
+msgstr "älä käytä"
+
+#: src/ctl/dgps.tsx:85
 msgid "The reference station's ID (RTCM)"
 msgstr "Referenssiaseman tunnus (RTCM)"
 
-#: src/ctl/dgps.tsx:42
+#: src/ctl/dgps.tsx:87
 msgid "station {id}"
 msgstr "asema {id}"
 
 #. words = the 30-bit RTCM data words; parity = their check bits
-#: src/ctl/dgps.tsx:47
+#: src/ctl/dgps.tsx:92
 msgid "Words passing parity, recently"
 msgstr "Pariteettitarkistuksen läpäisseet sanat, viime aikoina"
 
-#: src/ctl/dgps.tsx:49 src/ctl/psk.tsx:54
+#: src/ctl/dgps.tsx:94 src/ctl/psk.tsx:54
 msgid "quiet"
 msgstr "hiljaa"
 
-#: src/ctl/dgps.tsx:53
+#: src/ctl/dgps.tsx:98
 msgid "The reference station's position (RTCM type 3)"
 msgstr "Referenssiaseman sijainti (RTCM-tyyppi 3)"
 
-#: src/ctl/dgps.tsx:59
-msgid "Satellites in its latest corrections"
-msgstr "Satelliitit sen viimeisimmissä korjauksissa"
-
-#: src/ctl/dgps.tsx:65
+#: src/ctl/dgps.tsx:104
 msgid "Messages by RTCM type (hover for the name), and how many were read whole"
 msgstr "Viestit RTCM-tyypeittäin (nimi osoittamalla) ja montako luettiin kokonaan"
 
-#: src/ctl/dgps.tsx:66
+#: src/ctl/dgps.tsx:105
 msgid "messages"
 msgstr "viestit"
 
-#: src/ctl/dgps.tsx:67
+#: src/ctl/dgps.tsx:106
 msgid "{n} of {m} whole"
 msgstr "{n}/{m} kokonaisia"
 
-#: src/ctl/dgps.tsx:74
+#: src/ctl/dgps.tsx:113
 msgid "Almanac: {n} beacons"
 msgstr "Almanakka: {n} majakkaa"
 
-#: src/ctl/dgps.tsx:80
+#: src/ctl/dgps.tsx:119
 msgid "Station ID"
 msgstr "Aseman tunnus"
 
-#: src/ctl/dgps.tsx:85
+#: src/ctl/dgps.tsx:124
 msgid "Range"
 msgstr "Kantama"
 
-#: src/ctl/dgps.tsx:106
+#: src/ctl/dgps.tsx:145
 msgid "Tune to a part of the beacon band, 283.5-325 kHz (USB)"
 msgstr "Viritä osaan majakkakaistaa, 283,5–325 kHz (USB)"
 
-#: src/ctl/dgps.tsx:108 src/ctl/timecode.tsx:60
+#: src/ctl/dgps.tsx:147 src/ctl/timecode.tsx:60
 msgid "Tune…"
 msgstr "Viritä…"
 
-#: src/ctl/dgps.tsx:117
+#: src/ctl/dgps.tsx:167
 msgid "Clear the beacons no longer heard"
 msgstr "Poista majakat, joita ei enää kuulu"
 
-#: src/ctl/dgps.tsx:126
+#: src/ctl/dgps.tsx:179
 msgid "DGPS is decoded in USB, LSB and CW."
 msgstr "DGPS puretaan USB-, LSB- ja CW-tilassa."
 
-#: src/ctl/dgps.tsx:128
+#: src/ctl/dgps.tsx:182
 msgid "Nothing yet: every DGPS beacon (283.5-325 kHz, MSK at 50-200 Bd) in the passband is found and its RTCM messages read: its station, health, position and satellites. A wide passband (USB, 3 kHz) reads several at once."
 msgstr "Ei vielä mitään: jokainen päästökaistalla oleva DGPS-majakka (283,5–325 kHz, MSK 50–200 Bd) löydetään ja sen RTCM-viestit luetaan: asema, kunto, sijainti ja satelliitit. Leveä päästökaista (USB, 3 kHz) lukee useita kerralla."
 
@@ -4170,47 +4204,47 @@ msgid "When this minute began by the server's clock, less the time it says: the 
 msgstr "Milloin tämä minuutti alkoi palvelimen kellon mukaan, vähennettynä sen ilmoittamalla ajalla: matka asemalta, vastaanotin ja palvelimen kellovirhe"
 
 #. RTCM SC-104 message types (DGPS); GPS and GLONASS stay in English
-#: src/dgps.ts:95
+#: src/dgps.ts:120
 msgid "GPS corrections"
 msgstr "GPS-korjaukset"
 
-#: src/dgps.ts:96
+#: src/dgps.ts:121
 msgid "reference station position"
 msgstr "referenssiaseman sijainti"
 
-#: src/dgps.ts:97
+#: src/dgps.ts:122
 msgid "GPS constellation health"
 msgstr "GPS-konstellaation kunto"
 
-#: src/dgps.ts:98
+#: src/dgps.ts:123
 msgid "null frame"
 msgstr "tyhjä kehys"
 
-#: src/dgps.ts:99
+#: src/dgps.ts:124
 msgid "beacon almanac"
 msgstr "majakka-almanakka"
 
-#: src/dgps.ts:100
+#: src/dgps.ts:125
 msgid "GPS partial corrections"
 msgstr "GPS-osakorjaukset"
 
-#: src/dgps.ts:101
+#: src/dgps.ts:126
 msgid "text"
 msgstr "teksti"
 
-#: src/dgps.ts:102
+#: src/dgps.ts:127
 msgid "extended almanac"
 msgstr "laajennettu almanakka"
 
-#: src/dgps.ts:103
+#: src/dgps.ts:128
 msgid "GLONASS corrections"
 msgstr "GLONASS-korjaukset"
 
-#: src/dgps.ts:104
+#: src/dgps.ts:129
 msgid "GLONASS partial corrections"
 msgstr "GLONASS-osakorjaukset"
 
-#: src/dgps.ts:105
+#: src/dgps.ts:130
 msgid "GLONASS text"
 msgstr "GLONASS-teksti"
 
@@ -5142,35 +5176,35 @@ msgstr "salasana vaaditaan"
 msgid "login failed ({status})"
 msgstr "kirjautuminen epäonnistui ({status})"
 
-#: src/state.ts:740 src/state.ts:2727
+#: src/state.ts:744 src/state.ts:2754
 msgid "nothing was received"
 msgstr "mitään ei vastaanotettu"
 
-#: src/state.ts:750
+#: src/state.ts:754
 msgid ", {s} s lost (zeros)"
 msgstr ", {s} s menetetty (nollia)"
 
-#: src/state.ts:751
+#: src/state.ts:755
 msgid "{name} ({s} s{lost})"
 msgstr "{name} ({s} s{lost})"
 
-#: src/state.ts:1234
+#: src/state.ts:1261
 msgid "named by the clock"
 msgstr "nimetty kellon mukaan"
 
-#: src/state.ts:2727
+#: src/state.ts:2754
 msgid "only silence was heard"
 msgstr "kuului vain hiljaisuutta"
 
-#: src/state.ts:2737
+#: src/state.ts:2764
 msgid ", {s} s of silence left out"
 msgstr ", {s} s hiljaisuutta jätetty pois"
 
-#: src/state.ts:2738
+#: src/state.ts:2765
 msgid "; ended when the audio format changed"
 msgstr "; päättyi äänimuodon vaihtuessa"
 
-#: src/state.ts:2739
+#: src/state.ts:2766
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
@@ -5331,3 +5365,6 @@ msgstr "Vesiputous: signaalin voimakkuus taajuuden ja ajan mukaan"
 
 #~ msgid "Decoders"
 #~ msgstr "Dekooderit"
+
+#~ msgid "Satellites in its latest corrections"
+#~ msgstr "Satelliitit sen viimeisimmissä korjauksissa"

@@ -45,12 +45,18 @@ pub fn encode(d: u32, p29: u32, p30: u32) -> u32 {
     (sent << 6) | parity_bits(d & 0xff_ffff, p29, p30)
 }
 
-/// A correction's satellite: (ID, issue of data, UDRE 0-3).
+/// A correction's satellite.
 #[derive(Clone, Debug, PartialEq)]
 pub struct Sat {
     pub prn: u32,
+    /// Issue of data (GLONASS: the change bit and tb).
     pub iod: u32,
+    /// User differential range error class 0-3 (≤1, 1-4, 4-8, >8 m).
     pub udre: u32,
+    /// Pseudorange correction (m) and its rate (m/s); None: the station
+    /// says don't use this satellite.
+    pub prc: Option<f64>,
+    pub rrc: f64,
 }
 
 /// One beacon of a type 7 almanac.
@@ -166,10 +172,15 @@ fn body(kind: u32, words: &[Option<u32>]) -> Body {
                 .map(|k| {
                     let a = 40 * k;
                     let prn = field(&w, a + 3, 5);
+                    // scale factor: 0.02 m and 0.002 m/s, or 16 times
+                    let k = if field(&w, a, 1) == 1 { 16.0 } else { 1.0 };
+                    let prc = field(&w, a + 8, 16);
                     Sat {
                         prn: if prn == 0 && kind < 31 { 32 } else { prn },
                         udre: field(&w, a + 1, 2),
                         iod: field(&w, a + 32, 8),
+                        prc: (prc != 0x8000).then(|| signed(prc, 16) as f64 * 0.02 * k),
+                        rrc: signed(field(&w, a + 24, 8), 8) as f64 * 0.002 * k,
                     }
                 })
                 .collect();

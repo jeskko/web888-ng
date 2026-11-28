@@ -4,6 +4,7 @@
 // (station, health, position, satellites, messages) every 15 s; saves
 // dgps.png in OUT.
 //   CHROME=... node dgps.mjs URL [DIAL_HZ] [SECONDS]
+// WIDE=1: the Wide button (the bin around the dial) as well.
 import { launch, q, sleep, decoder, lit } from "./lib.mjs";
 const [url, dial = "286500", secs = "60"] = process.argv.slice(2);
 const out = process.env.OUT ?? ".";
@@ -15,6 +16,7 @@ await sleep(1500);
 await decoder(p, "DGPS");
 await sleep(500);
 await p.ev(`(() => { const s = ${q(".dgps select")}; const o = [...s.options].find((o) => o.value === ${lit(dial)}); if (o) { s.value = o.value; } else { s.value = s.options[1].value; } s.dispatchEvent(new Event('change', { bubbles: true })); })()`);
+if (process.env.WIDE === "1") await p.ev(`[...document.querySelectorAll('.dgps button')].find((b) => b.textContent === 'Wide' && !b.classList.contains('on'))?.click()`);
 const t0 = Date.now();
 while (Date.now() - t0 < Number(secs) * 1000) {
   await sleep(15000);

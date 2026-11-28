@@ -1765,7 +1765,7 @@ msgstr ""
 msgid "5 min"
 msgstr ""
 
-#: src/ctl/audiorec.tsx:14
+#: src/ctl/audiorec.tsx:14 src/ctl/dgps.tsx:48
 msgid "15 min"
 msgstr ""
 
@@ -2639,12 +2639,12 @@ msgid "Decode CW (Morse) from this receiver's audio, in this browser: every keye
 msgstr ""
 
 #. Wide = skim a 40 kHz slice of spectrum (a channelizer bin of the receiver's filter bank) instead of the narrow audio passband
-#: src/ctl/cw.tsx:41 src/ctl/rtty.tsx:57
+#: src/ctl/cw.tsx:41 src/ctl/dgps.tsx:162 src/ctl/rtty.tsx:57
 msgid "Skim 40 kHz around the dial (a channelizer bin straight from the receiver, ~1 Mbit/s) instead of the audio passband"
 msgstr ""
 
 #. Wide = skim a 40 kHz slice of spectrum (a channelizer bin) instead of the narrow audio passband
-#: src/ctl/cw.tsx:44 src/ctl/rtty.tsx:60
+#: src/ctl/cw.tsx:44 src/ctl/dgps.tsx:164 src/ctl/rtty.tsx:60
 msgid "Wide"
 msgstr ""
 
@@ -2661,20 +2661,20 @@ msgstr ""
 msgid "Clear the text"
 msgstr ""
 
-#: src/ctl/cw.tsx:52 src/ctl/dgps.tsx:118 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
+#: src/ctl/cw.tsx:52 src/ctl/dgps.tsx:168 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
 msgid "Clear"
 msgstr ""
 
-#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/dgps.tsx:120 src/ctl/dgps.tsx:120 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
+#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/dgps.tsx:170 src/ctl/dgps.tsx:170 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
 msgid "Stop decoding"
 msgstr ""
 
-#: src/ctl/cw.tsx:61 src/ctl/rtty.tsx:73
+#: src/ctl/cw.tsx:61 src/ctl/dgps.tsx:177 src/ctl/rtty.tsx:73
 #, placeholders
 msgid "Skimming {lo}–{hi} kHz"
 msgstr ""
 
-#: src/ctl/cw.tsx:61 src/ctl/rtty.tsx:73
+#: src/ctl/cw.tsx:61 src/ctl/dgps.tsx:177 src/ctl/rtty.tsx:73
 msgid "Waiting for the wide IQ…"
 msgstr ""
 
@@ -2801,87 +2801,122 @@ msgid "Decoders in this browser"
 msgstr ""
 
 #. a DGPS station's own report on its corrections
-#: src/ctl/dgps.tsx:16
+#: src/ctl/dgps.tsx:21
 msgid "healthy"
 msgstr ""
 
-#: src/ctl/dgps.tsx:17
+#: src/ctl/dgps.tsx:22
 msgid "not monitored"
 msgstr ""
 
-#: src/ctl/dgps.tsx:18
+#: src/ctl/dgps.tsx:23
 msgid "unhealthy"
 msgstr ""
 
+#. pseudorange corrections = the metres a receiver adds to its measured distance to each satellite
 #: src/ctl/dgps.tsx:40
+#, placeholders
+msgid "Corrections: {n} satellites"
+msgstr ""
+
+#. column heads: the satellite (G GPS, R GLONASS and its number), its pseudorange correction, the correction's rate of change, UDRE = user differential range error class
+#: src/ctl/dgps.tsx:44
+msgid "sat"
+msgstr ""
+
+#: src/ctl/dgps.tsx:45
+msgid "Pseudorange correction: added to the measured range"
+msgstr ""
+
+#: src/ctl/dgps.tsx:45
+msgid "m"
+msgstr ""
+
+#: src/ctl/dgps.tsx:46
+msgid "Its rate of change"
+msgstr ""
+
+#: src/ctl/dgps.tsx:46
+msgid "cm/s"
+msgstr ""
+
+#: src/ctl/dgps.tsx:47
+msgid "User differential range error: how good the correction is"
+msgstr ""
+
+#: src/ctl/dgps.tsx:48
+msgid "The correction over the last 15 minutes"
+msgstr ""
+
+#: src/ctl/dgps.tsx:56
+msgid "don't use"
+msgstr ""
+
+#: src/ctl/dgps.tsx:85
 msgid "The reference station's ID (RTCM)"
 msgstr ""
 
-#: src/ctl/dgps.tsx:42
+#: src/ctl/dgps.tsx:87
 #, placeholders
 msgid "station {id}"
 msgstr ""
 
 #. words = the 30-bit RTCM data words; parity = their check bits
-#: src/ctl/dgps.tsx:47
+#: src/ctl/dgps.tsx:92
 msgid "Words passing parity, recently"
 msgstr ""
 
-#: src/ctl/dgps.tsx:49 src/ctl/psk.tsx:54
+#: src/ctl/dgps.tsx:94 src/ctl/psk.tsx:54
 msgid "quiet"
 msgstr ""
 
-#: src/ctl/dgps.tsx:53
+#: src/ctl/dgps.tsx:98
 msgid "The reference station's position (RTCM type 3)"
 msgstr ""
 
-#: src/ctl/dgps.tsx:59
-msgid "Satellites in its latest corrections"
-msgstr ""
-
-#: src/ctl/dgps.tsx:65
+#: src/ctl/dgps.tsx:104
 msgid "Messages by RTCM type (hover for the name), and how many were read whole"
 msgstr ""
 
-#: src/ctl/dgps.tsx:66
+#: src/ctl/dgps.tsx:105
 msgid "messages"
 msgstr ""
 
-#: src/ctl/dgps.tsx:67
+#: src/ctl/dgps.tsx:106
 #, placeholders
 msgid "{n} of {m} whole"
 msgstr ""
 
-#: src/ctl/dgps.tsx:74
+#: src/ctl/dgps.tsx:113
 #, placeholders
 msgid "Almanac: {n} beacons"
 msgstr ""
 
-#: src/ctl/dgps.tsx:80
+#: src/ctl/dgps.tsx:119
 msgid "Station ID"
 msgstr ""
 
-#: src/ctl/dgps.tsx:85
+#: src/ctl/dgps.tsx:124
 msgid "Range"
 msgstr ""
 
-#: src/ctl/dgps.tsx:106
+#: src/ctl/dgps.tsx:145
 msgid "Tune to a part of the beacon band, 283.5-325 kHz (USB)"
 msgstr ""
 
-#: src/ctl/dgps.tsx:108 src/ctl/timecode.tsx:60
+#: src/ctl/dgps.tsx:147 src/ctl/timecode.tsx:60
 msgid "Tune…"
 msgstr ""
 
-#: src/ctl/dgps.tsx:117
+#: src/ctl/dgps.tsx:167
 msgid "Clear the beacons no longer heard"
 msgstr ""
 
-#: src/ctl/dgps.tsx:126
+#: src/ctl/dgps.tsx:179
 msgid "DGPS is decoded in USB, LSB and CW."
 msgstr ""
 
-#: src/ctl/dgps.tsx:128
+#: src/ctl/dgps.tsx:182
 msgid "Nothing yet: every DGPS beacon (283.5-325 kHz, MSK at 50-200 Bd) in the passband is found and its RTCM messages read: its station, health, position and satellites. A wide passband (USB, 3 kHz) reads several at once."
 msgstr ""
 
@@ -4368,47 +4403,47 @@ msgid "When this minute began by the server's clock, less the time it says: the 
 msgstr ""
 
 #. RTCM SC-104 message types (DGPS); GPS and GLONASS stay in English
-#: src/dgps.ts:95
+#: src/dgps.ts:120
 msgid "GPS corrections"
 msgstr ""
 
-#: src/dgps.ts:96
+#: src/dgps.ts:121
 msgid "reference station position"
 msgstr ""
 
-#: src/dgps.ts:97
+#: src/dgps.ts:122
 msgid "GPS constellation health"
 msgstr ""
 
-#: src/dgps.ts:98
+#: src/dgps.ts:123
 msgid "null frame"
 msgstr ""
 
-#: src/dgps.ts:99
+#: src/dgps.ts:124
 msgid "beacon almanac"
 msgstr ""
 
-#: src/dgps.ts:100
+#: src/dgps.ts:125
 msgid "GPS partial corrections"
 msgstr ""
 
-#: src/dgps.ts:101
+#: src/dgps.ts:126
 msgid "text"
 msgstr ""
 
-#: src/dgps.ts:102
+#: src/dgps.ts:127
 msgid "extended almanac"
 msgstr ""
 
-#: src/dgps.ts:103
+#: src/dgps.ts:128
 msgid "GLONASS corrections"
 msgstr ""
 
-#: src/dgps.ts:104
+#: src/dgps.ts:129
 msgid "GLONASS partial corrections"
 msgstr ""
 
-#: src/dgps.ts:105
+#: src/dgps.ts:130
 msgid "GLONASS text"
 msgstr ""
 
@@ -5420,38 +5455,38 @@ msgstr ""
 msgid "login failed ({status})"
 msgstr ""
 
-#: src/state.ts:740 src/state.ts:2727
+#: src/state.ts:744 src/state.ts:2754
 msgid "nothing was received"
 msgstr ""
 
-#: src/state.ts:750
+#: src/state.ts:754
 #, placeholders
 msgid ", {s} s lost (zeros)"
 msgstr ""
 
-#: src/state.ts:751
+#: src/state.ts:755
 #, placeholders
 msgid "{name} ({s} s{lost})"
 msgstr ""
 
-#: src/state.ts:1234
+#: src/state.ts:1261
 msgid "named by the clock"
 msgstr ""
 
-#: src/state.ts:2727
+#: src/state.ts:2754
 msgid "only silence was heard"
 msgstr ""
 
-#: src/state.ts:2737
+#: src/state.ts:2764
 #, placeholders
 msgid ", {s} s of silence left out"
 msgstr ""
 
-#: src/state.ts:2738
+#: src/state.ts:2765
 msgid "; ended when the audio format changed"
 msgstr ""
 
-#: src/state.ts:2739
+#: src/state.ts:2766
 #, placeholders
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr ""

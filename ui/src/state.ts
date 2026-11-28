@@ -292,7 +292,7 @@ export function connect(): void {
       if (!cwWideNow()) cwAudio(f);
       if (!rttyWideNow()) rttyAudio(f);
       pskAudio(f);
-      dgpsAudio(f);
+      if (!dgpsWideNow()) dgpsAudio(f);
       tcAudio(f);
       hfdlAudio(f);
       js8Audio(f);
@@ -308,9 +308,9 @@ export function connect(): void {
       if (wideCentre.value !== f.centre) wideCentre.value = f.centre;
       skimIq(f); // first: the others may take the samples' buffer
       recIq(f);
-      const both = cwWideNow() && rttyWideNow();
-      if (cwWideNow()) cwIq(f, both ? f.iq.slice() : f.iq);
-      if (rttyWideNow()) rttyIq(f, f.iq);
+      // each worker takes its samples' buffer: copies for all but the last
+      const takers = [cwWideNow() && cwIq, rttyWideNow() && rttyIq, dgpsWideNow() && dgpsIq].filter((x) => x !== false);
+      takers.forEach((g, i) => g(f, i < takers.length - 1 ? f.iq.slice() : f.iq));
     },
     onWf(l) {
       wfBytes += l.bytes;
@@ -645,6 +645,7 @@ export const wideAvail = signal(false);
 /** The CW and RTTY skimmers read the bin instead of the audio. */
 export const cwWide = signal(load("cwWide") === "1");
 export const rttyWide = signal(load("rttyWide") === "1");
+export const dgpsWide = signal(load("dgpsWide") === "1");
 /** The bin being received (its centre, Hz), or null. */
 export const wideCentre = signal<number | null>(null);
 /** The part of a bin skimmed (Hz from its centre; it's clean to ±21). */
@@ -658,6 +659,9 @@ function cwWideNow(): boolean {
 function rttyWideNow(): boolean {
   return wideAvail.value && rttyOn.value && rttyWide.value;
 }
+function dgpsWideNow(): boolean {
+  return wideAvail.value && dgpsOn.value && dgpsWide.value;
+}
 
 /** The sample width last asked for. */
 let wideBits: 8 | 16 = 8;
@@ -666,7 +670,7 @@ let wideBits: 8 | 16 = 8;
  * dial leaves the bin's middle 30 kHz, but not while recording: the
  * recording keeps its bin), stop when none does. 16-bit while recording. */
 function wideSync(): void {
-  const others = cwWideNow() || rttyWideNow() || recorder !== null;
+  const others = cwWideNow() || rttyWideNow() || dgpsWideNow() || recorder !== null;
   const want = others || skimWant();
   const hz = st.value?.hz;
   if (!want) {
@@ -978,7 +982,7 @@ function skimStart(): Worker {
  * view one bin wide stays: its next look in 2 s). */
 function skimDone(): void {
   skimBusy = false;
-  if (cwWideNow() || rttyWideNow() || recorder !== null) return;
+  if (cwWideNow() || rttyWideNow() || dgpsWideNow() || recorder !== null) return;
   const v = skimView();
   const s = st.value;
   if (!v || !s) return;
@@ -1021,9 +1025,6 @@ effect(() => {
   skimShow();
 });
 
-// the wide IQ stream follows the skimmers' settings and the dial (here,
-// after everything it reads is declared)
-effect(() => wideSync());
 
 // ------------------------------------------------------------ PSK31/63/125
 
@@ -1144,7 +1145,7 @@ function dgpsAudio(f: AudioFrame): void {
     dgpsRf = (a) => rfOf(mode, hz, pitch, a);
     dgpsBeacons.value = dgpsBeacons.value.map((x) => ({ ...x, active: false }));
     dgpsBand = "";
-    dgpsWorker.postMessage({ reset: true });
+    dgpsWorker.postMessage({ wide: null });
   }
   const b = `${band.lo}|${band.hi}`;
   if (b !== dgpsBand) {
@@ -1168,6 +1169,28 @@ export function setDgps(on: boolean): void {
   }
 }
 
+/** The DGPS skimmer reads the bin (40 kHz around the dial). */
+export function setDgpsWide(on: boolean): void {
+  dgpsWide.value = on;
+  save("dgpsWide", on ? "1" : "0");
+  dgpsKey = "";
+}
+
+function dgpsIq(f: IqFrame, iq: Float32Array): void {
+  dgpsWorker ??= dgpsStart();
+  const key = `wide|${f.centre}|${f.rate}`;
+  if (key !== dgpsKey) {
+    dgpsKey = key;
+    dgpsBand = "";
+    dgpsGen++;
+    const c = f.centre;
+    dgpsRf = (a) => c + a;
+    dgpsBeacons.value = dgpsBeacons.value.map((x) => ({ ...x, active: false }));
+    dgpsWorker.postMessage({ wide: { rate: f.rate, lo: -WIDE_HALF, hi: WIDE_HALF } });
+  }
+  dgpsWorker.postMessage({ iq, gen: dgpsGen }, [iq.buffer]);
+}
+
 export function clearDgps(): void {
   dgpsBeacons.value = dgpsBeacons.value.filter((x) => x.active);
 }
@@ -1176,6 +1199,10 @@ export function clearDgps(): void {
 export function pickDgps(dial: number): void {
   pickPsk(dial);
 }
+
+// the wide IQ stream follows the skimmers' settings and the dial (here,
+// after everything it reads is declared)
+effect(() => wideSync());
 
 // ---------------------------------------------------------- time codes
 
@@ -2516,7 +2543,7 @@ export const decodersOnAudio = computed(
     (cwOn.value && !cwWideNow()) ||
     (rttyOn.value && !rttyWideNow()) ||
     pskOn.value ||
-    dgpsOn.value ||
+    (dgpsOn.value && !dgpsWideNow()) ||
     tcOn.value ||
     hfdlOn.value ||
     js8On.value ||

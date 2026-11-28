@@ -404,7 +404,9 @@ pre.log { flex: 1; margin: 0; min-height: 200px; overflow: auto; white-space: pr
 .hfdl-msg.squitter { opacity: 0.75; }
 .hfdl-item { margin-left: 8px; overflow-wrap: anywhere; }
 .dgps-alm { border-collapse: collapse; font-size: 0.8571rem; }
-.dgps-alm td { padding: 0 6px 0 0; white-space: nowrap; }
+.dgps-alm td, .dgps-alm th { padding: 0 6px 0 0; white-space: nowrap; text-align: left; font-weight: normal; }
+.dgps-spark { vertical-align: middle; }
+.dgps-spark polyline { fill: none; stroke: var(--accent); stroke-width: 1.2; }
 .hfdl-kind { display: inline-block; font-size: 0.7143rem; padding: 0 4px; border-radius: 3px; background: var(--accent-bg); margin-right: 2px; }
 .hfdl-text { font-family: ui-monospace, Menlo, Consolas, monospace; white-space: pre-wrap; }
 .js8-msg { margin: 6px 0 10px; }

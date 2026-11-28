@@ -456,6 +456,52 @@ hears, or tunes one (USB with the carrier at 1 kHz; AM on WWV).
 * **Not done**: RBU, BPC; WWV's coherent subcarrier. (CHU's 300 Bd FSK
   code: none; CHU left shortwave on 2026-06-22.)
 
+### 2.10 DGPS beacons (new): done (2026-11-28)
+
+Maritime DGPS (IALA beacons, 283.5-325 kHz, ITU-R M.823): MSK at 100 or
+200 Bd (50 allowed) carrying RTCM SC-104 version 2. Asked for after the
+RTTY panel left 287/311/323 kHz alone (MSK, 50 Hz shift: below its 60 Hz
+pairing limit, and no text inside). `crates/dgps`, `dgps.wasm`, the DGPS
+panel.
+
+* **Finding beacons**: MSK squared gives two lines a bit rate apart,
+  centred on twice the carrier (carriers and NDBs square to one line).
+  Every 2 s (4 s on a 60 kS/s bin) the last 8 s: one FFT of the history,
+  pieces of 3 kHz cut from it and squared (wider pieces raise the
+  squared floor: a 6 kHz piece lost a weak 200-Bd beacon at 286.5 kHz
+  that 3 kHz found), pairs 50/100/200 Hz apart both 15 dB over the floor.
+  A candidate is kept once 3 words in step with a header pass parity.
+* **Demodulator**: 12 samples a bit (the channel rate divides 12 kS/s
+  and 60 kS/s for 50/100/200 Bd), a ±0.75 × rate FIR (neighbours are
+  500 Hz away: a wider filter let them in and most beacons failed in
+  the prototype), the bit from the sign of the phase turned over one bit,
+  timing where |turn| is largest, a slow loop on −turn².
+* **RTCM**: 30-bit words (24 data + 6 GPS parity, D29*/D30* chained; an
+  inverted stream reads the same), header (type, station, Z-count,
+  sequence, length, health); decoded: 1/9/31/34 (each satellite's
+  pseudorange correction, its rate, UDRE, IOD), 3 (reference station,
+  ECEF to WGS84), 7 (beacon almanac), 16 (text), 36 (GLONASS text,
+  KOI8-R).
+* **On air** (two 5-min 60 kS/s bins, 279-351 kHz, 2026-11-28 00:33 UTC,
+  `/data/misc/web888-iq/2026-11-28_dgps/`; `--example replay`): 27
+  beacons, the strong ones 95-100 % of messages whole. Positions check
+  out (311.0 kHz at 59.99 N 29.13 E, 289.0 at 63.48 N 19.65 E), the
+  almanacs list the Finnish beacons (Porkkala 293.5 kHz), corrections
+  agree across stations (GPS 3: −5.1, −6.5, −5.5 m from three beacons).
+  Some beacons come and go (287.5 kHz half the time). The page's audio
+  path (the same minutes as USB audio) reads what the IQ path reads.
+  Replay cost: 300 s of the bin in 22 s on the desktop.
+* **Page**: DGPS in the Decoders list; per beacon its station, health,
+  words passing parity, position and distance/bearing from the
+  receiver's locator, message counts by type, texts, the almanac, and a
+  corrections table (satellite, correction m, rate cm/s, UDRE, the last
+  15 minutes plotted). Wide: the 40 kHz bin around the dial (280-320 kHz
+  from a 299.4 kHz dial: 11 beacons live). A wasm32 bug found there:
+  `len * m` overflowed usize at a 60 kS/s history (fine natively).
+  `ui/tools/cdp/dgps.mjs` (WIDE=1).
+* **Not done**: the map (beacon positions as points), station names (an
+  ID list; the almanacs give positions), type 5/27 contents.
+
 ## 3. Shared UI
 
 * A decoder panel the text decoders share (CW, RTTY, NAVTEX, JTTY), and

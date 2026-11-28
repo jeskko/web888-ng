@@ -164,6 +164,8 @@ impl Skimmer {
     pub fn new_iq(rate: f64, lo: f64, hi: f64) -> Self {
         let mut s = Self::with_rate(rate, true, lo, hi);
         s.max_signals = 64;
+        // a 60 kS/s bin: the search costs more, beacons come and go slowly
+        s.every = 4.0;
         s
     }
 
@@ -300,8 +302,18 @@ impl Skimmer {
     /// Carrier and rate of each MSK signal in the history: pairs of lines
     /// in the squared passband, searched in pieces of at most
     /// [`PIECE_HZ`] (a wide IQ band squared would alias, and a wider
-    /// band squared raises the floor: weak beacons are lost).
+    /// band squared raises the floor: weak beacons are lost). One FFT of
+    /// the history; each piece is cut from it (a 50 Hz taper each side)
+    /// and brought back to time at the rate it needs.
     pub fn candidates(&mut self) -> Vec<(f64, f64)> {
+        let len = self.hist.len();
+        if (len as f64) < 4.0 * self.rate {
+            return Vec::new();
+        }
+        let n = len.next_power_of_two();
+        let mut x: Vec<Complex32> = self.hist.iter().copied().collect();
+        x.resize(n, Complex32::new(0.0, 0.0));
+        self.planner.plan_fft_forward(n).process(&mut x);
         let mut out: Vec<(f64, f64, f32)> = Vec::new();
         let width = self.hi - self.lo;
         let pieces = (width / PIECE_HZ).ceil().max(1.0) as usize;
@@ -310,7 +322,7 @@ impl Skimmer {
             // overlapping by 300 Hz, so a beacon on an edge is whole in one
             let a = (self.lo + k as f64 * w - 150.0).max(self.lo);
             let b = (self.lo + (k + 1) as f64 * w + 150.0).min(self.hi);
-            for c in self.piece(a, b) {
+            for c in self.piece(&x, len, a, b) {
                 match out.iter_mut().find(|o| (o.0 - c.0).abs() < 0.3 * c.1) {
                     Some(o) if c.2 > o.2 => *o = c,
                     Some(_) => {}
@@ -322,35 +334,48 @@ impl Skimmer {
         out.into_iter().map(|(f, b, _)| (f, b)).collect()
     }
 
-    /// [`Skimmer::candidates`] in lo..hi: (carrier, rate, line level dB).
-    fn piece(&mut self, lo: f64, hi: f64) -> Vec<(f64, f64, f32)> {
-        let width = hi - lo;
-        let centre = 0.5 * (lo + hi);
+    /// [`Skimmer::candidates`] in lo..hi of the history's spectrum `x`
+    /// (`len` samples, zero-padded): (carrier, rate, line level dB).
+    fn piece(&mut self, x: &[Complex32], len: usize, lo: f64, hi: f64) -> Vec<(f64, f64, f32)> {
+        let big = x.len();
+        let df = self.rate / big as f64;
+        let kc = (0.5 * (lo + hi) / df).round() as i64;
+        let centre = kc as f64 * df;
         // the squared band spans ±width: a rate with room for it
-        let decim = ((self.rate / (2.0 * width + 400.0)).floor() as usize).max(1);
-        let out = self.rate / decim as f64;
-        let taps = ((self.rate / 300.0) * 2.0) as usize;
-        let mut ch = Channel::new(centre, 0.5 * width + 50.0, self.rate, decim, taps);
-        let mut z = Vec::new();
-        ch.push(self.hist.iter().copied(), &mut z);
-        let skip = (taps / decim).min(z.len());
-        let z = &z[skip..];
-        if (z.len() as f64) < 4.0 * out {
-            return Vec::new();
+        let m = (((2.0 * (hi - lo) + 400.0) / df).ceil() as usize)
+            .next_power_of_two()
+            .min(big);
+        let out = m as f64 * df;
+        let mut z = vec![Complex32::new(0.0, 0.0); m];
+        let half = m as i64 / 2;
+        for j in -half..half {
+            let f = centre + j as f64 * df;
+            let edge = (lo - f).max(f - hi);
+            let g = if edge <= 0.0 {
+                1.0
+            } else if edge < 50.0 {
+                0.5 + 0.5 * (std::f64::consts::PI * edge / 50.0).cos()
+            } else {
+                continue;
+            };
+            let k = (kc + j).rem_euclid(big as i64) as usize;
+            z[j.rem_euclid(m as i64) as usize] = x[k] * g as f32;
         }
-        let n = z.len().next_power_of_two();
-        let fft = self.planner.plan_fft_forward(n);
-        let m = z.len();
-        let mut s: Vec<Complex32> = z
+        self.planner.plan_fft_inverse(m).process(&mut z);
+        // the history's span at the piece's rate, squared and windowed
+        // (in u64: wasm32's usize overflows at a 60 kS/s history)
+        let v = ((len as u64 * m as u64 / big as u64) as usize).clamp(2, m);
+        let mut s: Vec<Complex32> = z[..v]
             .iter()
             .enumerate()
-            .map(|(i, v)| {
-                let w = 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / m as f64).cos();
-                v * v * w as f32
+            .map(|(i, u)| {
+                let w = 0.5 - 0.5 * (2.0 * std::f64::consts::PI * i as f64 / v as f64).cos();
+                u * u * w as f32
             })
             .collect();
-        s.resize(n, Complex32::new(0.0, 0.0));
-        fft.process(&mut s);
+        s.resize(m, Complex32::new(0.0, 0.0));
+        self.planner.plan_fft_forward(m).process(&mut s);
+        let n = m;
         let bin = out / n as f64;
         let db: Vec<f32> = s
             .iter()

@@ -153,3 +153,54 @@ fn skimmer_finds_two_beacons_in_noise() {
     // 100 Bd: 40 messages in 12 s (the first 8 s primed); 200 Bd in 6 s
     assert!(texts[0] >= 30 && texts[1] >= 30, "{texts:?}");
 }
+
+/// Type 1: each satellite's correction and rate at both scales, and the
+/// "don't use" value.
+#[test]
+fn corrections_decode() {
+    // 40 bits a satellite: scale, UDRE, ID, PRC, RRC, IOD
+    let sat = |s: u64, udre: u64, prn: u64, prc: i64, rrc: i64, iod: u64| -> u64 {
+        (s << 39)
+            | (udre << 37)
+            | (prn << 32)
+            | (((prc as u64) & 0xffff) << 16)
+            | (((rrc as u64) & 0xff) << 8)
+            | iod
+    };
+    let sats = [
+        sat(0, 1, 12, -173, 2, 40),
+        sat(1, 0, 0, 100, -3, 7),
+        sat(0, 3, 5, -32768, 0, 1),
+    ];
+    let mut bits: Vec<bool> = sats
+        .iter()
+        .flat_map(|v| (0..40).rev().map(move |i| (v >> i) & 1 == 1))
+        .collect();
+    bits.resize(120, false);
+    let data: Vec<u32> = bits
+        .chunks(24)
+        .map(|c| c.iter().fold(0u32, |a, &b| (a << 1) | u32::from(b)))
+        .collect();
+    // the framer looks back two bits before a word: a lead-in
+    let m = frame(
+        &[
+            vec![false; 32],
+            web888_dgps::synth::bits(&message(1, 5, 10, 0, 0, &data)),
+        ]
+        .concat(),
+    );
+    let Body::Corr {
+        glonass: false,
+        sats,
+    } = &m[0].body
+    else {
+        panic!("{:?}", m[0].body)
+    };
+    assert_eq!(sats.len(), 3);
+    assert_eq!((sats[0].prn, sats[0].udre, sats[0].iod), (12, 1, 40));
+    assert!((sats[0].prc.unwrap() + 3.46).abs() < 1e-9 && (sats[0].rrc - 0.004).abs() < 1e-9);
+    // scale 1: 16 times; ID 0 is 32
+    assert_eq!(sats[1].prn, 32);
+    assert!((sats[1].prc.unwrap() - 32.0).abs() < 1e-9 && (sats[1].rrc + 0.096).abs() < 1e-9);
+    assert_eq!(sats[2].prc, None);
+}

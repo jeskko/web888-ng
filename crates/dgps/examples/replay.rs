@@ -89,7 +89,13 @@ fn main() {
                         Body::Corr { glonass, sats } => format!(
                             "{} {:?}",
                             if *glonass { "GLONASS" } else { "GPS" },
-                            sats.iter().map(|s| s.prn).collect::<Vec<_>>()
+                            sats.iter()
+                                .map(|s| (
+                                    s.prn,
+                                    s.prc.map(|v| (v * 100.0).round() / 100.0),
+                                    s.udre
+                                ))
+                                .collect::<Vec<_>>()
                         ),
                         Body::Pos { lat, lon, h } => format!("pos {lat:.5} {lon:.5} {h:.1} m"),
                         Body::Almanac(b) => format!("almanac {b:?}"),

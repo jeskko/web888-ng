@@ -11,3 +11,4 @@ crate-type = ["cdylib", "rlib"]
 
 [dependencies]
 web888-dgps.workspace = true
+num-complex.workspace = true

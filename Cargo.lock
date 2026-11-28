@@ -1841,6 +1841,7 @@ dependencies = [
 name = "web888-dgps-wasm"
 version = "0.17.0"
 dependencies = [
+ "num-complex",
  "web888-dgps",
 ]
 
