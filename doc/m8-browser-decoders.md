@@ -1446,8 +1446,24 @@ with NN on). As planned above, StoRM-shaped:
   2 dB closer to the clean balance; words don't follow. The feature
   loss buys words back, more with more weight (×1 → ×3: Whisper −1.0,
   Parakeet ±0). gen5f3 is in `crates/nr/model` (server c7ae809) and on
-  the unit; still 8 points behind the mask on Whisper. Running: × 10
-  from gen5f3, and × 3 from scratch (40k).
+  the unit; still 8 points behind the mask on Whisper.
+* **Sixth round (2026-11-28): more feature weight, and from scratch.**
+  gen6f10: 20k steps from gen5f3 with the feature loss × 10; gen6s: 40k
+  steps from nothing (direct, band, feature × 3, lr 1e-3).
+
+  | Gen, 1 step | Whisper WER | sub/del/ins | Parakeet WER | STOI | ESTOI | speech vs mask (dB) | balance (dB) |
+  |---|---|---|---|---|---|---|---|
+  | gen5f3 | 60.7 % | 33/23/6 | 47.7 % | 0.600 | 0.375 | −7 / −14 / −17 / −19 | +5.5 / 0 / −5.6 / −12.6 |
+  | gen6f10 (feat × 10) | 61.0 % | 32/24/5 | 48.0 % | 0.598 | 0.376 | −7 / −14 / −17 / −18 | +5.4 / 0 / −5.5 / −12.3 |
+  | gen6s (from scratch) | 60.6 % | 31/25/5 | 47.0 % | 0.583 | 0.351 | −8 / −14 / −16 / −18 | +4.8 / 0 / −6.8 / −13.2 |
+
+  Neither is a step: × 10 changes nothing measurable (the feature
+  term's gain is spent by × 3), and from scratch trades ESTOI (back to
+  the mask's 0.351) and more deletions for under a point of Parakeet.
+  gen5f3 stays on the unit. The plateau is ~60.7 % Whisper against the
+  mask's 52.5 %: more loss weighting won't close it; the next lever is
+  the input (step 6, training jointly with the mask, or conditioning on
+  more than the mask's output).
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
