@@ -1787,11 +1787,11 @@ dependencies = [
 
 [[package]]
 name = "web888-clock"
-version = "0.17.0"
+version = "0.18.0"
 
 [[package]]
 name = "web888-config"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "schemars",
  "serde",
@@ -1801,7 +1801,7 @@ dependencies = [
 
 [[package]]
 name = "web888-core"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "libc",
  "tokio",
@@ -1812,7 +1812,7 @@ dependencies = [
 
 [[package]]
 name = "web888-cw"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "ionochannel",
  "num-complex",
@@ -1822,7 +1822,7 @@ dependencies = [
 
 [[package]]
 name = "web888-cw-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-cw",
@@ -1830,7 +1830,7 @@ dependencies = [
 
 [[package]]
 name = "web888-dgps"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1839,7 +1839,7 @@ dependencies = [
 
 [[package]]
 name = "web888-dgps-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-dgps",
@@ -1847,7 +1847,7 @@ dependencies = [
 
 [[package]]
 name = "web888-digi-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-clock",
  "web888-ftx",
@@ -1856,7 +1856,7 @@ dependencies = [
 
 [[package]]
 name = "web888-dsp"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1868,7 +1868,7 @@ dependencies = [
 
 [[package]]
 name = "web888-fft"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1876,7 +1876,7 @@ dependencies = [
 
 [[package]]
 name = "web888-fsk"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "ionochannel",
  "num-complex",
@@ -1887,7 +1887,7 @@ dependencies = [
 
 [[package]]
 name = "web888-fsk-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-fsk",
@@ -1895,7 +1895,7 @@ dependencies = [
 
 [[package]]
 name = "web888-ftx"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1905,21 +1905,21 @@ dependencies = [
 
 [[package]]
 name = "web888-hfdl"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
 ]
 
 [[package]]
 name = "web888-hfdl-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-hfdl",
 ]
 
 [[package]]
 name = "web888-hpsdr"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1930,7 +1930,7 @@ dependencies = [
 
 [[package]]
 name = "web888-hw"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-radio",
@@ -1939,7 +1939,7 @@ dependencies = [
 
 [[package]]
 name = "web888-img"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-cw",
@@ -1947,14 +1947,14 @@ dependencies = [
 
 [[package]]
 name = "web888-img-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-img",
 ]
 
 [[package]]
 name = "web888-iq"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1965,7 +1965,7 @@ dependencies = [
 
 [[package]]
 name = "web888-js8"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1974,7 +1974,7 @@ dependencies = [
 
 [[package]]
 name = "web888-js8-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-ftx",
  "web888-js8",
@@ -1982,7 +1982,7 @@ dependencies = [
 
 [[package]]
 name = "web888-jtty"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -1990,14 +1990,14 @@ dependencies = [
 
 [[package]]
 name = "web888-jtty-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-jtty",
 ]
 
 [[package]]
 name = "web888-markers"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "serde",
  "serde_json",
@@ -2005,7 +2005,7 @@ dependencies = [
 
 [[package]]
 name = "web888-nr"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -2013,21 +2013,21 @@ dependencies = [
 
 [[package]]
 name = "web888-nr-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-nr",
 ]
 
 [[package]]
 name = "web888-opus-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "opus1",
 ]
 
 [[package]]
 name = "web888-prop"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "hfcast",
  "serde",
@@ -2036,7 +2036,7 @@ dependencies = [
 
 [[package]]
 name = "web888-psk"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -2045,7 +2045,7 @@ dependencies = [
 
 [[package]]
 name = "web888-psk-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-psk",
@@ -2053,11 +2053,11 @@ dependencies = [
 
 [[package]]
 name = "web888-radio"
-version = "0.17.0"
+version = "0.18.0"
 
 [[package]]
 name = "web888-sigid"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -2065,7 +2065,7 @@ dependencies = [
 
 [[package]]
 name = "web888-sigid-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-sigid",
@@ -2073,7 +2073,7 @@ dependencies = [
 
 [[package]]
 name = "web888-sim"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "web888-radio",
@@ -2081,7 +2081,7 @@ dependencies = [
 
 [[package]]
 name = "web888-skim"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "libc",
  "serde_json",
@@ -2096,21 +2096,21 @@ dependencies = [
 
 [[package]]
 name = "web888-timecode"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
 ]
 
 [[package]]
 name = "web888-timecode-wasm"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "web888-timecode",
 ]
 
 [[package]]
 name = "web888-web"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "argon2",
  "axum",
@@ -2147,7 +2147,7 @@ dependencies = [
 
 [[package]]
 name = "web888-wspr"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "num-complex",
  "rustfft",
@@ -2157,7 +2157,7 @@ dependencies = [
 
 [[package]]
 name = "web888-zynqsdr"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "libc",
  "web888-dsp",
@@ -2167,7 +2167,7 @@ dependencies = [
 
 [[package]]
 name = "web888d"
-version = "0.17.0"
+version = "0.18.0"
 dependencies = [
  "clap",
  "libc",
