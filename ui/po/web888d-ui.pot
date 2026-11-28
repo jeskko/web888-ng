@@ -66,7 +66,7 @@ msgstr ""
 msgid "Admin password"
 msgstr ""
 
-#: src/admin/admin.tsx:94 src/ctl/controls.tsx:877 src/main.tsx:121
+#: src/admin/admin.tsx:94 src/ctl/controls.tsx:877 src/main.tsx:122
 msgid "Log in"
 msgstr ""
 
@@ -2489,7 +2489,7 @@ msgstr ""
 msgid "Save the spectrum and waterfall as a PNG image (with time marks and the frequency)"
 msgstr ""
 
-#: src/ctl/controls.tsx:977 src/ctl/decoders.tsx:54
+#: src/ctl/controls.tsx:977 src/ctl/decoders.tsx:55
 msgid "Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)"
 msgstr ""
 
@@ -2661,11 +2661,11 @@ msgstr ""
 msgid "Clear the text"
 msgstr ""
 
-#: src/ctl/cw.tsx:52 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
+#: src/ctl/cw.tsx:52 src/ctl/dgps.tsx:118 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
 msgid "Clear"
 msgstr ""
 
-#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
+#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/dgps.tsx:120 src/ctl/dgps.tsx:120 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
 msgid "Stop decoding"
 msgstr ""
 
@@ -2695,7 +2695,7 @@ msgstr ""
 msgid "{hz} Hz audio; click: CW mode on this signal"
 msgstr ""
 
-#. hint = one-line description of each browser decoder; mode names (FT8, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
+#. hint = one-line description of each browser decoder; mode names (FT8, DGPS, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
 #: src/ctl/decoders.tsx:21
 msgid "on the frequency you tune; nothing is reported anywhere"
 msgstr ""
@@ -2717,83 +2717,172 @@ msgid "JS8Call: heartbeats, directed messages and chat, every submode (USB)"
 msgstr ""
 
 #: src/ctl/decoders.tsx:26
-msgid "aircraft HF data link: position reports and ACARS (USB)"
+msgid "maritime DGPS beacons (283.5-325 kHz): station, position, satellites"
 msgstr ""
 
 #: src/ctl/decoders.tsx:27
-msgid "HF weather charts and SSTV pictures (USB)"
-msgstr ""
-
-#: src/ctl/decoders.tsx:28 src/ctl/timecode.tsx:44
-msgid "Time"
+msgid "aircraft HF data link: position reports and ACARS (USB)"
 msgstr ""
 
 #: src/ctl/decoders.tsx:28
+msgid "HF weather charts and SSTV pictures (USB)"
+msgstr ""
+
+#: src/ctl/decoders.tsx:29 src/ctl/timecode.tsx:44
+msgid "Time"
+msgstr ""
+
+#: src/ctl/decoders.tsx:29
 msgid "time-code stations: DCF77, MSF, WWVB, JJY, WWV/WWVH"
 msgstr ""
 
-#: src/ctl/decoders.tsx:29
+#: src/ctl/decoders.tsx:30
 msgid "Signal ID"
 msgstr ""
 
-#: src/ctl/decoders.tsx:29
+#: src/ctl/decoders.tsx:30
 msgid "identify the signals in the passband"
 msgstr ""
 
-#: src/ctl/decoders.tsx:30
+#: src/ctl/decoders.tsx:31
 msgid "WSJT-X's keyboard mode"
 msgstr ""
 
-#: src/ctl/decoders.tsx:38 src/ctl/spots.tsx:29
+#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:29
 msgid "Spots"
 msgstr ""
 
-#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:25
+#: src/ctl/decoders.tsx:40 src/ctl/spots.tsx:25
 msgid "Decodes of this receiver's skimmers and live DX spots"
 msgstr ""
 
-#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:25
+#: src/ctl/decoders.tsx:40 src/ctl/spots.tsx:25
 msgid "Decodes of this receiver's skimmers"
 msgstr ""
 
-#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:25
+#: src/ctl/decoders.tsx:40 src/ctl/spots.tsx:25
 msgid "Live DX spots"
 msgstr ""
 
-#: src/ctl/decoders.tsx:44 src/ctl/licences.tsx:80 src/ctl/map.tsx:42
+#: src/ctl/decoders.tsx:45 src/ctl/licences.tsx:80 src/ctl/map.tsx:42
 msgid "Map"
 msgstr ""
 
-#: src/ctl/decoders.tsx:44 src/ctl/map.tsx:41
+#: src/ctl/decoders.tsx:45 src/ctl/map.tsx:41
 msgid "Map of the stations heard"
 msgstr ""
 
 #. a switch: every signal in the waterfall's view named on the spectrum
-#: src/ctl/decoders.tsx:48
+#: src/ctl/decoders.tsx:49
 msgid "Signal labels"
 msgstr ""
 
-#: src/ctl/decoders.tsx:49
+#: src/ctl/decoders.tsx:50
 msgid "Name every signal in the waterfall's view on the spectrum (at 1 MHz wide or narrower): the identifier in this browser, over the receiver's 40 kHz slices in turn (~1 Mbit/s while on)"
 msgstr ""
 
-#: src/ctl/decoders.tsx:100
+#: src/ctl/decoders.tsx:101
 #, placeholders
 msgid "Open beside the waterfall: {list}"
 msgstr ""
 
-#: src/ctl/decoders.tsx:100
+#: src/ctl/decoders.tsx:101
 msgid "The spots, the map, the audio spectrum and the decoders that run in this browser, beside the waterfall"
 msgstr ""
 
 #. button opening the list of panels beside the waterfall (spots, map, audio spectrum, decoders)
-#: src/ctl/decoders.tsx:104 src/ctl/decoders.tsx:107
+#: src/ctl/decoders.tsx:105 src/ctl/decoders.tsx:108
 msgid "Panels"
 msgstr ""
 
 #. heading in the panel list: the decoders that run in this browser
-#: src/ctl/decoders.tsx:110
+#: src/ctl/decoders.tsx:111
 msgid "Decoders in this browser"
+msgstr ""
+
+#. a DGPS station's own report on its corrections
+#: src/ctl/dgps.tsx:16
+msgid "healthy"
+msgstr ""
+
+#: src/ctl/dgps.tsx:17
+msgid "not monitored"
+msgstr ""
+
+#: src/ctl/dgps.tsx:18
+msgid "unhealthy"
+msgstr ""
+
+#: src/ctl/dgps.tsx:40
+msgid "The reference station's ID (RTCM)"
+msgstr ""
+
+#: src/ctl/dgps.tsx:42
+#, placeholders
+msgid "station {id}"
+msgstr ""
+
+#. words = the 30-bit RTCM data words; parity = their check bits
+#: src/ctl/dgps.tsx:47
+msgid "Words passing parity, recently"
+msgstr ""
+
+#: src/ctl/dgps.tsx:49 src/ctl/psk.tsx:54
+msgid "quiet"
+msgstr ""
+
+#: src/ctl/dgps.tsx:53
+msgid "The reference station's position (RTCM type 3)"
+msgstr ""
+
+#: src/ctl/dgps.tsx:59
+msgid "Satellites in its latest corrections"
+msgstr ""
+
+#: src/ctl/dgps.tsx:65
+msgid "Messages by RTCM type (hover for the name), and how many were read whole"
+msgstr ""
+
+#: src/ctl/dgps.tsx:66
+msgid "messages"
+msgstr ""
+
+#: src/ctl/dgps.tsx:67
+#, placeholders
+msgid "{n} of {m} whole"
+msgstr ""
+
+#: src/ctl/dgps.tsx:74
+#, placeholders
+msgid "Almanac: {n} beacons"
+msgstr ""
+
+#: src/ctl/dgps.tsx:80
+msgid "Station ID"
+msgstr ""
+
+#: src/ctl/dgps.tsx:85
+msgid "Range"
+msgstr ""
+
+#: src/ctl/dgps.tsx:106
+msgid "Tune to a part of the beacon band, 283.5-325 kHz (USB)"
+msgstr ""
+
+#: src/ctl/dgps.tsx:108 src/ctl/timecode.tsx:60
+msgid "Tune…"
+msgstr ""
+
+#: src/ctl/dgps.tsx:117
+msgid "Clear the beacons no longer heard"
+msgstr ""
+
+#: src/ctl/dgps.tsx:126
+msgid "DGPS is decoded in USB, LSB and CW."
+msgstr ""
+
+#: src/ctl/dgps.tsx:128
+msgid "Nothing yet: every DGPS beacon (283.5-325 kHz, MSK at 50-200 Bd) in the passband is found and its RTCM messages read: its station, health, position and satellites. A wide passband (USB, 3 kHz) reads several at once."
 msgstr ""
 
 #: src/ctl/digi.tsx:22
@@ -3801,7 +3890,7 @@ msgstr ""
 msgid "Unmute"
 msgstr ""
 
-#: src/ctl/mobile.tsx:216 src/ctl/mobile.tsx:216 src/main.tsx:155
+#: src/ctl/mobile.tsx:216 src/ctl/mobile.tsx:216 src/main.tsx:156
 msgid "Start audio"
 msgstr ""
 
@@ -3957,10 +4046,6 @@ msgstr ""
 #. phase changes = the BPSK symbols (carrier phase flips between 0 and 180 degrees)
 #: src/ctl/psk.tsx:52
 msgid "How cleanly its phase changes read: 100 % clean, ~64 % noise"
-msgstr ""
-
-#: src/ctl/psk.tsx:54
-msgid "quiet"
 msgstr ""
 
 #: src/ctl/psk.tsx:61
@@ -4228,10 +4313,6 @@ msgstr ""
 msgid "Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
 msgstr ""
 
-#: src/ctl/timecode.tsx:60
-msgid "Tune…"
-msgstr ""
-
 #: src/ctl/timecode.tsx:70
 msgid "Clear the minutes"
 msgstr ""
@@ -4286,49 +4367,94 @@ msgstr ""
 msgid "When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error"
 msgstr ""
 
+#. RTCM SC-104 message types (DGPS); GPS and GLONASS stay in English
+#: src/dgps.ts:95
+msgid "GPS corrections"
+msgstr ""
+
+#: src/dgps.ts:96
+msgid "reference station position"
+msgstr ""
+
+#: src/dgps.ts:97
+msgid "GPS constellation health"
+msgstr ""
+
+#: src/dgps.ts:98
+msgid "null frame"
+msgstr ""
+
+#: src/dgps.ts:99
+msgid "beacon almanac"
+msgstr ""
+
+#: src/dgps.ts:100
+msgid "GPS partial corrections"
+msgstr ""
+
+#: src/dgps.ts:101
+msgid "text"
+msgstr ""
+
+#: src/dgps.ts:102
+msgid "extended almanac"
+msgstr ""
+
+#: src/dgps.ts:103
+msgid "GLONASS corrections"
+msgstr ""
+
+#: src/dgps.ts:104
+msgid "GLONASS partial corrections"
+msgstr ""
+
+#: src/dgps.ts:105
+msgid "GLONASS text"
+msgstr ""
+
 #: src/fmt.ts:78
 msgid "auto"
 msgstr ""
 
-#: src/main.tsx:110
+#: src/main.tsx:111
 msgid "Log in with the receiver's password for any of its receivers."
 msgstr ""
 
-#: src/main.tsx:110
+#: src/main.tsx:111
 msgid "This receiver is private."
 msgstr ""
 
-#: src/main.tsx:113 src/main.tsx:114
+#: src/main.tsx:114 src/main.tsx:115
 msgid "Password"
 msgstr ""
 
-#: src/main.tsx:121
+#: src/main.tsx:122
 msgid "Listen"
 msgstr ""
 
-#: src/main.tsx:125
+#: src/main.tsx:126
 msgid "Stay a visitor"
 msgstr ""
 
-#: src/main.tsx:138
+#: src/main.tsx:139
 #, placeholders
 msgid "Session ended: {reason}."
 msgstr ""
 
-#: src/main.tsx:139
+#: src/main.tsx:140
 msgid "Reconnect"
 msgstr ""
 
-#: src/main.tsx:146
+#: src/main.tsx:147
 msgid "The receiver is in use."
 msgstr ""
 
-#: src/main.tsx:147
+#: src/main.tsx:148
 msgid "Try again"
 msgstr ""
 
 #. a heading only screen readers hear: the page's title
-#: src/main.tsx:177
+#: src/main.tsx:178
 msgid "Web-888 receiver"
 msgstr ""
 
@@ -5285,47 +5411,47 @@ msgstr ""
 msgid "3G ALE (MIL-STD-188-141B): 2400 Bd PSK bursts (not decoded here)"
 msgstr ""
 
-#: src/state.ts:167
+#: src/state.ts:168
 msgid "password needed"
 msgstr ""
 
-#: src/state.ts:191
+#: src/state.ts:192
 #, placeholders
 msgid "login failed ({status})"
 msgstr ""
 
-#: src/state.ts:738 src/state.ts:2651
+#: src/state.ts:740 src/state.ts:2727
 msgid "nothing was received"
 msgstr ""
 
-#: src/state.ts:748
+#: src/state.ts:750
 #, placeholders
 msgid ", {s} s lost (zeros)"
 msgstr ""
 
-#: src/state.ts:749
+#: src/state.ts:751
 #, placeholders
 msgid "{name} ({s} s{lost})"
 msgstr ""
 
-#: src/state.ts:1159
+#: src/state.ts:1234
 msgid "named by the clock"
 msgstr ""
 
-#: src/state.ts:2651
+#: src/state.ts:2727
 msgid "only silence was heard"
 msgstr ""
 
-#: src/state.ts:2661
+#: src/state.ts:2737
 #, placeholders
 msgid ", {s} s of silence left out"
 msgstr ""
 
-#: src/state.ts:2662
+#: src/state.ts:2738
 msgid "; ended when the audio format changed"
 msgstr ""
 
-#: src/state.ts:2663
+#: src/state.ts:2739
 #, placeholders
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr ""

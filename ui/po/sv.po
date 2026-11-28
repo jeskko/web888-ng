@@ -67,7 +67,7 @@ msgstr "eller lägg lösenordet (en rad, minst 8 tecken) i {file} på SD-kortet 
 msgid "Admin password"
 msgstr "Administratörslösenord"
 
-#: src/admin/admin.tsx:94 src/ctl/controls.tsx:877 src/main.tsx:121
+#: src/admin/admin.tsx:94 src/ctl/controls.tsx:877 src/main.tsx:122
 msgid "Log in"
 msgstr "Logga in"
 
@@ -2385,7 +2385,7 @@ msgstr "Rensa topparna"
 msgid "Save the spectrum and waterfall as a PNG image (with time marks and the frequency)"
 msgstr "Spara spektrum och vattenfall som en PNG-bild (med tidsmarkeringar och frekvensen)"
 
-#: src/ctl/controls.tsx:977 src/ctl/decoders.tsx:54
+#: src/ctl/controls.tsx:977 src/ctl/decoders.tsx:55
 msgid "Audio spectrum: the audio's spectrum and waterfall in a panel (in IQ, both sides of the dial)"
 msgstr "Ljudspektrum: ljudets spektrum och vattenfall i en panel (i IQ båda sidor om den inställda frekvensen)"
 
@@ -2548,11 +2548,11 @@ msgstr "Neural"
 msgid "Clear the text"
 msgstr "Rensa texten"
 
-#: src/ctl/cw.tsx:52 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
+#: src/ctl/cw.tsx:52 src/ctl/dgps.tsx:118 src/ctl/digi.tsx:90 src/ctl/hfdl.tsx:65 src/ctl/js8.tsx:62 src/ctl/psk.tsx:35 src/ctl/rtty.tsx:64 src/ctl/timecode.tsx:71
 msgid "Clear"
 msgstr "Rensa"
 
-#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
+#: src/ctl/cw.tsx:54 src/ctl/cw.tsx:54 src/ctl/dgps.tsx:120 src/ctl/dgps.tsx:120 src/ctl/digi.tsx:92 src/ctl/digi.tsx:92 src/ctl/hfdl.tsx:67 src/ctl/hfdl.tsx:67 src/ctl/img.tsx:101 src/ctl/img.tsx:101 src/ctl/js8.tsx:64 src/ctl/js8.tsx:64 src/ctl/jtty.tsx:46 src/ctl/jtty.tsx:46 src/ctl/psk.tsx:37 src/ctl/psk.tsx:37 src/ctl/rtty.tsx:66 src/ctl/rtty.tsx:66
 msgid "Stop decoding"
 msgstr "Sluta avkoda"
 
@@ -2580,7 +2580,7 @@ msgstr "Text"
 msgid "{hz} Hz audio; click: CW mode on this signal"
 msgstr "{hz} Hz ljud; klick: CW-mod på den här signalen"
 
-#. hint = one-line description of each browser decoder; mode names (FT8, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
+#. hint = one-line description of each browser decoder; mode names (FT8, DGPS, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
 #: src/ctl/decoders.tsx:21
 msgid "on the frequency you tune; nothing is reported anywhere"
 msgstr "på frekvensen du ställt in; inget rapporteras någonstans"
@@ -2602,83 +2602,169 @@ msgid "JS8Call: heartbeats, directed messages and chat, every submode (USB)"
 msgstr "JS8Call: heartbeats, riktade meddelanden och chatt, alla undermoder (USB)"
 
 #: src/ctl/decoders.tsx:26
+msgid "maritime DGPS beacons (283.5-325 kHz): station, position, satellites"
+msgstr "maritima DGPS-fyrar (283,5–325 kHz): station, position, satelliter"
+
+#: src/ctl/decoders.tsx:27
 msgid "aircraft HF data link: position reports and ACARS (USB)"
 msgstr "flygets HF-datalänk: positionsrapporter och ACARS (USB)"
 
-#: src/ctl/decoders.tsx:27
+#: src/ctl/decoders.tsx:28
 msgid "HF weather charts and SSTV pictures (USB)"
 msgstr "HF-väderkartor och SSTV-bilder (USB)"
 
-#: src/ctl/decoders.tsx:28 src/ctl/timecode.tsx:44
+#: src/ctl/decoders.tsx:29 src/ctl/timecode.tsx:44
 msgid "Time"
 msgstr "Tid"
 
-#: src/ctl/decoders.tsx:28
+#: src/ctl/decoders.tsx:29
 msgid "time-code stations: DCF77, MSF, WWVB, JJY, WWV/WWVH"
 msgstr "tidssignalstationer: DCF77, MSF, WWVB, JJY, WWV/WWVH"
 
-#: src/ctl/decoders.tsx:29
+#: src/ctl/decoders.tsx:30
 msgid "Signal ID"
 msgstr "Signal-ID"
 
-#: src/ctl/decoders.tsx:29
+#: src/ctl/decoders.tsx:30
 msgid "identify the signals in the passband"
 msgstr "identifiera signalerna i passbandet"
 
-#: src/ctl/decoders.tsx:30
+#: src/ctl/decoders.tsx:31
 msgid "WSJT-X's keyboard mode"
 msgstr "WSJT-X:s tangentbordsmod"
 
-#: src/ctl/decoders.tsx:38 src/ctl/spots.tsx:29
+#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:29
 msgid "Spots"
 msgstr "Spots"
 
-#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:25
+#: src/ctl/decoders.tsx:40 src/ctl/spots.tsx:25
 msgid "Decodes of this receiver's skimmers and live DX spots"
 msgstr "Avkodningar från mottagarens bakgrundsavkodare och live-DX-spots"
 
-#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:25
+#: src/ctl/decoders.tsx:40 src/ctl/spots.tsx:25
 msgid "Decodes of this receiver's skimmers"
 msgstr "Avkodningar från mottagarens bakgrundsavkodare"
 
-#: src/ctl/decoders.tsx:39 src/ctl/spots.tsx:25
+#: src/ctl/decoders.tsx:40 src/ctl/spots.tsx:25
 msgid "Live DX spots"
 msgstr "Live-DX-spots"
 
-#: src/ctl/decoders.tsx:44 src/ctl/licences.tsx:80 src/ctl/map.tsx:42
+#: src/ctl/decoders.tsx:45 src/ctl/licences.tsx:80 src/ctl/map.tsx:42
 msgid "Map"
 msgstr "Karta"
 
-#: src/ctl/decoders.tsx:44 src/ctl/map.tsx:41
+#: src/ctl/decoders.tsx:45 src/ctl/map.tsx:41
 msgid "Map of the stations heard"
 msgstr "Karta över hörda stationer"
 
 #. a switch: every signal in the waterfall's view named on the spectrum
-#: src/ctl/decoders.tsx:48
+#: src/ctl/decoders.tsx:49
 msgid "Signal labels"
 msgstr "Signaletiketter"
 
-#: src/ctl/decoders.tsx:49
+#: src/ctl/decoders.tsx:50
 msgid "Name every signal in the waterfall's view on the spectrum (at 1 MHz wide or narrower): the identifier in this browser, over the receiver's 40 kHz slices in turn (~1 Mbit/s while on)"
 msgstr "Namnge varje signal i vattenfallets vy på spektrumet (när vyn är högst 1 MHz bred): identifieraren i den här webbläsaren, över mottagarens 40 kHz-skivor i tur och ordning (~1 Mbit/s när den är på)"
 
-#: src/ctl/decoders.tsx:100
+#: src/ctl/decoders.tsx:101
 msgid "Open beside the waterfall: {list}"
 msgstr "Öppet bredvid vattenfallet: {list}"
 
-#: src/ctl/decoders.tsx:100
+#: src/ctl/decoders.tsx:101
 msgid "The spots, the map, the audio spectrum and the decoders that run in this browser, beside the waterfall"
 msgstr "Spottar, kartan, ljudspektrumet och avkodarna som körs i den här webbläsaren, bredvid vattenfallet"
 
 #. button opening the list of panels beside the waterfall (spots, map, audio spectrum, decoders)
-#: src/ctl/decoders.tsx:104 src/ctl/decoders.tsx:107
+#: src/ctl/decoders.tsx:105 src/ctl/decoders.tsx:108
 msgid "Panels"
 msgstr "Paneler"
 
 #. heading in the panel list: the decoders that run in this browser
-#: src/ctl/decoders.tsx:110
+#: src/ctl/decoders.tsx:111
 msgid "Decoders in this browser"
 msgstr "Avkodare i den här webbläsaren"
+
+#. a DGPS station's own report on its corrections
+#: src/ctl/dgps.tsx:16
+msgid "healthy"
+msgstr "frisk"
+
+#: src/ctl/dgps.tsx:17
+msgid "not monitored"
+msgstr "ej övervakad"
+
+#: src/ctl/dgps.tsx:18
+msgid "unhealthy"
+msgstr "felaktig"
+
+#: src/ctl/dgps.tsx:40
+msgid "The reference station's ID (RTCM)"
+msgstr "Referensstationens ID (RTCM)"
+
+#: src/ctl/dgps.tsx:42
+msgid "station {id}"
+msgstr "station {id}"
+
+#. words = the 30-bit RTCM data words; parity = their check bits
+#: src/ctl/dgps.tsx:47
+msgid "Words passing parity, recently"
+msgstr "Ord som klarat paritetskontrollen, på sistone"
+
+#: src/ctl/dgps.tsx:49 src/ctl/psk.tsx:54
+msgid "quiet"
+msgstr "tyst"
+
+#: src/ctl/dgps.tsx:53
+msgid "The reference station's position (RTCM type 3)"
+msgstr "Referensstationens position (RTCM typ 3)"
+
+#: src/ctl/dgps.tsx:59
+msgid "Satellites in its latest corrections"
+msgstr "Satelliter i dess senaste korrektioner"
+
+#: src/ctl/dgps.tsx:65
+msgid "Messages by RTCM type (hover for the name), and how many were read whole"
+msgstr "Meddelanden per RTCM-typ (namnet när du pekar) och hur många som lästes hela"
+
+#: src/ctl/dgps.tsx:66
+msgid "messages"
+msgstr "meddelanden"
+
+#: src/ctl/dgps.tsx:67
+msgid "{n} of {m} whole"
+msgstr "{n} av {m} hela"
+
+#: src/ctl/dgps.tsx:74
+msgid "Almanac: {n} beacons"
+msgstr "Almanacka: {n} fyrar"
+
+#: src/ctl/dgps.tsx:80
+msgid "Station ID"
+msgstr "Stations-ID"
+
+#: src/ctl/dgps.tsx:85
+msgid "Range"
+msgstr "Räckvidd"
+
+#: src/ctl/dgps.tsx:106
+msgid "Tune to a part of the beacon band, 283.5-325 kHz (USB)"
+msgstr "Ställ in en del av fyrbandet, 283,5–325 kHz (USB)"
+
+#: src/ctl/dgps.tsx:108 src/ctl/timecode.tsx:60
+msgid "Tune…"
+msgstr "Ställ in…"
+
+#: src/ctl/dgps.tsx:117
+msgid "Clear the beacons no longer heard"
+msgstr "Rensa fyrar som inte längre hörs"
+
+#: src/ctl/dgps.tsx:126
+msgid "DGPS is decoded in USB, LSB and CW."
+msgstr "DGPS avkodas i USB, LSB och CW."
+
+#: src/ctl/dgps.tsx:128
+msgid "Nothing yet: every DGPS beacon (283.5-325 kHz, MSK at 50-200 Bd) in the passband is found and its RTCM messages read: its station, health, position and satellites. A wide passband (USB, 3 kHz) reads several at once."
+msgstr "Inget ännu: varje DGPS-fyr i passbandet (283,5–325 kHz, MSK med 50–200 Bd) hittas och dess RTCM-meddelanden läses: station, status, position och satelliter. Ett brett passband (USB, 3 kHz) läser flera på en gång."
 
 #: src/ctl/digi.tsx:22
 msgid "Decode FT8, FT4 or WSPR on the frequency you tune, in this browser (nothing is reported anywhere)"
@@ -3631,7 +3717,7 @@ msgstr "Band"
 msgid "Unmute"
 msgstr "Slå på ljudet"
 
-#: src/ctl/mobile.tsx:216 src/ctl/mobile.tsx:216 src/main.tsx:155
+#: src/ctl/mobile.tsx:216 src/ctl/mobile.tsx:216 src/main.tsx:156
 msgid "Start audio"
 msgstr "Starta ljudet"
 
@@ -3778,10 +3864,6 @@ msgstr "Inget ännu: varje PSK31-, PSK63- och PSK125-signal i passbandet hittas 
 #: src/ctl/psk.tsx:52
 msgid "How cleanly its phase changes read: 100 % clean, ~64 % noise"
 msgstr "Hur rent dess fasskiften läses: 100 % rent, ~64 % brus"
-
-#: src/ctl/psk.tsx:54
-msgid "quiet"
-msgstr "tyst"
 
 #: src/ctl/psk.tsx:61
 msgid "Read weakly: a phase change near 90°, it may have been another character"
@@ -4037,10 +4119,6 @@ msgstr "Auto"
 msgid "Tune to a station (USB with its carrier at 1 kHz; AM on WWV)"
 msgstr "Ställ in en station (USB med bärvågen på 1 kHz; AM på WWV)"
 
-#: src/ctl/timecode.tsx:60
-msgid "Tune…"
-msgstr "Ställ in…"
-
 #: src/ctl/timecode.tsx:70
 msgid "Clear the minutes"
 msgstr "Rensa minuterna"
@@ -4091,48 +4169,93 @@ msgstr "När minuten började vid antennen enligt mottagarens klocka, minus tide
 msgid "When this minute began by the server's clock, less the time it says: the way from the station, the receiver and the server's clock error"
 msgstr "När den här minuten började enligt serverns klocka, minus den tid den anger: vägen från stationen, mottagaren och serverklockans fel"
 
+#. RTCM SC-104 message types (DGPS); GPS and GLONASS stay in English
+#: src/dgps.ts:95
+msgid "GPS corrections"
+msgstr "GPS-korrektioner"
+
+#: src/dgps.ts:96
+msgid "reference station position"
+msgstr "referensstationens position"
+
+#: src/dgps.ts:97
+msgid "GPS constellation health"
+msgstr "GPS-konstellationens status"
+
+#: src/dgps.ts:98
+msgid "null frame"
+msgstr "tom ram"
+
+#: src/dgps.ts:99
+msgid "beacon almanac"
+msgstr "fyralmanacka"
+
+#: src/dgps.ts:100
+msgid "GPS partial corrections"
+msgstr "GPS-delkorrektioner"
+
+#: src/dgps.ts:101
+msgid "text"
+msgstr "text"
+
+#: src/dgps.ts:102
+msgid "extended almanac"
+msgstr "utökad almanacka"
+
+#: src/dgps.ts:103
+msgid "GLONASS corrections"
+msgstr "GLONASS-korrektioner"
+
+#: src/dgps.ts:104
+msgid "GLONASS partial corrections"
+msgstr "GLONASS-delkorrektioner"
+
+#: src/dgps.ts:105
+msgid "GLONASS text"
+msgstr "GLONASS-text"
+
 #: src/fmt.ts:78
 msgid "auto"
 msgstr "auto"
 
-#: src/main.tsx:110
+#: src/main.tsx:111
 msgid "Log in with the receiver's password for any of its receivers."
 msgstr "Logga in med mottagarens lösenord för att använda vilken som helst av dess mottagare."
 
-#: src/main.tsx:110
+#: src/main.tsx:111
 msgid "This receiver is private."
 msgstr "Den här mottagaren är privat."
 
-#: src/main.tsx:113 src/main.tsx:114
+#: src/main.tsx:114 src/main.tsx:115
 msgid "Password"
 msgstr "Lösenord"
 
-#: src/main.tsx:121
+#: src/main.tsx:122
 msgid "Listen"
 msgstr "Lyssna"
 
-#: src/main.tsx:125
+#: src/main.tsx:126
 msgid "Stay a visitor"
 msgstr "Fortsätt som besökare"
 
-#: src/main.tsx:138
+#: src/main.tsx:139
 msgid "Session ended: {reason}."
 msgstr "Sessionen avslutad: {reason}."
 
-#: src/main.tsx:139
+#: src/main.tsx:140
 msgid "Reconnect"
 msgstr "Återanslut"
 
-#: src/main.tsx:146
+#: src/main.tsx:147
 msgid "The receiver is in use."
 msgstr "Mottagaren är upptagen."
 
-#: src/main.tsx:147
+#: src/main.tsx:148
 msgid "Try again"
 msgstr "Försök igen"
 
 #. a heading only screen readers hear: the page's title
-#: src/main.tsx:177
+#: src/main.tsx:178
 msgid "Web-888 receiver"
 msgstr "Web-888-mottagare"
 
@@ -5011,43 +5134,43 @@ msgstr "många bärvågor samtidigt: MT63, 39-tonsmodemet, OFDM-data som VARA (a
 msgid "3G ALE (MIL-STD-188-141B): 2400 Bd PSK bursts (not decoded here)"
 msgstr "3G ALE (MIL-STD-188-141B): 2400 Bd PSK-skurar (avkodas inte här)"
 
-#: src/state.ts:167
+#: src/state.ts:168
 msgid "password needed"
 msgstr "lösenord krävs"
 
-#: src/state.ts:191
+#: src/state.ts:192
 msgid "login failed ({status})"
 msgstr "inloggningen misslyckades ({status})"
 
-#: src/state.ts:738 src/state.ts:2651
+#: src/state.ts:740 src/state.ts:2727
 msgid "nothing was received"
 msgstr "inget togs emot"
 
-#: src/state.ts:748
+#: src/state.ts:750
 msgid ", {s} s lost (zeros)"
 msgstr ", {s} s förlorade (nollor)"
 
-#: src/state.ts:749
+#: src/state.ts:751
 msgid "{name} ({s} s{lost})"
 msgstr "{name} ({s} s{lost})"
 
-#: src/state.ts:1159
+#: src/state.ts:1234
 msgid "named by the clock"
 msgstr "namngiven efter klockan"
 
-#: src/state.ts:2651
+#: src/state.ts:2727
 msgid "only silence was heard"
 msgstr "bara tystnad hördes"
 
-#: src/state.ts:2661
+#: src/state.ts:2737
 msgid ", {s} s of silence left out"
 msgstr ", {s} s tystnad utelämnad"
 
-#: src/state.ts:2662
+#: src/state.ts:2738
 msgid "; ended when the audio format changed"
 msgstr "; avslutad när ljudformatet ändrades"
 
-#: src/state.ts:2663
+#: src/state.ts:2739
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 

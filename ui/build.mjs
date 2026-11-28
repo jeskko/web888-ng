@@ -4,7 +4,8 @@
 // their WebAssembly (from scripts/build-wasm.sh, in wasm/): jtty-worker.js
 // with jtty.wasm (JTTY), digi-worker.js with digi.wasm (FT8/FT4/WSPR),
 // cw-worker.js with cw.wasm (CW), rtty-worker.js with fsk.wasm
-// (FSK/RTTY), psk-worker.js with psk.wasm (PSK31/63/125), hfdl-worker.js
+// (FSK/RTTY), psk-worker.js with psk.wasm (PSK31/63/125), dgps-worker.js
+// with dgps.wasm (DGPS beacons), hfdl-worker.js
 // with hfdl.wasm (HFDL), js8-worker.js with js8.wasm (JS8), img-worker.js with img.wasm (fax, SSTV), sigid-worker.js
 // with sigid.wasm (the signal identifier) and timecode-worker.js with
 // timecode.wasm (time-code stations); opus.wasm (the audio's Opus
@@ -36,6 +37,7 @@ const copyStatic = {
         ["cw.wasm", "CW decoding"],
         ["fsk.wasm", "RTTY decoding"],
         ["psk.wasm", "PSK decoding"],
+        ["dgps.wasm", "DGPS decoding"],
         ["hfdl.wasm", "HFDL decoding"],
         ["js8.wasm", "JS8 decoding"],
         ["img.wasm", "FAX/SSTV decoding"],
@@ -59,7 +61,7 @@ const copyStatic = {
 };
 
 const options = {
-  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "psk-worker": "src/psk/worker.ts", "hfdl-worker": "src/hfdl/worker.ts", "js8-worker": "src/js8/worker.ts", "img-worker": "src/img/worker.ts", "sigid-worker": "src/sigid/worker.ts", "timecode-worker": "src/timecode/worker.ts" },
+  entryPoints: { app: "src/main.tsx", worklet: "src/audio/worklet.ts", "jtty-worker": "src/jtty/worker.ts", "digi-worker": "src/digi/worker.ts", "cw-worker": "src/cw/worker.ts", "rtty-worker": "src/rtty/worker.ts", "psk-worker": "src/psk/worker.ts", "dgps-worker": "src/dgps/worker.ts", "hfdl-worker": "src/hfdl/worker.ts", "js8-worker": "src/js8/worker.ts", "img-worker": "src/img/worker.ts", "sigid-worker": "src/sigid/worker.ts", "timecode-worker": "src/timecode/worker.ts" },
   outdir: out,
   bundle: true,
   format: "esm",

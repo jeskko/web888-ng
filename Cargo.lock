@@ -1829,6 +1829,22 @@ dependencies = [
 ]
 
 [[package]]
+name = "web888-dgps"
+version = "0.17.0"
+dependencies = [
+ "num-complex",
+ "rustfft",
+ "web888-cw",
+]
+
+[[package]]
+name = "web888-dgps-wasm"
+version = "0.17.0"
+dependencies = [
+ "web888-dgps",
+]
+
+[[package]]
 name = "web888-digi-wasm"
 version = "0.17.0"
 dependencies = [

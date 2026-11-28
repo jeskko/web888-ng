@@ -7,7 +7,7 @@ import { useEffect, useRef, useState } from "preact/hooks";
 import { usePopFocus } from "../a11y.ts";
 import type { Signal } from "@preact/signals";
 import { N_, t } from "../i18n.ts";
-import { afOn, setSigLabels, sigLabelsOn, wideAvail, dxAvail, mapOpen, setAf, showMap, showSpots, spotsAvail, spotsOpen, cwOn, digiOn, hfdlOn, imgOn, js8On, jttyOn, pskOn, rttyOn, setCw, setDigi, setHfdl, setImg, setJs8, setJtty, setPsk, setRtty, setSig, setTc, sigOn, tcOn } from "../state.ts";
+import { afOn, setSigLabels, sigLabelsOn, wideAvail, dxAvail, mapOpen, setAf, showMap, showSpots, spotsAvail, spotsOpen, cwOn, dgpsOn, digiOn, hfdlOn, imgOn, js8On, jttyOn, pskOn, rttyOn, setCw, setDgps, setDigi, setHfdl, setImg, setJs8, setJtty, setPsk, setRtty, setSig, setTc, sigOn, tcOn } from "../state.ts";
 
 interface Decoder {
   label: string;
@@ -16,13 +16,14 @@ interface Decoder {
   set: (on: boolean) => void;
 }
 
-// i18n: hint = one-line description of each browser decoder; mode names (FT8, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
+// i18n: hint = one-line description of each browser decoder; mode names (FT8, DGPS, CW, RTTY, NAVTEX, DSC, PSK31, BPSK, JS8, HFDL, ACARS, SSTV, DCF77, MSF, WWVB, JJY, WWV, WWVH, JTTY) stay in English
 export const DECODERS: Decoder[] = [
   { label: "FT8/FT4/WSPR", hint: N_("on the frequency you tune; nothing is reported anywhere"), on: digiOn, set: setDigi },
   { label: "CW", hint: N_("every keyed signal in the passband (Morse)"), on: cwOn, set: setCw },
   { label: "RTTY", hint: N_("FSK/RTTY, NAVTEX and DSC, every parameter found from the signal"), on: rttyOn, set: setRtty },
   { label: "PSK", hint: N_("PSK31, PSK63 and PSK125: every BPSK signal in the passband"), on: pskOn, set: setPsk },
   { label: "JS8", hint: N_("JS8Call: heartbeats, directed messages and chat, every submode (USB)"), on: js8On, set: setJs8 },
+  { label: "DGPS", hint: N_("maritime DGPS beacons (283.5-325 kHz): station, position, satellites"), on: dgpsOn, set: setDgps },
   { label: "HFDL", hint: N_("aircraft HF data link: position reports and ACARS (USB)"), on: hfdlOn, set: setHfdl },
   { label: "FAX/SSTV", hint: N_("HF weather charts and SSTV pictures (USB)"), on: imgOn, set: setImg },
   { label: N_("Time"), hint: N_("time-code stations: DCF77, MSF, WWVB, JJY, WWV/WWVH"), on: tcOn, set: setTc },

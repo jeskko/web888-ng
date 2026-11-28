@@ -20,6 +20,7 @@ import { JTTY_KEEP, JTTY_PASSBAND, JttyFeed, toRows, type JttyDecode, type JttyR
 import { applyRun, audioBand, rfOf, type CwRun, type CwSignal } from "./cw.ts";
 import { applyFsk, RTTY_AUDIO, type FskRun, type FskSignal } from "./rtty.ts";
 import { applyPsk, type PskRun, type PskSignal } from "./psk.ts";
+import { applyDgps, type DgpsBeacon, type DgpsRun } from "./dgps.ts";
 import { applyHfdl, hfdlCentre, hfdlChannels, type HfdlMsg, type HfdlRun, type HfdlStation } from "./hfdl.ts";
 import { applyJs8, JS8_SUBMODES, type Js8Msg, type Js8Result } from "./js8.ts";
 import { applyImg, FAX_OFFSET, type ImgRun, type ImgState } from "./img.ts";
@@ -291,6 +292,7 @@ export function connect(): void {
       if (!cwWideNow()) cwAudio(f);
       if (!rttyWideNow()) rttyAudio(f);
       pskAudio(f);
+      dgpsAudio(f);
       tcAudio(f);
       hfdlAudio(f);
       js8Audio(f);
@@ -1100,6 +1102,79 @@ export function pickPsk(dial: number): void {
   const span = wfSpan(r.adc_hz, v.decim);
   const c = dial + 1500;
   if (Math.abs(c - v.center_hz) > 0.45 * span - 2000) setView({ ...v, center_hz: c });
+}
+
+// ---------------------------------------------------------------- DGPS
+
+/** Maritime DGPS beacons (RTCM over MSK) in this receiver's passband,
+ * decoded in this browser (remembered). */
+export const dgpsOn = signal(load("dgps") === "1");
+export const dgpsBeacons = signal<DgpsBeacon[]>([]);
+export const dgpsError = signal("");
+let dgpsWorker: Worker | null = null;
+const dgpsFeed = new JttyFeed();
+let dgpsKey = "";
+let dgpsBand = "";
+let dgpsGen = 0;
+let dgpsRf: (hz: number) => number = (hz) => hz;
+
+function dgpsStart(): Worker {
+  const w = new Worker("dgps-worker.js", { type: "module" });
+  w.onmessage = (e: MessageEvent) => {
+    const d = e.data as { run?: DgpsRun; gen?: number; error?: string };
+    if (d.error) dgpsError.value = d.error;
+    if (!d.run || d.gen !== dgpsGen) return;
+    dgpsBeacons.value = applyDgps(dgpsBeacons.value, d.run, Date.now() / 1000, dgpsRf);
+  };
+  return w;
+}
+
+function dgpsAudio(f: AudioFrame): void {
+  const s = st.value;
+  if (!dgpsOn.value || !s) return;
+  const band = audioBand(s.mode, s.lo, s.hi, s.pitch);
+  if (!band) return;
+  dgpsWorker ??= dgpsStart();
+  const key = `${s.hz}|${s.mode}|${s.listen ?? ""}`;
+  if (key !== dgpsKey) {
+    // retuned: a new stream
+    dgpsKey = key;
+    dgpsGen++;
+    const { mode, hz, pitch } = s;
+    dgpsRf = (a) => rfOf(mode, hz, pitch, a);
+    dgpsBeacons.value = dgpsBeacons.value.map((x) => ({ ...x, active: false }));
+    dgpsBand = "";
+    dgpsWorker.postMessage({ reset: true });
+  }
+  const b = `${band.lo}|${band.hi}`;
+  if (b !== dgpsBand) {
+    dgpsBand = b;
+    dgpsWorker.postMessage({ band: [band.lo, band.hi] });
+  }
+  const pcm = dgpsFeed.push(f.pcm, f.rate, f.stereo);
+  dgpsWorker.postMessage({ pcm, gen: dgpsGen }, [pcm.buffer]);
+}
+
+export function setDgps(on: boolean): void {
+  dgpsOn.value = on;
+  save("dgps", on ? "1" : "0");
+  // the receiver's locator, for each beacon's distance
+  if (on && !mapInfo.value) void loadMapInfo();
+  if (!on && dgpsWorker) {
+    dgpsWorker.terminate();
+    dgpsWorker = null;
+    dgpsKey = "";
+    dgpsBand = "";
+  }
+}
+
+export function clearDgps(): void {
+  dgpsBeacons.value = dgpsBeacons.value.filter((x) => x.active);
+}
+
+/** A part of the beacon band was picked: USB there, a 3 kHz passband. */
+export function pickDgps(dial: number): void {
+  pickPsk(dial);
 }
 
 // ---------------------------------------------------------- time codes
@@ -2441,6 +2516,7 @@ export const decodersOnAudio = computed(
     (cwOn.value && !cwWideNow()) ||
     (rttyOn.value && !rttyWideNow()) ||
     pskOn.value ||
+    dgpsOn.value ||
     tcOn.value ||
     hfdlOn.value ||
     js8On.value ||

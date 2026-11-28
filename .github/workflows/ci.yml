@@ -43,7 +43,7 @@ jobs:
           node-version: 24
           cache: pnpm
           cache-dependency-path: ui/pnpm-lock.yaml
-      # the decoders' WebAssembly (ui/wasm/jtty.wasm, digi.wasm, cw.wasm, fsk.wasm, psk.wasm, hfdl.wasm, js8.wasm, img.wasm, sigid.wasm, timecode.wasm, opus.wasm, nr.wasm, copied by the build)
+      # the decoders' WebAssembly (ui/wasm/jtty.wasm, digi.wasm, cw.wasm, fsk.wasm, psk.wasm, dgps.wasm, hfdl.wasm, js8.wasm, img.wasm, sigid.wasm, timecode.wasm, opus.wasm, nr.wasm, copied by the build)
       - uses: dtolnay/rust-toolchain@stable
         with:
           targets: wasm32-unknown-unknown
