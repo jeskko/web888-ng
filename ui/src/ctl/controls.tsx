@@ -502,6 +502,18 @@ export function AudioCtl() {
 const nbLevel = { v: 8 };
 const nrLevel = { v: 0.6 };
 
+/** The neural models (NN, Gen) are experimental: a small mark on their
+ * buttons and a word at the start of their titles. */
+function Exp() {
+  // i18n: short mark on the NN and Gen buttons: experimental (still being trained and tested)
+  return <sup class="exp" aria-hidden="true">{t("exp.")}</sup>;
+}
+
+function expTitle(): string {
+  // i18n: the start of the NN and Gen buttons' titles
+  return t("Experimental:");
+}
+
 /** The neural noise reduction in the page (USB/LSB, CW, AM at 12 kHz):
  * a row of the noise box, and one under it for the model and Gen. */
 function NnRows() {
@@ -520,13 +532,14 @@ function NnRows() {
         title={!ok
           ? t("Neural noise reduction: for USB, LSB, CW and AM (not SAS) with 12 kHz audio")
           : kind === "cw"
-          ? t("Neural noise reduction for CW, in this browser: keeps the keyed tones, takes away the noise between and around them, never adds sound")
+          ? `${expTitle()} ${t("Neural noise reduction for CW, in this browser: keeps the keyed tones, takes away the noise between and around them, never adds sound")}`
           : kind === "am"
-          ? t("Neural noise reduction for AM broadcasts (speech and music), in this browser: takes away hiss, crackle, buzz and splatter, never adds sound")
-          : t("Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound")}
+          ? `${expTitle()} ${t("Neural noise reduction for AM broadcasts (speech and music), in this browser: takes away hiss, crackle, buzz and splatter, never adds sound")}`
+          : `${expTitle()} ${t("Neural noise reduction for SSB voice, in this browser: takes away what it hears as noise, never adds sound")}`}
       >
         {/* i18n: NN = neural (network) noise reduction, a short button label */}
         {tc("filter", "NN")}
+        <Exp />
       </button>
       <input
         type="range"
@@ -547,10 +560,11 @@ function NnRows() {
             <button
               class={nnRestore.value ? "on" : ""} aria-pressed={nnRestore.value}
               onClick={() => (nnRestore.value = !nnRestore.value)}
-              title={t("Restore (may invent): a generative model rebuilds the voice after the noise reduction; clearer, but now and then it adds sounds or words that weren't said. The decoders never hear it")}
+              title={`${expTitle()} ${t("Restore (may invent): a generative model rebuilds the voice after the noise reduction; clearer, but now and then it adds sounds or words that weren't said. The decoders never hear it")}`}
             >
               {/* i18n: Gen = generative voice restorer, a short button label */}
               {tc("filter", "Gen")}
+              <Exp />
             </button>
           )}
           {models.length > 0 && (

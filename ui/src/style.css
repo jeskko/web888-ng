@@ -85,6 +85,7 @@ input[type="range"]:disabled { opacity: 0.35; }
 .noise-grid > button, .wf-grid > button { justify-self: stretch; }
 .noise-grid input[type="range"], .wf-grid input[type="range"] { width: 140px; }
 .noise-sub, .noise-note { grid-column: 2 / -1; display: flex; gap: 6px; align-items: center; }
+.exp { font-size: 0.65em; opacity: 0.75; margin-left: 2px; }
 .noise-note { font-size: 0.8571rem; }
 .wf-grid label { justify-content: flex-end; }
 .rec-kind { display: inline-flex; margin-bottom: 4px; }
