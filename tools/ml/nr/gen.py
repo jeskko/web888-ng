@@ -138,8 +138,11 @@ class Gen(nn.Module):
 
 
 def mask_out(mask, x: torch.Tensor, X: torch.Tensor) -> torch.Tensor:
-    with torch.no_grad():
-        return X * mask.gains(x, X)
+    # frozen: no graph; --joint: the mask learns with the restorer
+    if not torch.is_grad_enabled() or not any(p.requires_grad for p in mask.parameters()):
+        with torch.no_grad():
+            return X * mask.gains(x, X)
+    return X * mask.gains(x, X)
 
 
 @torch.no_grad()
@@ -262,6 +265,8 @@ def evaluate(gen, mask, sets, steps=(1, 2)):
     from train import si_sdr
     from common import enhance
     gen.eval()
+    was = mask.training
+    mask.eval()
     res = {}
     for k, (x, y, _) in sets.items():
         x, y = x.cuda(), y.cuda()
@@ -276,6 +281,7 @@ def evaluate(gen, mask, sets, steps=(1, 2)):
                 lev = float(10 * torch.log10((e ** 2).mean() / (y ** 2).mean()).item())
         res[k] = r + [lev]
     gen.train()
+    mask.train(was)
     return res
 
 
@@ -305,14 +311,20 @@ def main():
     ap.add_argument("--band", type=float, default=1.0, help="--direct: the band-level term's weight")
     ap.add_argument("--feat", type=float, default=0.0, help="--direct: the speech-encoder feature loss's weight")
     ap.add_argument("--feat-layers", type=int, default=4, help="--direct: transformer layers the feature loss uses")
+    ap.add_argument("--joint", type=float, default=0.0,
+                    help="train the mask with the restorer at this share of --lr (0: frozen); the tuned mask "
+                         "is saved as OUT/mask.pt (the page would carry it for Gen, the plain NN keeps its own)")
     ap.add_argument("--resume")
     ap.add_argument("--out", default="/tmp/gen")
     a = ap.parse_args()
     dev = "cuda"
     os.makedirs(a.out, exist_ok=True)
-    mask = load(torch.load(a.mask, map_location=dev), dev)
+    mask_ck = torch.load(a.mask, map_location=dev)
+    mask = load(mask_ck, dev)
     for p in mask.parameters():
-        p.requires_grad_(False)
+        p.requires_grad_(a.joint > 0)
+    # (cuDNN's GRU backward wants training mode; the mask has no dropout)
+    mask.train(a.joint > 0)
     gen = Gen(a.hidden, a.width, a.mag, a.norm).to(dev)
     if a.resume:
         gen.load_state_dict(torch.load(a.resume, map_location=dev)["model"])
@@ -322,8 +334,12 @@ def main():
     dl = torch.utils.data.DataLoader(GpuStream(int(time.time()), a.batch, snr, a.real_noise, None, p_pairs=a.pairs),
                                      batch_size=None, num_workers=a.workers, multiprocessing_context="spawn",
                                      persistent_workers=True, prefetch_factor=2)
-    opt = torch.optim.AdamW(gen.parameters(), a.lr, weight_decay=1e-4)
-    sched = torch.optim.lr_scheduler.OneCycleLR(opt, a.lr, total_steps=a.steps, pct_start=0.05)
+    groups = [{"params": list(gen.parameters()), "lr": a.lr, "weight_decay": 1e-4}]
+    if a.joint > 0:
+        # no weight decay on the mask: it starts from a trained model
+        groups.append({"params": list(mask.parameters()), "lr": a.lr * a.joint, "weight_decay": 0.0})
+    opt = torch.optim.AdamW(groups)
+    sched = torch.optim.lr_scheduler.OneCycleLR(opt, [g["lr"] for g in groups], total_steps=a.steps, pct_start=0.05)
     if a.direct and not a.mag:
         ap.error("--direct needs --mag")
     ssl = None
@@ -343,7 +359,7 @@ def main():
             loss, lv = loss_fn(gen, mask, x, y, a.level, a.level_margin)
         opt.zero_grad()
         loss.backward()
-        torch.nn.utils.clip_grad_norm_(gen.parameters(), 1.0)
+        torch.nn.utils.clip_grad_norm_([p for g in groups for p in g["params"]], 1.0)
         opt.step()
         sched.step()
         run = 0.98 * run + 0.02 * loss.item() if step > 1 else loss.item()
@@ -355,6 +371,8 @@ def main():
             print(f"{step:6d} loss {run:.4f} level {10 * run_lv:.1f} dB " + extra + " ".join(f"{k} {'/'.join(f'{v:+.1f}' for v in r[k][:-1])} ({r[k][-1]:+.1f} dB)" for k in r)
                   + f"  {time.time() - t0:.0f} s", flush=True)
             torch.save({"model": gen.state_dict(), "step": step, "val": r, "args": vars(a)}, f"{a.out}/last.pt")
+            if a.joint > 0:
+                torch.save({**mask_ck, "model": mask.state_dict(), "step": step}, f"{a.out}/mask.pt")
         if step >= a.steps:
             break
 
