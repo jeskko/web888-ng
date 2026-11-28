@@ -1464,6 +1464,25 @@ with NN on). As planned above, StoRM-shaped:
   mask's 52.5 %: more loss weighting won't close it; the next lever is
   the input (step 6, training jointly with the mask, or conditioning on
   more than the mask's output).
+* **Seventh round (2026-11-28): step 6, the mask learning with Gen.**
+  `gen.py --joint J`: the mask's weights train too, at J × the
+  restorer's learning rate, no weight decay; its tuned copy is saved as
+  `mask.pt` and scored as the nn0 column. gen7j: 20k steps from gen5f3,
+  J = 0.1 (band, feature × 3).
+
+  | 1 step | Whisper WER | sub/del/ins | Parakeet WER | STOI | ESTOI |
+  |---|---|---|---|---|---|
+  | mask (run7) alone | 52.5 % | | 38.9 % | 0.552 | 0.351 |
+  | gen5f3 | 60.7 % | 33/23/6 | 47.7 % | 0.600 | 0.375 |
+  | gen7j's tuned mask alone | 54.0 % | 30/18/5 | 41.1 % | 0.573 | 0.353 |
+  | gen7j | 61.9 % | 35/22/5 | 49.8 % | 0.599 | 0.375 |
+
+  Worse on both counts: Gen loses 1-2 points of WER at the same ESTOI,
+  and the mask drifts towards what the restorer likes (STOI up, its own
+  WER 1.5-2 points worse). The restorer was not starved of anything the
+  mask throws away; joint training just spends the mask's capacity on
+  the restorer's loss. J = 0.3 did not run (the GPU was taken by another
+  program); with 0.1 already worse it was not repeated. gen5f3 stays.
 
 ### 5.5 Label every signal (2026-11-26, first version)
 
