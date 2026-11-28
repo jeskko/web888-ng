@@ -10,7 +10,10 @@ import { N_, t } from "./i18n.ts";
 export interface TcStation {
   /** The crate's index (tc_start). */
   id: number;
+  /** Its key (the crate's and the server's name, a saved choice). */
   name: string;
+  /** Shown instead of the key: today's callsign with the old name. */
+  label?: string;
   /** Carriers (Hz). */
   carriers: number[];
   /** Heard as a keyed carrier (a tone in USB/LSB/CW), or WWV's 100 Hz
@@ -28,13 +31,18 @@ export interface TcStation {
 }
 
 // i18n: about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
+/** A station's name as shown. */
+export function tcLabel(s: TcStation): string {
+  return s.label ?? s.name;
+}
+
 export const TC_STATIONS: TcStation[] = [
   { id: 0, name: "DCF77", carriers: [77_500], am: false, about: N_("Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST") },
   { id: 1, name: "MSF", carriers: [60_000], am: false, about: N_("Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST") },
   { id: 2, name: "WWVB", carriers: [60_000], am: false, about: N_("Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC") },
   { id: 3, name: "JJY", carriers: [40_000, 60_000], am: false, about: N_("Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST") },
   { id: 5, name: "RBU", carriers: [200_000 / 3], am: false, margin: 350, about: N_("Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time") },
-  { id: 9, name: "TDF", carriers: [162_000], am: false, margin: 100, about: N_("Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST") },
+  { id: 9, name: "TDF", label: "ALS162 (TDF)", carriers: [162_000], am: false, margin: 100, about: N_("Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST") },
   { id: 10, name: "BPC", carriers: [68_500], am: false, about: N_("Shangqiu, China: carrier reduced 0.1-0.4 s each second (two bits), none at seconds 0, 20 and 40; Beijing time") },
   { id: 6, name: "DCF39", carriers: [139_000], am: false, margin: 250, about: N_("Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST") },
   { id: 7, name: "HGA22", carriers: [135_600], am: false, margin: 250, about: N_("Lakihegy, Hungary (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST") },
@@ -88,8 +96,8 @@ export function tcPlan(
     // i18n: AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
     return {
       error: s.am
-        ? t("{name}: tune AM to {mhz} MHz", { name: s.name, mhz: s.carriers.map((c) => c / 1e6).join(", ") })
-        : t("{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW", { name: s.name, khz: s.carriers.map((c) => c / 1e3).join(" or ") }),
+        ? t("{name}: tune AM to {mhz} MHz", { name: tcLabel(s), mhz: s.carriers.map((c) => c / 1e6).join(", ") })
+        : t("{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW", { name: tcLabel(s), khz: s.carriers.map((c) => c / 1e3).join(" or ") }),
     };
   }
   return { error: t("No time station in the passband: pick one to tune to.") };

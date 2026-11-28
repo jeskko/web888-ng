@@ -28,7 +28,7 @@ import type { DigiMode, DigiResult, DigiRow } from "./digi.ts";
 import { toSigRows, type SigClass, type SigRow, type SigRun } from "./sigid.ts";
 import { BIN_HALF, BIN_STEP, named, newSkim, nextHop, shown, visit, type SkimShown } from "./sigskim.ts";
 import { askPlan, describe as describeSig, type Desc, type SigAn } from "./sigdesc.ts";
-import { applySeconds, minuteUtc, TC_KEEP, TC_STATIONS, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
+import { applySeconds, minuteUtc, TC_KEEP, TC_STATIONS, tcLabel, tcPlan, tcTuning, type TcMinute, type TcRun } from "./timecode.ts";
 import { design, stereoSpec } from "./audio/stereo.ts";
 import { IqRecorder, REC_MAX_S, type RecFormat } from "./iqrec.ts";
 import { AREC_MAX_S, AudioRecorder } from "./audiorec.ts";
@@ -1184,7 +1184,7 @@ function tcAudio(f: AudioFrame): void {
     // retuned, or samples lost: a new stream
     tcKey = key;
     tcGen++;
-    tcName = plan.station.name;
+    tcName = tcLabel(plan.station);
     tcBase = tcIndex;
     tcSeconds.value = [];
     tcLevel.value = null;

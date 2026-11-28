@@ -5330,72 +5330,71 @@ msgstr ""
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr ""
 
-#. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
-#: src/timecode.ts:32
+#: src/timecode.ts:40
 msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
 msgstr ""
 
-#: src/timecode.ts:33
+#: src/timecode.ts:41
 msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
 msgstr ""
 
-#: src/timecode.ts:34
+#: src/timecode.ts:42
 msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
 msgstr ""
 
-#: src/timecode.ts:35
+#: src/timecode.ts:43
 msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
 msgstr ""
 
-#: src/timecode.ts:36
+#: src/timecode.ts:44
 msgid "Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time"
 msgstr ""
 
-#: src/timecode.ts:37
+#: src/timecode.ts:45
 msgid "Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST"
 msgstr ""
 
-#: src/timecode.ts:38
+#: src/timecode.ts:46
 msgid "Shangqiu, China: carrier reduced 0.1-0.4 s each second (two bits), none at seconds 0, 20 and 40; Beijing time"
 msgstr ""
 
-#: src/timecode.ts:39 src/timecode.ts:41
+#: src/timecode.ts:47 src/timecode.ts:49
 msgid "Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
 msgstr ""
 
-#: src/timecode.ts:40
+#: src/timecode.ts:48
 msgid "Lakihegy, Hungary (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
 msgstr ""
 
-#: src/timecode.ts:42
+#: src/timecode.ts:50
 msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC. Which one sent a minute is told by its 1000 or 1200 Hz tones"
 msgstr ""
 
-#: src/timecode.ts:43
+#: src/timecode.ts:51
 msgid "Pucheng, China: no time code, a 1 kHz tick each second (sent 20 ms early), heard in AM; minutes named by this clock"
 msgstr ""
 
-#: src/timecode.ts:44
+#: src/timecode.ts:52
 msgid "Taldom near Moscow: no time code, the carrier on 0.1 s each second and 0.5 s at the minute in some minutes of the hour; minutes named by this clock"
 msgstr ""
 
-#: src/timecode.ts:87
+#: src/timecode.ts:95
 #, placeholders
 msgid "no station {name}"
 msgstr ""
 
 #. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
-#: src/timecode.ts:91
+#: src/timecode.ts:99
 #, placeholders
 msgid "{name}: tune AM to {mhz} MHz"
 msgstr ""
 
-#: src/timecode.ts:92
+#: src/timecode.ts:100
 #, placeholders
 msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
 msgstr ""
 
-#: src/timecode.ts:95
+#: src/timecode.ts:103
 msgid "No time station in the passband: pick one to tune to."
 msgstr ""
 

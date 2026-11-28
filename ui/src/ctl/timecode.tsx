@@ -7,7 +7,7 @@
 // audio's timestamps where the server gives them: doc/api.md §8.5).
 
 import { t } from "../i18n.ts";
-import { TC_STATIONS, utcText } from "../timecode.ts";
+import { TC_STATIONS, tcLabel, utcText } from "../timecode.ts";
 import { clearTc, pickTc, setTc, setTcWant, tcError, tcLevel, tcMinutes, tcNow, tcOn, tcSeconds, tcWant, timebase } from "../state.ts";
 
 function carrierText(hz: number): string {
@@ -45,7 +45,7 @@ export function TcPanel() {
         <select value={tcWant.value} onChange={(e) => setTcWant((e.target as HTMLSelectElement).value)} title={t("The station to read (Auto: whichever the tuning hears)")}>
           <option value="auto">{t("Auto")}</option>
           {TC_STATIONS.map((x) => (
-            <option value={x.name}>{x.name}</option>
+            <option value={x.name}>{tcLabel(x)}</option>
           ))}
         </select>
         <select
@@ -62,7 +62,7 @@ export function TcPanel() {
           {TC_STATIONS.flatMap((x) =>
             x.carriers.map((c) => (
               <option value={`${x.name}|${c}`}>
-                {x.name} {carrierText(c)}
+                {tcLabel(x)} {carrierText(c)}
               </option>
             )),
           )}
@@ -83,8 +83,8 @@ export function TcPanel() {
             <p class="dim" title={t(plan.station.about)}>
               {/* i18n: time code = the station's slowly keyed time signal; carrier = its unmodulated radio signal; keying = the depth of its on/off or high/low modulation */}
               {plan.station.am
-                ? t("{name} on {carrier}: its 100 Hz time code", { name: plan.station.name, carrier: carrierText(plan.carrier) })
-                : t("{name} on {carrier}: the carrier at {hz} Hz", { name: plan.station.name, carrier: carrierText(plan.carrier), hz: Math.round(plan.tone) })}
+                ? t("{name} on {carrier}: its 100 Hz time code", { name: tcLabel(plan.station), carrier: carrierText(plan.carrier) })
+                : t("{name} on {carrier}: the carrier at {hz} Hz", { name: tcLabel(plan.station), carrier: carrierText(plan.carrier), hz: Math.round(plan.tone) })}
               {lv !== null && ` · ${lv < 6 ? t("keying {db} dB (weak: a narrow passband and slow AGC help)", { db: lv.toFixed(0) }) : t("keying {db} dB", { db: lv.toFixed(0) })}`}
             </p>
             <pre

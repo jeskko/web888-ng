@@ -149,6 +149,7 @@ impl Station {
         Station::ALL.into_iter().find(|v| {
             v.name().eq_ignore_ascii_case(s)
                 || (s.eq_ignore_ascii_case("wwv") && *v == Station::Wwv)
+                || (s.eq_ignore_ascii_case("als162") && *v == Station::Tdf)
         })
     }
 

@@ -5051,69 +5051,68 @@ msgstr "; avslutad när ljudformatet ändrades"
 msgid "{name} ({s} s{skipped}{ended})"
 msgstr "{name} ({s} s{skipped}{ended})"
 
-#. about = where the time-code station is and how its time signal is keyed (carrier reduced/off for 0.1-0.8 s per second: a 0 or 1 bit, a marker)
-#: src/timecode.ts:32
+#: src/timecode.ts:40
 msgid "Mainflingen, Germany: carrier reduced 0.1 s (0) or 0.2 s (1) each second, none at second 59; CET/CEST"
 msgstr "Mainflingen, Tyskland: bärvågen sänkt 0,1 s (0) eller 0,2 s (1) varje sekund, ingen vid sekund 59; CET/CEST"
 
-#: src/timecode.ts:33
+#: src/timecode.ts:41
 msgid "Anthorn, UK: carrier off 0.1 s, then bits A and B; 0.5 s at the minute; GMT/BST"
 msgstr "Anthorn, Storbritannien: bärvågen av 0,1 s, sedan bitarna A och B; 0,5 s vid minutskiftet; GMT/BST"
 
-#: src/timecode.ts:34
+#: src/timecode.ts:42
 msgid "Fort Collins, USA: carrier reduced 0.2 s (0), 0.5 s (1), 0.8 s (marker); UTC"
 msgstr "Fort Collins, USA: bärvågen sänkt 0,2 s (0), 0,5 s (1), 0,8 s (markör); UTC"
 
-#: src/timecode.ts:35
+#: src/timecode.ts:43
 msgid "Japan: carrier on 0.8 s (0), 0.5 s (1), 0.2 s (marker); JST"
 msgstr "Japan: bärvågen på 0,8 s (0), 0,5 s (1), 0,2 s (markör); JST"
 
-#: src/timecode.ts:36
+#: src/timecode.ts:44
 msgid "Taldom near Moscow: each 0.1 s a bit, the carrier phase-modulated at 100 Hz (0) or 312.5 Hz (1); Moscow time"
 msgstr "Taldom nära Moskva: en bit var 0,1 s, bärvågen fasmodulerad med 100 Hz (0) eller 312,5 Hz (1); Moskvatid"
 
-#: src/timecode.ts:37
+#: src/timecode.ts:45
 msgid "Allouis, France: DCF77's code as phase modulation of the carrier (one pulse a second for a 0, two for a 1); CET/CEST"
 msgstr "Allouis, Frankrike: DCF77:s kod som fasmodulering av bärvågen (en puls i sekunden för 0, två för 1); CET/CEST"
 
-#: src/timecode.ts:38
+#: src/timecode.ts:46
 msgid "Shangqiu, China: carrier reduced 0.1-0.4 s each second (two bits), none at seconds 0, 20 and 40; Beijing time"
 msgstr "Shangqiu, Kina: bärvågen sänkt 0,1-0,4 s varje sekund (två bitar), ingen vid sekund 0, 20 och 40; Pekingtid"
 
-#: src/timecode.ts:39 src/timecode.ts:41
+#: src/timecode.ts:47 src/timecode.ts:49
 msgid "Burg, Germany (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
 msgstr "Burg, Tyskland (EFR-fjärrstyrning): FSK-telegram, ett tidstelegram var 10:e s; CET/CEST"
 
-#: src/timecode.ts:40
+#: src/timecode.ts:48
 msgid "Lakihegy, Hungary (EFR teleswitching): FSK telegrams, a time telegram every 10 s; CET/CEST"
 msgstr "Lakihegy, Ungern (EFR-fjärrstyrning): FSK-telegram, ett tidstelegram var 10:e s; CET/CEST"
 
-#: src/timecode.ts:42
+#: src/timecode.ts:50
 msgid "Fort Collins and Hawaii: the 100 Hz subcarrier 0.17 s (0), 0.47 s (1), 0.77 s (marker), heard in AM; UTC. Which one sent a minute is told by its 1000 or 1200 Hz tones"
 msgstr "Fort Collins och Hawaii: underbärvågen på 100 Hz 0,17 s (0), 0,47 s (1), 0,77 s (markör), hörs i AM; UTC. Vilken som sände en minut avgörs av dess toner på 1000 eller 1200 Hz"
 
-#: src/timecode.ts:43
+#: src/timecode.ts:51
 msgid "Pucheng, China: no time code, a 1 kHz tick each second (sent 20 ms early), heard in AM; minutes named by this clock"
 msgstr "Pucheng, Kina: ingen tidkod, ett tick på 1 kHz varje sekund (sänds 20 ms för tidigt), hörs i AM; minuterna namnges efter den här klockan"
 
-#: src/timecode.ts:44
+#: src/timecode.ts:52
 msgid "Taldom near Moscow: no time code, the carrier on 0.1 s each second and 0.5 s at the minute in some minutes of the hour; minutes named by this clock"
 msgstr "Taldom nära Moskva: ingen tidkod, bärvågen på 0,1 s varje sekund och 0,5 s vid minuten under vissa av timmens minuter; minuterna namnges efter den här klockan"
 
-#: src/timecode.ts:87
+#: src/timecode.ts:95
 msgid "no station {name}"
 msgstr "ingen station {name}"
 
 #. AM, USB, LSB, CW are mode names (kept in English); a station's carrier is its unmodulated radio frequency
-#: src/timecode.ts:91
+#: src/timecode.ts:99
 msgid "{name}: tune AM to {mhz} MHz"
 msgstr "{name}: ställ in AM på {mhz} MHz"
 
-#: src/timecode.ts:92
+#: src/timecode.ts:100
 msgid "{name}: tune its carrier ({khz} kHz) into the passband in USB, LSB or CW"
 msgstr "{name}: ställ in dess bärvåg ({khz} kHz) i passbandet i USB, LSB eller CW"
 
-#: src/timecode.ts:95
+#: src/timecode.ts:103
 msgid "No time station in the passband: pick one to tune to."
 msgstr "Ingen tidssignalstation i passbandet: välj en att ställa in."
 
